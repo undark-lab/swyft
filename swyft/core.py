@@ -105,7 +105,7 @@ def subsample(n_sub, z, replace = False):
     """Subsample lists."""
     if n_sub >= len(z):
         return z
-    indices = np.random.choice(len(z), size = n, replace = replace)
+    indices = np.random.choice(len(z), size = n_sub, replace = replace)
     z_sub = [z[i] for i in indices]
     return z_sub
 
