@@ -3,26 +3,8 @@ from tqdm import tqdm
 import torch
 from sklearn.neighbors import BallTree
 
-def sample_z(n_draws, n_dim, z_seeds = None):
-    """Sample latent space parameters zimport torch.functional as F
-.
-
-    Arguments
-    ---------
-    n_draws : Number of draws
-    n_dim : Number of dimensions
-    z_seeds : Optional parameter providing a list of seed positions
-
-    Returns
-    -------
-    List of z samples.
-    """
-    if z_seeds is None:
-        # Draw from unit hypercube
-        return [torch.rand(n_dim) for i in range(n_draws)]
-    else:
-        # TODO: Finish
-        pass
+def sample_z(n_draws, n_dim):
+    return [torch.rand(n_dim) for i in range(n_draws)]
 
 def sample_x(model, z):
     xz = []
@@ -32,15 +14,6 @@ def sample_x(model, z):
         x = torch.tensor(x, dtype=torch.float32)
         xz.append(dict(x=x, z=z[i]))
     return xz
-
-def get_normalization(xz):
-    return norms
-
-def apply_norms(xz, norms):
-    return xz_norm
-
-def unapply_norms(xz, norms):
-    return xz_norm
 
 def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 4):
     # 1. Randomly select n_particles from train_data
@@ -73,8 +46,16 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 4):
 
     return losses
 
-def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2):
+def get_z(xz):
+    return [xz[i]['z'] for i in range(len(xz))]
+
+def get_x(xz):
+    return [xz[i]['x'] for i in range(len(xz))]
+
+def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2, n_sub = 1000):
     """Return current estimate of normalized marginal 1-dim lnL.  Returns (n_train, n_dim)."""
+    if n_sub > 0:
+        z = subsample(n_sub, z)
     x0 = torch.tensor(x0, dtype=torch.float32)
     n_dim = z[0].shape[0]
     lnL = [network(x0, z[i]).detach() for i in range(len(z))]
@@ -97,7 +78,7 @@ def get_seeds(z_lnL, lnL_th = -6):
         z_seeds.append(z[mask])
     return z_seeds
 
-def resample(z_seeds, n, epsilon = None):
+def resample_z(n, z_seeds, epsilon = None):
     z_samples = []
     n_dim = len(z_seeds)
     for i in range(n_dim):
@@ -119,3 +100,32 @@ def resample(z_seeds, n, epsilon = None):
         z_samples.append(z_new)
     z = [torch.cat([z_samples[i][j] for i in range(n_dim)]) for j in range(n)]
     return z
+
+def subsample(n_sub, z, replace = False):
+    """Subsample lists."""
+    if n_sub >= len(z):
+        return z
+    indices = np.random.choice(len(z), size = n, replace = replace)
+    z_sub = [z[i] for i in indices]
+    return z_sub
+
+def init_xz(model, n_sims, n_dim):
+    z = sample_z(n_sims, n_dim)
+    xz = sample_x(model, z)
+    return xz
+
+def update_xz(xz, network, x0, model, n_sims, lnL_th = -6, n_sub = 1000, append = True):
+    # Generate training points
+    z_sub = subsample(n_sub, get_z(xz))
+    z_lnL = estimate_lnL(network, x0, z_sub)
+    z_seeds = get_seeds(z_lnL, lnL_th = lnL_th)
+    z_new = resample_z(n_sims, z_seeds)
+
+    # Generate training data
+    xz_new = sample_x(model, z_new)
+
+    # Append or not append
+    if append:
+        xz += xz_new
+    else:
+        xz = xz_new
