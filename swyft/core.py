@@ -142,11 +142,12 @@ def update_xz(xz, network, x0, model, n_sims, lnL_th = -6, n_sub = 1000, append 
 ###################
 
 class MLP(nn.Module):
-    def __init__(self, n_dim = None, n_hidden = None, xz_init = None):
+    def __init__(self, x_dim, z_dim, n_hidden, xz_init = None):
         super().__init__()
-        self.n_dim = n_dim
-        self.fc1 = nn.ModuleList([nn.Linear(n_dim+1, n_hidden) for i in range(n_dim)])
-        self.fc2 = nn.ModuleList([nn.Linear(n_hidden, 1) for i in range(n_dim)])
+        self.x_dim = x_dim
+        self.z_dim = z_dim
+        self.fc1 = nn.ModuleList([nn.Linear(x_dim+1, n_hidden) for i in range(z_dim)])
+        self.fc2 = nn.ModuleList([nn.Linear(n_hidden, 1) for i in range(z_dim)])
 
         if xz_init is not None:
             self.normalize = True
@@ -175,7 +176,7 @@ class MLP(nn.Module):
             x, z = self._normalized(x, z)
 
         f_list = []
-        for i in range(self.n_dim):
+        for i in range(self.z_dim):
             y = x
             y = torch.cat([y, z[i].unsqueeze(0)], 0)
             y = torch.relu(self.fc1[i](y))
