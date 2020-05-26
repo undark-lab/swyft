@@ -152,6 +152,8 @@ class MLP(nn.Module):
             self.normalize = True
             tmp = self._get_norms(xz_init)
             self.x_mean, self.x_std, self.z_mean, self.z_std = tmp
+            print("x:", self.x_mean, self.x_std)
+            print("z:", self.z_mean, self.z_std)
         else:
             self.normalize = False
 
