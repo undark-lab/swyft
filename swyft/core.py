@@ -3,6 +3,10 @@ from tqdm import tqdm
 import torch
 from sklearn.neighbors import BallTree
 
+################
+# Core functions
+################
+
 def sample_z(n_draws, n_dim):
     return [torch.rand(n_dim) for i in range(n_draws)]
 
@@ -129,3 +133,50 @@ def update_xz(xz, network, x0, model, n_sims, lnL_th = -6, n_sub = 1000, append 
         xz += xz_new
     else:
         xz = xz_new
+    return xz
+
+
+###################
+# Training networks
+###################
+
+class MLP(nn.Module):
+    def __init__(self, n_dim = None, n_hidden = None, xz_init = None):
+        super().__init__()
+        self.n_dim = n_dim
+        self.fc1 = nn.ModuleList([nn.Linear(n_dim+1, n_hidden) for i in range(n_dim)])
+        self.fc2 = nn.ModuleList([nn.Linear(n_hidden, 1) for i in range(n_dim)])
+
+        if xz_init is not None:
+            self.normalize = True
+            tmp = self._get_norms(xz)
+            self.x_mean, self.x_std, self.z_mean, self.z_std = tmp
+        else:
+            self.normalize = False
+
+    @staticmethod
+    def _get_norms(xz):
+        x = get_x(xz)
+        z = get_z(xz)
+        x_mean = sum(x)/len(x)
+        z_mean = sum(z)/len(z)
+        x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
+        z_var = sum([(z[i]-z_mean)**2 for i in range(len(z))])/len(z)
+        return x_mean, x_var**0.5, z_mean, z_var**0.5
+
+    def _normalized(self, x, z):
+        return (x-self.x_mean)/self.x_std, (z-self.z_mean)/self.z_std
+
+    def forward(self, x, z):
+        if self.normalize:
+            x, z = self._normalized(x, z)
+
+        f_list = []
+        for i in range(self.n_dim):
+            y = x
+            y = torch.cat([y, z[i].unsqueeze(0)], 0)
+            y = torch.relu(self.fc1[i](y))
+            f = self.fc2[i](y)
+            f_list.append(f)
+        f_list = torch.cat(f_list, 0)
+        return f_list
