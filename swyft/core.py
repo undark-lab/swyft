@@ -150,7 +150,7 @@ class MLP(nn.Module):
 
         if xz_init is not None:
             self.normalize = True
-            tmp = self._get_norms(xz)
+            tmp = self._get_norms(xz_init)
             self.x_mean, self.x_std, self.z_mean, self.z_std = tmp
         else:
             self.normalize = False
