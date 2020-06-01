@@ -8,6 +8,8 @@ import torch.nn as nn
 import numpy as np
 import swyft
 
+n_train = 10000
+
 # Definition of trivial test model
 def model(z, sigma = 0.05):
     y = ((z[0]-0.5)**2 + (z[1]-0.5)**2)**0.5  # Radius
@@ -19,7 +21,7 @@ z0 = np.array([0.10, 0.50])
 x0 = model(z0)
 
 # Fit model
-sw = swyft.SWYFT(model, 2, x0, n_train = 100000, n_sims = 10000)
+sw = swyft.SWYFT(model, 2, x0, n_train = n_train, n_sims = 10000)
 sw.run()
 z_lnL = sw.get_post1d()
 
