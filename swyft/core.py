@@ -58,7 +58,7 @@ def get_x(xz):
     return [xz[i]['x'] for i in range(len(xz))]
 
 def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2, n_sub = 1000):
-    """Return current estimate of normalized marginal 1-dim lnL.  Returns (n_train, n_dim)."""
+    """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
     if n_sub > 0:
         z = subsample(n_sub, z)
     x0 = torch.tensor(x0, dtype=torch.float32)
@@ -73,6 +73,15 @@ def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2, n_su
         lnL_i -= lnL_i.max()
         out.append(dict(z=z_i, lnL=lnL_i))
     return out
+
+def estimate_lnL_2d(network, x0, z, n_sub = 1000):
+    """Returns single dict(z, lnL)"""
+    if n_sub > 0:
+        z = subsample(n_sub, z)
+    x0 = torch.tensor(x0, dtype=torch.float32)
+    lnL = np.array([network(x0, z[k]).detach() for k in range(len(z))])
+    lnL -= lnL.max()
+    return dict(z = z, lnL = lnL)
 
 def get_seeds(z_lnL, lnL_th = -6):
     z_seeds = []
@@ -136,6 +145,14 @@ def update_xz(xz, network, x0, model, n_sims, lnL_th = -6, n_sub = 1000, append 
         xz = xz_new
     return xz
 
+def get_norms(xz):
+    x = get_x(xz)
+    z = get_z(xz)
+    x_mean = sum(x)/len(x)
+    z_mean = sum(z)/len(z)
+    x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
+    z_var = sum([(z[i]-z_mean)**2 for i in range(len(z))])/len(z)
+    return x_mean, x_var**0.5, z_mean, z_var**0.5
 
 ###################
 # Training networks
@@ -143,6 +160,7 @@ def update_xz(xz, network, x0, model, n_sims, lnL_th = -6, n_sub = 1000, append 
 
 class MLP(nn.Module):
     def __init__(self, x_dim, z_dim, n_hidden, xz_init = None):
+        """Model for marginal 1-dim posteriors, p(z_1|x), p(z_2|x), ..., p(z_N|x)"""
         super().__init__()
         self.x_dim = x_dim
         self.z_dim = z_dim
@@ -151,29 +169,15 @@ class MLP(nn.Module):
 
         if xz_init is not None:
             self.normalize = True
-            tmp = self._get_norms(xz_init)
+            tmp = get_norms(xz_init)
             self.x_mean, self.x_std, self.z_mean, self.z_std = tmp
-            print("x:", self.x_mean, self.x_std)
-            print("z:", self.z_mean, self.z_std)
         else:
             self.normalize = False
 
-    @staticmethod
-    def _get_norms(xz):
-        x = get_x(xz)
-        z = get_z(xz)
-        x_mean = sum(x)/len(x)
-        z_mean = sum(z)/len(z)
-        x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
-        z_var = sum([(z[i]-z_mean)**2 for i in range(len(z))])/len(z)
-        return x_mean, x_var**0.5, z_mean, z_var**0.5
-
-    def _normalized(self, x, z):
-        return (x-self.x_mean)/self.x_std, (z-self.z_mean)/self.z_std
-
     def forward(self, x, z):
         if self.normalize:
-            x, z = self._normalized(x, z)
+            x = (x-self.x_mean)/self.x_std
+            z = (z-self.z_mean)/self.z_std
 
         f_list = []
         for i in range(self.z_dim):
@@ -184,3 +188,29 @@ class MLP(nn.Module):
             f_list.append(f)
         f_list = torch.cat(f_list, 0)
         return f_list
+
+
+class MLP_2d(nn.Module):
+    def __init__(self, x_dim, n_hidden, xz_init = None):
+        """Model for joined 2-dim posterior, p(z_1, z_2|x)"""
+        super().__init__()
+        self.x_dim = x_dim
+        self.fc1 = nn.Linear(x_dim+2, n_hidden)
+        self.fc2 = nn.Linear(n_hidden, 1)
+
+        if xz_init is not None:
+            self.normalize = True
+            tmp = get_norms(xz_init)
+            self.x_mean, self.x_std, self.z_mean, self.z_std = tmp
+        else:
+            self.normalize = False
+
+    def forward(self, x, z):
+        if self.normalize:
+            x = (x-self.x_mean)/self.x_std
+            z = (z-self.z_mean)/self.z_std
+
+        y = torch.cat([x, z], 0)
+        y = torch.relu(self.fc1(y))
+        f = self.fc2(y)
+        return f
