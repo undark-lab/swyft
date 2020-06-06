@@ -8,4 +8,5 @@ Copyright: 2020
 
 """
 from .core import *
-__all__ = []
+from .swyft import *
+__all__ = ['SWYFT']
