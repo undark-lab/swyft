@@ -230,10 +230,22 @@ class ConvHead(nn.Module):
         return x.flatten(start_dim=-2)
 
 class Network(nn.Module):
-    def __init__(self, xdim, zdim, xz_init = None):
+    def __init__(self, xdim, zdim, xz_init = None, head = None):
+        """Base network combining z-independent head and parallel tail.
+
+        :param xdim: Number of data dimensions going into DenseLeg network
+        :param zdim: Number of latent space variables
+        :param xz_init: xz Samples used for normalization
+        :param head: Head network, z-independent
+        :type head: `torch.nn.Module`, optional
+
+        The forward method of the `head` network takes data `x` as input, and
+        returns intermediate state `y`.
+        """
         super().__init__()
         #self.head = ConvHead(xdim)
         self.legs = DenseLegs(xdim, zdim)
+        self.head = head
         
         if xz_init is not None:
             x_mean, x_std, z_mean, z_std = get_norms(xz_init)
@@ -248,8 +260,8 @@ class Network(nn.Module):
         x = (x-self.x_mean)/self.x_std
         z = (z-self.z_mean)/self.z_std
         
-        #x = x.unsqueeze(-2)
-        #y = self.head(x).squeeze(-2)
+        if self.head is not None:
+            x = self.head(x)
         out = self.legs(x, z)
         return out
 

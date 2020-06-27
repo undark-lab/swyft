@@ -6,58 +6,52 @@ from .core import *
 
 class SWYFT:
     """SWYFT. Convenience class around functional methods."""
-    def __init__(self, model, z_dim, x0, n_train = 10000, n_sims = 10000, n_hidden = 10000):
+    def __init__(self, model, z_dim, x0, device = 'cpu', verbosity = True):
         self.model = model
         self.z_dim = z_dim
         self.x0 = x0 
-        self.x_dim = x0.shape[0]
-        self.n_train = n_train
-        self.n_sims = n_sims
-        self.n_hidden = n_hidden
+        self.device = device
 
-        self.xz_storage = []
-        self.network_storage = []
-        self.losses_storage = []
+        self.xz_store = []
+        self.net_store = []
+        self.loss_store = []
+        self.verbose = verbosity
 
-#    def strip(self, xz):
-#        xz0 = []
-#        for i in range(len(xz)):
-#            z = xz[i]['z']
-#            if (1.00 > z[0] and z[0] > 0.7) or (0.00 < z[0] and z[0] < 0.3):
-#                xz0.append(xz[i])
-#            else:
-#                if np.random.random(1) < 0.1:
-#                    xz0.append(xz[i])
-#        return xz0
-
-    def run(self):
+    def round(self, n_sims = 3000, n_train = 5000, lr = 1e-3, n_particles = 2,
+            head = None):
         # Generate new training data
-        if len(self.xz_storage) == 0:
-            xz = init_xz(self.model, n_sims = self.n_sims, n_dim = self.z_dim)
+        if self.verbose:
+            print("Round: ", len(self.xz_store))
+            print("Generate samples from constrained prior: z~pc(z)")
+        if len(self.net_store) == 0:
+            z = sample_z(n_sims, self.z_dim)  # draw from initial prior
         else:
-            xz_prev = self.xz_storage[-1]
-            network_prev = self.network_storage[-1]
-            xz = update_xz(xz_prev, network_prev, self.x0, self.model, n_sims = self.n_sims, lnL_th = -9, append = False)
+            z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device)
 
-        # Remove some points
-        #print(len(xz))
-        #xz = self.strip(xz)
-        #print(len(xz))
+        # time sink
+        if self.verbose:
+            print("Generate corresponding draws x ~ p(x|z)")
+        xz = sample_x(self.model, z)  # generate corresponding model samples
 
         # Instantiate network
-        network = MLP(self.x_dim, self.z_dim, self.n_hidden, xz_init = xz)
+        if head is None:
+            x_dim = len(self.x0)
+        else:
+            x_dim = head(torch.tensor(self.x0).float().to(self.device)).shape[-1]
+        network = Network(x_dim, self.z_dim, xz_init = xz, head = head).to(self.device)
 
+        if self.verbose:
+            print("Network optimization")
         # Perform optimization
-        losses = train(network, xz, n_steps = self.n_train, lr = 1e-3, n_particles = 3)
-        losses = train(network, xz, n_steps = self.n_train, lr = 1e-4, n_particles = 3)
+        losses = train(network, xz, n_steps = n_train, lr = lr, n_particles = n_particles, device = self.device)
 
         # Store results
-        self.xz_storage.append(xz)
-        self.network_storage.append(network)
-        self.losses_storage.append(losses)
+        self.xz_store.append(xz)
+        self.net_store.append(network)
+        self.loss_store.append(losses)
 
-    def get_post1d(self, round = -1):
-        network = self.network_storage[round]
-        z = get_z(self.xz_storage[round])
-        z_lnL = estimate_lnL(network, self.x0, z, L_th=1e-5)
+    def get_posteriors(self, nround = -1):
+        network = self.net_store[nround]
+        z = get_z(self.xz_store[nround])
+        z_lnL = estimate_lnL(network, self.x0, z, device = self.device)
         return z_lnL
