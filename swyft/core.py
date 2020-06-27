@@ -3,6 +3,8 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from sklearn.neighbors import BallTree
+from collections import defaultdict
+import math
 
 ################
 # Core functions
@@ -156,6 +158,144 @@ def get_norms(xz):
     x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
     z_var = sum([(z[i]-z_mean)**2 for i in range(len(z))])/len(z)
     return x_mean, x_var**0.5, z_mean, z_var**0.5
+
+# From: https://github.com/pytorch/pytorch/issues/36591
+class LinearWithChannel(nn.Module):
+    def __init__(self, input_size, output_size, channel_size):
+        super(LinearWithChannel, self).__init__()
+
+        #initialize weights
+        self.w = torch.nn.Parameter(torch.zeros(channel_size, output_size, input_size))
+        self.b = torch.nn.Parameter(torch.zeros(channel_size, output_size))
+
+        #change weights to kaiming
+        self.reset_parameters(self.w, self.b)
+
+    def reset_parameters(self, weights, bias):
+        torch.nn.init.kaiming_uniform_(weights, a=math.sqrt(3))
+        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(weights)
+        bound = 1 / math.sqrt(fan_in)
+        torch.nn.init.uniform_(bias, -bound, bound)
+
+    def forward(self, x):
+        x = x.unsqueeze(-1)
+        return torch.matmul(self.w, x).squeeze(-1) + self.b
+
+def combine(y, z):
+    """Combines data vector y and parameter vector z.
+
+    y : (ydim) or (nbatch, ydim) (only if nbatch provided for z)
+    z : (zdim) or (nbatch, zdim)
+
+    returns: (nbatch, zdim, ydim+1)
+    """
+    y = y.unsqueeze(-2)
+    z = z.unsqueeze(-1)
+    y = y.expand(*z.shape[:-1], *y.shape[-1:])
+    return torch.cat([y, z], -1)
+
+class DenseLegs(nn.Module):
+    def __init__(self, ydim, zdim):
+        super().__init__()
+        self.fc1 = LinearWithChannel(ydim+1, 1000, zdim)
+        self.fc2 = LinearWithChannel(1000, 1000, zdim)
+        self.fc3 = LinearWithChannel(1000, 100, zdim)
+        self.fc4 = LinearWithChannel(100, 1, zdim)
+
+    def forward(self, y, z):
+        x = combine(y, z)
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = torch.relu(self.fc3(x))
+        x = self.fc4(x).squeeze(-1)
+        return x
+
+class ConvHead(nn.Module):
+    def __init__(self, xdim):
+        super().__init__()
+        self.conv1 = torch.nn.Conv1d(1, 10, 3)
+        self.conv2 = torch.nn.Conv1d(10, 20, 3)
+        self.conv3 = torch.nn.Conv1d(20, 30, 3)
+        self.pool = torch.nn.MaxPool1d(2)
+        
+    def forward(self, x):
+        """Input (nbatch, xdim)"""
+        x = x.unsqueeze(-2)
+        x = self.conv1(x)
+        x = self.pool(x)
+        x = self.conv2(x)
+        x = self.pool(x)
+        x = self.conv3(x)
+        x = self.pool(x)
+        return x.flatten(start_dim=-2)
+
+class Network(nn.Module):
+    def __init__(self, xdim, zdim, xz_init = None):
+        super().__init__()
+        #self.head = ConvHead(xdim)
+        self.legs = DenseLegs(xdim, zdim)
+        
+        if xz_init is not None:
+            x_mean, x_std, z_mean, z_std = swyft.get_norms(xz_init)
+        else:
+            x_mean, x_std, z_mean, z_std = 0., 1., 0., 1.
+        self.x_mean = torch.nn.Parameter(torch.tensor(x_mean).float())
+        self.z_mean = torch.nn.Parameter(torch.tensor(z_mean).float())
+        self.x_std = torch.nn.Parameter(torch.tensor(x_std).float())
+        self.z_std = torch.nn.Parameter(torch.tensor(z_std).float())
+    
+    def forward(self, x, z):
+        x = (x-self.x_mean)/self.x_std
+        z = (z-self.z_mean)/self.z_std
+        
+        #x = x.unsqueeze(-2)
+        #y = self.head(x).squeeze(-2)
+        out = self.legs(x, z)
+        return out
+
+
+def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu'):
+    """Generate parameter samples z~p_c(z) from constrained prior.
+    
+    Arguments
+    ---------
+    n_draws: Number of draws
+    n_dim: Number of dimensions of z
+    net: Trained density network
+    x0: Reference data
+    
+    Returns
+    -------
+    z: list of n_dim samples with length n_draws
+    """
+    done = False
+    zout = defaultdict(lambda: [])
+    counter = np.zeros(n_dim)
+    while not done:
+        z = swyft.sample_z(n_draws, n_dim)
+        zlnL = swyft.estimate_lnL(net, x0, z, sort = False, device = device)
+        for i in range(n_dim):
+            mask = zlnL[i]['lnL'] > -13
+            zout[i].append(zlnL[i]['z'][mask])
+            counter[i] += mask.sum()
+        done = min(counter) >= n_draws
+    return np.array([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ###################
 # Training networks
