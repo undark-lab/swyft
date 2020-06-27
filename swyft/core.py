@@ -236,7 +236,7 @@ class Network(nn.Module):
         self.legs = DenseLegs(xdim, zdim)
         
         if xz_init is not None:
-            x_mean, x_std, z_mean, z_std = swyft.get_norms(xz_init)
+            x_mean, x_std, z_mean, z_std = get_norms(xz_init)
         else:
             x_mean, x_std, z_mean, z_std = 0., 1., 0., 1.
         self.x_mean = torch.nn.Parameter(torch.tensor(x_mean).float())
@@ -272,27 +272,14 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu'):
     zout = defaultdict(lambda: [])
     counter = np.zeros(n_dim)
     while not done:
-        z = swyft.sample_z(n_draws, n_dim)
-        zlnL = swyft.estimate_lnL(net, x0, z, sort = False, device = device)
+        z = sample_z(n_draws, n_dim)
+        zlnL = estimate_lnL(net, x0, z, sort = False, device = device)
         for i in range(n_dim):
             mask = zlnL[i]['lnL'] > -13
             zout[i].append(zlnL[i]['z'][mask])
             counter[i] += mask.sum()
         done = min(counter) >= n_draws
     return np.array([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
