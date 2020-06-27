@@ -9,18 +9,17 @@ from sklearn.neighbors import BallTree
 ################
 
 def sample_z(n_draws, n_dim):
-    return [torch.rand(n_dim) for i in range(n_draws)]
+    return [np.random.rand(n_dim) for i in range(n_draws)]
 
 def sample_x(model, z):
     xz = []
     n_samples = len(z)
     for i in tqdm(range(n_samples)):
         x = model(z[i])
-        x = torch.tensor(x, dtype=torch.float32)
         xz.append(dict(x=x, z=z[i]))
     return xz
 
-def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 4):
+def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu'):
     # 1. Randomly select n_particles from train_data
     # 2. Calculate associated loss by permuting
     # 3. Repeat n_step times
@@ -29,7 +28,11 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 4):
         indices = np.random.choice(len(xz), size = n_particles, replace = False)
         x = [xz[i]['x'] for i in indices]
         z = [xz[i]['z'] for i in indices]
-        loss = torch.tensor(0.)
+
+        x = [torch.tensor(a).float().to(device) for a in x]
+        z = [torch.tensor(a).float().to(device) for a in z]
+
+        loss = torch.tensor(0.).to(x[0].device)
         for i in range(n_particles):
             f = [network(x[i], z[j]).unsqueeze(0) for j in range(n_particles)]
             f = torch.cat(f, 0)
@@ -45,7 +48,7 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 4):
         optimizer.zero_grad()
 
         loss = loss_fn(network, xz, n_particles = n_particles)
-        losses.append(loss.detach().numpy().item())
+        losses.append(loss.detach().cpu().numpy().item())
         loss.backward()
         optimizer.step()
 
@@ -57,17 +60,18 @@ def get_z(xz):
 def get_x(xz):
     return [xz[i]['x'] for i in range(len(xz))]
 
-def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2, n_sub = 1000):
+def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2, n_sub = 1000, sort = True, device = 'cpu'):
     """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
     if n_sub > 0:
         z = subsample(n_sub, z)
-    x0 = torch.tensor(x0, dtype=torch.float32)
     n_dim = z[0].shape[0]
-    lnL = [network(x0, z[i]).detach() for i in range(len(z))]
+    x0 = torch.tensor(x0).float().to(device)
+    lnL = [network(x0, torch.tensor(z[i]).float().to(device)).detach().cpu().numpy() for i in range(len(z))]
     out = []
     for i in range(n_dim):
         tmp = [[z[j][i], lnL[j][i]] for j in range(len(z))]
-        tmp = sorted(tmp, key = lambda pair: pair[0])
+        if sort:
+            tmp = sorted(tmp, key = lambda pair: pair[0])
         z_i = np.array([y[0] for y in tmp])
         lnL_i = np.array([y[1] for y in tmp])
         lnL_i -= lnL_i.max()
@@ -78,7 +82,6 @@ def estimate_lnL_2d(network, x0, z, n_sub = 1000):
     """Returns single dict(z, lnL)"""
     if n_sub > 0:
         z = subsample(n_sub, z)
-    x0 = torch.tensor(x0, dtype=torch.float32)
     lnL = np.array([network(x0, z[k]).detach() for k in range(len(z))])
     lnL -= lnL.max()
     return dict(z = z, lnL = lnL)
@@ -105,7 +108,7 @@ def resample_z(n, z_seeds, epsilon = None):
         z_new = []
         counter = 0
         while counter < n:
-            z_proposal = torch.rand(n, 1);
+            z_proposal = torch.rand(n, 1).to(z_seeds[0].device);
             nn_dist = tree.query(z_proposal, 1)[0][:,0]
             mask = nn_dist <= epsilon
             z_new.append(z_proposal[mask])

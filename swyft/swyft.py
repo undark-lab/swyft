@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from .core import *
 
-
 class SWYFT:
     """SWYFT. Convenience class around functional methods."""
     def __init__(self, model, z_dim, x0, n_train = 10000, n_sims = 10000, n_hidden = 10000):
