@@ -15,10 +15,13 @@ class SWYFT:
         self.xz_store = []
         self.net_store = []
         self.loss_store = []
+        self.test_loss_store = []
         self.verbose = verbosity
 
     def round(self, n_sims = 3000, n_train = 5000, lr = 1e-3, n_particles = 2,
-            head = None):
+            head = None, combine = False):
+        n_tests = int(n_sims/10)
+
         # Generate new training data
         if self.verbose:
             print("Round: ", len(self.xz_store))
@@ -26,12 +29,15 @@ class SWYFT:
         if len(self.net_store) == 0:
             z = sample_z(n_sims, self.z_dim)  # draw from initial prior
         else:
-            z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device)
+            z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device, verbosity = self.verbose)
 
         # time sink
         if self.verbose:
             print("Generate corresponding draws x ~ p(x|z)")
         xz = sample_x(self.model, z)  # generate corresponding model samples
+
+        if combine:
+            xz += self.xz_store[-1]
 
         # Instantiate network
         if head is None:
@@ -43,15 +49,42 @@ class SWYFT:
         if self.verbose:
             print("Network optimization")
         # Perform optimization
-        losses = train(network, xz, n_steps = n_train, lr = lr, n_particles = n_particles, device = self.device)
+        losses, losses_test  = train(network, xz[:-n_tests-1], n_steps =
+                n_train, lr = lr, n_particles = n_particles, device =
+                self.device, xz_test = xz[-n_tests-1:])
 
         # Store results
         self.xz_store.append(xz)
         self.net_store.append(network)
         self.loss_store.append(losses)
+        self.test_loss_store.append(losses_test)
 
-    def get_posteriors(self, nround = -1):
+    def get_posteriors(self, nround = -1, x0 = None):
         network = self.net_store[nround]
         z = get_z(self.xz_store[nround])
-        z_lnL = estimate_lnL(network, self.x0, z, device = self.device)
+        x0 = x0 if x0 is not None else self.x0
+        z_lnL = estimate_lnL(network, x0, z, device = self.device)
         return z_lnL
+
+    def save(self, filename):
+        """Save current state, including sampled data, loss history and fitted networks.
+
+        :param filename: Output filename, .pt format.
+        :type filename: String
+        """
+        obj = {'xz_store': self.xz_store,
+               'loss_store': self.loss_store,
+               'net_store': self.net_store
+               }
+        torch.save(obj, filename)
+
+    def load(self, filename):
+        """Load previously saved state, including sampled data, loss history and fitted networks.
+
+        :param filename: Input filename, .pt format.
+        :type filename: String
+        """
+        obj = torch.load(filename)
+        self.xz_store = obj['xz_store']
+        self.net_store = obj['net_store']
+        self.loss_store = obj['loss_store']

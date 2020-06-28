@@ -21,7 +21,7 @@ def sample_x(model, z):
         xz.append(dict(x=x, z=z[i]))
     return xz
 
-def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu'):
+def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu', xz_test = None):
     # 1. Randomly select n_particles from train_data
     # 2. Calculate associated loss by permuting
     # 3. Repeat n_step times
@@ -45,16 +45,24 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu
 
     optimizer = torch.optim.Adam(network.parameters(), lr = lr)
     losses = []
+    losses_test = []
 
     for i in tqdm(range(n_steps)):
         optimizer.zero_grad()
 
-        loss = loss_fn(network, xz, n_particles = n_particles)
-        losses.append(loss.detach().cpu().numpy().item())
-        loss.backward()
-        optimizer.step()
+        if xz_test is not None and i%5 == 0:
+            loss = loss_fn(network, xz_test, n_particles = n_particles)
+            losses_test.append(loss.detach().cpu().numpy().item())
+        else:
+            loss = loss_fn(network, xz, n_particles = n_particles)
+            losses.append(loss.detach().cpu().numpy().item())
+            loss.backward()
+            optimizer.step()
 
-    return losses
+    if xz_test is None:
+        return losses
+    else:
+        return losses, losses_test
 
 def get_z(xz):
     return [xz[i]['z'] for i in range(len(xz))]
@@ -266,7 +274,7 @@ class Network(nn.Module):
         return out
 
 
-def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu'):
+def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False):
     """Generate parameter samples z~p_c(z) from constrained prior.
     
     Arguments
@@ -283,17 +291,19 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu'):
     done = False
     zout = defaultdict(lambda: [])
     counter = np.zeros(n_dim)
+    frac = np.ones(n_dim)
     while not done:
         z = sample_z(n_draws, n_dim)
         zlnL = estimate_lnL(net, x0, z, sort = False, device = device)
         for i in range(n_dim):
             mask = zlnL[i]['lnL'] > -13
+            frac[i] = sum(mask)/len(mask)
             zout[i].append(zlnL[i]['z'][mask])
             counter[i] += mask.sum()
         done = min(counter) >= n_draws
+    if verbosity:
+        print("Constrained posterior volume:", frac.prod())
     return np.array([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T
-
-
 
 
 ###################
