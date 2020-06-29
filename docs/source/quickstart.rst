@@ -1,10 +1,11 @@
-Quickstart with pyrofit
-=======================
+Quickstart with SWYFT
+=====================
 
-Writing a simple pyrofit module
--------------------------------
+General usage
+-------------
 
-A simple example for a pyrofit module looks like this::
+SWYFT is simple to use.  First, we define a model function which takes as
+argument A simple example for a pyrofit module looks like this::
 
     import pyro
     import pyro.distributions as dist
