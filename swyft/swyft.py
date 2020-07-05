@@ -20,24 +20,32 @@ class SWYFT:
 
     def round(self, n_sims = 3000, n_train = 5000, lr = 1e-3, n_particles = 2,
             head = None, combine = False):
-        n_tests = int(n_sims/10)
-
-        # Generate new training data
         if self.verbose:
             print("Round: ", len(self.xz_store))
-            print("Generate samples from constrained prior: z~pc(z)")
-        if len(self.net_store) == 0:
-            z = sample_z(n_sims, self.z_dim)  # draw from initial prior
+        if n_sims > 0:
+            n_tests = int(n_sims/10)
+
+            # Generate new training data
+            if self.verbose:
+                print("Generate samples from constrained prior: z~pc(z)")
+            if len(self.net_store) == 0:
+                z = sample_z(n_sims, self.z_dim)  # draw from initial prior
+            else:
+                z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device, verbosity = self.verbose)
+
+            # time sink
+            if self.verbose:
+                print("Generate corresponding draws x ~ p(x|z)")
+            xz = sample_x(self.model, z)  # generate corresponding model samples
+
+            if combine:
+                xz += self.xz_store[-1]
         else:
-            z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device, verbosity = self.verbose)
-
-        # time sink
-        if self.verbose:
-            print("Generate corresponding draws x ~ p(x|z)")
-        xz = sample_x(self.model, z)  # generate corresponding model samples
-
-        if combine:
-            xz += self.xz_store[-1]
+            # Take simply previous samples
+            if self.verbose:
+                print("Reusing samples from previous round.")
+            xz = self.xz_store[-1]
+            n_tests = int(len(xz)/10)
 
         # Instantiate network
         if head is None:
