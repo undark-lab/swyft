@@ -21,12 +21,39 @@ def sample_x(model, z):
         xz.append(dict(x=x, z=z[i]))
     return xz
 
-def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu', xz_test = None):
+def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu', xz_test = None, n_batch = 1):
     # 1. Randomly select n_particles from train_data
     # 2. Calculate associated loss by permuting
     # 3. Repeat n_step times
 
+    def loss_fn2(network, xz):
+        indices = np.random.choice(len(xz), size = 2, replace = False)
+        x = [xz[i]['x'] for i in indices]
+        z = [xz[i]['z'] for i in indices]
+
+        x = [torch.tensor(a).float().to(device) for a in x]
+        z = [torch.tensor(a).float().to(device) for a in z]
+
+        lnL_r = [
+                network(x[0], z[0]).unsqueeze(0),
+                network(x[0], z[1]).unsqueeze(0),
+                network(x[1], z[1]).unsqueeze(0),
+                network(x[1], z[0]).unsqueeze(0)]
+        #d = [torch.exp(lnL_r[i])/(1+torch.exp(lnL_r[i])) for i in range(4)]
+        #loss  = -torch.log(d[0]) - torch.log(1-d[1])
+        #loss -= torch.log(d[2]) + torch.log(1-d[3])
+        #return loss.sum()
+
+        loss  = -torch.nn.functional.logsigmoid( lnL_r[0])
+        loss += -torch.nn.functional.logsigmoid(-lnL_r[1])
+        loss += -torch.nn.functional.logsigmoid( lnL_r[2])
+        loss += -torch.nn.functional.logsigmoid(-lnL_r[3])
+        return loss.sum()
+
     def loss_fn(network, xz, n_particles = 3):
+        if n_particles == 1:
+            return loss_fn2(network, xz)
+
         indices = np.random.choice(len(xz), size = n_particles, replace = False)
         x = [xz[i]['x'] for i in indices]
         z = [xz[i]['z'] for i in indices]
@@ -54,7 +81,10 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu
             loss = loss_fn(network, xz_test, n_particles = n_particles)
             losses_test.append(loss.detach().cpu().numpy().item())
         else:
-            loss = loss_fn(network, xz, n_particles = n_particles)
+            loss = 0.
+            for j in range(n_batch):
+                loss += loss_fn(network, xz, n_particles = n_particles)
+            loss /= n_batch
             losses.append(loss.detach().cpu().numpy().item())
             loss.backward()
             optimizer.step()
@@ -70,7 +100,7 @@ def get_z(xz):
 def get_x(xz):
     return [xz[i]['x'] for i in range(len(xz))]
 
-def estimate_lnL(network, x0, z, L_th = 1e-3, n_train = 10, epsilon = 1e-2, n_sub = 1000, sort = True, device = 'cpu'):
+def estimate_lnL(network, x0, z, n_sub = 1000, sort = True, device = 'cpu'):
     """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
     if n_sub > 0:
         z = subsample(n_sub, z)
@@ -192,8 +222,8 @@ class LinearWithChannel(nn.Module):
 def combine(y, z):
     """Combines data vector y and parameter vector z.
 
-    y : (ydim) or (nbatch, ydim) (only if nbatch provided for z)
     z : (zdim) or (nbatch, zdim)
+    y : (ydim) or (nbatch, ydim) (only if nbatch provided for z)
 
     returns: (nbatch, zdim, ydim+1)
     """
@@ -203,19 +233,26 @@ def combine(y, z):
     return torch.cat([y, z], -1)
 
 class DenseLegs(nn.Module):
-    def __init__(self, ydim, zdim):
+    def __init__(self, ydim, zdim, p = 0.0):
         super().__init__()
-        self.fc1 = LinearWithChannel(ydim+1, 1000, zdim)
-        self.fc2 = LinearWithChannel(1000, 1000, zdim)
-        self.fc3 = LinearWithChannel(1000, 100, zdim)
-        self.fc4 = LinearWithChannel(100, 1, zdim)
+        NH = 1000
+        self.fc1 = LinearWithChannel(ydim+1, NH, zdim)
+        self.fc2 = LinearWithChannel(NH, NH, zdim)
+        self.fc3 = LinearWithChannel(NH, NH, zdim)
+        self.fc4 = LinearWithChannel(NH, NH, zdim)
+        self.fc5 = LinearWithChannel(NH, 1, zdim)
+        self.drop = nn.Dropout(p = p)
 
     def forward(self, y, z):
         x = combine(y, z)
         x = torch.relu(self.fc1(x))
+        x = self.drop(x)
         x = torch.relu(self.fc2(x))
+        x = self.drop(x)
         x = torch.relu(self.fc3(x))
-        x = self.fc4(x).squeeze(-1)
+        x = self.drop(x)
+        x = torch.relu(self.fc4(x))
+        x = self.fc5(x).squeeze(-1)
         return x
 
 class ConvHead(nn.Module):
@@ -238,7 +275,7 @@ class ConvHead(nn.Module):
         return x.flatten(start_dim=-2)
 
 class Network(nn.Module):
-    def __init__(self, xdim, zdim, xz_init = None, head = None):
+    def __init__(self, xdim, zdim, xz_init = None, head = None, p = 0.):
         """Base network combining z-independent head and parallel tail.
 
         :param xdim: Number of data dimensions going into DenseLeg network
@@ -251,9 +288,8 @@ class Network(nn.Module):
         returns intermediate state `y`.
         """
         super().__init__()
-        #self.head = ConvHead(xdim)
-        self.legs = DenseLegs(xdim, zdim)
         self.head = head
+        self.legs = DenseLegs(xdim, zdim, p = p)
         
         if xz_init is not None:
             x_mean, x_std, z_mean, z_std = get_norms(xz_init)

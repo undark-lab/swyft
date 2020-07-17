@@ -19,7 +19,7 @@ class SWYFT:
         self.verbose = verbosity
 
     def round(self, n_sims = 3000, n_train = 5000, lr = 1e-3, n_particles = 2,
-            head = None, combine = False):
+            head = None, combine = False, p = 0.0, n_batch = 1):
         if self.verbose:
             print("Round: ", len(self.xz_store))
         if n_sims > 0:
@@ -52,14 +52,25 @@ class SWYFT:
             x_dim = len(self.x0)
         else:
             x_dim = head(torch.tensor(self.x0).float().to(self.device)).shape[-1]
-        network = Network(x_dim, self.z_dim, xz_init = xz, head = head).to(self.device)
+        network = Network(x_dim, self.z_dim, xz_init = xz, head = head, p = p).to(self.device)
+        network.train()
 
         if self.verbose:
             print("Network optimization")
         # Perform optimization
-        losses, losses_test  = train(network, xz[:-n_tests-1], n_steps =
-                n_train, lr = lr, n_particles = n_particles, device =
-                self.device, xz_test = xz[-n_tests-1:])
+        if isinstance(lr, list):
+            losses = []
+            losses_test = []
+            for i in range(len(lr)):
+                loss, loss_test  = train(network, xz[:-n_tests-1], n_steps =
+                        n_train[i], lr = lr[i], n_particles = n_particles, device =
+                        self.device, xz_test = xz[-n_tests-1:], n_batch = n_batch)
+                losses += loss
+                losses_test += loss_test
+        else:
+            losses, losses_test  = train(network, xz[:-n_tests-1], n_steps =
+                    n_train, lr = lr, n_particles = n_particles, device =
+                    self.device, xz_test = xz[-n_tests-1:], n_batch = n_batch)
 
         # Store results
         self.xz_store.append(xz)
@@ -67,8 +78,12 @@ class SWYFT:
         self.loss_store.append(losses)
         self.test_loss_store.append(losses_test)
 
-    def get_posteriors(self, nround = -1, x0 = None):
+    def get_posteriors(self, nround = -1, x0 = None, MC_dropout = False):
         network = self.net_store[nround]
+        if MC_dropout:
+            network.train()
+        else:
+            network.eval()
         z = get_z(self.xz_store[nround])
         x0 = x0 if x0 is not None else self.x0
         z_lnL = estimate_lnL(network, x0, z, device = self.device)
