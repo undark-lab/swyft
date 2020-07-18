@@ -18,8 +18,8 @@ class SWYFT:
         self.test_loss_store = []
         self.verbose = verbosity
 
-    def round(self, n_sims = 3000, n_train = 5000, lr = 1e-3, n_particles = 2,
-            head = None, combine = False, p = 0.0, n_batch = 1):
+    def round(self, n_sims = 3000, n_train = [3000,3000,3000], lr = [1e-3,1e-4,1e-5], n_particles = 1,
+            head = None, combine = False, p = 0.2, n_batch = 3, threshold = 1e-6):
         if self.verbose:
             print("Round: ", len(self.xz_store))
         if n_sims > 0:
@@ -31,7 +31,8 @@ class SWYFT:
             if len(self.net_store) == 0:
                 z = sample_z(n_sims, self.z_dim)  # draw from initial prior
             else:
-                z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device, verbosity = self.verbose)
+                z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device, verbosity = self.verbose,
+                        threshold = threshold)
 
             # time sink
             if self.verbose:

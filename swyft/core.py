@@ -310,7 +310,7 @@ class Network(nn.Module):
         return out
 
 
-def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False):
+def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False, threshold = 1e-6):
     """Generate parameter samples z~p_c(z) from constrained prior.
     
     Arguments
@@ -332,7 +332,7 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False):
         z = sample_z(n_draws, n_dim)
         zlnL = estimate_lnL(net, x0, z, sort = False, device = device)
         for i in range(n_dim):
-            mask = zlnL[i]['lnL'] > -13
+            mask = zlnL[i]['lnL'] > np.log(threshold)
             frac[i] = sum(mask)/len(mask)
             zout[i].append(zlnL[i]['z'][mask])
             counter[i] += mask.sum()
