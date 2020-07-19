@@ -79,16 +79,32 @@ class SWYFT:
         self.loss_store.append(losses)
         self.test_loss_store.append(losses_test)
 
-    def get_posteriors(self, nround = -1, x0 = None, MC_dropout = False):
+    def get_posteriors(self, nround = -1, x0 = None, error = False, z = None, n_sub = 100):
         network = self.net_store[nround]
-        if MC_dropout:
-            network.train()
-        else:
-            network.eval()
-        z = get_z(self.xz_store[nround])
+        if z is None:
+            z = get_z(self.xz_store[nround])
         x0 = x0 if x0 is not None else self.x0
-        z_lnL = estimate_lnL(network, x0, z, device = self.device)
-        return z_lnL
+
+        if not error:
+            network.eval()
+            z_lnL = estimate_lnL(network, x0, z, device = self.device, normalize = True, n_sub = n_sub)
+            return z_lnL
+        else:
+            network.train()
+            z_lnL_list = []
+            zsub = subsample(n_sub, z)
+            for i in tqdm(range(100), desc="Estimating std"):
+                z_lnL = estimate_lnL(network, x0, zsub, device = self.device, normalize = False, n_sub = 100000000)
+                z_lnL_list.append(z_lnL)
+            std_list = []
+            for j in range(len(z_lnL_list[0])):
+                tmp = [z_lnL_list[i][j]['lnL'] for i in range(len(zsub))]
+                mean = sum(tmp)/len(zsub)
+                tmp = [(z_lnL_list[i][j]['lnL']-mean)**2 for i in range(len(zsub))]
+                var = sum(tmp)/len(zsub)
+                std = var**0.5
+                std_list.append(std)
+            return std_list
 
     def save(self, filename):
         """Save current state, including sampled data, loss history and fitted networks.
