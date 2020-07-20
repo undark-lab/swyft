@@ -35,12 +35,12 @@ def sample_x(model, z):
         xz.append(dict(x=x, z=z[i]))
     return xz
 
-def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu', xz_test = None, n_batch = 1):
+def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu', xz_test = None, n_batch = 1, combinations = None):
     # 1. Randomly select n_particles from train_data
     # 2. Calculate associated loss by permuting
     # 3. Repeat n_step times
 
-    def loss_fn(network, xz):
+    def loss_fn(network, xz, combinations = None):
         xz = subsample(2, xz)
         x = get_x(xz)
         z = get_z(xz)
@@ -48,12 +48,10 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu
         x = [torch.tensor(a).float().to(device) for a in x]
 
         # z has to be list of (zdim, pdim) arrays
-        if len(z[0].shape) == 1:
+        if combinations is None:
             z = [torch.tensor(a).float().to(device).unsqueeze(-1) for a in z]
-        elif len(z[0].shape) == 2:
-            z = [torch.tensor(a).float().to(device) for a in z]
         else:
-            raise ValueError
+            z = [torch.stack([torch.tensor(a).float().to(device)[c] for c in combinations]) for a in z]
 
         lnL_r = [
                 network(x[0], z[0]).unsqueeze(0),
@@ -98,12 +96,12 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu
         optimizer.zero_grad()
 
         if xz_test is not None and i%5 == 0:
-            loss = loss_fn(network, xz_test)
+            loss = loss_fn(network, xz_test, combinations = combinations)
             losses_test.append(loss.detach().cpu().numpy().item())
         else:
             loss = 0.
             for j in range(n_batch):
-                loss += loss_fn(network, xz)
+                loss += loss_fn(network, xz, combinations = combinations)
             loss /= n_batch
             losses.append(loss.detach().cpu().numpy().item())
             loss.backward()
@@ -120,16 +118,27 @@ def get_z(xz):
 def get_x(xz):
     return [xz[i]['x'] for i in range(len(xz))]
 
-def estimate_lnL(network, x0, z, n_sub = 1000, sort = True, device = 'cpu', normalize = True):
+def combine2(z, combinations):
+    if combinations is None:
+        return np.stack([[z[i]] for i in range(len(z))])
+    else:
+        return np.stack([z[c] for c in combinations])
+
+
+def estimate_lnL(network, x0, z, n_sub = 1000, sort = True, device = 'cpu', normalize = True, combinations = None):
     """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
     if n_sub > 0:
         z = subsample(n_sub, z)
-    n_dim = z[0].shape[0]
+    if combinations is None:
+        n_dim = len(z[0])
+    else:
+        n_dim = len(combinations)
     x0 = torch.tensor(x0).float().to(device)
-    lnL = [network(x0, torch.tensor(z[i]).float().to(device).unsqueeze(-1)).detach().cpu().numpy() for i in range(len(z))]
+    lnL = [
+            network(x0, torch.tensor(combine2(zn, combinations)).float().to(device)).detach().cpu().numpy() for zn in z]
     out = []
     for i in range(n_dim):
-        tmp = [[z[j][i], lnL[j][i]] for j in range(len(z))]
+        tmp = [[combine2(z[j], combinations)[i], lnL[j][i]] for j in range(len(z))]
         if sort:
             tmp = sorted(tmp, key = lambda pair: pair[0])
         z_i = np.array([y[0] for y in tmp])
