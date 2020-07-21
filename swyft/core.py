@@ -11,13 +11,14 @@ import math
 ###############
 
 def sample_z(n_draws, n_dim):
-    """Return samples from the hyper cube with uniform prior.
+    """Return uniform samples from the hyper cube.
 
-    :param n_draws: Number of samples.
-    :param n_dim: Hypercube dimensions.
-    :return: Random samples from hyper cube.
-    :rtype: List of length n_draws and with (n_dim) array elements.
+    Args:
+        n_draws (int): Number of samples
+        n_dim (int): Dimension of hypercube
 
+    Returns:
+        list: A list of length n_draws, with (n_dim,) array elements
     """
     return [np.random.rand(n_dim) for i in range(n_draws)]
 
@@ -35,35 +36,38 @@ def sample_x(model, z):
         xz.append(dict(x=x, z=z[i]))
     return xz
 
-def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu', xz_test = None, n_batch = 1, combinations = None):
-    # 1. Randomly select n_particles from train_data
-    # 2. Calculate associated loss by permuting
-    # 3. Repeat n_step times
+def get_z(xz):
+    return [xz[i]['z'] for i in range(len(xz))]
 
-    def loss_fn(network, xz, combinations = None):
-        xz = subsample(2, xz)
-        x = get_x(xz)
-        z = get_z(xz)
+def get_x(xz):
+    return [xz[i]['x'] for i in range(len(xz))]
 
-        x = [torch.tensor(a).float().to(device) for a in x]
+def loss_fn(network, xz, combinations = None, device = 'cpu'):
+    xz = subsample(2, xz)
+    x = get_x(xz)
+    z = get_z(xz)
 
-        # z has to be list of (zdim, pdim) arrays
-        if combinations is None:
-            z = [torch.tensor(a).float().to(device).unsqueeze(-1) for a in z]
-        else:
-            z = [torch.stack([torch.tensor(a).float().to(device)[c] for c in combinations]) for a in z]
+    x = [torch.tensor(a).float().to(device) for a in x]
 
-        lnL_r = [
-                network(x[0], z[0]).unsqueeze(0),
-                network(x[0], z[1]).unsqueeze(0),
-                network(x[1], z[1]).unsqueeze(0),
-                network(x[1], z[0]).unsqueeze(0)]
+    # z has to be list of (zdim, pdim) arrays
+    if combinations is None:
+        z = [torch.tensor(a).float().to(device).unsqueeze(-1) for a in z]
+    else:
+        z = [torch.stack([torch.tensor(a).float().to(device)[c] for c in combinations]) for a in z]
 
-        loss  = -torch.nn.functional.logsigmoid( lnL_r[0])
-        loss += -torch.nn.functional.logsigmoid(-lnL_r[1])
-        loss += -torch.nn.functional.logsigmoid( lnL_r[2])
-        loss += -torch.nn.functional.logsigmoid(-lnL_r[3])
-        return loss.sum()
+    lnL_r = [
+            network(x[0], z[0]).unsqueeze(0),
+            network(x[0], z[1]).unsqueeze(0),
+            network(x[1], z[1]).unsqueeze(0),
+            network(x[1], z[0]).unsqueeze(0)]
+
+    loss  = -torch.nn.functional.logsigmoid( lnL_r[0])
+    loss += -torch.nn.functional.logsigmoid(-lnL_r[1])
+    loss += -torch.nn.functional.logsigmoid( lnL_r[2])
+    loss += -torch.nn.functional.logsigmoid(-lnL_r[3])
+    return loss.sum()
+
+
 
 #    def loss_fn(network, xz, n_particles = 3):
 #        if n_particles == 1:
@@ -88,42 +92,27 @@ def train(network, xz, n_steps = 1000, lr = 1e-3, n_particles = 2, device = 'cpu
 #            loss += particle_loss.sum()
 #        return loss
 
+def train(network, xz, n_train = 1000, lr = 1e-3, device = 'cpu', n_batch = 3, combinations = None):
+    """Train a network.
+    """
     optimizer = torch.optim.Adam(network.parameters(), lr = lr)
     losses = []
-    losses_test = []
-
-    for i in tqdm(range(n_steps)):
+    for i in tqdm(range(n_train)):
         optimizer.zero_grad()
-
-        if xz_test is not None and i%5 == 0:
-            loss = loss_fn(network, xz_test, combinations = combinations)
-            losses_test.append(loss.detach().cpu().numpy().item())
-        else:
-            loss = 0.
-            for j in range(n_batch):
-                loss += loss_fn(network, xz, combinations = combinations)
-            loss /= n_batch
-            losses.append(loss.detach().cpu().numpy().item())
-            loss.backward()
-            optimizer.step()
-
-    if xz_test is None:
-        return losses
-    else:
-        return losses, losses_test
-
-def get_z(xz):
-    return [xz[i]['z'] for i in range(len(xz))]
-
-def get_x(xz):
-    return [xz[i]['x'] for i in range(len(xz))]
+        loss = 0.
+        for j in range(n_batch):
+            loss += loss_fn(network, xz, combinations = combinations, device = device)
+        loss /= n_batch
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.detach().cpu().numpy().item())
+    return losses
 
 def combine2(z, combinations):
     if combinations is None:
         return np.stack([[z[i]] for i in range(len(z))])
     else:
         return np.stack([z[c] for c in combinations])
-
 
 def estimate_lnL(network, x0, z, n_sub = 1000, sort = True, device = 'cpu', normalize = True, combinations = None):
     """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
@@ -148,22 +137,30 @@ def estimate_lnL(network, x0, z, n_sub = 1000, sort = True, device = 'cpu', norm
         out.append(dict(z=z_i, lnL=lnL_i))
     return out
 
-def estimate_lnL_2d(network, x0, z, n_sub = 1000):
-    """Returns single dict(z, lnL)"""
-    if n_sub > 0:
-        z = subsample(n_sub, z)
-    lnL = np.array([network(x0, z[k]).detach() for k in range(len(z))])
-    lnL -= lnL.max()
-    return dict(z = z, lnL = lnL)
 
-def get_seeds(z_lnL, lnL_th = -6):
-    z_seeds = []
-    for i in range(len(z_lnL)):
-        z = z_lnL[i]['z']
-        lnL = z_lnL[i]['lnL']
-        mask = lnL > lnL_th
-        z_seeds.append(z[mask])
-    return z_seeds
+
+
+
+
+
+
+
+#def estimate_lnL_2d(network, x0, z, n_sub = 1000):
+#    """Returns single dict(z, lnL)"""
+#    if n_sub > 0:
+#        z = subsample(n_sub, z)
+#    lnL = np.array([network(x0, z[k]).detach() for k in range(len(z))])
+#    lnL -= lnL.max()
+#    return dict(z = z, lnL = lnL)
+#
+#def get_seeds(z_lnL, lnL_th = -6):
+#    z_seeds = []
+#    for i in range(len(z_lnL)):
+#        z = z_lnL[i]['z']
+#        lnL = z_lnL[i]['lnL']
+#        mask = lnL > lnL_th
+#        z_seeds.append(z[mask])
+#    return z_seeds
 
 def resample_z(n, z_seeds, epsilon = None):
     z_samples = []

@@ -18,7 +18,34 @@ class SWYFT:
         self.test_loss_store = []
         self.verbose = verbosity
 
-    def round(self, n_sims = 3000, n_train = [3000,3000,3000], lr = [1e-3,1e-4,1e-5], n_particles = 1,
+    def square(self, n_train = [3000,3000,3000], lr = [1e-3,1e-4,1e-5], head = None,
+            combinations = None, p = 0.2, n_batch = 3):
+
+        # Instantiate network
+        if head is None:
+            x_dim = len(self.x0)
+        else:
+            x_dim = head(torch.tensor(self.x0).float().to(self.device)).shape[-1]
+        zdim = len(combinations)
+        pdim = len(combinations[0])
+        network = Network(x_dim, zdim, pdim = pdim, head = head, p = p).to(self.device)
+        xz = self.xz_store[-1]
+        
+        z = get_z(xz)
+        network.train()
+
+        losses = []
+        for i in range(len(lr)):
+            loss = train(network, xz, n_train = n_train[i], lr = lr[i],
+                    device = self.device, n_batch = n_batch, combinations=combinations)
+            losses += loss
+
+        network.eval()
+        out = estimate_lnL(network, self.x0, z, sort = False, device = self.device,
+                normalize = False, combinations = combinations)
+        return out
+
+    def round(self, n_sims = 3000, n_train = [3000,3000,3000], lr = [1e-3,1e-4,1e-5],
             head = None, combine = False, p = 0.2, n_batch = 3, threshold = 1e-6):
         if self.verbose:
             print("Round: ", len(self.xz_store))
@@ -61,23 +88,20 @@ class SWYFT:
         # Perform optimization
         if isinstance(lr, list):
             losses = []
-            losses_test = []
             for i in range(len(lr)):
-                loss, loss_test  = train(network, xz[:-n_tests-1], n_steps =
-                        n_train[i], lr = lr[i], n_particles = n_particles, device =
-                        self.device, xz_test = xz[-n_tests-1:], n_batch = n_batch)
+                loss = train(network, xz, n_train =
+                        n_train[i], lr = lr[i], device =
+                        self.device, n_batch = n_batch)
                 losses += loss
-                losses_test += loss_test
         else:
-            losses, losses_test  = train(network, xz[:-n_tests-1], n_steps =
-                    n_train, lr = lr, n_particles = n_particles, device =
-                    self.device, xz_test = xz[-n_tests-1:], n_batch = n_batch)
+            losses = train(network, xz, n_train =
+                    n_train, lr = lr, device =
+                    self.device, n_batch = n_batch)
 
         # Store results
         self.xz_store.append(xz)
         self.net_store.append(network)
         self.loss_store.append(losses)
-        self.test_loss_store.append(losses_test)
 
     def get_posteriors(self, nround = -1, x0 = None, error = False, z = None, n_sub = 100):
         network = self.net_store[nround]
