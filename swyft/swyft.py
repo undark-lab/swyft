@@ -43,7 +43,7 @@ class SWYFT:
         network.eval()
         out = estimate_lnL(network, self.x0, z, sort = False, device = self.device,
                 normalize = False, combinations = combinations)
-        return out
+        return out, losses
 
     def round(self, n_sims = 3000, n_train = [3000,3000,3000], lr = [1e-3,1e-4,1e-5],
             head = None, combine = False, p = 0.2, n_batch = 3, threshold = 1e-6):

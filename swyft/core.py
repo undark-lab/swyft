@@ -95,7 +95,7 @@ def loss_fn(network, xz, combinations = None, device = 'cpu'):
 def train(network, xz, n_train = 1000, lr = 1e-3, device = 'cpu', n_batch = 3, combinations = None):
     """Train a network.
     """
-    optimizer = torch.optim.Adam(network.parameters(), lr = lr)
+    optimizer = torch.optim.Adam(network.parameters(), lr = lr, weight_decay = 0.0000)
     losses = []
     for i in tqdm(range(n_train)):
         optimizer.zero_grad()
@@ -273,7 +273,7 @@ def combine(y, z):
 #    return torch.cat([y, z], -1)
 
 class DenseLegs(nn.Module):
-    def __init__(self, ydim, zdim, pdim = 1, p = 0.0, NH = 1000):
+    def __init__(self, ydim, zdim, pdim = 1, p = 0.0, NH = 256):
         super().__init__()
         self.fc1 = LinearWithChannel(ydim+pdim, NH, zdim)
         self.fc2 = LinearWithChannel(NH, NH, zdim)
@@ -282,10 +282,7 @@ class DenseLegs(nn.Module):
         self.drop = nn.Dropout(p = p)
 
     def forward(self, y, z):
-        #print(y.shape)
-        #print(z.shape)
         x = combine(y, z)
-        #print(x.shape)
         x = torch.relu(self.fc1(x))
         x = self.drop(x)
         x = torch.relu(self.fc2(x))
@@ -380,7 +377,9 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False, th
         done = min(counter) >= n_draws
     if verbosity:
         print("Constrained posterior volume:", frac.prod())
-    return np.array([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T
+    out = list(np.array([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T[0])
+    return out
+
 
 
 ###################
