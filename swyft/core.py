@@ -42,31 +42,60 @@ def get_z(xz):
 def get_x(xz):
     return [xz[i]['x'] for i in range(len(xz))]
 
-def loss_fn(network, xz, combinations = None, device = 'cpu'):
-    xz = subsample(2, xz)
+def loss_fn_batched(network, xz, combinations = None, device = 'cpu', n_batch = 1):
+    xz = subsample(2*n_batch, xz)
     x = get_x(xz)
     z = get_z(xz)
 
-    x = [torch.tensor(a).float().to(device) for a in x]
+    # bring into shape
+    x = torch.tensor([a for a in x]).float().to(device)
+    x = torch.repeat_interleave(x, 2, dim = 0)
+    # (n_batch*4, data-shape)  - repeat twice each sample of x - there are 2*n_batch samples
+    # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
 
-    # z has to be list of (zdim, pdim) arrays
-    if combinations is None:
-        z = [torch.tensor(a).float().to(device).unsqueeze(-1) for a in z]
-    else:
-        z = [torch.stack([torch.tensor(a).float().to(device)[c] for c in combinations]) for a in z]
+    z = torch.tensor([combine2(zs, combinations) for zs in z]).float().to(device)
+    zdim = len(z[0])
+    z = z.view(n_batch, -1, *z.shape[-1:])
+    z = torch.repeat_interleave(z, 2, dim = 0)
+    z = z.view(n_batch*4, -1, *z.shape[-1:])
+    # (n_batch*4, param-shape)  - repeat twice each sample of z - there are 2*n_batch samples
+    # repetition is twisted in first dimension: [a, b, a, b, c, d, c, d, ...]
 
-    lnL_r = [
-            network(x[0], z[0]).unsqueeze(0),
-            network(x[0], z[1]).unsqueeze(0),
-            network(x[1], z[1]).unsqueeze(0),
-            network(x[1], z[0]).unsqueeze(0)]
+    lnL = network(x, z)
+    lnL = lnL.view(n_batch, 4, zdim)
 
-    loss  = -torch.nn.functional.logsigmoid( lnL_r[0])
-    loss += -torch.nn.functional.logsigmoid(-lnL_r[1])
-    loss += -torch.nn.functional.logsigmoid( lnL_r[2])
-    loss += -torch.nn.functional.logsigmoid(-lnL_r[3])
-    return loss.sum()
+    loss  = -torch.nn.functional.logsigmoid( lnL[:,0])
+    loss += -torch.nn.functional.logsigmoid(-lnL[:,1])
+    loss += -torch.nn.functional.logsigmoid(-lnL[:,2])
+    loss += -torch.nn.functional.logsigmoid( lnL[:,3])
 
+    loss = loss.sum() / n_batch
+    return loss
+
+#def loss_fn(network, xz, combinations = None, device = 'cpu'):
+#    xz = subsample(2, xz)
+#    x = get_x(xz)
+#    z = get_z(xz)
+#
+#    x = [torch.tensor(a).float().to(device) for a in x]
+#
+#    # z has to be list of (zdim, pdim) arrays
+#    if combinations is None:
+#        z = [torch.tensor(a).float().to(device).unsqueeze(-1) for a in z]
+#    else:
+#        z = [torch.stack([torch.tensor(a).float().to(device)[c] for c in combinations]) for a in z]
+#
+#    lnL_r = [
+#            network(x[0], z[0]).unsqueeze(0),
+#            network(x[0], z[1]).unsqueeze(0),
+#            network(x[1], z[1]).unsqueeze(0),
+#            network(x[1], z[0]).unsqueeze(0)]
+#
+#    loss  = -torch.nn.functional.logsigmoid( lnL_r[0])
+#    loss += -torch.nn.functional.logsigmoid(-lnL_r[1])
+#    loss += -torch.nn.functional.logsigmoid( lnL_r[2])
+#    loss += -torch.nn.functional.logsigmoid(-lnL_r[3])
+#    return loss.sum()
 
 
 #    def loss_fn(network, xz, n_particles = 3):
@@ -99,10 +128,11 @@ def train(network, xz, n_train = 1000, lr = 1e-3, device = 'cpu', n_batch = 3, c
     losses = []
     for i in tqdm(range(n_train)):
         optimizer.zero_grad()
-        loss = 0.
-        for j in range(n_batch):
-            loss += loss_fn(network, xz, combinations = combinations, device = device)
-        loss /= n_batch
+        loss = loss_fn_batched(network, xz, combinations = combinations, device = device, n_batch = n_batch)
+        #loss = 0.
+        #for j in range(n_batch):
+        #    loss += loss_fn(network, xz, combinations = combinations, device = device)
+        #loss /= n_batch
         loss.backward()
         optimizer.step()
         losses.append(loss.detach().cpu().numpy().item())
@@ -114,7 +144,7 @@ def combine2(z, combinations):
     else:
         return np.stack([z[c] for c in combinations])
 
-def estimate_lnL(network, x0, z, n_sub = 1000, sort = True, device = 'cpu', normalize = True, combinations = None):
+def estimate_lnL(network, x0, z, n_sub = 0, sort = True, device = 'cpu', normalize = True, combinations = None):
     """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
     if n_sub > 0:
         z = subsample(n_sub, z)
