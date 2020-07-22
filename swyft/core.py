@@ -52,12 +52,12 @@ def loss_fn_batched(network, xz, combinations = None, device = 'cpu', n_batch = 
     z = get_z(xz)
 
     # bring into shape
-    x = torch.tensor([a for a in x]).float().to(device)
+    x = torch.stack(x)
     x = torch.repeat_interleave(x, 2, dim = 0)
-    # (n_batch*4, data-shape)  - repeat twice each sample of x - there are 2*n_batch samples
+    # (n_batch*2, data-shape)  - repeat twice each sample of x - there are 2*n_batch samples
     # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
 
-    z = torch.tensor([combine2(zs, combinations) for zs in z]).float().to(device)
+    z = torch.stack([combine2(zs, combinations) for zs in z])
     zdim = len(z[0])
     z = z.view(n_batch, -1, *z.shape[-1:])
     z = torch.repeat_interleave(z, 2, dim = 0)
@@ -66,6 +66,7 @@ def loss_fn_batched(network, xz, combinations = None, device = 'cpu', n_batch = 
     # repetition is twisted in first dimension: [a, b, a, b, c, d, c, d, ...]
 
     lnL = network(x, z)
+
     lnL = lnL.view(n_batch, 4, zdim)
 
     loss  = -torch.nn.functional.logsigmoid( lnL[:,0])
@@ -133,10 +134,6 @@ def train(network, xz, n_train = 1000, lr = 1e-3, device = 'cpu', n_batch = 3, c
     for i in tqdm(range(n_train)):
         optimizer.zero_grad()
         loss = loss_fn_batched(network, xz, combinations = combinations, device = device, n_batch = n_batch)
-        #loss = 0.
-        #for j in range(n_batch):
-        #    loss += loss_fn(network, xz, combinations = combinations, device = device)
-        #loss /= n_batch
         loss.backward()
         optimizer.step()
         losses.append(loss.detach().cpu().numpy().item())
@@ -144,13 +141,15 @@ def train(network, xz, n_train = 1000, lr = 1e-3, device = 'cpu', n_batch = 3, c
 
 def combine2(z, combinations):
     if combinations is None:
-        return np.stack([[z[i]] for i in range(len(z))])
+        return z.unsqueeze(-1)
+        #return np.stack([[z[i]] for i in range(len(z))])
     else:
-        return np.stack([z[c] for c in combinations])
+        return torch.stack([z[c] for c in combinations])
+        #return np.stack([z[c] for c in combinations])
 
 def estimate_lnL_batched(network, x0, z, sort = True, device = 'cpu', normalize = True, combinations = None, n_batch = 64):
     """Return current estimate of normalized marginal 1-dim lnL.  List of zdim dictionaries."""
-    x0 = torch.tensor(x0).float().to(device)
+    x0 = torch.tensor(x0).float().to(device).unsqueeze(0)
     zdim = len(z[0]) if combinations is None else len(combinations)
     n_samples = len(z)
 
@@ -158,12 +157,10 @@ def estimate_lnL_batched(network, x0, z, sort = True, device = 'cpu', normalize 
     z_out = []
     for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL'):
         zbatch = z[i*n_batch:(i+1)*n_batch]
-        zcomb_list = [combine2(zn, combinations) for zn in zbatch]
-        zcomb = torch.tensor(zcomb_list).float().to(device)
+        zcomb = torch.stack([combine2(zn, combinations) for zn in zbatch])
         tmp = network(x0, zcomb)
-        lnL_list = list(tmp.detach().cpu().numpy())
-        lnL_out += lnL_list
-        z_out += zcomb_list
+        lnL_out += list(tmp.detach().cpu().numpy())
+        z_out += list(zcomb.cpu().numpy())
 
     out = []
     for i in range(zdim):
@@ -416,11 +413,12 @@ class Network(nn.Module):
         #TODO : Bring normalization back
         #x = (x-self.x_mean)/self.x_std
         #z = (z-self.z_mean)/self.z_std
-        
+
         if self.head is not None:
             y = self.head(x)
         else:
             y = x  # Take data as features
+
         out = self.legs(y, z)
         return out
 
