@@ -22,6 +22,10 @@ def sample_z(n_draws, n_dim):
     """
     return [np.random.rand(n_dim) for i in range(n_draws)]
 
+def sortbyfirst(x, y):
+    i = np.argsort(x)
+    return x[i], y[i]
+
 def sample_x(model, z):
     """Augments parameter points with simulated data.
     
@@ -43,7 +47,7 @@ def get_x(xz):
     return [xz[i]['x'] for i in range(len(xz))]
 
 def loss_fn_batched(network, xz, combinations = None, device = 'cpu', n_batch = 1):
-    xz = subsample(2*n_batch, xz)
+    xz = subsample(2*n_batch, xz, replace = True)
     x = get_x(xz)
     z = get_z(xz)
 
@@ -170,36 +174,50 @@ def estimate_lnL_batched(network, x0, z, sort = True, device = 'cpu', normalize 
         out.append(dict(z=z_i, lnL=lnL_i))
     return out
 
-def estimate_lnL(network, x0, z, n_sub = 0, sort = True, device = 'cpu', normalize = True, combinations = None):
-    """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
-    if n_sub > 0:
-        z = subsample(n_sub, z)
-    if combinations is None:
-        n_dim = len(z[0])
+def get_posteriors(network, x0, z, device = 'cpu', error = False, n_sub = None):
+    zsub = subsample(n_sub, z)
+    if not error:
+        network.eval()
+        z_lnL = estimate_lnL_batched(network, x0, zsub, device = device, normalize = True)
+        return z_lnL
     else:
-        n_dim = len(combinations)
-    x0 = torch.tensor(x0).float().to(device)
-    lnL = [
-            network(x0, torch.tensor(combine2(zn, combinations)).float().to(device)).detach().cpu().numpy() for zn in z]
-    out = []
-    for i in range(n_dim):
-        tmp = [[combine2(z[j], combinations)[i], lnL[j][i]] for j in range(len(z))]
-        if sort:
-            tmp = sorted(tmp, key = lambda pair: pair[0])
-        z_i = np.array([y[0] for y in tmp])
-        lnL_i = np.array([y[1] for y in tmp])
-        if normalize:
-            lnL_i -= lnL_i.max()
-        out.append(dict(z=z_i, lnL=lnL_i))
-    return out
+        network.train()
+        z_lnL_list = []
+        for i in tqdm(range(100), desc="Estimating std"):
+            z_lnL = estimate_lnL_batched(network, x0, zsub, device = device, normalize = False)
+            z_lnL_list.append(z_lnL)
+        std_list = []
+        for j in range(len(z_lnL_list[0])):
+            tmp = [z_lnL_list[i][j]['lnL'] for i in range(len(zsub))]
+            mean = sum(tmp)/len(zsub)
+            tmp = [(z_lnL_list[i][j]['lnL']-mean)**2 for i in range(len(zsub))]
+            var = sum(tmp)/len(zsub)
+            std = var**0.5
+            std_list.append(std)
+        return std_list
 
-
-
-
-
-
-
-
+#def estimate_lnL(network, x0, z, n_sub = 0, sort = True, device = 'cpu', normalize = True, combinations = None):
+#    """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
+#    if n_sub > 0:
+#        z = subsample(n_sub, z)
+#    if combinations is None:
+#        n_dim = len(z[0])
+#    else:
+#        n_dim = len(combinations)
+#    x0 = torch.tensor(x0).float().to(device)
+#    lnL = [
+#            network(x0, torch.tensor(combine2(zn, combinations)).float().to(device)).detach().cpu().numpy() for zn in z]
+#    out = []
+#    for i in range(n_dim):
+#        tmp = [[combine2(z[j], combinations)[i], lnL[j][i]] for j in range(len(z))]
+#        if sort:
+#            tmp = sorted(tmp, key = lambda pair: pair[0])
+#        z_i = np.array([y[0] for y in tmp])
+#        lnL_i = np.array([y[1] for y in tmp])
+#        if normalize:
+#            lnL_i -= lnL_i.max()
+#        out.append(dict(z=z_i, lnL=lnL_i))
+#    return out
 
 #def estimate_lnL_2d(network, x0, z, n_sub = 1000):
 #    """Returns single dict(z, lnL)"""
@@ -243,8 +261,10 @@ def resample_z(n, z_seeds, epsilon = None):
 
 def subsample(n_sub, z, replace = False):
     """Subsample lists."""
-    if n_sub >= len(z):
+    if n_sub is None:
         return z
+    if n_sub >= len(z) and not replace:
+        raise ValueError("Number of sub-samples without replacement larger than sample size")
     indices = np.random.choice(len(z), size = n_sub, replace = replace)
     z_sub = [z[i] for i in indices]
     return z_sub

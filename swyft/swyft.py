@@ -49,22 +49,23 @@ class SWYFT:
             head = None, combine = False, p = 0.2, n_batch = 3, threshold = 1e-6):
         if self.verbose:
             print("Round: ", len(self.xz_store))
-        if n_sims > 0:
-            n_tests = int(n_sims/10)
 
-            # Generate new training data
+        # New simulations requested
+        if n_sims > 0:
+            # Generate new z
             if self.verbose:
                 print("Generate samples from constrained prior: z~pc(z)")
             if len(self.net_store) == 0:
                 z = sample_z(n_sims, self.z_dim)  # draw from initial prior
             else:
-                z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1], self.x0, device = self.device, verbosity = self.verbose,
-                        threshold = threshold)
+                z = iter_sample_z(n_sims, self.z_dim, self.net_store[-1],
+                        self.x0, device = self.device, verbosity =
+                        self.verbose, threshold = threshold)
 
-            # time sink
+            # Generate new x
             if self.verbose:
                 print("Generate corresponding draws x ~ p(x|z)")
-            xz = sample_x(self.model, z)  # generate corresponding model samples
+            xz = sample_x(self.model, z)
 
             if combine:
                 xz += self.xz_store[-1]
@@ -73,7 +74,6 @@ class SWYFT:
             if self.verbose:
                 print("Reusing samples from previous round.")
             xz = self.xz_store[-1]
-            n_tests = int(len(xz)/10)
 
         # Instantiate network
         if head is None:
@@ -103,32 +103,13 @@ class SWYFT:
         self.net_store.append(network)
         self.loss_store.append(losses)
 
-    def get_posteriors(self, nround = -1, x0 = None, error = False, z = None, n_sub = 100):
+    def get_posteriors(self, nround = -1, x0 = None, error = False, z = None, n_sub = None):
         network = self.net_store[nround]
         if z is None:
             z = get_z(self.xz_store[nround])
         x0 = x0 if x0 is not None else self.x0
-
-        if not error:
-            network.eval()
-            z_lnL = estimate_lnL_batched(network, x0, z, device = self.device, normalize = True, n_sub = n_sub)
-            return z_lnL
-        else:
-            network.train()
-            z_lnL_list = []
-            zsub = subsample(n_sub, z)
-            for i in tqdm(range(100), desc="Estimating std"):
-                z_lnL = estimate_lnL_batched(network, x0, zsub, device = self.device, normalize = False, n_sub = 100000000)
-                z_lnL_list.append(z_lnL)
-            std_list = []
-            for j in range(len(z_lnL_list[0])):
-                tmp = [z_lnL_list[i][j]['lnL'] for i in range(len(zsub))]
-                mean = sum(tmp)/len(zsub)
-                tmp = [(z_lnL_list[i][j]['lnL']-mean)**2 for i in range(len(zsub))]
-                var = sum(tmp)/len(zsub)
-                std = var**0.5
-                std_list.append(std)
-            return std_list
+        post = get_posteriors(network, x0, z, device = self.device, error = error)
+        return post
 
     def save(self, filename):
         """Save current state, including sampled data, loss history and fitted networks.
