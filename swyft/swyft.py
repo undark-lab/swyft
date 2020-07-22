@@ -41,7 +41,7 @@ class SWYFT:
             losses += loss
 
         network.eval()
-        out = estimate_lnL(network, self.x0, z, sort = False, device = self.device,
+        out = estimate_lnL_batched(network, self.x0, z, device = self.device,
                 normalize = False, combinations = combinations)
         return out, losses
 
@@ -111,14 +111,14 @@ class SWYFT:
 
         if not error:
             network.eval()
-            z_lnL = estimate_lnL(network, x0, z, device = self.device, normalize = True, n_sub = n_sub)
+            z_lnL = estimate_lnL_batched(network, x0, z, device = self.device, normalize = True, n_sub = n_sub)
             return z_lnL
         else:
             network.train()
             z_lnL_list = []
             zsub = subsample(n_sub, z)
             for i in tqdm(range(100), desc="Estimating std"):
-                z_lnL = estimate_lnL(network, x0, zsub, device = self.device, normalize = False, n_sub = 100000000)
+                z_lnL = estimate_lnL_batched(network, x0, zsub, device = self.device, normalize = False, n_sub = 100000000)
                 z_lnL_list.append(z_lnL)
             std_list = []
             for j in range(len(z_lnL_list[0])):

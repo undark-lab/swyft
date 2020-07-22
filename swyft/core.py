@@ -144,6 +144,32 @@ def combine2(z, combinations):
     else:
         return np.stack([z[c] for c in combinations])
 
+def estimate_lnL_batched(network, x0, z, sort = True, device = 'cpu', normalize = True, combinations = None, n_batch = 64):
+    """Return current estimate of normalized marginal 1-dim lnL.  List of zdim dictionaries."""
+    x0 = torch.tensor(x0).float().to(device)
+    zdim = len(z[0]) if combinations is None else len(combinations)
+    n_samples = len(z)
+
+    lnL_out = []
+    z_out = []
+    for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL'):
+        zbatch = z[i*n_batch:(i+1)*n_batch]
+        zcomb_list = [combine2(zn, combinations) for zn in zbatch]
+        zcomb = torch.tensor(zcomb_list).float().to(device)
+        tmp = network(x0, zcomb)
+        lnL_list = list(tmp.detach().cpu().numpy())
+        lnL_out += lnL_list
+        z_out += zcomb_list
+
+    out = []
+    for i in range(zdim):
+        z_i = np.array([z_out[j][i] for j in range(n_samples)])
+        lnL_i= np.array([lnL_out[j][i] for j in range(n_samples)])
+        if normalize:
+            lnL_i -= lnL_i.max()
+        out.append(dict(z=z_i, lnL=lnL_i))
+    return out
+
 def estimate_lnL(network, x0, z, n_sub = 0, sort = True, device = 'cpu', normalize = True, combinations = None):
     """Return current estimate of normalized marginal 1-dim lnL.  List of n_dim dictionaries."""
     if n_sub > 0:
@@ -398,7 +424,7 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False, th
     frac = np.ones(n_dim)
     while not done:
         z = sample_z(n_draws, n_dim)
-        zlnL = estimate_lnL(net, x0, z, sort = False, device = device)
+        zlnL = estimate_lnL_batched(net, x0, z, sort = False, device = device)
         for i in range(n_dim):
             mask = zlnL[i]['lnL'] > np.log(threshold)
             frac[i] = sum(mask)/len(mask)
