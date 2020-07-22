@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# pyrofit_core documentation build configuration file, created by
+# swyft documentation build configuration file, created by
 # sphinx-quickstart on Mon Aug 19 15:05:09 2019.
 #
 # This file is execfile()d with the current directory set to its
@@ -20,7 +20,7 @@ import os
 import sys
 import sphinx_rtd_theme
 
-sys.path.insert(0, os.path.abspath('../../pyrofit/'))
+sys.path.insert(0, os.path.abspath('../../swyft/'))
 
 autodoc_mock_imports = ['yaml', 'pyro', 'numpy', 'torch', 'pykeops']
 
@@ -51,7 +51,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'pyrofit_core'
+project = u'swyft'
 copyright = u'2020, Christoph Weniger'
 author = u'Christoph Weniger'
 
@@ -123,7 +123,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'pyrofit_coredoc'
+htmlhelp_basename = 'swyftdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -150,7 +150,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'pyrofit_core.tex', u'pyrofit\\_core Documentation',
+    (master_doc, 'swyft.tex', u'swyft Documentation',
      u'Christoph Weniger', 'manual'),
 ]
 
@@ -160,7 +160,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'pyrofit_core', u'pyrofit_core Documentation',
+    (master_doc, 'swyft', u'swyft Documentation',
      [author], 1)
 ]
 
@@ -171,8 +171,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'pyrofit_core', u'pyrofit_core Documentation',
-     author, 'pyrofit_core', 'One line description of project.',
+    (master_doc, 'swyft', u'swyft Documentation',
+     author, 'swyft', 'One line description of project.',
      'Miscellaneous'),
 ]
 
