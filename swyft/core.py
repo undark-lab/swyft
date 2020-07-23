@@ -38,42 +38,42 @@ def combine_z(z, combinations):
 # Generate sample batches
 #########################
 
-def sample_z(n_draws, n_dim):
+def sample_hypercube(num_samples, num_params):
     """Return uniform samples from the hyper cube.
 
     Args:
-        n_draws (int): Number of samples
-        n_dim (int): Dimension of hypercube
+        num_samples (int): number of samples.
+        num_params (int): dimension of hypercube.
 
     Returns:
-        list: A list of length n_draws, with (n_dim,) array elements
+        list of Tensor: random samples.
     """
-    return [np.random.rand(n_dim) for i in range(n_draws)]
+    return [torch.rand(num_params) for i in range(num_samples)]
 
-def sample_x(model, zlist):
+def simulate_xz(model, list_z):
     """Generates x ~ model(z).
     
     Args:
-        model (fn): Foreward model, returns samples x~p(x|z).
-        zlist (list): List of model parameters z.
+        model (fn): foreward model, returns samples x~p(x|z).
+            Both x and z have to be Tensors.
+        list_z (list of Tensors): list of model parameters z.
 
     Returns:
-        list: List of dictionaries with 'x' and 'z' pairs.
+        list of dict: list of dictionaries with 'x' and 'z' pairs.
     """
-    xz = []
-    n_samples = len(zlist)
-    for i in tqdm(range(n_samples)):
-        x = model(zlist[i])
-        xz.append(dict(x=x, z=zlist[i]))
-    return xz
+    list_xz = []
+    for z in tqdm(list_z):
+        x = model(z)
+        list_xz.append(dict(x=x, z=z))
+    return list_xz
 
-def get_z(xz):
-    """Extract z from batch of samples."""
-    return [xz[i]['z'] for i in range(len(xz))]
-
-def get_x(xz):
+def get_x(list_xz):
     """Extract x from batch of samples."""
-    return [xz[i]['x'] for i in range(len(xz))]
+    return [xz['x'] for xz in list_xz]
+
+def get_z(list_xz):
+    """Extract z from batch of samples."""
+    return [xz['z'] for xz in list_xz]
 
 
 ##########
@@ -84,18 +84,18 @@ def loss_fn(network, xz, combinations = None, n_batch = 32):
     """Evaluate binary-cross-entropy loss function.
 
     Args:
-        network (nn.Module): Network taking minibatch of samples and returing ratio estimator.
-        xz (list): Batch of samples to train on.
-        combinations (list): Optional, determines posteriors that are generated.
+        network (nn.Module): network taking minibatch of samples and returing ratio estimator.
+        xz (list): batch of samples to train on.
+        combinations (list, optional): determines posteriors that are generated.
             examples:
                 [[0,1], [3,4]]: p(z_0,z_1) and p(z_3,z_4) are generated
                     initialize network with zdim = 2, pdim = 2
                 [[0,1,5,2]]: p(z_0,z_1,z_5,z_2) is generated
                     initialize network with zdim = 1, pdim = 4
-        n_batch (int): Mini-batch size.
+        n_batch (int): mini-batch size.
 
     Returns:
-        torch.tensor: Training loss
+        Tensor: training loss.
     """
     # generate minibatch
     xz = subsample(2*n_batch, xz, replace = True)
@@ -139,15 +139,15 @@ def train(network, xz, n_train = 1000, lr = 1e-3, n_batch = 32, combinations = N
     """Network training loop.
 
     Args:
-        network (nn.Module): Network for ratio estimation.
-        xz (list): Batch of samples
-        n_train (int): Training steps
-        lr (float): Learning rate
-        n_batch (int): Minibatch size
-        combinations (list): List of parameter combinations
+        network (nn.Module): network for ratio estimation.
+        xz (list): batch of samples.
+        n_train (int): training steps.
+        lr (float): learning rate.
+        n_batch (int): minibatch size.
+        combinations (list): list of parameter combinations.
 
     Returns:
-        list: List of training losses
+        list: list of training losses.
     """
     optimizer = torch.optim.Adam(network.parameters(), lr = lr, weight_decay = 0.0000)
     losses = []
@@ -164,37 +164,37 @@ def train(network, xz, n_train = 1000, lr = 1e-3, n_batch = 32, combinations = N
 # Posterior estimation
 ######################
 
-def estimate_lnL(network, x0, z, normalize = True, combinations = None, n_batch = 64):
+def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_batch = 64, device = 'cpu'):
     """Return current estimate of normalized marginal 1-dim lnL.
 
     Args:
-        network (nn.Module): trained ratio estimation network
-        x0 (torch.tensor): data
-        z (list): list of parameter points to evaluate
-        normalize (bool): set max(lnL) = 0
-        combinations (list): Optional, parameter combinations
-        n_batch (int): minibatch size
+        network (nn.Module): trained ratio estimation network.
+        x0 (torch.tensor): data.
+        list_z (list): list of parameter points to evaluate.
+        normalize (bool): set max(lnL) = 0.
+        combinations (list, optional): parameter combinations.
+        n_batch (int): minibatch size.
 
     Returns:
         list: List of dictionaries with component z and lnL
     """
-    x0 = x0.unsqueeze(0)
-    zdim = len(z[0]) if combinations is None else len(combinations)
-    n_samples = len(z)
+    x0 = x0.unsqueeze(0).to(device)
+    zdim = len(list_z[0]) if combinations is None else len(combinations)
+    n_samples = len(list_z)
 
     lnL_out = []
     z_out = []
     for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL'):
-        zbatch = z[i*n_batch:(i+1)*n_batch]
-        zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch])
+        zbatch = list_z[i*n_batch:(i+1)*n_batch]
+        zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch]).to(device)
         tmp = network(x0, zcomb)
-        lnL_out += list(tmp.detach().cpu().numpy())
-        z_out += list(zcomb.cpu().numpy())
+        lnL_out += list(tmp.detach().cpu())
+        z_out += list(zcomb.cpu())
 
     out = []
     for i in range(zdim):
-        z_i = np.array([z_out[j][i] for j in range(n_samples)])
-        lnL_i= np.array([lnL_out[j][i] for j in range(n_samples)])
+        z_i = torch.stack([z_out[j][i] for j in range(n_samples)])
+        lnL_i= torch.stack([lnL_out[j][i] for j in range(n_samples)])
         if normalize:
             lnL_i -= lnL_i.max()
         out.append(dict(z=z_i, lnL=lnL_i))
@@ -307,7 +307,7 @@ class Network(nn.Module):
         out = self.legs(y, z)
         return out
 
-def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False, threshold = 1e-6):
+def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6, device = 'cpu'):
     """Generate parameter samples z~p_c(z) from constrained prior.
     
     Arguments
@@ -326,8 +326,8 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False, th
     counter = np.zeros(n_dim)
     frac = np.ones(n_dim)
     while not done:
-        z = sample_z(n_draws, n_dim)
-        zlnL = estimate_lnL(net, x0, z, sort = False, device = device)
+        list_z = sample_hypercube(n_draws, n_dim)
+        zlnL = estimate_lnL(net, x0, list_z, device = device)
         for i in range(n_dim):
             mask = zlnL[i]['lnL'] > np.log(threshold)
             frac[i] = sum(mask)/len(mask)
@@ -336,86 +336,8 @@ def iter_sample_z(n_draws, n_dim, net, x0, device = 'cpu', verbosity = False, th
         done = min(counter) >= n_draws
     if verbosity:
         print("Constrained posterior volume:", frac.prod())
-    out = list(np.array([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T[0])
+    
+    #out = list(torch.tensor([np.concatenate(zout[i])[:n_draws] for i in range(n_dim)]).T[0])
+    out = list(torch.stack([torch.cat(zout[i]).squeeze(-1)[:n_draws] for i in range(n_dim)]).T)
     return out
-
-
-
-
-
-
-
-
-#############
-# OLD OLD OLD
-#############
-
-def get_posteriors(network, x0, z, error = False, n_sub = None):
-    """Get posteriors, potentially with MC dropout uncertainties.
-    """
-    zsub = subsample(n_sub, z)
-    if not error:
-        network.eval()
-        z_lnL = estimate_lnL(network, x0, zsub, normalize = True)
-        return z_lnL
-    else:
-        network.train()
-        z_lnL_list = []
-        for i in tqdm(range(100), desc="Estimating std"):
-            z_lnL = estimate_lnL(network, x0, zsub, normalize = False)
-            z_lnL_list.append(z_lnL)
-        std_list = []
-        for j in range(len(z_lnL_list[0])):
-            tmp = [z_lnL_list[i][j]['lnL'] for i in range(len(zsub))]
-            mean = sum(tmp)/len(zsub)
-            tmp = [(z_lnL_list[i][j]['lnL']-mean)**2 for i in range(len(zsub))]
-            var = sum(tmp)/len(zsub)
-            std = var**0.5
-            std_list.append(std)
-        return std_list
-
-def resample_z(n, z_seeds, epsilon = None):
-    z_samples = []
-    n_dim = len(z_seeds)
-    for i in range(n_dim):
-        z = z_seeds[i].reshape(-1, 1)
-        tree = BallTree(z)
-        # Estimate epsilon as  epsilon = 4 * (average nn-distance)
-        if epsilon is None:
-          nn_dist = tree.query(z, 2)[0][:,1]
-          epsilon = nn_dist.mean() * 4.
-        z_new = []
-        counter = 0
-        while counter < n:
-            z_proposal = torch.rand(n, 1).to(z_seeds[0].device);
-            nn_dist = tree.query(z_proposal, 1)[0][:,0]
-            mask = nn_dist <= epsilon
-            z_new.append(z_proposal[mask])
-            counter += mask.sum()
-        z_new = torch.cat(z_new)[:n]
-        z_samples.append(z_new)
-    z = [torch.cat([z_samples[i][j] for i in range(n_dim)]) for j in range(n)]
-    return z
-
-def init_xz(model, n_sims, n_dim):
-    z = sample_z(n_sims, n_dim)
-    xz = sample_x(model, z)
-    return xz
-
-def update_xz(xz, network, x0, model, n_sims, lnL_th = -6, n_sub = 1000, append = True):
-    # Generate training points
-    z_sub = subsample(n_sub, get_z(xz))
-    z_lnL = estimate_lnL(network, x0, z_sub)
-    z_seeds = get_seeds(z_lnL, lnL_th = lnL_th)
-    z_new = resample_z(n_sims, z_seeds)
-
-    # Generate training data
-    xz_new = sample_x(model, z_new)
-
-    # Append or not append
-    if append:
-        xz += xz_new
-    else:
-        xz = xz_new
-    return xz
 

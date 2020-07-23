@@ -90,8 +90,8 @@ class SWYFT:
             losses = []
             for i in range(len(lr)):
                 loss = train(network, xz, n_train =
-                        n_train[i], lr = lr[i], device =
-                        self.device, n_batch = n_batch)
+                        n_train[i], lr = lr[i],
+                        n_batch = n_batch)
                 losses += loss
         else:
             losses = train(network, xz, n_train =
