@@ -1,10 +1,10 @@
+# pylint: disable=no-member, not-callable
 import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn as nn
 from collections import defaultdict
 import math
-#from sklearn.neighbors import BallTree
 
 
 #######################
@@ -27,12 +27,14 @@ def subsample(n_sub, z, replace = False):
     return z_sub
 
 def combine_z(z, combinations):
-    """Generate parameter combinations."""
+    """Generate parameter combinations in last dimension. 
+    Requires: z.ndim == 1. 
+    output.shape == (n_posteriors, parameter shape)
+    """
     if combinations is None:
         return z.unsqueeze(-1)
     else:
         return torch.stack([z[c] for c in combinations])
-
 
 #########################
 # Generate sample batches
@@ -80,46 +82,47 @@ def get_z(list_xz):
 # Training
 ##########
 
-def loss_fn(network, xz, combinations = None, n_batch = 32):
+def loss_fn(network, xz, combinations = None):
     """Evaluate binary-cross-entropy loss function.
 
     Args:
         network (nn.Module): network taking minibatch of samples and returing ratio estimator.
-        xz (list): batch of samples to train on.
+        xz (dict): batch of samples to train on.
         combinations (list, optional): determines posteriors that are generated.
             examples:
                 [[0,1], [3,4]]: p(z_0,z_1) and p(z_3,z_4) are generated
                     initialize network with zdim = 2, pdim = 2
                 [[0,1,5,2]]: p(z_0,z_1,z_5,z_2) is generated
                     initialize network with zdim = 1, pdim = 4
-        n_batch (int): mini-batch size.
 
     Returns:
         Tensor: training loss.
     """
-    # generate minibatch
-    xz = subsample(2*n_batch, xz, replace = True)
-    x = get_x(xz)
-    z = get_z(xz)
+    assert xz['x'].size(0) == xz['z'].size(0), "Number of x and z must be equal."
+    assert xz['x'].size(0) % 2 == 0, "There must be an even number of samples in the batch for contrastive learning."
+    n_batch = xz['x'].size(0)
+
+    # Is it the removal of replacement that made it stop working?!
 
     # bring x into shape
-    # (n_batch*2, data-shape)  - repeat twice each sample of x - there are 2*n_batch samples
+    # (n_batch*2, data-shape)  - repeat twice each sample of x - there are n_batch samples
     # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
-    x = torch.stack(x)
+    x = xz['x']
     x = torch.repeat_interleave(x, 2, dim = 0)
 
     # bring z into shape
-    # (n_batch*4, param-shape)  - repeat twice each sample of z - there are 2*n_batch samples
-    # repetition is twisted in first dimension: [a, b, a, b, c, d, c, d, ...]
+    # (n_batch*2, param-shape)  - repeat twice each sample of z - there are n_batch samples
+    # repetition is alternating in first dimension: [a, b, a, b, c, d, c, d, ...]
+    z = xz['z']
     z = torch.stack([combine_z(zs, combinations) for zs in z])
     zdim = len(z[0])
-    z = z.view(n_batch, -1, *z.shape[-1:])
+    z = z.view(n_batch // 2, -1, *z.shape[-1:])
     z = torch.repeat_interleave(z, 2, dim = 0)
-    z = z.view(n_batch*4, -1, *z.shape[-1:])
-
+    z = z.view(n_batch*2, -1, *z.shape[-1:])
+    
     # call network
     lnL = network(x, z)
-    lnL = lnL.view(n_batch, 4, zdim)
+    lnL = lnL.view(n_batch // 2, 4, zdim)
 
     # Evaluate cross-entropy loss
     # loss = 
@@ -131,29 +134,37 @@ def loss_fn(network, xz, combinations = None, n_batch = 32):
     loss += -torch.nn.functional.logsigmoid(-lnL[:,1])
     loss += -torch.nn.functional.logsigmoid(-lnL[:,2])
     loss += -torch.nn.functional.logsigmoid( lnL[:,3])
-    loss = loss.sum() / n_batch
+    loss = loss.sum() / (n_batch // 2)
 
     return loss
 
-def train(network, xz, n_train = 1000, lr = 1e-3, n_batch = 32, combinations = None):
+def train(network, loader_xz, n_train = 1000, lr = 1e-3, combinations = None, device=None, non_blocking=True):
     """Network training loop.
 
     Args:
         network (nn.Module): network for ratio estimation.
-        xz (list): batch of samples.
+        loader_xz (DatLoader): DataLoader of samples.
         n_train (int): training steps.
         lr (float): learning rate.
-        n_batch (int): minibatch size.
-        combinations (list): list of parameter combinations.
+        combinations (list, optional): determines posteriors that are generated.
+            examples:
+                [[0,1], [3,4]]: p(z_0,z_1) and p(z_3,z_4) are generated
+                    initialize network with zdim = 2, pdim = 2
+                [[0,1,5,2]]: p(z_0,z_1,z_5,z_2) is generated
+                    initialize network with zdim = 1, pdim = 4
+        device (str, device): Move batches to this device.
+        non_blocking (bool): non_blocking in .to(device) expression.
 
     Returns:
         list: list of training losses.
     """
     optimizer = torch.optim.Adam(network.parameters(), lr = lr, weight_decay = 0.0000)
     losses = []
-    for i in tqdm(range(n_train)):
+    for batch in tqdm(loader_xz):
+        if device is not None:
+            batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
         optimizer.zero_grad()
-        loss = loss_fn(network, xz, combinations = combinations, n_batch = n_batch)
+        loss = loss_fn(network, batch, combinations = combinations)
         loss.backward()
         optimizer.step()
         losses.append(loss.detach().cpu().numpy().item())
@@ -164,7 +175,7 @@ def train(network, xz, n_train = 1000, lr = 1e-3, n_batch = 32, combinations = N
 # Posterior estimation
 ######################
 
-def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_batch = 64, device = 'cpu'):
+def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_batch = 64):
     """Return current estimate of normalized marginal 1-dim lnL.
 
     Args:
@@ -178,7 +189,7 @@ def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_b
     Returns:
         list: List of dictionaries with component z and lnL
     """
-    x0 = x0.unsqueeze(0).to(device)
+    x0 = x0.unsqueeze(0)
     zdim = len(list_z[0]) if combinations is None else len(combinations)
     n_samples = len(list_z)
 
@@ -186,7 +197,7 @@ def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_b
     z_out = []
     for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL'):
         zbatch = list_z[i*n_batch:(i+1)*n_batch]
-        zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch]).to(device)
+        zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch])
         tmp = network(x0, zcomb)
         lnL_out += list(tmp.detach().cpu())
         z_out += list(zcomb.cpu())
@@ -307,7 +318,7 @@ class Network(nn.Module):
         out = self.legs(y, z)
         return out
 
-def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6, device = 'cpu'):
+def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6):
     """Generate parameter samples z~p_c(z) from constrained prior.
     
     Arguments
@@ -326,8 +337,9 @@ def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6, 
     counter = np.zeros(n_dim)
     frac = np.ones(n_dim)
     while not done:
-        list_z = sample_hypercube(n_draws, n_dim)
-        zlnL = estimate_lnL(net, x0, list_z, device = device)
+        # list_z = sample_hypercube(n_draws, n_dim)
+        z = torch.rand(n_draws, n_dim, device=x0.device)
+        zlnL = estimate_lnL(net, x0, z)
         for i in range(n_dim):
             mask = zlnL[i]['lnL'] > np.log(threshold)
             frac[i] = sum(mask)/len(mask)
@@ -341,3 +353,6 @@ def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6, 
     out = list(torch.stack([torch.cat(zout[i]).squeeze(-1)[:n_draws] for i in range(n_dim)]).T)
     return out
 
+
+if __name__ == "__main__":
+    pass
