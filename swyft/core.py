@@ -64,7 +64,7 @@ def simulate_xz(model, list_z):
         list of dict: list of dictionaries with 'x' and 'z' pairs.
     """
     list_xz = []
-    for z in tqdm(list_z):
+    for z in tqdm(list_z, leave=False):
         x = model(z)
         list_xz.append(dict(x=x, z=z))
     return list_xz
@@ -161,7 +161,7 @@ def train(network, loader_xz, n_epochs = 1000, lr = 1e-3, combinations = None, d
     optimizer = torch.optim.Adam(network.parameters(), lr = lr, weight_decay = 0.0000)
     losses = []
     
-    for _ in tqdm(range(n_epochs)):
+    for _ in tqdm(range(n_epochs), leave=False):
         for batch in tqdm(loader_xz, leave=False):
             if device is not None:
                 batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
@@ -197,7 +197,7 @@ def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_b
 
     lnL_out = []
     z_out = []
-    for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL'):
+    for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL', leave = False):
         zbatch = list_z[i*n_batch:(i+1)*n_batch]
         zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch])
         tmp = network(x0, zcomb)
