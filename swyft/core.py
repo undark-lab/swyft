@@ -1,6 +1,6 @@
 # pylint: disable=no-member, not-callable
 import numpy as np
-from tqdm import tqdm
+from tqdm import tqdm_notebook as tqdm
 import torch
 import torch.nn as nn
 from collections import defaultdict
@@ -138,13 +138,13 @@ def loss_fn(network, xz, combinations = None):
 
     return loss
 
-def train(network, loader_xz, n_train = 1000, lr = 1e-3, combinations = None, device=None, non_blocking=True):
+def train(network, loader_xz, n_epochs = 1000, lr = 1e-3, combinations = None, device=None, non_blocking=True):
     """Network training loop.
 
     Args:
         network (nn.Module): network for ratio estimation.
         loader_xz (DatLoader): DataLoader of samples.
-        n_train (int): training steps.
+        n_epochs (int): Number of epochs.
         lr (float): learning rate.
         combinations (list, optional): determines posteriors that are generated.
             examples:
@@ -160,14 +160,16 @@ def train(network, loader_xz, n_train = 1000, lr = 1e-3, combinations = None, de
     """
     optimizer = torch.optim.Adam(network.parameters(), lr = lr, weight_decay = 0.0000)
     losses = []
-    for batch in tqdm(loader_xz):
-        if device is not None:
-            batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
-        optimizer.zero_grad()
-        loss = loss_fn(network, batch, combinations = combinations)
-        loss.backward()
-        optimizer.step()
-        losses.append(loss.detach().cpu().numpy().item())
+    
+    for _ in tqdm(range(n_epochs)):
+        for batch in tqdm(loader_xz, leave=False):
+            if device is not None:
+                batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
+            optimizer.zero_grad()
+            loss = loss_fn(network, batch, combinations = combinations)
+            loss.backward()
+            optimizer.step()
+            losses.append(loss.detach().cpu().numpy().item())
     return losses
 
 
@@ -337,7 +339,6 @@ def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6):
     counter = np.zeros(n_dim)
     frac = np.ones(n_dim)
     while not done:
-        # list_z = sample_hypercube(n_draws, n_dim)
         z = torch.rand(n_draws, n_dim, device=x0.device)
         zlnL = estimate_lnL(net, x0, z)
         for i in range(n_dim):
