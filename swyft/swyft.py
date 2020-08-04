@@ -68,7 +68,7 @@ class SWYFT:
             xz = sample_x(self.model, z)
 
             if combine:
-                xz += self.xz_store[-1]
+                xz =xz+self.xz_store[-1]
         else:
             # Take simply previous samples
             if self.verbose:
@@ -95,7 +95,7 @@ class SWYFT:
                 losses += loss
         else:
             losses = train(network, xz, n_train =
-                    n_train, lr = lr, device =
+                    n_train, lr = lr), device =
                     self.device, n_batch = n_batch)
 
         # Store results
