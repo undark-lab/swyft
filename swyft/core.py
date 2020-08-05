@@ -1,10 +1,15 @@
 # pylint: disable=no-member, not-callable
-import numpy as np
-from tqdm import tqdm_notebook as tqdm
-import torch
-import torch.nn as nn
+from typing import Callable
+from warnings import warn
+from contextlib import nullcontext
+
 from collections import defaultdict
 import math
+
+import numpy as np
+import torch
+import torch.nn as nn
+from torch import Tensor
 
 
 #######################
@@ -36,11 +41,24 @@ def combine_z(z, combinations):
     else:
         return torch.stack([z[c] for c in combinations])
 
+def set_device(gpu: bool = False) -> torch.device:
+    if gpu and torch.cuda.is_available():
+        device = torch.device("cuda")
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    elif gpu and not torch.cuda.is_available():
+        warn("Although the gpu flag was true, the gpu is not avaliable.")
+        device = torch.device("cpu")
+        torch.set_default_tensor_type("torch.FloatTensor")
+    else:
+        device = torch.device("cpu")
+        torch.set_default_tensor_type("torch.FloatTensor")
+    return device
+
 #########################
 # Generate sample batches
 #########################
 
-def sample_hypercube(num_samples, num_params):
+def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
     """Return uniform samples from the hyper cube.
 
     Args:
@@ -48,9 +66,13 @@ def sample_hypercube(num_samples, num_params):
         num_params (int): dimension of hypercube.
 
     Returns:
-        list of Tensor: random samples.
+        Tensor: random samples.
     """
-    return [torch.rand(num_params) for i in range(num_samples)]
+    return torch.rand(num_samples, num_params)
+
+def simulate(simulator: Callable[[Tensor,], Tensor], z: Tensor) -> Tensor:
+    """Simulate given parameters z. Simulator must return shape (1, N)"""
+    return torch.cat([simulator(zz) for zz in z], dim=0)  # TODO make a batched version of this.
 
 def simulate_xz(model, list_z):
     """Generates x ~ model(z).
@@ -64,7 +86,7 @@ def simulate_xz(model, list_z):
         list of dict: list of dictionaries with 'x' and 'z' pairs.
     """
     list_xz = []
-    for z in tqdm(list_z, leave=False):
+    for z in list_z:
         x = model(z)
         list_xz.append(dict(x=x, z=z))
     return list_xz
@@ -83,7 +105,7 @@ def get_z(list_xz):
 ##########
 
 def loss_fn(network, xz, combinations = None):
-    """Evaluate binary-cross-entropy loss function.
+    """Evaluate binary-cross-entropy loss function. Mean over batch.
 
     Args:
         network (nn.Module): network taking minibatch of samples and returing ratio estimator.
@@ -97,7 +119,7 @@ def loss_fn(network, xz, combinations = None):
 
     Returns:
         Tensor: training loss.
-    """
+    """ #TODO does the loss function depend on which distribution the z was drawn from? it does in SBI for the SNPE versions
     assert xz['x'].size(0) == xz['z'].size(0), "Number of x and z must be equal."
     assert xz['x'].size(0) % 2 == 0, "There must be an even number of samples in the batch for contrastive learning."
     n_batch = xz['x'].size(0)
@@ -138,13 +160,24 @@ def loss_fn(network, xz, combinations = None):
 
     return loss
 
-def train(network, loader_xz, n_epochs = 1000, lr = 1e-3, combinations = None, device=None, non_blocking=True):
+def train(
+    network, 
+    train_loader,
+    validation_loader,
+    early_stopping_patience,
+    max_epochs = 2 ** 31 - 1,
+    lr = 1e-3,
+    combinations = None,
+    device=None,
+    non_blocking=True
+):
     """Network training loop.
 
     Args:
         network (nn.Module): network for ratio estimation.
-        loader_xz (DatLoader): DataLoader of samples.
-        n_epochs (int): Number of epochs.
+        train_loader (DataLoader): DataLoader of samples.
+        validation_loader (DataLoader): DataLoader of samples.
+        max_epochs (int): Number of epochs.
         lr (float): learning rate.
         combinations (list, optional): determines posteriors that are generated.
             examples:
@@ -158,19 +191,46 @@ def train(network, loader_xz, n_epochs = 1000, lr = 1e-3, combinations = None, d
     Returns:
         list: list of training losses.
     """
-    optimizer = torch.optim.Adam(network.parameters(), lr = lr, weight_decay = 0.0000)
-    losses = []
+
+    def do_epoch(loader: torch.utils.data.dataloader.DataLoader, train: bool):
+        accumulated_loss = 0
+        training_context = nullcontext() if train else torch.no_grad()
+        with training_context:
+            for batch in loader:
+                optimizer.zero_grad()
+                if device is not None:
+                    batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
+                loss = loss_fn(network, batch, combinations = combinations)
+                if train:
+                    loss.backward()
+                    optimizer.step()
+                accumulated_loss += loss.detach().cpu().numpy().item()
+        return accumulated_loss
+
+    optimizer = torch.optim.Adam(network.parameters(), lr = lr)
+
+    n_train_batches = len(train_loader)
+    n_validation_batches = len(validation_loader)
     
-    for _ in tqdm(range(n_epochs), leave=False):
-        for batch in tqdm(loader_xz, leave=False):
-            if device is not None:
-                batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
-            optimizer.zero_grad()
-            loss = loss_fn(network, batch, combinations = combinations)
-            loss.backward()
-            optimizer.step()
-            losses.append(loss.detach().cpu().numpy().item())
-    return losses
+    train_losses, validation_losses = [], []
+    epoch, fruitless_epoch, max_loss = 0, 0, float("Inf")
+    while epoch <= max_epochs and fruitless_epoch < early_stopping_patience:
+        network.train()
+        train_loss = do_epoch(train_loader, True)
+        train_losses.append(train_loss / n_train_batches)
+        
+        network.eval()
+        validation_loss = do_epoch(validation_loader, False)
+        validation_losses.append(validation_loss / n_validation_batches)
+
+        epoch += 1
+        if max_loss < validation_loss:
+            fruitless_epoch = 0
+            max_loss = validation_loss
+        else:
+            fruitless_epoch += 1
+
+    return train_losses, validation_losses
 
 
 ######################
@@ -197,7 +257,7 @@ def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_b
 
     lnL_out = []
     z_out = []
-    for i in tqdm(range(n_samples//n_batch+1), desc = 'estimating lnL', leave = False):
+    for i in range(n_samples//n_batch+1):
         zbatch = list_z[i*n_batch:(i+1)*n_batch]
         zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch])
         tmp = network(x0, zcomb)
