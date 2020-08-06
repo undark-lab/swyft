@@ -1,5 +1,6 @@
 # pylint: disable=no-member, not-callable
 from typing import Callable
+from copy import deepcopy
 from warnings import warn
 from contextlib import nullcontext
 
@@ -165,7 +166,7 @@ def train(
     train_loader,
     validation_loader,
     early_stopping_patience,
-    max_epochs = 2 ** 31 - 1,
+    max_epochs = None,
     lr = 1e-3,
     combinations = None,
     device=None,
@@ -207,13 +208,14 @@ def train(
                 accumulated_loss += loss.detach().cpu().numpy().item()
         return accumulated_loss
 
+    max_epochs =  2 ** 31 - 1 if max_epochs is None else max_epochs
     optimizer = torch.optim.Adam(network.parameters(), lr = lr)
 
     n_train_batches = len(train_loader)
     n_validation_batches = len(validation_loader)
     
     train_losses, validation_losses = [], []
-    epoch, fruitless_epoch, max_loss = 0, 0, float("Inf")
+    epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
     while epoch <= max_epochs and fruitless_epoch < early_stopping_patience:
         network.train()
         train_loss = do_epoch(train_loader, True)
@@ -224,13 +226,14 @@ def train(
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
-        if max_loss < validation_loss:
+        if epoch == 0 or min_loss > validation_loss:
             fruitless_epoch = 0
-            max_loss = validation_loss
+            min_loss = validation_loss
+            best_state_dict = deepcopy(network.state_dict())
         else:
             fruitless_epoch += 1
 
-    return train_losses, validation_losses
+    return train_losses, validation_losses, best_state_dict
 
 
 ######################
@@ -259,7 +262,7 @@ def estimate_lnL(network, x0, list_z, normalize = True, combinations = None, n_b
     z_out = []
     for i in range(n_samples//n_batch+1):
         zbatch = list_z[i*n_batch:(i+1)*n_batch]
-        zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch])
+        zcomb = torch.stack([combine_z(zn, combinations) for zn in zbatch])  # TODO this raises an error when the n_samples % n_batch == 0
         tmp = network(x0, zcomb)
         lnL_out += list(tmp.detach().cpu())
         z_out += list(zcomb.cpu())
