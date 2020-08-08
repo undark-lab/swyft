@@ -157,6 +157,8 @@ def loss_fn(network, xz, combinations = None):
 
     return loss
 
+# We have the posterior exactly because our proir is known and flat. Flip bayes theorem, we have the likelihood ratio.
+# Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def train(
     network, 
     train_loader,

@@ -39,6 +39,9 @@ for r in range(rounds):
         x = swyft.more.simulate(simulator, z)
         rounds = torch.zeros(z.size(0))
     else:
+        # Store the mask and/or information about the probabily distribution.
+        # We need to support rejection sampling.
+        
         # This whole thing should probably be turned into a function.
         existing_x, existing_z, existing_round = swyft.more.apply_mask(mask, x, z, rounds)
         new_z, new_round = swyft.more.sample(sims_per_round, dim_z, mask, existing_z, existing_round)
