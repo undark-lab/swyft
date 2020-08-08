@@ -71,10 +71,6 @@ def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
     """
     return torch.rand(num_samples, num_params)
 
-def simulate(simulator: Callable[[Tensor,], Tensor], z: Tensor) -> Tensor:
-    """Simulate given parameters z. Simulator must return shape (1, N)"""
-    return torch.cat([simulator(zz) for zz in z], dim=0)  # TODO make a batched version of this.
-
 def simulate_xz(model, list_z):
     """Generates x ~ model(z).
     
@@ -192,7 +188,7 @@ def train(
     Returns:
         list: list of training losses.
     """
-
+    # TODO consider that the user might want other training stats, like number of correct samples for example
     def do_epoch(loader: torch.utils.data.dataloader.DataLoader, train: bool):
         accumulated_loss = 0
         training_context = nullcontext() if train else torch.no_grad()

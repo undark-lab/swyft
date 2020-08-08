@@ -7,10 +7,21 @@ from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 
 
+def simulate(simulator: Callable[[Tensor,], Tensor], z: Tensor) -> Tensor:
+    """Simulate given parameters z. Simulator must return shape (1, N)"""
+    return torch.cat([simulator(zz) for zz in z], dim=0)  # TODO make a batched version of this.
+
+
 class Warehouse(object):
     # The idea is to store everything in lists which are identified by rounds and the associated estimators (or model params)
     # Does it take in a simulator? It should be connected with a simulator I believe.
-    def __init__(self):
+    def __init__(
+        self,
+        x: Optional[Tensor] = None, 
+        z: Optional[Tensor] = None, 
+        rounds: Optional[Tensor] = None, 
+        likelihood_estimator: Optional[nn.Module] = None
+    ,):
         super().__init__()
     
     @property
@@ -22,36 +33,50 @@ class Warehouse(object):
         raise NotImplementedError
     
     @property
-    def rounds(self) -> Sequence[int]:
+    def rounds(self) -> Sequence[Tensor]:
+        # A sequence which shows which round a particular sample was initially drawn in. Has the same samples per round as x or z
         raise NotImplementedError
     
     @property
     def likelihood_estimators(self) -> Sequence[nn.Module]:
         raise NotImplementedError
-    
-    @property
-    def masks(self) -> Sequence[Tensor]:
-        # Setup lazy evaluation of mask for parameter on current round.
-        # Saving this implies that we need a Warehouse to be assosciated to a particular x0, maybe that isn't a good thing.
-        raise NotImplementedError
 
     def get_dataset(
         self,
-        masking_fn: Optional[Callable[[Tensor, Tensor], Tensor]] = None,
-        percent_train: float = 1.0,
-        loader: bool = True
-    ) -> Union[Dataset, Tuple[Dataset, Dataset]]:
+        subset_percents: Iterable[float] = (1.0,),
+    ) -> Union[Dataset, Sequence[Dataset]]:
         raise NotImplementedError
 
     def get_dataloader(
         self,
-    ) -> Union[DataLoader, Tuple[DataLoader, DataLoader]]:
+        percent_train: Iterable[float] = (1.0,),
+    ) -> Union[DataLoader, Sequence[Dataset]]:
         raise NotImplementedError
-        
+
+    def append(
+        self,
+        x: Optional[Tensor] = None, 
+        z: Optional[Tensor] = None, 
+        rounds: Optional[Tensor] = None, 
+        likelihood_estimator: Optional[nn.Module] = None,
+    ) -> None:
+        # Should allow the addition of new data and estimators to the warehouse. 
+        # Perhaps some saftey checks so that the user doesn't add two sets of zs before an x or something.
+        raise NotImplementedError
 
 
-def masking_fn(likelihood_estimator: nn.Module, x0: Tensor, threshold: float) -> Callable[[Tensor,], Tensor]:
-    # Return a function which classifies parameters as above or below the threshold
+def get_masking_fn(likelihood_estimator: nn.Module, x0: Tensor, threshold: float) -> Callable[[Tensor,], Tensor]:
+    # Return a function which classifies parameters as above or below the threshold, i.e. returns a boolean tensor
+    raise NotImplementedError
+
+
+def apply_mask(
+    masking_fn: Callable[[Tensor,], Tensor], 
+    x: Tensor,
+    z: Tensor, 
+    rounds: Optional[Tensor] = None
+) -> Union[Tuple[Tensor, Tensor,], Tuple[Tensor, Tensor, Tensor]]:
+    # Actually mask the parameters (and rounds if given)
     raise NotImplementedError
 
 
@@ -59,10 +84,12 @@ def sample(
     n_samples = int,
     n_dim = int,
     masking_fn: Optional[Callable[[Tensor,], Tensor]] = None,
-    existing_samples: Optional[Tensor] = None
+    existing_z: Optional[Tensor] = None,
+    existing_rounds: Optional[Tensor] = None,
 ) -> Tensor:
     # Start by looking at existing samples, when masking function is there use it, after that sample the hypercube with masking function
     raise NotImplementedError
+
 
 def train(
     network: nn.Module, 
@@ -78,6 +105,9 @@ def train(
     # Given loaders and a network it returns the training stats and the best params
     # When looping over legs, consider that multiple dimension posteriors are probably lower weight than single dimension ones.
     raise NotImplementedError
+
+
+
 
 
 if __name__ == "__main__":
