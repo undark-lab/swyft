@@ -86,7 +86,8 @@ def simulate_xz(model, list_z):
     """
     list_xz = []
     for z in list_z:
-        x = model(z)
+        x = model(z.numpy())
+        x = torch.tensor(x).float()
         list_xz.append(dict(x=x, z=z))
     return list_xz
 
@@ -197,7 +198,7 @@ def train(
         accumulated_loss = 0
         training_context = nullcontext() if train else torch.no_grad()
         with training_context:
-            for batch in tqdm(loader):
+            for batch in loader:
                 optimizer.zero_grad()
                 if device is not None:
                     batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
