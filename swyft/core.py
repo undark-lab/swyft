@@ -12,6 +12,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from tqdm import tqdm
+
 
 #######################
 # Convenience functions
@@ -195,7 +197,7 @@ def train(
         accumulated_loss = 0
         training_context = nullcontext() if train else torch.no_grad()
         with training_context:
-            for batch in loader:
+            for batch in tqdm(loader):
                 optimizer.zero_grad()
                 if device is not None:
                     batch = {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
@@ -214,7 +216,7 @@ def train(
     
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
-    while epoch <= max_epochs and fruitless_epoch < early_stopping_patience:
+    while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
         network.train()
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
