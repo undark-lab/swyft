@@ -406,7 +406,7 @@ def iter_sample_z(n_draws, n_dim, net, x0, verbosity = False, threshold = 1e-6):
         zlnL = estimate_lnL(net, x0, z)
         for i in range(n_dim):
             mask = zlnL[i]['lnL'] > np.log(threshold)
-            frac[i] = sum(mask)/len(mask)
+            frac[i] = np.true_divide(sum(mask),len(mask))
             zout[i].append(zlnL[i]['z'][mask])
             counter[i] += mask.sum()
         done = min(counter) >= n_draws
