@@ -317,13 +317,17 @@ class DenseLegs(nn.Module):
         self.fc4 = LinearWithChannel(NH, 1, pnum)
         self.drop = nn.Dropout(p = p)
 
+        # SWISH! activation function for smooth posteriors :-)
+        self.af = lambda x: x*torch.sigmoid(x)
+        #self.af = torch.relu
+
     def forward(self, y, z):
         x = combine(y, z)
-        x = torch.relu(self.fc1(x))
+        x = self.af(self.fc1(x))
         x = self.drop(x)
-        x = torch.relu(self.fc2(x))
+        x = self.af(self.fc2(x))
         x = self.drop(x)
-        x = torch.relu(self.fc3(x))
+        x = self.af(self.fc3(x))
         x = self.fc4(x).squeeze(-1)
         return x
 
