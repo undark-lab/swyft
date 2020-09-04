@@ -1,3 +1,4 @@
 # SWYFT
 
-A simple contrastive learning module.
+A python library for marginal posterior inference with nested likelihood-free
+inference.

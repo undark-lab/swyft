@@ -151,11 +151,12 @@ class SWYFT:
         dataset = self.data_store[-1]
 
         # Generate network
-        pdim = len(combinations[0])
         pnum = len(combinations)
+        pdim = len(combinations[0])
 
-        head = deepcopy(self.net1d_store[-1].head)
-        net = self._get_net(pnum, pdim, head = head)
+        #head = deepcopy(self.net1d_store[-1].head)
+        #head = None
+        net = self._get_net(pnum, pdim)
 
         # Train!
         trainloop(net, dataset, combinations = combinations, device =
