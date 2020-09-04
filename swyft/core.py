@@ -317,9 +317,10 @@ class DenseLegs(nn.Module):
         self.fc4 = LinearWithChannel(NH, 1, pnum)
         self.drop = nn.Dropout(p = p)
 
-        # SWISH! activation function for smooth posteriors :-)
-        self.af = lambda x: x*torch.sigmoid(x)
-        #self.af = torch.relu
+        self.af = torch.relu
+
+        # swish activation function for smooth posteriors
+        self.af2 = lambda x: x*torch.sigmoid(x)
 
     def forward(self, y, z):
         x = combine(y, z)
