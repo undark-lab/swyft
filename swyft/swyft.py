@@ -29,7 +29,7 @@ def gen_train_data(model, nsamples, zdim, mask = None):
     return dataset
 
 def trainloop(net, dataset, combinations = None, nbatch = 64, nworkers = 4,
-        max_epochs = 5, early_stopping_patience = 20, device = 'cpu'):
+        max_epochs = 100, early_stopping_patience = 20, device = 'cpu'):
     nvalid = 512
     ntrain = len(dataset) - nvalid
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [ntrain, nvalid])
@@ -50,22 +50,21 @@ def trainloop(net, dataset, combinations = None, nbatch = 64, nworkers = 4,
         valid_loss.append(vl[:vl_min_idx + 1])
         net.load_state_dict(sd)
 
-
 def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
-    x0 = torch.tensor(x0).float().to(device)
+    x0 = x0.to(device)
     z = torch.stack(get_z(dataset)).to(device)
     z = torch.stack([combine_z(zs, combinations) for zs in z])
     lnL = get_lnL(net, x0, z)
     return z.cpu(), lnL.cpu()
 
-
-
 class SWYFT:
-    def __init__(self, x0, model, zdim, device = 'cpu'):
-        self.x0 = x0
+    def __init__(self, x0, model, zdim, head = None, device = 'cpu', max_epochs = 100):
+        self.x0 = torch.tensor(x0).float()
         self.model = model
         self.zdim = zdim
+        self.head_cls = head  # head network class
         self.device = device
+        self.max_epochs = max_epochs
 
         # Each data_store entry has a corresponding mask entry
         # TODO: Replace with datastore eventually
@@ -80,17 +79,32 @@ class SWYFT:
         self.postNd_store = []
         self.netNd_store = []
 
+    def _get_net(self, pnum, pdim):
+        # Initialize neural network
+        if self.head_cls is None:
+            head = None
+            ydim = len(self.x0)
+        else:
+            head = self.head_cls()
+            ydim = head(self.x0.unsqueeze(0)).shape[1]
+            print("Number of output features:", ydim)
+        net = Network(ydim = ydim, pnum = pnum, pdim = pdim, head = head).to(self.device)
+        return net
+
+    def append_dataset(self, dataset):
+        """Append dataset to data_store, assuming unconstrained prior."""
+        self.data_store.append(dataset)
+        self.mask_store.append(None)
+
     def train(self):
         """Train 1-dim posteriors."""
         # Use most recent dataset by default
         dataset = self.data_store[-1]
 
-        # Initialize neural network
-        ydim = len(self.x0)  # TODO: Needs to be made dynamic and head-dependent
-        net = Network(ydim = ydim, pnum = self.zdim, pdim = 1).to(self.device)
+        net = self._get_net(self.zdim, 1)
 
         # Train
-        trainloop(net, dataset, device = self.device)
+        trainloop(net, dataset, device = self.device, max_epochs = self.max_epochs)
 
         # Get 1-dim posteriors
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, device = self.device)
@@ -116,7 +130,10 @@ class SWYFT:
     def run(self, nrounds = 1):
         """Iteratively generating training data and train 1-dim posteriors."""
         for i in range(nrounds):
-            self.data()
+            if self.model is None:
+                print("WARNING: No model provided. Skipping data generation.")
+            else:
+                self.data()
             self.train()
 
     def comb(self, combinations):
@@ -127,10 +144,11 @@ class SWYFT:
         # Generate network
         pdim = len(combinations[0])
         pnum = len(combinations)
-        net = Network(ydim = 3, pnum = pnum, pdim = pdim).to(self.device)
+        net = self._get_net(pnum, pdim)
 
         # Train!
-        trainloop(net, dataset, combinations = combinations, device = self.device)
+        trainloop(net, dataset, combinations = combinations, device =
+                self.device, max_epochs = self.max_epochs)
 
         # Get posteriors and store them internally
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =
