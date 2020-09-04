@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from .core import *
 
+from copy import deepcopy
+
 class Data(torch.utils.data.Dataset):
     def __init__(self, xz):
         super().__init__()
@@ -28,7 +30,7 @@ def gen_train_data(model, nsamples, zdim, mask = None):
     
     return dataset
 
-def trainloop(net, dataset, combinations = None, nbatch = 64, nworkers = 4,
+def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
         max_epochs = 100, early_stopping_patience = 20, device = 'cpu'):
     nvalid = 512
     ntrain = len(dataset) - nvalid
@@ -79,11 +81,14 @@ class SWYFT:
         self.postNd_store = []
         self.netNd_store = []
 
-    def _get_net(self, pnum, pdim):
+    def _get_net(self, pnum, pdim, head = None):
         # Initialize neural network
-        if self.head_cls is None:
+        if self.head_cls is None and head is None:
             head = None
             ydim = len(self.x0)
+        elif head is not None:
+            ydim = head(self.x0.unsqueeze(0).to(self.device)).shape[1]
+            print("Number of output features:", ydim)
         else:
             head = self.head_cls()
             ydim = head(self.x0.unsqueeze(0)).shape[1]
@@ -96,12 +101,16 @@ class SWYFT:
         self.data_store.append(dataset)
         self.mask_store.append(None)
 
-    def train(self):
+    def train(self, recycle_net = True):
         """Train 1-dim posteriors."""
         # Use most recent dataset by default
         dataset = self.data_store[-1]
 
-        net = self._get_net(self.zdim, 1)
+        if len(self.net1d_store) > 0 and recycle_net:
+            #print('deepcopy, HAHAHAHhahahahaheheheeee!')
+            net = deepcopy(self.net1d_store[-1])
+        else:
+            net = self._get_net(self.zdim, 1)
 
         # Train
         trainloop(net, dataset, device = self.device, max_epochs = self.max_epochs)
@@ -119,7 +128,7 @@ class SWYFT:
             mask = None
         else:
             last_net = self.net1d_store[-1]
-            mask = Mask(last_net, torch.tensor(self.x0).float().to(self.device), 1e-8)
+            mask = Mask(last_net, self.x0.to(self.device), 1e-8)
 
         dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask)
 
@@ -144,7 +153,9 @@ class SWYFT:
         # Generate network
         pdim = len(combinations[0])
         pnum = len(combinations)
-        net = self._get_net(pnum, pdim)
+
+        head = deepcopy(self.net1d_store[-1].head)
+        net = self._get_net(pnum, pdim, head = head)
 
         # Train!
         trainloop(net, dataset, combinations = combinations, device =
@@ -163,7 +174,7 @@ class SWYFT:
             i = indices
             return self.post1d_store[-1][0][:,i], self.post1d_store[-1][1][:,i]
         else:
-            for i in range(len(self.postNd_store)):
+            for i in range(len(self.postNd_store)-1, -1, -1):
                 combinations = self.postNd_store[i][0]
                 if indices in combinations:
                     j = combinations.index(indices)
