@@ -449,6 +449,7 @@ class Mask:
         """
         z = z.to(self.device)
         lnL = get_lnL(self.net, self.x0, z).cpu()
+        lnL -= lnL.max(axis=0)[0]
         return lnL > np.log(self.threshold)
 
 if __name__ == "__main__":
