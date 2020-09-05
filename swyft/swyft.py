@@ -9,17 +9,22 @@ from .core import *
 from copy import deepcopy
 
 class Data(torch.utils.data.Dataset):
-    def __init__(self, xz):
+    def __init__(self, xz, modelposthook = None):
         super().__init__()
         self.xz = xz
+        self.modelposthook = modelposthook
 
     def __len__(self):
         return len(self.xz)
 
     def __getitem__(self, idx):
-        return self.xz[idx]
+        if self.modelposthook is None:
+            return self.xz[idx]
+        else:
+            m, z = self.xz[idx]
+            x, z = self.modelposthook(m, z)
 
-def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}):
+def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}, modelposthook = None):
     # Generate training data
     if mask is None:
         z = sample_hypercube(nsamples, zdim)
@@ -27,7 +32,7 @@ def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}):
         z = sample_constrained_hypercube(nsamples, zdim, mask)
     
     xz = simulate_xz(model, z, model_kwargs)
-    dataset = Data(xz)
+    dataset = Data(xz, modelposthook = modelposthook)
     
     return dataset
 
@@ -125,7 +130,7 @@ class SWYFT:
         self.net1d_store.append(net)
         self.post1d_store.append((zgrid, lnLgrid))
 
-    def data(self, nsamples = 3000, threshold = 1e-6, model_kwargs = {}):
+    def data(self, nsamples = 3000, threshold = 1e-6, model_kwargs = {}, modelposthook = None):
         """Generate training data on constrained prior."""
         if len(self.mask_store) == 0:
             mask = None
@@ -133,19 +138,19 @@ class SWYFT:
             last_net = self.net1d_store[-1]
             mask = Mask(last_net, self.x0.to(self.device), threshold)
 
-        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask, model_kwargs = model_kwargs)
+        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask, model_kwargs = model_kwargs, modelposthook = modelposthook)
 
         # Store dataset and mask
         self.mask_store.append(mask)
         self.data_store.append(dataset)
 
-    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs = 100, recycle_net = True, nbatch = 8, model_kwargs = {}):
+    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs = 100, recycle_net = True, nbatch = 8, model_kwargs = {}, modelposthook = None):
         """Iteratively generating training data and train 1-dim posteriors."""
         for i in range(nrounds):
             if self.model is None:
                 print("WARNING: No model provided. Skipping data generation.")
             else:
-                self.data(nsamples = nsamples, threshold = threshold, model_kwargs = model_kwargs)
+                self.data(nsamples = nsamples, threshold = threshold, model_kwargs = model_kwargs, modelposthook = modelposthook)
             self.train1d(recycle_net = recycle_net, max_epochs = max_epochs, nbatch = nbatch)
 
     def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch = 8):
