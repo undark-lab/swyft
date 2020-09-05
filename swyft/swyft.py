@@ -9,9 +9,12 @@ from .core import *
 from copy import deepcopy
 
 class Data(torch.utils.data.Dataset):
-    def __init__(self, xz, modelposthook = None):
+    def __init__(self, xz):
         super().__init__()
         self.xz = xz
+        self.modelposthook = None
+
+    def set_modelposthook(self, modelposthook):
         self.modelposthook = modelposthook
 
     def __len__(self):
@@ -21,10 +24,11 @@ class Data(torch.utils.data.Dataset):
         if self.modelposthook is None:
             return self.xz[idx]
         else:
-            m, z = self.xz[idx]
-            x, z = self.modelposthook(m, z)
+            xz = self.xz[idx]
+            x = self.modelposthook(xz['x'], xz['z'])
+            return dict(x=x, z=xz['z'])
 
-def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}, modelposthook = None):
+def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}):
     # Generate training data
     if mask is None:
         z = sample_hypercube(nsamples, zdim)
@@ -32,7 +36,7 @@ def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}, modelp
         z = sample_constrained_hypercube(nsamples, zdim, mask)
     
     xz = simulate_xz(model, z, model_kwargs)
-    dataset = Data(xz, modelposthook = modelposthook)
+    dataset = Data(xz)
     
     return dataset
 
@@ -107,10 +111,11 @@ class SWYFT:
         self.data_store.append(dataset)
         self.mask_store.append(None)
 
-    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8):
+    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8, modelposthook = None): 
         """Train 1-dim posteriors."""
         # Use most recent dataset by default
         dataset = self.data_store[-1]
+        dataset.set_modelposthook(modelposthook)
 
         datanorms = get_norms(dataset)
 
@@ -130,7 +135,7 @@ class SWYFT:
         self.net1d_store.append(net)
         self.post1d_store.append((zgrid, lnLgrid))
 
-    def data(self, nsamples = 3000, threshold = 1e-6, model_kwargs = {}, modelposthook = None):
+    def data(self, nsamples = 3000, threshold = 1e-6, model_kwargs = {}):
         """Generate training data on constrained prior."""
         if len(self.mask_store) == 0:
             mask = None
@@ -138,7 +143,7 @@ class SWYFT:
             last_net = self.net1d_store[-1]
             mask = Mask(last_net, self.x0.to(self.device), threshold)
 
-        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask, model_kwargs = model_kwargs, modelposthook = modelposthook)
+        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask, model_kwargs = model_kwargs)
 
         # Store dataset and mask
         self.mask_store.append(mask)
@@ -150,8 +155,8 @@ class SWYFT:
             if self.model is None:
                 print("WARNING: No model provided. Skipping data generation.")
             else:
-                self.data(nsamples = nsamples, threshold = threshold, model_kwargs = model_kwargs, modelposthook = modelposthook)
-            self.train1d(recycle_net = recycle_net, max_epochs = max_epochs, nbatch = nbatch)
+                self.data(nsamples = nsamples, threshold = threshold, model_kwargs = model_kwargs)
+            self.train1d(recycle_net = recycle_net, max_epochs = max_epochs, nbatch = nbatch, modelposthook = modelposthook)
 
     def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch = 8):
         """Generate N-dim posteriors."""
