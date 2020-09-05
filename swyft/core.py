@@ -12,8 +12,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from tqdm import tqdm
-
 
 #######################
 # Convenience functions
@@ -73,7 +71,7 @@ def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
     """
     return torch.rand(num_samples, num_params)
 
-def simulate_xz(model, list_z):
+def simulate_xz(model, list_z, model_kwargs = {}):
     """Generates x ~ model(z).
     
     Args:
@@ -89,7 +87,7 @@ def simulate_xz(model, list_z):
 
     list_xz = []
     for z in list_z:
-        x = model(z.numpy())
+        x = model(z.numpy(), **model_kwargs)
         x = torch.tensor(x).float()
         list_xz.append(dict(x=x, z=z))
     return list_xz
@@ -262,7 +260,7 @@ def get_lnL(net, x0, z, n_batch = 64):
     nsamples = len(z)
 
     lnL = []
-    for i in tqdm(range(nsamples//n_batch+1)):
+    for i in range(nsamples//n_batch+1):
         zbatch = z[i*n_batch:(i+1)*n_batch]
         lnL += net(x0.unsqueeze(0), zbatch).detach().cpu()
 
@@ -342,13 +340,12 @@ def get_norms(xz):
     return x_mean, x_var**0.5, z_mean, z_var**0.5
 
 class Network(nn.Module):
-    def __init__(self, ydim, pnum, pdim = 1, xz_init = None, head = None, p = 0.):
+    def __init__(self, ydim, pnum, pdim = 1, head = None, p = 0., datanorms = None):
         """Base network combining z-independent head and parallel tail.
 
         :param ydim: Number of data dimensions going into DenseLeg network
         :param pnum: Number of posteriors to estimate
         :param pdim: Dimensionality of posteriors
-        :param xz_init: xz Samples used for normalization
         :param head: Head network, z-independent
         :type head: `torch.nn.Module`, optional
 
@@ -358,82 +355,82 @@ class Network(nn.Module):
         super().__init__()
         self.head = head
         self.legs = DenseLegs(ydim, pnum, pdim = pdim, p = p)
-        
-        if xz_init is not None:
-            x_mean, x_std, z_mean, z_std = get_norms(xz_init)
-        else:
-            x_mean, x_std, z_mean, z_std = 0., 1., 0., 1.
-        self.x_mean = torch.nn.Parameter(torch.tensor(x_mean).float())
-        self.z_mean = torch.nn.Parameter(torch.tensor(z_mean).float())
-        self.x_std = torch.nn.Parameter(torch.tensor(x_std).float())
-        self.z_std = torch.nn.Parameter(torch.tensor(z_std).float())
+
+        # Set datascaling
+        if datanorms is None:
+            datanorms = [torch.tensor(0.), torch.tensor(1.), torch.tensor(0.5), torch.tensor(0.5)]
+        self._set_datanorms(*datanorms)
+
+    def _set_datanorms(self, x_mean, x_std, z_mean, z_std):
+        self.x_loc = torch.nn.Parameter(x_mean)
+        self.x_scale = torch.nn.Parameter(x_std)
+        self.z_loc = torch.nn.Parameter(z_mean.unsqueeze(-1))
+        self.z_scale = torch.nn.Parameter(z_std.unsqueeze(-1))
     
     def forward(self, x, z):
-        #TODO : Bring normalization back
-        #x = (x-self.x_mean)/self.x_std
-        #z = (z-self.z_mean)/self.z_std
+        x = (x-self.x_loc)/self.x_scale
+        z = (z-self.z_loc)/self.z_scale
 
         if self.head is not None:
             y = self.head(x)
         else:
-            y = x  # Take data as features
+            y = x  # Use 1-dim data vector as features
 
         out = self.legs(y, z)
         return out
 
-def iter_sample_z(n_draws, zdim, net, x0, verbosity = False, threshold = 1e-6):
-    """Generate parameter samples z~p_c(z) from constrained prior.
-    
-    Arguments
-    ---------
-    n_draws: Number of draws
-    zdim: Number of dimensions of z
-    net: Trained density network
-    x0: Reference data
-    
-    Returns
-    -------
-    z: list of zdim samples with length n_draws
-    """
-    done = False
-    zout = defaultdict(lambda: [])
-    counter = np.zeros(zdim)
-    frac = np.ones(zdim)
-    while not done:
-        z = torch.rand(n_draws, zdim, device=x0.device)
-        zlnL = estimate_lnL(net, x0, z)
-        for i in range(zdim):
-            mask = zlnL[i]['lnL'] > np.log(threshold)
-            frac[i] = np.true_divide(sum(mask),len(mask))
-            zout[i].append(zlnL[i]['z'][mask])
-            counter[i] += mask.sum()
-        done = min(counter) >= n_draws
-    if verbosity:
-        print("Constrained posterior volume:", frac.prod())
-    
-    #out = list(torch.tensor([np.concatenate(zout[i])[:n_draws] for i in range(zdim)]).T[0])
-    out = list(torch.stack([torch.cat(zout[i]).squeeze(-1)[:n_draws] for i in range(zdim)]).T)
-    return out
-
+#def iter_sample_z(n_draws, zdim, net, x0, verbosity = False, threshold = 1e-6):
+#    """Generate parameter samples z~p_c(z) from constrained prior.
+#    
+#    Arguments
+#    ---------
+#    n_draws: Number of draws
+#    zdim: Number of dimensions of z
+#    net: Trained density network
+#    x0: Reference data
+#    
+#    Returns
+#    -------
+#    z: list of zdim samples with length n_draws
+#    """
+#    done = False
+#    zout = defaultdict(lambda: [])
+#    counter = np.zeros(zdim)
+#    frac = np.ones(zdim)
+#    while not done:
+#        z = torch.rand(n_draws, zdim, device=x0.device)
+#        zlnL = estimate_lnL(net, x0, z)
+#        for i in range(zdim):
+#            mask = zlnL[i]['lnL'] > np.log(threshold)
+#            frac[i] = np.true_divide(sum(mask),len(mask))
+#            zout[i].append(zlnL[i]['z'][mask])
+#            counter[i] += mask.sum()
+#        done = min(counter) >= n_draws
+#    if verbosity:
+#        print("Constrained posterior volume:", frac.prod())
+#    
+#    #out = list(torch.tensor([np.concatenate(zout[i])[:n_draws] for i in range(zdim)]).T[0])
+#    out = list(torch.stack([torch.cat(zout[i]).squeeze(-1)[:n_draws] for i in range(zdim)]).T)
+#    return out
 
 def sample_constrained_hypercube(nsamples, zdim, mask):
     done = False
     zout = defaultdict(lambda: [])
-    counter = np.zeros(zdim)  # Counter of accepted points in each z component
-    frac = np.ones(zdim)
+    counter1 = np.zeros(zdim)  # Counter of accepted points in each z component
+    counter2 = np.zeros(zdim)  # Counter of tested points in each z component
     while not done:
         z = torch.rand(nsamples, zdim)
         m = mask(z.unsqueeze(-1))
         for i in range(zdim):
-            frac[i] = np.true_divide(sum(m[:,i]),len(m))
             zout[i].append(z[m[:,i], i])
-            counter[i] += m[:,i].sum()
-        done = min(counter) >= nsamples
-    print("Constrained posterior volume:", frac.prod())
+            counter1[i] += m[:,i].sum()
+            counter2[i] += nsamples
+        done = min(counter1) >= nsamples
+    post_vol = np.true_divide(counter1, counter2)  # constrained posterior volume
+    print("Constrained posterior volume:", post_vol.prod())
     
     out = torch.stack([torch.cat(zout[i]).squeeze(-1)[:nsamples] for i in range(zdim)]).T
     return out
-
 
 # NOTE: This mask works on exactly the parameter combinations that were also
 # used for the definition of the network, not plain z vectors.
