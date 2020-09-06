@@ -9,39 +9,47 @@ from .core import *
 from copy import deepcopy
 
 class Data(torch.utils.data.Dataset):
+    """Data container class.
+
+    Note: The noisemodel allows scheduled noise level increase during training.
+    """
     def __init__(self, xz):
         super().__init__()
         self.xz = xz
-        self.modelposthook = None
+        self.noisemodel = None
 
-    def set_modelposthook(self, modelposthook):
-        self.modelposthook = modelposthook
+    def set_noisemodel(self, noisemodel):
+        self.noisemodel = noisemodel
+        self.noiselevel = 1.  # 0: no noise, 1: full noise
+
+    def set_noiselevel(self, level):
+        self.noiselevel = level
 
     def __len__(self):
         return len(self.xz)
 
     def __getitem__(self, idx):
-        if self.modelposthook is None:
-            return self.xz[idx]
-        else:
-            xz = self.xz[idx]
-            x = self.modelposthook(xz['x'], xz['z'])
-            return dict(x=x, z=xz['z'])
+        xz = self.xz[idx]
+        if self.noisemodel is not None:
+            x = self.noisemodel(xz['x'].numpy(), z = xz['z'].numpy(), noiselevel = self.noiselevel)
+            x = torch.tensor(x).float()
+            xz = dict(x=x, z=xz['z'])
+        return xz
 
-def gen_train_data(model, nsamples, zdim, mask = None, model_kwargs = {}):
+def gen_train_data(model, nsamples, zdim, mask = None):
     # Generate training data
     if mask is None:
         z = sample_hypercube(nsamples, zdim)
     else:
         z = sample_constrained_hypercube(nsamples, zdim, mask)
     
-    xz = simulate_xz(model, z, model_kwargs)
+    xz = simulate_xz(model, z)
     dataset = Data(xz)
     
     return dataset
 
 def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
-        max_epochs = 100, early_stopping_patience = 20, device = 'cpu'):
+        max_epochs = 100, early_stopping_patience = 20, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0]):
     print("Start training")
     nvalid = 512
     ntrain = len(dataset) - nvalid
@@ -51,8 +59,9 @@ def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
     # Train!
 
     train_loss, valid_loss = [], []
-    for i, lr in enumerate([1e-3, 1e-4, 1e-5]):
+    for i, lr in enumerate(lr_schedule):
         print(f'LR iteration {i}', end="\r")
+        dataset.set_noiselevel(nl_schedule[i])
         tl, vl, sd = train(net, train_loader, valid_loader,
                 early_stopping_patience = early_stopping_patience, lr = lr,
                 max_epochs = max_epochs, device=device, combinations =
@@ -71,9 +80,10 @@ def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
     return z.cpu(), lnL.cpu()
 
 class SWYFT:
-    def __init__(self, x0, model, zdim, head = None, device = 'cpu'):
+    def __init__(self, x0, model, zdim, head = None, noisemodel = None, device = 'cpu'):
         self.x0 = torch.tensor(x0).float()
         self.model = model
+        self.noisemodel = noisemodel
         self.zdim = zdim
         self.head_cls = head  # head network class
         self.device = device
@@ -111,11 +121,10 @@ class SWYFT:
         self.data_store.append(dataset)
         self.mask_store.append(None)
 
-    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8, modelposthook = None): 
+    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8): 
         """Train 1-dim posteriors."""
         # Use most recent dataset by default
         dataset = self.data_store[-1]
-        dataset.set_modelposthook(modelposthook)
 
         datanorms = get_norms(dataset)
 
@@ -135,7 +144,7 @@ class SWYFT:
         self.net1d_store.append(net)
         self.post1d_store.append((zgrid, lnLgrid))
 
-    def data(self, nsamples = 3000, threshold = 1e-6, model_kwargs = {}):
+    def data(self, nsamples = 3000, threshold = 1e-6):
         """Generate training data on constrained prior."""
         if len(self.mask_store) == 0:
             mask = None
@@ -143,20 +152,21 @@ class SWYFT:
             last_net = self.net1d_store[-1]
             mask = Mask(last_net, self.x0.to(self.device), threshold)
 
-        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask, model_kwargs = model_kwargs)
+        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask)
+        dataset.set_noisemodel(self.noisemodel)
 
         # Store dataset and mask
         self.mask_store.append(mask)
         self.data_store.append(dataset)
 
-    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs = 100, recycle_net = True, nbatch = 8, model_kwargs = {}, modelposthook = None):
+    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs = 100, recycle_net = True, nbatch = 8):
         """Iteratively generating training data and train 1-dim posteriors."""
         for i in range(nrounds):
             if self.model is None:
                 print("WARNING: No model provided. Skipping data generation.")
             else:
-                self.data(nsamples = nsamples, threshold = threshold, model_kwargs = model_kwargs)
-            self.train1d(recycle_net = recycle_net, max_epochs = max_epochs, nbatch = nbatch, modelposthook = modelposthook)
+                self.data(nsamples = nsamples, threshold = threshold)
+            self.train1d(recycle_net = recycle_net, max_epochs = max_epochs, nbatch = nbatch)
 
     def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch = 8):
         """Generate N-dim posteriors."""
