@@ -121,11 +121,12 @@ class SWYFT:
         self.data_store.append(dataset)
         self.mask_store.append(None)
 
-    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8): 
+    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience = 20): 
         """Train 1-dim posteriors."""
         # Use most recent dataset by default
         dataset = self.data_store[-1]
 
+        dataset.set_noiselevel(1.)
         datanorms = get_norms(dataset)
 
         # Start by retraining previous network
@@ -135,7 +136,9 @@ class SWYFT:
             net = self._get_net(self.zdim, 1, datanorms = datanorms)
 
         # Train
-        trainloop(net, dataset, device = self.device, max_epochs = max_epochs, nbatch = nbatch)
+        trainloop(net, dataset, device = self.device, max_epochs = max_epochs,
+                nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
+                nl_schedule, early_stopping_patience = early_stopping_patience)
 
         # Get 1-dim posteriors
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, device = self.device)
@@ -159,19 +162,30 @@ class SWYFT:
         self.mask_store.append(mask)
         self.data_store.append(dataset)
 
-    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs = 100, recycle_net = True, nbatch = 8):
+    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs =
+            100, recycle_net = True, nbatch = 8, lr_schedule = [1e-3, 1e-4,
+                1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
+            20):
         """Iteratively generating training data and train 1-dim posteriors."""
         for i in range(nrounds):
             if self.model is None:
                 print("WARNING: No model provided. Skipping data generation.")
             else:
                 self.data(nsamples = nsamples, threshold = threshold)
-            self.train1d(recycle_net = recycle_net, max_epochs = max_epochs, nbatch = nbatch)
+            self.train1d(recycle_net = recycle_net, max_epochs = max_epochs,
+                    nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
+                    nl_schedule, early_stopping_patience =
+                    early_stopping_patience)
 
-    def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch = 8):
+    def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch =
+            8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0],
+            early_stopping_patience = 20):
         """Generate N-dim posteriors."""
         # Use by default data from last 1-dim round
         dataset = self.data_store[-1]
+
+        dataset.set_noiselevel(1.)
+        datanorms = get_norms(dataset, combinations = combinations)
 
         # Generate network
         pnum = len(combinations)
@@ -179,13 +193,15 @@ class SWYFT:
 
         if recycle_net:
             head = deepcopy(self.net1d_store[-1].head)
-            net = self._get_net(pnum, pdim, head = head)
+            net = self._get_net(pnum, pdim, head = head, datanorms = datanorms)
         else:
-            net = self._get_net(pnum, pdim)
+            net = self._get_net(pnum, pdim, datanorms = datanorms)
 
         # Train!
         trainloop(net, dataset, combinations = combinations, device =
-                self.device, max_epochs = max_epochs, nbatch = nbatch)
+                self.device, max_epochs = max_epochs, nbatch = nbatch,
+                lr_schedule = lr_schedule, nl_schedule = nl_schedule,
+                early_stopping_patience = early_stopping_patience)
 
         # Get posteriors and store them internally
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =

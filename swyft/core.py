@@ -219,6 +219,7 @@ def train(
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
     while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
+        print("Epoch:", epoch, validation_losses)
         network.train()
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
@@ -330,13 +331,23 @@ class DenseLegs(nn.Module):
         x = self.fc4(x).squeeze(-1)
         return x
 
-def get_norms(xz):
+def get_norms(xz, combinations = None):
     x = get_x(xz)
     z = get_z(xz)
     x_mean = sum(x)/len(x)
     z_mean = sum(z)/len(z)
     x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
     z_var = sum([(z[i]-z_mean)**2 for i in range(len(z))])/len(z)
+
+    z_mean = combine_z(z_mean, combinations)
+    z_var = combine_z(z_var, combinations)
+
+    print("Normalizations")
+    print("x_mean", x_mean)
+    print("x_err", x_var**0.5)
+    print("z_mean", z_mean)
+    print("z_err", z_var**0.5)
+
     return x_mean, x_var**0.5, z_mean, z_var**0.5
 
 class Network(nn.Module):
@@ -364,8 +375,8 @@ class Network(nn.Module):
     def _set_datanorms(self, x_mean, x_std, z_mean, z_std):
         self.x_loc = torch.nn.Parameter(x_mean)
         self.x_scale = torch.nn.Parameter(x_std)
-        self.z_loc = torch.nn.Parameter(z_mean.unsqueeze(-1))
-        self.z_scale = torch.nn.Parameter(z_std.unsqueeze(-1))
+        self.z_loc = torch.nn.Parameter(z_mean)
+        self.z_scale = torch.nn.Parameter(z_std)
     
     def forward(self, x, z):
         x = (x-self.x_loc)/self.x_scale
