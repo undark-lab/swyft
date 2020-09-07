@@ -1,4 +1,3 @@
-# SWYFT
+# SWYFT!
 
-A python library for marginal posterior inference with nested likelihood-free
-inference.
+Stop Wasting Your Freaking Time
