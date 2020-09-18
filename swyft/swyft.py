@@ -48,8 +48,8 @@ def gen_train_data(model, nsamples, zdim, mask = None):
     
     return dataset
 
-def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
-        max_epochs = 100, early_stopping_patience = 20, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0]):
+def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
+        max_epochs = 50, early_stopping_patience = 3, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
     print("Start training")
     nvalid = 512
     ntrain = len(dataset) - nvalid
@@ -60,7 +60,7 @@ def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
 
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
-        print(f'LR iteration {i}', end="\r")
+        print(f'LR iteration {i}')
         dataset.set_noiselevel(nl_schedule[i])
         tl, vl, sd = train(net, train_loader, valid_loader,
                 early_stopping_patience = early_stopping_patience, lr = lr,

@@ -10,6 +10,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from scipy.integrate import cumtrapz
 from torch import Tensor
 
 
@@ -219,7 +220,7 @@ def train(
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
     while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
-        print("Epoch:", epoch, validation_losses)
+        print("Epoch:", epoch, end = "\r")
         network.train()
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
@@ -235,6 +236,9 @@ def train(
             best_state_dict = deepcopy(network.state_dict())
         else:
             fruitless_epoch += 1
+
+    print("Total epochs:", epoch)
+    print("Validation losses:", validation_losses)
 
     return train_losses, validation_losses, best_state_dict
 
@@ -342,11 +346,11 @@ def get_norms(xz, combinations = None):
     z_mean = combine_z(z_mean, combinations)
     z_var = combine_z(z_var, combinations)
 
-    print("Normalizations")
-    print("x_mean", x_mean)
-    print("x_err", x_var**0.5)
-    print("z_mean", z_mean)
-    print("z_err", z_var**0.5)
+    #print("Normalizations")
+    #print("x_mean", x_mean)
+    #print("x_err", x_var**0.5)
+    #print("z_mean", z_mean)
+    #print("z_err", z_var**0.5)
 
     return x_mean, x_var**0.5, z_mean, z_var**0.5
 
@@ -465,5 +469,22 @@ class Mask:
         lnL -= lnL.max(axis=0)[0]
         return lnL > np.log(self.threshold)
 
+def get_stats(z, p):
+    # Returns central credible intervals
+    zmax = z[p.argmax()]
+    c = cumtrapz(p, z, initial = 0)
+    res = np.interp([0.025, 0.16, 0.5, 0.84, 0.975], c, z)
+    xmedian = res[2]
+    xerr68 = [res[1], res[3]]
+    xerr95 = [res[0], res[4]]
+    return {'mode': zmax, 'median': xmedian,
+            'cred68': xerr68, 'cred95': xerr95,
+            'err68': (xerr68[1] - xerr68[0])/2,
+            'err95': (xerr95[1] - xerr95[0])/2,
+            }
+
 if __name__ == "__main__":
     pass
+
+
+
