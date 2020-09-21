@@ -48,8 +48,8 @@ def gen_train_data(model, nsamples, zdim, mask = None):
     
     return dataset
 
-def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
-        max_epochs = 100, early_stopping_patience = 20, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0]):
+def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
+        max_epochs = 50, early_stopping_patience = 3, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
     print("Start training")
     nvalid = 512
     ntrain = len(dataset) - nvalid
@@ -60,7 +60,7 @@ def trainloop(net, dataset, combinations = None, nbatch = 8, nworkers = 4,
 
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
-        print(f'LR iteration {i}', end="\r")
+        print(f'LR iteration {i}')
         dataset.set_noiselevel(nl_schedule[i])
         tl, vl, sd = train(net, train_loader, valid_loader,
                 early_stopping_patience = early_stopping_patience, lr = lr,
@@ -210,20 +210,32 @@ class SWYFT:
         self.postNd_store.append((combinations, zgrid, lnLgrid))
         self.netNd_store.append(net)
 
-    def posterior(self, indices, version = -1):
-        """Return generated posteriors."""
+    def _prep_post_1dim(self, x, y):
+        # Sort and normalize posterior
         # NOTE: 1-dim posteriors are automatically normalized
         # TODO: Normalization should be done based on prior range, not enforced by hand
+        isorted = np.argsort(x)
+        x, y = x[isorted], y[isorted]
+        y = np.exp(y)
+        I = trapz(y, x)
+        return x, y/I
+
+    def posterior(self, indices, version = -1, x0 = None):
+        """Return generated posteriors."""
         if isinstance(indices, int):
             i = indices
-            # Sort for convenience
-            x = self.post1d_store[version][0][:,i,0]
-            y = self.post1d_store[version][1][:,i]
-            isorted = np.argsort(x)
-            x, y = x[isorted], y[isorted]
-            y = np.exp(y)
-            I = trapz(y, x)
-            return x, y/I
+            if x0 is None:
+                x = self.post1d_store[version][0][:,i,0]
+                y = self.post1d_store[version][1][:,i]
+                return self._prep_post_1dim(x, y)
+            else:
+                net = self.net1d_store[version]
+                dataset = self.data_store[version]
+                x0 = torch.tensor(x0).float().to(self.device)
+                x, y = posteriors(x0, net, dataset, combinations = None, device = self.device)
+                x = x[:,i,0]
+                y = y[:,i]
+                return self._prep_post_1dim(x, y)
         else:
             for i in range(len(self.postNd_store)-1, -1, -1):
                 combinations = self.postNd_store[i][0]
