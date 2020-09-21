@@ -210,20 +210,32 @@ class SWYFT:
         self.postNd_store.append((combinations, zgrid, lnLgrid))
         self.netNd_store.append(net)
 
-    def posterior(self, indices, version = -1):
-        """Return generated posteriors."""
+    def _prep_post_1dim(self, x, y):
+        # Sort and normalize posterior
         # NOTE: 1-dim posteriors are automatically normalized
         # TODO: Normalization should be done based on prior range, not enforced by hand
+        isorted = np.argsort(x)
+        x, y = x[isorted], y[isorted]
+        y = np.exp(y)
+        I = trapz(y, x)
+        return x, y/I
+
+    def posterior(self, indices, version = -1, x0 = None):
+        """Return generated posteriors."""
         if isinstance(indices, int):
             i = indices
-            # Sort for convenience
-            x = self.post1d_store[version][0][:,i,0]
-            y = self.post1d_store[version][1][:,i]
-            isorted = np.argsort(x)
-            x, y = x[isorted], y[isorted]
-            y = np.exp(y)
-            I = trapz(y, x)
-            return x, y/I
+            if x0 is None:
+                x = self.post1d_store[version][0][:,i,0]
+                y = self.post1d_store[version][1][:,i]
+                return self._prep_post_1dim(x, y)
+            else:
+                net = self.net1d_store[version]
+                dataset = self.data_store[version]
+                x0 = torch.tensor(x0).float().to(self.device)
+                x, y = posteriors(x0, net, dataset, combinations = None, device = self.device)
+                x = x[:,i,0]
+                y = y[:,i]
+                return self._prep_post_1dim(x, y)
         else:
             for i in range(len(self.postNd_store)-1, -1, -1):
                 combinations = self.postNd_store[i][0]
