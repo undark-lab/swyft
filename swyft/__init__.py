@@ -8,5 +8,5 @@ Copyright: 2020
 
 """
 from .core import *
-from .swyft import *
+from .interface import *
 __all__ = ['SWYFT']
