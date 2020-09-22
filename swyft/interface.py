@@ -4,12 +4,12 @@ from scipy.integrate import trapz
 
 import torch
 import torch.nn as nn
-from .core import *
+from swyft.core import *
 
 from copy import deepcopy
 
 class Data(torch.utils.data.Dataset):
-    """Data container class.
+    """Simple data container class.
 
     Note: The noisemodel allows scheduled noise level increase during training.
     """
@@ -113,7 +113,21 @@ def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
     return z.cpu(), lnL.cpu()
 
 class SWYFT:
+    """Main SWYFT interface."""
     def __init__(self, x0, model, zdim, head = None, noisemodel = None, device = 'cpu'):
+        """Initialize SWYFT.
+
+        Args:
+            x0 (array): Observational data.
+            model (function): Functions returning samples from x~p(x|z).
+            zdim (int): Number of parameters.
+            head (class): Head network class.
+            noisemodel (function): Function return noise.
+            device (str): Device type.
+
+        Returns:
+            Instance of SWYFT.
+        """
         self.x0 = torch.tensor(x0).float()
         self.model = model
         self.noisemodel = noisemodel
