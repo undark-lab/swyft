@@ -48,6 +48,39 @@ def gen_train_data(model, nsamples, zdim, mask = None):
     
     return dataset
 
+#if datastore is empty, add sims according to poisson process
+#if datastore isn't empty, use constrained posterior via mask as prior  
+#then grow the DataStore and sample
+def update_datastore(ds, model, nsamples, zdim, mask=None):
+    if mask==None:
+        #use unit hypercube for prior
+        pr=Prior([0.0]*zdim,[1.0]*zdim)
+        ds.grow(nsamples, pr);
+        z=ds.get_z_without_x()
+        xz = simulate_xz(model,torch.tensor(z).float())
+        x = get_x(xz)
+        ds.fill_sims(x, z)
+        dataset = Data(xz)
+        return dataset
+    else:
+        z = ds.z
+        zz=torch.tensor(z).float()
+        m = mask(zz.unsqueeze(-1))
+        #use mask to compute prior
+        pr=Prior([z[:,i][m[:,i]].min() for i in range(len(z[0]))],[z[:,i][m[:,i]].max() for i in range(len(z[0]))])
+        #enlarge DataStore and compute missing simulations
+        ds.grow(nsamples, pr);
+        z2=ds.get_z_without_x()
+        xz2 = simulate_xz(model,torch.tensor(z2).float()) 
+        x2 = get_x(xz2)
+        ds.fill_sims(x2, z2)
+        #sample the DataStore and return
+        x,z=ds.sample(nsamples,pr);
+        xz=[dict(x=x[i],z=torch.tensor(z[i]).float()) for i in range(len(x))]
+        dataset=Data(xz)
+        return dataset
+
+
 def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
         max_epochs = 50, early_stopping_patience = 3, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
     print("Start training")
@@ -92,6 +125,8 @@ class SWYFT:
         # TODO: Replace with datastore eventually
         self.mask_store = []
         self.data_store = []
+        #self.ds is new DataStore class
+        self.ds = DataStore()
 
         # NOTE: Each trained network goes together with evaluated posteriors (evaluated on x0)
         self.post1d_store = []
@@ -121,7 +156,7 @@ class SWYFT:
         self.data_store.append(dataset)
         self.mask_store.append(None)
 
-    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience = 20): 
+    def train1d(self, recycle_net = True, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience = 20,nworkers=4): 
         """Train 1-dim posteriors."""
         # Use most recent dataset by default
         dataset = self.data_store[-1]
@@ -138,7 +173,7 @@ class SWYFT:
         # Train
         trainloop(net, dataset, device = self.device, max_epochs = max_epochs,
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
-                nl_schedule, early_stopping_patience = early_stopping_patience)
+                nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
         # Get 1-dim posteriors
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, device = self.device)
@@ -149,13 +184,16 @@ class SWYFT:
 
     def data(self, nsamples = 3000, threshold = 1e-6):
         """Generate training data on constrained prior."""
+        
         if len(self.mask_store) == 0:
             mask = None
         else:
             last_net = self.net1d_store[-1]
             mask = Mask(last_net, self.x0.to(self.device), threshold)
 
-        dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask)
+        
+        #dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask)
+        dataset = update_datastore(self.ds, self.model, nsamples, self.zdim, mask=mask)
         dataset.set_noisemodel(self.noisemodel)
 
         # Store dataset and mask
@@ -165,7 +203,7 @@ class SWYFT:
     def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs =
             100, recycle_net = True, nbatch = 8, lr_schedule = [1e-3, 1e-4,
                 1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
-            20):
+            20, nworkers=4):
         """Iteratively generating training data and train 1-dim posteriors."""
         for i in range(nrounds):
             if self.model is None:
@@ -175,11 +213,11 @@ class SWYFT:
             self.train1d(recycle_net = recycle_net, max_epochs = max_epochs,
                     nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                     nl_schedule, early_stopping_patience =
-                    early_stopping_patience)
+                    early_stopping_patience, nworkers=nworkers)
 
     def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch =
             8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0],
-            early_stopping_patience = 20):
+            early_stopping_patience = 20, nworkers=4):
         """Generate N-dim posteriors."""
         # Use by default data from last 1-dim round
         dataset = self.data_store[-1]
@@ -201,7 +239,7 @@ class SWYFT:
         trainloop(net, dataset, combinations = combinations, device =
                 self.device, max_epochs = max_epochs, nbatch = nbatch,
                 lr_schedule = lr_schedule, nl_schedule = nl_schedule,
-                early_stopping_patience = early_stopping_patience)
+                early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
         # Get posteriors and store them internally
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =

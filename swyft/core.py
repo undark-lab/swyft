@@ -12,7 +12,8 @@ import torch
 import torch.nn as nn
 from scipy.integrate import cumtrapz
 from torch import Tensor
-
+from tqdm import tqdm
+from itertools import compress
 
 #######################
 # Convenience functions
@@ -100,6 +101,116 @@ def get_x(list_xz):
 def get_z(list_xz):
     """Extract z from batch of samples."""
     return [xz['z'] for xz in list_xz]
+    
+#################
+# Datastore class
+#################
+
+class DataStore:
+    def __init__(self, x = None, z = None, u = None):
+        """Initialize datastore content. Default is empty."""
+        # Initialize datastore content
+        self.x = x # samples
+        self.z = z # samples
+        self.u = lambda z: 0.  # intensity function
+        
+    def __len__(self):
+        """Number of samples in the datastore."""
+        if self.z is not None:
+            return len(self.z)
+        else:
+            return 0
+
+    def _max_u(self, u):
+        """Replace DS intensity function with max between intensity functions."""
+        if self.u is None:
+            self.u = u
+        else:
+            self.u = lambda z, u_prev = self.u: max(u_prev(z), u(z))
+    
+    def _append(self, x, z):
+        """Append (x, z) to datastore content."""
+        if x is None:
+            x = [None for i in range(len(z))]
+        if self.x is None:
+            self.x = x
+            self.z = z
+        else:
+            self.x += x
+            self.z = np.vstack([self.z, z])
+            
+    def grow(self, mu, p):
+        """Grow number of samples in datastore."""
+        
+        # Number of requested samples from p
+        N = np.random.poisson(mu, 1)[0]
+        
+        # Proposed new samples z from p
+        z_prop = p.sample(N)
+        
+        # Rejection sampling from proposal list
+        accepted = []
+        for z in tqdm(z_prop, desc = "Adding samples."):
+            rej_prob = np.minimum(1, self.u(z)/mu/p.pdf(z))
+            w = np.random.rand(1)[0]
+            accepted.append(rej_prob < w)
+        z_accepted = z_prop[accepted, :]
+        print("Adding %i new samples."%len(z_accepted))
+        
+        # Add new entries to datastore and update intensity function
+        self._append(None, z_accepted)
+        self._max_u(lambda z: mu*p.pdf(z))
+        # return the new z's?
+        #return z_accepted
+        
+    def sample(self, mu, p):
+        accepted = []
+        if self.z is None:
+            print("Warning: Requires running grow!")
+            return None, None
+        for z in tqdm(self.z, desc = "Extracting samples."):
+            accept_prob  = mu*p.pdf(z)/self.u(z)
+            if accept_prob > 1.:
+                print("Warning: Requires running grow!")
+                return None, None
+            w = np.random.rand(1)[0]
+            accepted.append(accept_prob > w)
+        x_sub = list(compress(self.x, accepted))
+        z_sub = self.z[accepted, :]
+        if any([x is None for x in x_sub]):
+            print("Warning: Requires simulator run!")
+            x_sub = None
+        print("Extracted %i samples"%len(accepted))
+        return x_sub, z_sub
+    
+    def get_z_without_x(self):
+        return self.z[[x is None for x in self.x]]
+    
+    def fill_sims(self, x, z):
+        for i in tqdm(range(len(z)), desc = "Adding simulations"):
+            j = np.where((self.z == z[i]).all(axis=1))[0][0]
+            self.x[j] = x[i]
+            
+#############
+# Prior class
+#############
+
+class Prior:
+    def __init__(self, z0, z1):
+        self.z0 = np.array(z0)
+        self.z1 = np.array(z1)
+        
+    def sample(self, N):
+        q = np.random.rand(N, len(self.z0))
+        q *= self.z1 - self.z0
+        q += self.z0
+        return q
+
+    def pdf(self, z):
+        if any(z < self.z0) or any(z > self.z1):
+            return 0.
+        else:
+            return 1./(self.z1 - self.z0).prod()
 
 
 ##########
