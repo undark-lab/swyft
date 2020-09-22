@@ -4,7 +4,7 @@ from scipy.integrate import trapz
 
 import torch
 import torch.nn as nn
-from .core import *
+from swyft.core import *
 
 from copy import deepcopy
 
