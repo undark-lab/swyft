@@ -323,7 +323,7 @@ class DenseLegs(nn.Module):
         self.af = torch.relu
 
         # swish activation function for smooth posteriors
-        self.af2 = lambda x: x*torch.sigmoid(x)
+        self.af2 = lambda x: x*torch.sigmoid(x*10.)
 
     def forward(self, y, z):
         x = combine(y, z)

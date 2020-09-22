@@ -4,10 +4,16 @@ Theoretical concepts
 Neural likelihood-to-evidence estimation
 ----------------------------------------
 
+TODO
+
 
 Nested marginal posterior estimation
 ------------------------------------
 
+TODO
 
-Poisson point process data store
---------------------------------
+
+Data store
+----------
+
+TODO
