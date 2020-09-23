@@ -52,14 +52,19 @@ def gen_train_data(model, nsamples, zdim, mask = None):
 #if datastore isn't empty, use constrained posterior via mask as prior  
 #then grow the DataStore and sample
 def update_datastore(ds, model, nsamples, zdim, mask=None):
-    if mask==None:
+    if ds.__len__()==0 or mask==None:
         #use unit hypercube for prior
         pr=Prior([0.0]*zdim,[1.0]*zdim)
-        ds.grow(nsamples, pr);
-        z=ds.get_z_without_x()
-        xz = simulate_xz(model,torch.tensor(z).float())
-        x = get_x(xz)
-        ds.fill_sims(x, z)
+        #does datastore need to grow here?
+        if ds.__len__() <nsamples: 
+            ds.grow(nsamples, pr)
+            z=ds.get_z_without_x()
+            xz = simulate_xz(model,torch.tensor(z).float())
+            x = get_x(xz)
+            ds.fill_sims(x, z)
+        x,z=ds.sample(nsamples,pr);
+        xz=[dict(x=x[i],z=torch.tensor(z[i]).float()) for i in range(len(x))]
+        dataset=Data(xz)
         dataset = Data(xz)
         return dataset
     else:
@@ -114,7 +119,7 @@ def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
 
 class SWYFT:
     """Main SWYFT interface."""
-    def __init__(self, x0, model, zdim, head = None, noisemodel = None, device = 'cpu'):
+    def __init__(self, x0, model, zdim, head = None, noisemodel = None, device = 'cpu',datastore = None):
         """Initialize SWYFT.
 
         Args:
@@ -140,7 +145,10 @@ class SWYFT:
         self.mask_store = []
         self.data_store = []
         #self.ds is new DataStore class
-        self.ds = DataStore()
+        if datastore == None:
+            self.ds = DataStore()
+        else:
+            self.ds = datastore
 
         # NOTE: Each trained network goes together with evaluated posteriors (evaluated on x0)
         self.post1d_store = []

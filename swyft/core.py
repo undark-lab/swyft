@@ -147,7 +147,7 @@ class DataStore:
         
         # Proposed new samples z from p
         z_prop = p.sample(N)
-        
+         
         # Rejection sampling from proposal list
         accepted = []
         for z in tqdm(z_prop, desc = "Adding samples."):
@@ -160,8 +160,6 @@ class DataStore:
         # Add new entries to datastore and update intensity function
         self._append(None, z_accepted)
         self._max_u(lambda z: mu*p.pdf(z))
-        # return the new z's?
-        #return z_accepted
         
     def sample(self, mu, p):
         accepted = []
@@ -180,7 +178,7 @@ class DataStore:
         if any([x is None for x in x_sub]):
             print("Warning: Requires simulator run!")
             x_sub = None
-        print("Extracted %i samples"%len(accepted))
+        print("Extracted %i samples"%len(z_sub))
         return x_sub, z_sub
     
     def get_z_without_x(self):
