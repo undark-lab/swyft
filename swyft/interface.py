@@ -8,50 +8,40 @@ from swyft.core import *
 
 from copy import deepcopy
 
-class Data(torch.utils.data.Dataset):
-    """Simple data container class.
+## NOTE: Deprecated
+#class Data(torch.utils.data.Dataset):
+#    """Simple data container class.
+#
+#    Note: The noisemodel allows scheduled noise level increase during training.
+#    """
+#    def __init__(self, xz):
+#        super().__init__()
+#        self.xz = xz
+#        self.noisemodel = None
+#
+#    def set_noisemodel(self, noisemodel):
+#        self.noisemodel = noisemodel
+#        self.noiselevel = 1.  # 0: no noise, 1: full noise
+#
+#    def set_noiselevel(self, level):
+#        self.noiselevel = level
+#
+#    def __len__(self):
+#        return len(self.xz)
+#
+#    def __getitem__(self, idx):
+#        xz = self.xz[idx]
+#        if self.noisemodel is not None:
+#            x = self.noisemodel(xz['x'].numpy(), z = xz['z'].numpy(), noiselevel = self.noiselevel)
+#            x = torch.tensor(x).float()
+#            xz = dict(x=x, z=xz['z'])
+#        return xz
 
-    Note: The noisemodel allows scheduled noise level increase during training.
-    """
-    def __init__(self, xz):
-        super().__init__()
-        self.xz = xz
-        self.noisemodel = None
-
-    def set_noisemodel(self, noisemodel):
-        self.noisemodel = noisemodel
-        self.noiselevel = 1.  # 0: no noise, 1: full noise
-
-    def set_noiselevel(self, level):
-        self.noiselevel = level
-
-    def __len__(self):
-        return len(self.xz)
-
-    def __getitem__(self, idx):
-        xz = self.xz[idx]
-        if self.noisemodel is not None:
-            x = self.noisemodel(xz['x'].numpy(), z = xz['z'].numpy(), noiselevel = self.noiselevel)
-            x = torch.tensor(x).float()
-            xz = dict(x=x, z=xz['z'])
-        return xz
-
-def gen_train_data(model, nsamples, zdim, mask = None):
-    # Generate training data
-    if mask is None:
-        z = sample_hypercube(nsamples, zdim)
-    else:
-        z = sample_constrained_hypercube(nsamples, zdim, mask)
-    
-    xz = simulate_xz(model, z)
-    dataset = Data(xz)
-    
-    return dataset
 
 #if datastore is empty, add sims according to poisson process
 #if datastore isn't empty, use constrained posterior via mask as prior  
 #then grow the DataStore and sample
-def update_datastore(ds, model, nsamples, zdim, mask=None):
+def get_dataset(ds, model, nsamples, zdim, mask=None):
     if ds.__len__()==0 or mask==None:
         #use unit hypercube for prior
         pr=Prior([0.0]*zdim,[1.0]*zdim)
@@ -204,34 +194,42 @@ class SWYFT:
         self.net1d_store.append(net)
         self.post1d_store.append((zgrid, lnLgrid))
 
-    def data(self, nsamples = 3000, threshold = 1e-6):
-        """Generate training data on constrained prior."""
-        
+    def _get_intensity(self, nsamples = 3000, threshold = 1e-6, version = -1):
         if len(self.mask_store) == 0:
             mask = None
         else:
             last_net = self.net1d_store[-1]
             mask = Mask(last_net, self.x0.to(self.device), threshold)
 
-        
-        #dataset = gen_train_data(self.model, nsamples, self.zdim, mask = mask)
-        dataset = update_datastore(self.ds, self.model, nsamples, self.zdim, mask=mask)
-        dataset.set_noisemodel(self.noisemodel)
+        # TODO
+        return intensity
+
+    def gen_data(self, nsamples = 3000, threshold = 1e-6):
+        """Generate training data on constrained prior."""
+
+        intensity = self._get_intensity(nsamples = nsamples, threshold = threshold)
+
+        indices = get_dataset(self.ds, self.model, intensity, noisemodel = self.noisemodel))
 
         # Store dataset and mask
-        self.mask_store.append(mask)
-        self.data_store.append(dataset)
+        #self.mask_store.append(mask)  # TODO: Intensity store
+        #self.data_store.append(dataset)  # TODO: Store indices instead
+
+        self.train_store.append([indices, intensity])
+
+        return "requires_sim", "success"
 
     def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs =
             100, recycle_net = True, nbatch = 8, lr_schedule = [1e-3, 1e-4,
                 1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
             20, nworkers=4):
         """Iteratively generating training data and train 1-dim posteriors."""
+        #if self.model is None:
+        #    print("WARNING: No model provided. Skipping data generation.")
+
         for i in range(nrounds):
-            if self.model is None:
-                print("WARNING: No model provided. Skipping data generation.")
-            else:
-                self.data(nsamples = nsamples, threshold = threshold)
+            self.gen_data(nsamples = nsamples, threshold = threshold)
+
             self.train1d(recycle_net = recycle_net, max_epochs = max_epochs,
                     nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                     nl_schedule, early_stopping_patience =

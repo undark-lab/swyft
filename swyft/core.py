@@ -19,21 +19,6 @@ from itertools import compress
 # Convenience functions
 #######################
 
-#def sortbyfirst(x, y):
-#    """Sort two lists by values of first list."""
-#    i = np.argsort(x)
-#    return x[i], y[i]
-#
-#def subsample(n_sub, z, replace = False):
-#    """Subsample lists."""
-#    if n_sub is None:
-#        return z
-#    if n_sub >= len(z) and not replace:
-#        raise ValueError("Number of sub-samples without replacement larger than sample size")
-#    indices = np.random.choice(len(z), size = n_sub, replace = replace)
-#    z_sub = [z[i] for i in indices]
-#    return z_sub
-
 def combine_z(z, combinations):
     """Generate parameter combinations in last dimension. 
     Requires: z.ndim == 1. 
@@ -57,6 +42,7 @@ def set_device(gpu: bool = False) -> torch.device:
         torch.set_default_tensor_type("torch.FloatTensor")
     return device
 
+
 #########################
 # Generate sample batches
 #########################
@@ -73,26 +59,26 @@ def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
     """
     return torch.rand(num_samples, num_params)
 
-def simulate_xz(model, list_z, model_kwargs = {}):
-    """Generates x ~ model(z).
-    
-    Args:
-        model (fn): foreward model, returns samples x~p(x|z).
-            Both x and z have to be Tensors.
-        list_z (list of Tensors): list of model parameters z.
-
-    Returns:
-        list of dict: list of dictionaries with 'x' and 'z' pairs.
-    """
-
-    # TODO: Change format to (x, z) tuples rather than dictionary
-
-    list_xz = []
-    for z in list_z:
-        x = model(z.numpy(), **model_kwargs)
-        x = torch.tensor(x).float()
-        list_xz.append(dict(x=x, z=z))
-    return list_xz
+#def simulate_xz(model, list_z, model_kwargs = {}):
+#    """Generates x ~ model(z).
+#    
+#    Args:
+#        model (fn): foreward model, returns samples x~p(x|z).
+#            Both x and z have to be Tensors.
+#        list_z (list of Tensors): list of model parameters z.
+#
+#    Returns:
+#        list of dict: list of dictionaries with 'x' and 'z' pairs.
+#    """
+#
+#    # TODO: Change format to (x, z) tuples rather than dictionary
+#
+#    list_xz = []
+#    for z in list_z:
+#        x = model(z.numpy(), **model_kwargs)
+#        x = torch.tensor(x).float()
+#        list_xz.append(dict(x=x, z=z))
+#    return list_xz
 
 def get_x(list_xz):
     """Extract x from batch of samples."""
@@ -101,114 +87,298 @@ def get_x(list_xz):
 def get_z(list_xz):
     """Extract z from batch of samples."""
     return [xz['z'] for xz in list_xz]
+
+
+###################################
+# New data model based on datastore
+###################################
+
+class DataDS(torch.utils.data.Dataset):
+    """Simple data container class.
+
+    Note: The noisemodel allows scheduled noise level increase during training.
+    """
+    def __init__(self, datastore, indices, noisemodel = None):
+        super().__init__()
+        self.ds = datastore
+        self.indices = indices
+        self.noisemodel = noisemodel
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        # Obtain x, z
+        i = self.indices[idx]
+        x = self.ds.x[i]
+        z = self.ds.z[i]
+        
+        # Add optional noise
+        if self.noisemodel is not None:
+            x = self.noisemodel(x, z, noiselevel = self.noiselevel)
+
+        # Tensors
+        x = torch.tensor(x).float()
+        z = torch.tensor(z).float()
+        
+        # Done
+        xz = dict(x=x, z=z)
+        return xz
+
+
+##################
+# Simulation loops
+##################
+
+def simulate_ds(model, ds):
+    """Run simulation to fill missing entries in data store."""
+    indices = ds.requires_sim()
+    for i in tqdm(indices, desc="Running simulations"):
+        _, z = ds[i]
+        x = model(z)
+        ds.add_sim(i, x)
+
+
+#################
+# Intensity class
+#################
+
+class Intensity:
+    def __init__(self, mu, z0, z1):
+        self.mu = mu
+        self.z0 = np.array(z0)
+        self.z1 = np.array(z1)
+        
+    def sample(self):
+        N = np.random.poisson(self.mu, 1)[0]
+        q = np.random.rand(N, len(self.z0))
+        q *= self.z1 - self.z0
+        q += self.z0
+        return q
+    
+    def __call__(self, z):
+        return self._pdf(z)*self.mu
+
+    def _pdf(self, z):
+        val = 1./(self.z1 - self.z0).prod()
+        return np.where(z >= self.z0, np.where(z <= self.z1, val, 0.), 0.).prod(axis=-1)
     
 #################
 # Datastore class
 #################
 
-class DataStore:
-    def __init__(self, x = None, z = None, u = None):
-        """Initialize datastore content. Default is empty."""
-        # Initialize datastore content
-        self.x = x # samples
-        self.z = z # samples
-        self.u = lambda z: 0.  # intensity function
+class DataStoreZarr:
+    def __init__(self, filename):
+        # Open (new) datastore
+        self.store = zarr.DirectoryStore(filename)
+        self.root = zarr.group(store = self.store)
+        
+        if 'samples' not in self.root.keys():
+            print("Creating empty datastore:", filename)
+            print("...don't forget to run `init` to set up storage parameters.")
+            return
+        
+        print("Loading datastore:", filename)
+        self.x = self.root['samples/x']
+        self.z = self.root['samples/z']
+        self.m = self.root['metadata/needs_sim']
+        self.u = self.root['metadata/intensity']
+        
+    def init(self, xdim, zdim):
+        """Initialize data store."""
+        if 'samples' in self.root.keys():
+            print("WARNING: Datastore is already initialized.")
+            return
+        self.x = self.root.zeros('samples/x', shape=(0,)+xdim, chunks=(1,)+xdim, dtype='f4')
+        self.z = self.root.zeros('samples/z', shape=(0,)+(zdim,), chunks=(10000,)+(zdim,), dtype='f4')
+        self.m = self.root.zeros('metadata/needs_sim', shape=(0,1), chunks=(10000,)+(1,), dtype='bool')
+        self.u = self.root.create('metadata/intensity', shape=(0,), dtype=object, object_codec=numcodecs.Pickle())
+        print("Datastore initialized.")
+        
+    def _append_z(self, z):
+        """Append z to datastore content and new slots for x."""
+        # Add simulation slots
+        xshape = list(self.x.shape)
+        xshape[0] += len(z)
+        self.x.resize(*xshape)
+        
+        # Add z samples
+        self.z.append(z)
+        
+        # Register as missing
+        m = np.ones((len(z),1), dtype='bool')
+        self.m.append(m)
         
     def __len__(self):
-        """Number of samples in the datastore."""
-        if self.z is not None:
-            return len(self.z)
+        """Returns number of samples in the datastore."""
+        return len(self.z)
+        
+    def intensity(self, zlist):
+        """Replace DS intensity function with max of intensity functions."""
+        if len(self.u) == 0:
+            return np.zeros(len(zlist))
         else:
-            return 0
-
-    def _max_u(self, u):
-        """Replace DS intensity function with max between intensity functions."""
-        if self.u is None:
-            self.u = u
-        else:
-            self.u = lambda z, u_prev = self.u: max(u_prev(z), u(z))
-    
-    def _append(self, x, z):
-        """Append (x, z) to datastore content."""
-        if x is None:
-            x = [None for i in range(len(z))]
-        if self.x is None:
-            self.x = x
-            self.z = z
-        else:
-            self.x += x
-            self.z = np.vstack([self.z, z])
-            
-    def grow(self, mu, p):
+            return np.array([self.u[i](zlist) for i in range(len(self.u))]).max(axis=0)
+        
+    def _grow(self, p):
         """Grow number of samples in datastore."""
-        
-        # Number of requested samples from p
-        N = np.random.poisson(mu, 1)[0]
-        
         # Proposed new samples z from p
-        z_prop = p.sample(N)
-         
+        z_prop = p.sample()
+        
         # Rejection sampling from proposal list
         accepted = []
-        for z in tqdm(z_prop, desc = "Adding samples."):
-            rej_prob = np.minimum(1, self.u(z)/mu/p.pdf(z))
+        ds_intensities = self.intensity(z_prop)
+        target_intensities = p(z_prop)
+        for z, Ids, It in zip(z_prop, ds_intensities, target_intensities):
+            rej_prob = np.minimum(1, Ids/It)
             w = np.random.rand(1)[0]
             accepted.append(rej_prob < w)
         z_accepted = z_prop[accepted, :]
-        print("Adding %i new samples."%len(z_accepted))
         
         # Add new entries to datastore and update intensity function
-        self._append(None, z_accepted)
-        self._max_u(lambda z: mu*p.pdf(z))
-        
-    def sample(self, mu, p):
-        accepted = []
-        if self.z is None:
-            print("Warning: Requires running grow!")
-            return None, None
-        for z in tqdm(self.z, desc = "Extracting samples."):
-            accept_prob  = mu*p.pdf(z)/self.u(z)
-            if accept_prob > 1.:
-                print("Warning: Requires running grow!")
-                return None, None
-            w = np.random.rand(1)[0]
-            accepted.append(accept_prob > w)
-        x_sub = list(compress(self.x, accepted))
-        z_sub = self.z[accepted, :]
-        if any([x is None for x in x_sub]):
-            print("Warning: Requires simulator run!")
-            x_sub = None
-        print("Extracted %i samples"%len(z_sub))
-        return x_sub, z_sub
-    
-    def get_z_without_x(self):
-        return self.z[[x is None for x in self.x]]
-    
-    def fill_sims(self, x, z):
-        for i in tqdm(range(len(z)), desc = "Adding simulations"):
-            j = np.where((self.z == z[i]).all(axis=1))[0][0]
-            self.x[j] = x[i]
-            
-#############
-# Prior class
-#############
-
-class Prior:
-    def __init__(self, z0, z1):
-        self.z0 = np.array(z0)
-        self.z1 = np.array(z1)
-        
-    def sample(self, N):
-        q = np.random.rand(N, len(self.z0))
-        q *= self.z1 - self.z0
-        q += self.z0
-        return q
-
-    def pdf(self, z):
-        if any(z < self.z0) or any(z > self.z1):
-            return 0.
+        self._append_z(z_accepted)
+        if len(z_accepted) > 0:
+            self.u.resize(len(self.u)+1)
+            self.u[-1] = p
+            print("Adding %i new samples. Run simulator!"%len(z_accepted))
         else:
-            return 1./(self.z1 - self.z0).prod()
+            print("No new simulator runs required.")
+
+    def sample(self, p):
+        self._grow(p)
+        
+        accepted = []
+        zlist = self.z[:]
+        I_ds = self.intensity(zlist)
+        I_target = p(zlist)
+        for i, z in enumerate(zlist):
+            accept_prob  = I_target[i]/I_ds[i]
+            assert accept_prob <= 1.
+            w = np.random.rand(1)[0]
+            if accept_prob > w:
+                accepted.append(i)
+        return accepted
+    
+    def __getitem__(self, i):
+        return self.x[i], self.z[i]
+                
+    def requires_sim(self):
+        indices = []
+        m = self.m[:]
+        for i in range(len(self.z)):
+            if m[i]:
+                indices.append(i)
+        return indices
+    
+    def add_sim(self, i, x):
+        self.x[i] = x
+        self.m[i] = False
+
+
+## NOTE: Deprecated datastore
+#class DataStore:
+#    def __init__(self, x = None, z = None, u = None):
+#        """Initialize datastore content. Default is empty."""
+#        # Initialize datastore content
+#        self.x = x # samples
+#        self.z = z # samples
+#        self.u = lambda z: 0.  # intensity function
+#        
+#    def __len__(self):
+#        """Number of samples in the datastore."""
+#        if self.z is not None:
+#            return len(self.z)
+#        else:
+#            return 0
+#
+#    def _max_u(self, u):
+#        """Replace DS intensity function with max between intensity functions."""
+#        if self.u is None:
+#            self.u = u
+#        else:
+#            self.u = lambda z, u_prev = self.u: max(u_prev(z), u(z))
+#    
+#    def _append(self, x, z):
+#        """Append (x, z) to datastore content."""
+#        if x is None:
+#            x = [None for i in range(len(z))]
+#        if self.x is None:
+#            self.x = x
+#            self.z = z
+#        else:
+#            self.x += x
+#            self.z = np.vstack([self.z, z])
+#            
+#    def grow(self, mu, p):
+#        """Grow number of samples in datastore."""
+#        
+#        # Number of requested samples from p
+#        N = np.random.poisson(mu, 1)[0]
+#        
+#        # Proposed new samples z from p
+#        z_prop = p.sample(N)
+#         
+#        # Rejection sampling from proposal list
+#        accepted = []
+#        for z in tqdm(z_prop, desc = "Adding samples."):
+#            rej_prob = np.minimum(1, self.u(z)/mu/p.pdf(z))
+#            w = np.random.rand(1)[0]
+#            accepted.append(rej_prob < w)
+#        z_accepted = z_prop[accepted, :]
+#        print("Adding %i new samples."%len(z_accepted))
+#        
+#        # Add new entries to datastore and update intensity function
+#        self._append(None, z_accepted)
+#        self._max_u(lambda z: mu*p.pdf(z))
+#        
+#    def sample(self, mu, p):
+#        accepted = []
+#        if self.z is None:
+#            print("Warning: Requires running grow!")
+#            return None, None
+#        for z in tqdm(self.z, desc = "Extracting samples."):
+#            accept_prob  = mu*p.pdf(z)/self.u(z)
+#            if accept_prob > 1.:
+#                print("Warning: Requires running grow!")
+#                return None, None
+#            w = np.random.rand(1)[0]
+#            accepted.append(accept_prob > w)
+#        x_sub = list(compress(self.x, accepted))
+#        z_sub = self.z[accepted, :]
+#        if any([x is None for x in x_sub]):
+#            print("Warning: Requires simulator run!")
+#            x_sub = None
+#        print("Extracted %i samples"%len(z_sub))
+#        return x_sub, z_sub
+#    
+#    def get_z_without_x(self):
+#        return self.z[[x is None for x in self.x]]
+#    
+#    def fill_sims(self, x, z):
+#        for i in tqdm(range(len(z)), desc = "Adding simulations"):
+#            j = np.where((self.z == z[i]).all(axis=1))[0][0]
+#            self.x[j] = x[i]
+            
+##############
+## Prior class
+##############
+#
+#class Prior:
+#    def __init__(self, z0, z1):
+#        self.z0 = np.array(z0)
+#        self.z1 = np.array(z1)
+#        
+#    def sample(self, N):
+#        q = np.random.rand(N, len(self.z0))
+#        q *= self.z1 - self.z0
+#        q += self.z0
+#        return q
+#
+#    def pdf(self, z):
+#        if any(z < self.z0) or any(z > self.z1):
+#            return 0.
+#        else:
+#            return 1./(self.z1 - self.z0).prod()
 
 
 ##########
