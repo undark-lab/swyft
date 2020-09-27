@@ -6,6 +6,8 @@ from contextlib import nullcontext
 
 from collections import defaultdict
 import math
+import zarr
+import numcodecs
 
 import numpy as np
 import torch
@@ -100,6 +102,10 @@ class DataDS(torch.utils.data.Dataset):
     """
     def __init__(self, datastore, indices, noisemodel = None):
         super().__init__()
+        # Check whether datastore is complete
+        if len(datastore.require_sim()) > 0:
+            raise RuntimeError("Datastore entries missing. Run simulator.")
+
         self.ds = datastore
         self.indices = indices
         self.noisemodel = noisemodel
@@ -132,7 +138,7 @@ class DataDS(torch.utils.data.Dataset):
 
 def simulate_ds(model, ds):
     """Run simulation to fill missing entries in data store."""
-    indices = ds.requires_sim()
+    indices = ds.require_sim()
     for i in tqdm(indices, desc="Running simulations"):
         _, z = ds[i]
         x = model(z)
@@ -262,7 +268,7 @@ class DataStoreZarr:
     def __getitem__(self, i):
         return self.x[i], self.z[i]
                 
-    def requires_sim(self):
+    def require_sim(self):
         indices = []
         m = self.m[:]
         for i in range(len(self.z)):
@@ -767,3 +773,70 @@ if __name__ == "__main__":
 
 
 
+
+
+####
+# Intensity functions
+####
+
+class Mask1d:
+    """A 1-dim multi-interval based mask class."""
+    def __init__(self, intervals):
+        self.intervals = np.array(intervals)  # n x 2 matrix
+        
+    def __call__(self, z):
+        """Returns 1. if inside interval, otherwise 0."""
+        m = np.zeros_like(z)
+        for z0, z1 in self.intervals:
+            m += np.where(z >= z0, np.where(z <= z1, 1., 0.), 0.)
+        assert not any(m > 1.), "Overlapping intervals."
+        return m
+        
+    def area(self):
+        """Combined length of all intervals (AKAK 1-dim area)."""
+        return (self.intervals[:, 1] - self.intervals[:, 0]).sum()
+    
+    def sample(self, N):
+        p = self.intervals[:, 1] - self.intervals[:,0]
+        p /= p.sum()
+        i = np.random.choice(len(p), size = N, replace = True, p = p)
+        w = np.random.rand(N)
+        z = self.intervals[i,0] + w*(self.intervals[i,1] - self.intervals[i,0])
+        return z
+
+
+class FactorMask:
+    """A d-dim factorized mask."""
+    def __init__(self, masks):
+        self.masks = masks
+        self.d = len(masks)
+    
+    def __call__(self, z):
+        m = [self.masks[i](z[:,i]) for i in range(self.d)]
+        m = np.array(m).prod(axis=0)
+        return m
+    
+    def area(self):
+        m = [self.masks[i].area() for i in range(self.d)]
+        return np.array(m).prod()
+    
+    def sample(self, N):
+        z = np.empty((N, self.d))
+        for i in range(self.d):
+            z[:,i] = self.masks[i].sample(N)
+        return z
+
+
+class Intensity:
+    """Intensity function based on d-dim mask."""
+    def __init__(self, mu, mask):
+        self.mu = mu
+        self.mask = mask
+        self.area = mask.area()
+        
+    def __call__(self, z):
+        return self.mask(z)/self.area*self.mu
+    
+    def sample(self):
+        N = np.random.poisson(self.mu, 1)[0]
+        return self.mask.sample(N)
