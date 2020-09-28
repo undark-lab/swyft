@@ -90,21 +90,13 @@ class SWYFT:
         self.head_cls = head  # head network class
         self.device = device
 
-        # Each data_store entry has a corresponding mask entry
-        # TODO: Replace with datastore eventually
-        self.mask_store = []
-        self.data_store = []
-        #self.ds is new DataStore class
         if datastore == None:
-            self.ds = DataStore()
-        else:
-            self.ds = datastore
+            raise ValueError("Need datastore!")
+        self.ds = datastore
 
         self.train_history = []
         self.net1d_history = []
         self.post1d_history = []
-
-        # NOTE: We separate N-dim posteriors since they are not used (yet) for refining training data
         self.netNd_history = []
         self.postNd_history = []
 
@@ -127,11 +119,6 @@ class SWYFT:
             print("Number of output features:", ydim)
         net = Network(ydim = ydim, pnum = pnum, pdim = pdim, head = head, datanorms = datanorms).to(self.device)
         return net
-
-    def append_dataset(self, dataset):
-        """Append dataset to data_store, assuming unconstrained prior."""
-        self.data_store.append(dataset)
-        self.mask_store.append(None)
 
     def get_dataset(self, version = -1):
         """Retrieve training dataset from datastore and SWYFT object train history."""
@@ -159,16 +146,6 @@ class SWYFT:
         trainloop(net, dataset, combinations = combinations, device = self.device, max_epochs = max_epochs,
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
-
-    def _get_intensity(self, nsamples = 3000, threshold = 1e-6):
-        if len(self.mask_store) == 0:
-            mask = None
-        else:
-            last_net = self.net1d_history[-1]
-            mask = Mask(last_net, self.x0.to(self.device), threshold)
-
-        # TODO
-        return intensity
 
     def advance_train_history(self, nsamples = 3000, threshold = 1e-6, res = 1e-4):
         """Advance SWYFT internal training data history on constrained prior."""
@@ -220,56 +197,24 @@ class SWYFT:
                 1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
             20, nworkers = 4):
         """Iteratively generating training data and train 1-dim posteriors."""
-        for i in range(nrounds):
-            self.advance_train_history(nsamples = nsamples, threshold = threshold)
+        raise NotImplementedError
+        #for i in range(nrounds):
+        #    self.advance_train_history(nsamples = nsamples, threshold = threshold)
 
-            if self.requires_sim():
-                pass  # TODO: Run simulations if needed!
+        #    if self.requires_sim():
+        #        pass  # TODO: Run simulations if needed!
 
-            self.advance_net1d_history()
+        #    self.advance_net1d_history()
 
-            self.train1d(max_epochs = max_epochs,
-                    nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
-                    nl_schedule, early_stopping_patience =
-                    early_stopping_patience, nworkers=nworkers)
+        #    self.train1d(max_epochs = max_epochs,
+        #            nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
+        #            nl_schedule, early_stopping_patience =
+        #            early_stopping_patience, nworkers=nworkers)
 
-            self.advance_post1d_history()
+        #    self.advance_post1d_history()
 
-
-    def comb(self, combinations, max_epochs = 100, recycle_net = True, nbatch =
-            8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [0.1, 0.3, 1.0],
-            early_stopping_patience = 20, nworkers=4):
-        """Generate N-dim posteriors."""
-        # Use by default data from last 1-dim round
-        dataset = self.data_store[-1]
-
-        dataset.set_noiselevel(1.)
-        datanorms = get_norms(dataset, combinations = combinations)
-
-        # Generate network
-        pnum = len(combinations)
-        pdim = len(combinations[0])
-
-        if recycle_net:
-            head = deepcopy(self.net1d_history[-1].head)
-            net = self._get_net(pnum, pdim, head = head, datanorms = datanorms)
-        else:
-            net = self._get_net(pnum, pdim, datanorms = datanorms)
-
-        # Train!
-        trainloop(net, dataset, combinations = combinations, device =
-                self.device, max_epochs = max_epochs, nbatch = nbatch,
-                lr_schedule = lr_schedule, nl_schedule = nl_schedule,
-                early_stopping_patience = early_stopping_patience, nworkers=nworkers)
-
-        # Get posteriors and store them internally
-        zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =
-                combinations, device = self.device)
-
-        self.postNd_history.append((combinations, zgrid, lnLgrid))
-        self.netNd_history.append(net)
-
-    def _prep_post_1dim(self, x, y):
+    @staticmethod
+    def _prep_post_1dim(x, y):
         # Sort and normalize posterior
         # NOTE: 1-dim posteriors are automatically normalized
         # TODO: Normalization should be done based on prior range, not enforced by hand
@@ -288,13 +233,14 @@ class SWYFT:
                 y = self.post1d_history[version][1][:,i]
                 return self._prep_post_1dim(x, y)
             else:
-                net = self.net1d_history[version]
-                dataset = self.data_store[version]
-                x0 = torch.tensor(x0).float().to(self.device)
-                x, y = posteriors(x0, net, dataset, combinations = None, device = self.device)
-                x = x[:,i,0]
-                y = y[:,i]
-                return self._prep_post_1dim(x, y)
+                raise NotImplementedError
+                #net = self.net1d_history[version]
+                #dataset = self.data_store[version]
+                #x0 = torch.tensor(x0).float().to(self.device)
+                #x, y = posteriors(x0, net, dataset, combinations = None, device = self.device)
+                #x = x[:,i,0]
+                #y = y[:,i]
+                #return self._prep_post_1dim(x, y)
         else:
             for i in range(len(self.postNd_history)-1, -1, -1):
                 combinations = self.postNd_history[i][0]
