@@ -38,6 +38,34 @@ from copy import deepcopy
 #        return xz
 
 
+def construct_intervals(x, y):
+    """Get x intervals where y is above 0."""
+    m = np.where(y > 0., 1., 0.)
+    m = m[1:] - m[:-1]
+    i0 = np.argwhere(m == 1.)[:,0]  # Upcrossings
+    i1 = np.argwhere(m == -1.)[:,0]  # Downcrossings
+    
+    # No crossings --> return entire interval
+    if len(i0) == 0 and len(i1) == 0:
+        return [[x[0], x[-1]]]
+    
+    # One more upcrossing than downcrossing
+    # --> Treat right end as downcrossing
+    if len(i0) - len(i1) == 1:
+        i1 = np.append(i1, -1)
+  
+    # One more downcrossing than upcrossing
+    # --> Treat left end as upcrossing
+    if len(i0) - len(i1) == -1:
+        i0 = np.append(0, i0)
+      
+    intervals = []
+    for i in range(len(i0)):
+        intervals.append([x[i0[i]], x[i1[i]]])
+    
+    return intervals
+    
+
 #if datastore is empty, add sims according to poisson process
 #if datastore isn't empty, use constrained posterior via mask as prior  
 #then grow the DataStore and sample
@@ -199,19 +227,19 @@ class SWYFT:
         # TODO
         return intensity
 
-    def advance_train_history(self, nsamples = 3000, threshold = 1e-6):
+    def advance_train_history(self, nsamples = 3000, threshold = 1e-6, res = 1e-6):
         """Advance SWYFT internal training data history on constrained prior."""
 
         if len(self.train_history) == 0:
             # Generate initial intensity over hypercube
             mask1d = Mask1d([[0., 1.]])
-            factormask = FactorMask([mask1d]*self.zdim)
+            masks_1d = [mask1d]*self.zdim
         else:
             # Generate target intensity based on previous round
-            intervals_list = 0. # TODO
+            intervals_list = self.get_intervals(threshold = threshold, res = res)
             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
-            factormask = FactorMask(masks_1d)
 
+        factormask = FactorMask(masks_1d)
         intensity = Intensity(nsamples, factormask)
         indices = self.ds.sample(intensity)
 
@@ -331,3 +359,18 @@ class SWYFT:
                     return self.postNd_store[i][1][:,j], self.postNd_store[i][2][:,j]
             print("WARNING: Did not find requested parameter combination.")
             return None
+
+    def get_intervals(self, version = -1, res = 1e-5, threshold = 1e-6):
+        """Generate intervals from previous posteriors."""
+        net = self.net1d_history[-1]
+        nbins = int(1./res)+1
+        z = torch.linspace(0, 1, nbins).repeat(self.zdim, 1).T.unsqueeze(-1).to(self.device)
+        lnL = get_lnL(net, self.x0.to(self.device), z)  
+        z = z.cpu().numpy()[:,:,0]
+        lnL = lnL.cpu().numpy()
+        intervals_list = []
+        for i in range(self.zdim):
+            lnL_max = lnL[:,i].max()
+            intervals = construct_intervals(z[:,i], lnL[:,i] - lnL_max - np.log(threshold))
+            intervals_list.append(intervals)
+        return intervals_list
