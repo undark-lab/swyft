@@ -67,14 +67,13 @@ def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
     return z.cpu(), lnL.cpu()
 
 
-class LFI:
+class SWYFT:
     """Main SWYFT interface."""
-    def __init__(self, x0, model, zdim, head = None, noisemodel = None, device = 'cpu', datastore = None, parent = None):
+    def __init__(self, x0, zdim, head = None, noisemodel = None, device = 'cpu', datastore = None, parent = None, nsamples = 3000, threshold = 1e-6, res = 1e-4):
         """Initialize SWYFT.
 
         Args:
             x0 (array): Observational data.
-            model (function): Functions returning samples from x~p(x|z).
             zdim (int): Number of parameters.
             head (class): Head network class.
             noisemodel (function): Function return noise.
@@ -84,7 +83,6 @@ class LFI:
             Instance of SWYFT.
         """
         self.x0 = torch.tensor(x0).float()
-        self.model = model
         self.noisemodel = noisemodel
         self.zdim = zdim
         self.head_cls = head  # head network class
@@ -103,6 +101,11 @@ class LFI:
 
         self.netNd = dict()
         self.postNd = dict()
+
+        self.need_eval_post1d = True
+        self.need_eval_postNd = dict()
+
+        self._init_train_data(nsamples = nsamples, threshold = threshold, res = res)
 
     def _get_net(self, pnum, pdim, head = None, datanorms = None, recycle_net = False):
         # Check whether we can jump-start with using a copy of the previous network
@@ -132,6 +135,9 @@ class LFI:
 
     def train1d(self, max_epochs = 100, nbatch = 16, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 3, nworkers = 0): 
         """Train 1-dim posteriors."""
+        if self.net1d is None:
+            self._init_net1d()
+        self.need_eval_post1d = True
         net = self.net1d
         dataset = self.get_dataset()
 
@@ -140,8 +146,15 @@ class LFI:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
-    def trainNd(self, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 3, nworkers = 0, tag = 'default'): 
+    def trainNd(self, combinations = None, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 3, nworkers = 0, tag = 'default'): 
         """Train 1-dim posteriors."""
+        if tag not in self.netNd.keys():
+            self.init_netNd(combinations, tag = tag)
+        if combinations is not None:
+            assert combinations == self.netNd[tag]['combinations']
+
+        self.need_eval_postNd[tag] = True
+            
         net = self.netNd[tag]['net']
         combinations = self.netNd[tag]['combinations']
         dataset = self.get_dataset()
@@ -151,7 +164,7 @@ class LFI:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
-    def init_train_data(self, nsamples = 3000, threshold = 1e-6, res = 1e-4):
+    def _init_train_data(self, nsamples = 3000, threshold = 1e-6, res = 1e-4):
         """Advance SWYFT internal training data history on constrained prior."""
 
         if self.parent is None:
@@ -173,7 +186,7 @@ class LFI:
         self.intensity = intensity
         self.train_indices = indices
 
-    def init_net1d(self, recycle_net = False):
+    def _init_net1d(self, recycle_net = False):
         """Advance SWYFT-internal net1d history."""
         # Set proper data normalizations for network initialization
         dataset = self.get_dataset()
@@ -185,7 +198,7 @@ class LFI:
         # And append it to history!
         self.net1d = net
 
-    def eval_post1d(self):
+    def _eval_post1d(self):
         # Get 1-dim posteriors
         net = self.net1d
         dataset = self.get_dataset()
@@ -193,6 +206,7 @@ class LFI:
 
         # Store results
         self.post1d = [z, lnL]
+        self.need_eval_post1d = False
 
     def requires_sim(self):
         """Check whether simulations are required to complete datastore."""
@@ -230,9 +244,11 @@ class LFI:
         I = trapz(y, x)
         return x, y/I
 
-    def posterior(self, indices, x0 = None):
+    def posterior(self, indices, x0 = None, tag = 'default'):
         """Return generated posteriors."""
         if isinstance(indices, int):
+            if self.need_eval_post1d:
+                self._eval_post1d()
             i = indices
             if x0 is None:
                 x = self.post1d[0][:,i,0]
@@ -248,13 +264,11 @@ class LFI:
                 #y = y[:,i]
                 #return self._prep_post_1dim(x, y)
         else:
-            for tag in self.postNd.keys():
-                combinations = self.postNd[tag][0]
-                if indices in combinations:
-                    j = combinations.index(indices)
-                    return self.postNd[tag][1][:,j], self.postNd[tag][2][:,j]
-            print("WARNING: Did not find requested parameter combination.")
-            return None
+            if self.need_eval_postNd[tag]:
+                self.eval_postNd(tag = tag)
+            combinations = self.postNd[tag][0]
+            j = combinations.index(indices)
+            return self.postNd[tag][1][:,j], self.postNd[tag][2][:,j]
 
     def get_intervals(self, net, res = 1e-5, threshold = 1e-6):
         """Generate intervals from previous posteriors."""
@@ -298,3 +312,4 @@ class LFI:
                 combinations, device = self.device)
 
         self.postNd[tag] = (combinations, zgrid, lnLgrid)
+        self.need_eval_postNd[tag] = False
