@@ -173,8 +173,8 @@ class SWYFT:
         self.post1d_history = []
 
         # NOTE: We separate N-dim posteriors since they are not used (yet) for refining training data
-        self.postNd_store = []
-        self.netNd_store = []
+        self.netNd_history = []
+        self.postNd_history = []
 
     def _get_net(self, pnum, pdim, head = None, datanorms = None, recycle_net = False):
         # Check whether we can jump-start with using a copy of the previous network
@@ -217,6 +217,17 @@ class SWYFT:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
+    def trainNd(self, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 3, nworkers = 0, version = -1): 
+        """Train 1-dim posteriors."""
+        net = self.netNd_history[version]['net']
+        combinations = self.netNd_history[version]['combinations']
+        dataset = self.get_dataset(version = version)
+
+        # Start actual training
+        trainloop(net, dataset, combinations = combinations, device = self.device, max_epochs = max_epochs,
+                nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
+                nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
+
     def _get_intensity(self, nsamples = 3000, threshold = 1e-6):
         if len(self.mask_store) == 0:
             mask = None
@@ -240,7 +251,7 @@ class SWYFT:
             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
 
         factormask = FactorMask(masks_1d)
-        print("Consrained posterior area:", factormask.area())
+        print("Constrained posterior area:", factormask.area())
         intensity = Intensity(nsamples, factormask)
         indices = self.ds.sample(intensity)
 
@@ -323,8 +334,8 @@ class SWYFT:
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =
                 combinations, device = self.device)
 
-        self.postNd_store.append((combinations, zgrid, lnLgrid))
-        self.netNd_store.append(net)
+        self.postNd_history.append((combinations, zgrid, lnLgrid))
+        self.netNd_history.append(net)
 
     def _prep_post_1dim(self, x, y):
         # Sort and normalize posterior
@@ -353,11 +364,11 @@ class SWYFT:
                 y = y[:,i]
                 return self._prep_post_1dim(x, y)
         else:
-            for i in range(len(self.postNd_store)-1, -1, -1):
-                combinations = self.postNd_store[i][0]
+            for i in range(len(self.postNd_history)-1, -1, -1):
+                combinations = self.postNd_history[i][0]
                 if indices in combinations:
                     j = combinations.index(indices)
-                    return self.postNd_store[i][1][:,j], self.postNd_store[i][2][:,j]
+                    return self.postNd_history[i][1][:,j], self.postNd_history[i][2][:,j]
             print("WARNING: Did not find requested parameter combination.")
             return None
 
@@ -375,3 +386,32 @@ class SWYFT:
             intervals = construct_intervals(z[:,i], lnL[:,i] - lnL_max - np.log(threshold))
             intervals_list.append(intervals)
         return intervals_list
+
+    def add_netNd(self, combinations, recycle_net = False):
+        """Generate N-dim posteriors."""
+        # Use by default data from last 1-dim round
+        dataset = self.get_dataset(version = -1)
+        datanorms = get_norms(dataset, combinations = combinations)
+        
+        # Generate network
+        pnum = len(combinations)
+        pdim = len(combinations[0])
+
+        if recycle_net:
+            head = deepcopy(self.net1d_history[-1].head)
+            net = self._get_net(pnum, pdim, head = head, datanorms = datanorms)
+        else:
+            net = self._get_net(pnum, pdim, datanorms = datanorms)
+            
+        self.netNd_history.append(dict(net=net, combinations=combinations))
+
+    def add_postNd(self):
+        # Get posteriors and store them internally
+        net = self.netNd_history[-1]['net']
+        combinations = self.netNd_history[-1]['combinations']
+        dataset = self.get_dataset(version = -1)
+        
+        zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =
+                combinations, device = self.device)
+
+        self.postNd_history.append((combinations, zgrid, lnLgrid))
