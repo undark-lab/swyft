@@ -227,7 +227,7 @@ class SWYFT:
         # TODO
         return intensity
 
-    def advance_train_history(self, nsamples = 3000, threshold = 1e-6, res = 1e-6):
+    def advance_train_history(self, nsamples = 3000, threshold = 1e-6, res = 1e-4):
         """Advance SWYFT internal training data history on constrained prior."""
 
         if len(self.train_history) == 0:
@@ -240,6 +240,7 @@ class SWYFT:
             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
 
         factormask = FactorMask(masks_1d)
+        print("Consrained posterior area:", factormask.area())
         intensity = Intensity(nsamples, factormask)
         indices = self.ds.sample(intensity)
 
