@@ -61,27 +61,6 @@ def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
     """
     return torch.rand(num_samples, num_params)
 
-#def simulate_xz(model, list_z, model_kwargs = {}):
-#    """Generates x ~ model(z).
-#    
-#    Args:
-#        model (fn): foreward model, returns samples x~p(x|z).
-#            Both x and z have to be Tensors.
-#        list_z (list of Tensors): list of model parameters z.
-#
-#    Returns:
-#        list of dict: list of dictionaries with 'x' and 'z' pairs.
-#    """
-#
-#    # TODO: Change format to (x, z) tuples rather than dictionary
-#
-#    list_xz = []
-#    for z in list_z:
-#        x = model(z.numpy(), **model_kwargs)
-#        x = torch.tensor(x).float()
-#        list_xz.append(dict(x=x, z=z))
-#    return list_xz
-
 def get_x(list_xz):
     """Extract x from batch of samples."""
     return [xz['x'] for xz in list_xz]
@@ -279,112 +258,6 @@ class DataStoreZarr:
     def add_sim(self, i, x):
         self.x[i] = x
         self.m[i] = False
-
-
-## NOTE: Deprecated datastore
-#class DataStore:
-#    def __init__(self, x = None, z = None, u = None):
-#        """Initialize datastore content. Default is empty."""
-#        # Initialize datastore content
-#        self.x = x # samples
-#        self.z = z # samples
-#        self.u = lambda z: 0.  # intensity function
-#        
-#    def __len__(self):
-#        """Number of samples in the datastore."""
-#        if self.z is not None:
-#            return len(self.z)
-#        else:
-#            return 0
-#
-#    def _max_u(self, u):
-#        """Replace DS intensity function with max between intensity functions."""
-#        if self.u is None:
-#            self.u = u
-#        else:
-#            self.u = lambda z, u_prev = self.u: max(u_prev(z), u(z))
-#    
-#    def _append(self, x, z):
-#        """Append (x, z) to datastore content."""
-#        if x is None:
-#            x = [None for i in range(len(z))]
-#        if self.x is None:
-#            self.x = x
-#            self.z = z
-#        else:
-#            self.x += x
-#            self.z = np.vstack([self.z, z])
-#            
-#    def grow(self, mu, p):
-#        """Grow number of samples in datastore."""
-#        
-#        # Number of requested samples from p
-#        N = np.random.poisson(mu, 1)[0]
-#        
-#        # Proposed new samples z from p
-#        z_prop = p.sample(N)
-#         
-#        # Rejection sampling from proposal list
-#        accepted = []
-#        for z in tqdm(z_prop, desc = "Adding samples."):
-#            rej_prob = np.minimum(1, self.u(z)/mu/p.pdf(z))
-#            w = np.random.rand(1)[0]
-#            accepted.append(rej_prob < w)
-#        z_accepted = z_prop[accepted, :]
-#        print("Adding %i new samples."%len(z_accepted))
-#        
-#        # Add new entries to datastore and update intensity function
-#        self._append(None, z_accepted)
-#        self._max_u(lambda z: mu*p.pdf(z))
-#        
-#    def sample(self, mu, p):
-#        accepted = []
-#        if self.z is None:
-#            print("Warning: Requires running grow!")
-#            return None, None
-#        for z in tqdm(self.z, desc = "Extracting samples."):
-#            accept_prob  = mu*p.pdf(z)/self.u(z)
-#            if accept_prob > 1.:
-#                print("Warning: Requires running grow!")
-#                return None, None
-#            w = np.random.rand(1)[0]
-#            accepted.append(accept_prob > w)
-#        x_sub = list(compress(self.x, accepted))
-#        z_sub = self.z[accepted, :]
-#        if any([x is None for x in x_sub]):
-#            print("Warning: Requires simulator run!")
-#            x_sub = None
-#        print("Extracted %i samples"%len(z_sub))
-#        return x_sub, z_sub
-#    
-#    def get_z_without_x(self):
-#        return self.z[[x is None for x in self.x]]
-#    
-#    def fill_sims(self, x, z):
-#        for i in tqdm(range(len(z)), desc = "Adding simulations"):
-#            j = np.where((self.z == z[i]).all(axis=1))[0][0]
-#            self.x[j] = x[i]
-            
-##############
-## Prior class
-##############
-#
-#class Prior:
-#    def __init__(self, z0, z1):
-#        self.z0 = np.array(z0)
-#        self.z1 = np.array(z1)
-#        
-#    def sample(self, N):
-#        q = np.random.rand(N, len(self.z0))
-#        q *= self.z1 - self.z0
-#        q += self.z0
-#        return q
-#
-#    def pdf(self, z):
-#        if any(z < self.z0) or any(z > self.z1):
-#            return 0.
-#        else:
-#            return 1./(self.z1 - self.z0).prod()
 
 
 ##########
@@ -678,40 +551,6 @@ class Network(nn.Module):
 
         out = self.legs(y, z)
         return out
-
-#def iter_sample_z(n_draws, zdim, net, x0, verbosity = False, threshold = 1e-6):
-#    """Generate parameter samples z~p_c(z) from constrained prior.
-#    
-#    Arguments
-#    ---------
-#    n_draws: Number of draws
-#    zdim: Number of dimensions of z
-#    net: Trained density network
-#    x0: Reference data
-#    
-#    Returns
-#    -------
-#    z: list of zdim samples with length n_draws
-#    """
-#    done = False
-#    zout = defaultdict(lambda: [])
-#    counter = np.zeros(zdim)
-#    frac = np.ones(zdim)
-#    while not done:
-#        z = torch.rand(n_draws, zdim, device=x0.device)
-#        zlnL = estimate_lnL(net, x0, z)
-#        for i in range(zdim):
-#            mask = zlnL[i]['lnL'] > np.log(threshold)
-#            frac[i] = np.true_divide(sum(mask),len(mask))
-#            zout[i].append(zlnL[i]['z'][mask])
-#            counter[i] += mask.sum()
-#        done = min(counter) >= n_draws
-#    if verbosity:
-#        print("Constrained posterior volume:", frac.prod())
-#    
-#    #out = list(torch.tensor([np.concatenate(zout[i])[:n_draws] for i in range(zdim)]).T[0])
-#    out = list(torch.stack([torch.cat(zout[i]).squeeze(-1)[:n_draws] for i in range(zdim)]).T)
-#    return out
 
 def sample_constrained_hypercube(nsamples, zdim, mask):
     done = False

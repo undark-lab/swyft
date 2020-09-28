@@ -8,36 +8,6 @@ from swyft.core import *
 
 from copy import deepcopy
 
-## NOTE: Deprecated
-#class Data(torch.utils.data.Dataset):
-#    """Simple data container class.
-#
-#    Note: The noisemodel allows scheduled noise level increase during training.
-#    """
-#    def __init__(self, xz):
-#        super().__init__()
-#        self.xz = xz
-#        self.noisemodel = None
-#
-#    def set_noisemodel(self, noisemodel):
-#        self.noisemodel = noisemodel
-#        self.noiselevel = 1.  # 0: no noise, 1: full noise
-#
-#    def set_noiselevel(self, level):
-#        self.noiselevel = level
-#
-#    def __len__(self):
-#        return len(self.xz)
-#
-#    def __getitem__(self, idx):
-#        xz = self.xz[idx]
-#        if self.noisemodel is not None:
-#            x = self.noisemodel(xz['x'].numpy(), z = xz['z'].numpy(), noiselevel = self.noiselevel)
-#            x = torch.tensor(x).float()
-#            xz = dict(x=x, z=xz['z'])
-#        return xz
-
-
 def construct_intervals(x, y):
     """Get x intervals where y is above 0."""
     m = np.where(y > 0., 1., 0.)
@@ -65,45 +35,6 @@ def construct_intervals(x, y):
     
     return intervals
     
-
-#if datastore is empty, add sims according to poisson process
-#if datastore isn't empty, use constrained posterior via mask as prior  
-#then grow the DataStore and sample
-def get_dataset(ds, model, nsamples, zdim, mask=None):
-    if ds.__len__()==0 or mask==None:
-        #use unit hypercube for prior
-        pr=Prior([0.0]*zdim,[1.0]*zdim)
-        #does datastore need to grow here?
-        if ds.__len__() <nsamples: 
-            ds.grow(nsamples, pr)
-            z=ds.get_z_without_x()
-            xz = simulate_xz(model,torch.tensor(z).float())
-            x = get_x(xz)
-            ds.fill_sims(x, z)
-        x,z=ds.sample(nsamples,pr);
-        xz=[dict(x=x[i],z=torch.tensor(z[i]).float()) for i in range(len(x))]
-        dataset=Data(xz)
-        dataset = Data(xz)
-        return dataset
-    else:
-        z = ds.z
-        zz=torch.tensor(z).float()
-        m = mask(zz.unsqueeze(-1))
-        #use mask to compute prior
-        pr=Prior([z[:,i][m[:,i]].min() for i in range(len(z[0]))],[z[:,i][m[:,i]].max() for i in range(len(z[0]))])
-        #enlarge DataStore and compute missing simulations
-        ds.grow(nsamples, pr);
-        z2=ds.get_z_without_x()
-        xz2 = simulate_xz(model,torch.tensor(z2).float()) 
-        x2 = get_x(xz2)
-        ds.fill_sims(x2, z2)
-        #sample the DataStore and return
-        x,z=ds.sample(nsamples,pr);
-        xz=[dict(x=x[i],z=torch.tensor(z[i]).float()) for i in range(len(x))]
-        dataset=Data(xz)
-        return dataset
-
-
 def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
         max_epochs = 50, early_stopping_patience = 3, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
     print("Start training")
@@ -134,6 +65,7 @@ def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
     z = torch.stack([combine_z(zs, combinations) for zs in z])
     lnL = get_lnL(net, x0, z)
     return z.cpu(), lnL.cpu()
+
 
 class SWYFT:
     """Main SWYFT interface."""
