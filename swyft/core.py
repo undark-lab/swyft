@@ -100,7 +100,7 @@ class DataDS(torch.utils.data.Dataset):
         
         # Add optional noise
         if self.noisemodel is not None:
-            x = self.noisemodel(x, z, noiselevel = self.noiselevel)
+            x = self.noisemodel(x, z)
 
         # Tensors
         x = torch.tensor(x).float()
