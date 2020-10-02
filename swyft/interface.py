@@ -39,7 +39,7 @@ def construct_intervals(x, y):
     return intervals
     
 def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
-        max_epochs = 50, early_stopping_patience = 3, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
+        max_epochs = 50, early_stopping_patience = 1, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
     print("Start training")
     nvalid = 512
     ntrain = len(dataset) - nvalid
@@ -136,7 +136,7 @@ class SWYFT:
         dataset = DataDS(self.ds, indices, self.noisemodel)
         return dataset
 
-    def train1d(self, max_epochs = 100, nbatch = 16, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 3, nworkers = 0): 
+    def train1d(self, max_epochs = 100, nbatch = 16, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 1, nworkers = 0): 
         """Train 1-dim posteriors."""
         if self.net1d is None:
             self._init_net1d()
@@ -149,7 +149,7 @@ class SWYFT:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
-    def trainNd(self, combinations = None, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 3, nworkers = 0, tag = 'default'): 
+    def trainNd(self, combinations = None, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 1, nworkers = 0, tag = 'default'): 
         """Train 1-dim posteriors."""
         if tag not in self.netNd.keys():
             self.init_netNd(combinations, tag = tag)
