@@ -10,6 +10,9 @@ from copy import deepcopy
 
 def construct_intervals(x, y):
     """Get x intervals where y is above 0."""
+    indices = np.argsort(x)
+    x = x[indices]
+    y = y[indices]
     m = np.where(y > 0., 1., 0.)
     m = m[1:] - m[:-1]
     i0 = np.argwhere(m == 1.)[:,0]  # Upcrossings
@@ -69,7 +72,7 @@ def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
 
 class SWYFT:
     """Main SWYFT interface."""
-    def __init__(self, x0, zdim, head = None, noisemodel = None, device = 'cpu', datastore = None, parent = None, nsamples = 3000, threshold = 1e-6, res = 1e-4):
+    def __init__(self, x0, zdim, head = None, noisemodel = None, device = 'cpu', datastore = None, parent = None, nsamples = 3000, threshold = 1e-7):
         """Initialize SWYFT.
 
         Args:
@@ -105,7 +108,7 @@ class SWYFT:
         self.need_eval_post1d = True
         self.need_eval_postNd = dict()
 
-        self._init_train_data(nsamples = nsamples, threshold = threshold, res = res)
+        self._init_train_data(nsamples = nsamples, threshold = threshold)
 
     def _get_net(self, pnum, pdim, head = None, datanorms = None, recycle_net = False):
         # Check whether we can jump-start with using a copy of the previous network
@@ -164,7 +167,7 @@ class SWYFT:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
-    def _init_train_data(self, nsamples = 3000, threshold = 1e-6, res = 1e-4):
+    def _init_train_data(self, nsamples = 3000, threshold = 1e-7):
         """Advance SWYFT internal training data history on constrained prior."""
 
         if self.parent is None:
@@ -174,7 +177,8 @@ class SWYFT:
         else:
             # Generate target intensity based on previous round
             net = self.parent.net1d
-            intervals_list = self.get_intervals(net, threshold = threshold, res = res)
+            intensity = self.parent.intensity
+            intervals_list = self.get_intervals(net, intensity, threshold = threshold)
             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
 
         factormask = FactorMask(masks_1d)
@@ -212,26 +216,26 @@ class SWYFT:
         """Check whether simulations are required to complete datastore."""
         return len(self.ds.require_sim()) > 0
 
-    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-6, max_epochs =
-            100, recycle_net = True, nbatch = 8, lr_schedule = [1e-3, 1e-4,
-                1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
-            20, nworkers = 4):
-        """Iteratively generating training data and train 1-dim posteriors."""
-        raise NotImplementedError
-        #for i in range(nrounds):
-        #    self.advance_train_history(nsamples = nsamples, threshold = threshold)
-
-        #    if self.requires_sim():
-        #        pass  # TODO: Run simulations if needed!
-
-        #    self.advance_net1d_history()
-
-        #    self.train1d(max_epochs = max_epochs,
-        #            nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
-        #            nl_schedule, early_stopping_patience =
-        #            early_stopping_patience, nworkers=nworkers)
-
-        #    self.advance_post1d_history()
+#    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-7, max_epochs =
+#            100, recycle_net = True, nbatch = 8, lr_schedule = [1e-3, 1e-4,
+#                1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
+#            20, nworkers = 4):
+#        """Iteratively generating training data and train 1-dim posteriors."""
+#        raise NotImplementedError
+#        #for i in range(nrounds):
+#        #    self.advance_train_history(nsamples = nsamples, threshold = threshold)
+#
+#        #    if self.requires_sim():
+#        #        pass  # TODO: Run simulations if needed!
+#
+#        #    self.advance_net1d_history()
+#
+#        #    self.train1d(max_epochs = max_epochs,
+#        #            nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
+#        #            nl_schedule, early_stopping_patience =
+#        #            early_stopping_patience, nworkers=nworkers)
+#
+#        #    self.advance_post1d_history()
 
     @staticmethod
     def _prep_post_1dim(x, y):
@@ -270,10 +274,9 @@ class SWYFT:
             j = combinations.index(indices)
             return self.postNd[tag][1][:,j], self.postNd[tag][2][:,j]
 
-    def get_intervals(self, net, res = 1e-5, threshold = 1e-6):
+    def get_intervals(self, net, intensity, N = 10000, threshold = 1e-7):
         """Generate intervals from previous posteriors."""
-        nbins = int(1./res)+1
-        z = torch.linspace(0, 1, nbins).repeat(self.zdim, 1).T.unsqueeze(-1).to(self.device)
+        z = torch.tensor(intensity.sample(N = N)).float().unsqueeze(-1).to(self.device)
         lnL = get_lnL(net, self.x0.to(self.device), z)  
         z = z.cpu().numpy()[:,:,0]
         lnL = lnL.cpu().numpy()

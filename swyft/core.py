@@ -124,38 +124,41 @@ def simulate_ds(model, ds):
         ds.add_sim(i, x)
 
 
-#################
-# Intensity class
-#################
-
-class Intensity:
-    def __init__(self, mu, z0, z1):
-        self.mu = mu
-        self.z0 = np.array(z0)
-        self.z1 = np.array(z1)
-        
-    def sample(self):
-        N = np.random.poisson(self.mu, 1)[0]
-        q = np.random.rand(N, len(self.z0))
-        q *= self.z1 - self.z0
-        q += self.z0
-        return q
-    
-    def __call__(self, z):
-        return self._pdf(z)*self.mu
-
-    def _pdf(self, z):
-        val = 1./(self.z1 - self.z0).prod()
-        return np.where(z >= self.z0, np.where(z <= self.z1, val, 0.), 0.).prod(axis=-1)
+##################
+## Intensity class
+##################
+#
+#class Intensity:
+#    def __init__(self, mu, z0, z1):
+#        self.mu = mu
+#        self.z0 = np.array(z0)
+#        self.z1 = np.array(z1)
+#        
+#    def sample(self):
+#        N = np.random.poisson(self.mu, 1)[0]
+#        q = np.random.rand(N, len(self.z0))
+#        q *= self.z1 - self.z0
+#        q += self.z0
+#        return q
+#    
+#    def __call__(self, z):
+#        return self._pdf(z)*self.mu
+#
+#    def _pdf(self, z):
+#        val = 1./(self.z1 - self.z0).prod()
+#        return np.where(z >= self.z0, np.where(z <= self.z1, val, 0.), 0.).prod(axis=-1)
     
 #################
 # Datastore class
 #################
 
 class DataStoreZarr:
-    def __init__(self, filename):
+    def __init__(self, filename = None):
         # Open (new) datastore
-        self.store = zarr.DirectoryStore(filename)
+        if filename is None:
+            self.store = zarr.MemoryStore()
+        else:
+            self.store = zarr.DirectoryStore(filename)
         self.root = zarr.group(store = self.store)
         
         if 'samples' not in self.root.keys():
@@ -238,7 +241,7 @@ class DataStoreZarr:
         I_target = p(zlist)
         for i, z in enumerate(zlist):
             accept_prob  = I_target[i]/I_ds[i]
-            assert accept_prob <= 1.
+            assert accept_prob <= 1., "Inconsistent intensity function of data store. This should not happen."
             w = np.random.rand(1)[0]
             if accept_prob > w:
                 accepted.append(i)
@@ -676,6 +679,7 @@ class Intensity:
     def __call__(self, z):
         return self.mask(z)/self.area*self.mu
     
-    def sample(self):
-        N = np.random.poisson(self.mu, 1)[0]
+    def sample(self, N = None):
+        if N is None:
+            N = np.random.poisson(self.mu, 1)[0]
         return self.mask.sample(N)
