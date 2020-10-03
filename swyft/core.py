@@ -115,12 +115,12 @@ class DataDS(torch.utils.data.Dataset):
 # Simulation loops
 ##################
 
-def simulate_ds(model, ds):
+def simulate_ds(simulator, ds):
     """Run simulation to fill missing entries in data store."""
     indices = ds.require_sim()
     for i in tqdm(indices, desc="Running simulations"):
         _, z = ds[i]
-        x = model(z)
+        x = simulator(z)
         ds.add_sim(i, x)
 
 
@@ -261,6 +261,21 @@ class DataStoreZarr:
     def add_sim(self, i, x):
         self.x[i] = x
         self.m[i] = False
+
+    def simulate(self, simulator):
+        """Run simulator sequentially for missing points.
+
+        Args:
+            simulator (callable): Simulator
+        """
+        idx = self.require_sim()
+        if len(idx) == 0:
+            print("No simulations required.")
+            return
+        for i in tqdm(idx, desc='Simulate'):
+            z = self.z[i]
+            x = simulator(z)
+            self.add_sim(i, x) 
 
 
 ##########

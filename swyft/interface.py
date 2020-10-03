@@ -316,11 +316,3 @@ class SWYFT:
 
         self.postNd[tag] = (combinations, zgrid, lnLgrid)
         self.need_eval_postNd[tag] = False
-
-    def simulate(self, model):
-        if not self.requires_sim():
-            return
-        for i in self.ds.require_sim():
-            z = self.ds.z[i]
-            x = model(z)
-            self.ds.add_sim(i, x) 
