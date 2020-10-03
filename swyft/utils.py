@@ -10,7 +10,7 @@ def get_contour_levels(x, cred_level = [0.68268, 0.95450, 0.99730]):
     levels = np.array(x[idx])
     return levels
 
-def cont2d(ax, sw, i, j, tag = 'default'):
+def cont2d(ax, sw, i, j, tag = 'default', cmap = 'gray_r'):
     z, ln_p = sw.posterior([i, j], tag = tag)
     p = np.exp(ln_p.numpy())
     z = z.numpy()
@@ -20,15 +20,17 @@ def cont2d(ax, sw, i, j, tag = 'default'):
     extent = [z[:,0].min(), z[:,0].max(), z[:,1].min(), z[:,1].max()]
     xs,ys = np.mgrid[z[:,0].min():z[:,0].max():N, z[:,1].min():z[:,1].max():N]
     resampled = griddata(z, p, (xs, ys))
-    ax.imshow(resampled.T, extent = extent, origin='lower', cmap='gray_r', aspect = 'auto')
+    ax.imshow(resampled.T, extent = extent, origin='lower', cmap=cmap, aspect = 'auto')
     ax.tricontour(z[:,0], z[:,1], -p, levels = -levels, colors = 'k', linestyles=['-'])
     
 def hist1d(ax, sw, i):
     z, p = sw.posterior(i)
     ax.plot(z, p, 'k')
 
-def corner(sw, tag = 'default', dim = 10, labels = None):
-    K = sw.zdim
+def corner(sw, tag = 'default', dim = 10, params = None, labels = None, z0 = None, cmap = 'Greys'):
+    if params is None:
+        params = range(sw.zdim)
+    K = len(params)
     fig, axes = plt.subplots(K, K, figsize=(dim, dim))
     lb = 0.125
     tr = 0.9
@@ -36,7 +38,7 @@ def corner(sw, tag = 'default', dim = 10, labels = None):
     fig.subplots_adjust(left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace)
     
     if labels is None:
-        labels = ['z%i'%(i+1) for i in range(K)]
+        labels = ['z%i'%params[i] for i in range(K)]
     for i in range(K):
         for j in range(K):
             ax = axes[i, j]
@@ -68,7 +70,10 @@ def corner(sw, tag = 'default', dim = 10, labels = None):
 
             # 2-dim plots
             if j < i:
-                cont2d(ax, sw, j, i, tag = tag)
+                cont2d(ax, sw, params[j], params[i], tag = tag, cmap = cmap)
+                ax.axvline(z0[params[j]], color='r', ls=':')
+                ax.axhline(z0[params[i]], color='r', ls=':')
 
             if j == i:
-                hist1d(ax, sw, i)
+                hist1d(ax, sw, params[i])
+                ax.axvline(z0[params[j]], color='r', ls=':')
