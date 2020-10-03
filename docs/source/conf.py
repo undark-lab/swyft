@@ -22,7 +22,7 @@ import sphinx_rtd_theme
 
 sys.path.insert(0, os.path.abspath('../../'))
 
-autodoc_mock_imports = ['tqdm', 'numcodecs', 'zarr', 'yaml', 'pyro', 'numpy', 'torch', 'pykeops', 'scipy']
+autodoc_mock_imports = ['pylab', 'tqdm', 'numcodecs', 'zarr', 'yaml', 'pyro', 'numpy', 'torch', 'pykeops', 'scipy']
 
 
 # -- General configuration ------------------------------------------------
