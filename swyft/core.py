@@ -49,79 +49,79 @@ def set_device(gpu: bool = False) -> torch.device:
 # Generate sample batches
 #########################
 
-def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
-    """Return uniform samples from the hyper cube.
-
-    Args:
-        num_samples (int): number of samples.
-        num_params (int): dimension of hypercube.
-
-    Returns:
-        Tensor: random samples.
-    """
-    return torch.rand(num_samples, num_params)
-
-def get_x(list_xz):
-    """Extract x from batch of samples."""
-    return [xz['x'] for xz in list_xz]
-
-def get_z(list_xz):
-    """Extract z from batch of samples."""
-    return [xz['z'] for xz in list_xz]
+#def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
+#    """Return uniform samples from the hyper cube.
+#
+#    Args:
+#        num_samples (int): number of samples.
+#        num_params (int): dimension of hypercube.
+#
+#    Returns:
+#        Tensor: random samples.
+#    """
+#    return torch.rand(num_samples, num_params)
+#
+#def get_x(list_xz):
+#    """Extract x from batch of samples."""
+#    return [xz['x'] for xz in list_xz]
+#
+#def get_z(list_xz):
+#    """Extract z from batch of samples."""
+#    return [xz['z'] for xz in list_xz]
 
 
 ###################################
 # New data model based on datastore
 ###################################
 
-class DataDS(torch.utils.data.Dataset):
-    """Simple data container class.
-
-    Note: The noisemodel allows scheduled noise level increase during training.
-    """
-    def __init__(self, datastore, indices, noisemodel = None):
-        super().__init__()
-        # Check whether datastore is complete
-        if len(datastore.require_sim()) > 0:
-            raise RuntimeError("Datastore entries missing. Run simulator.")
-
-        self.ds = datastore
-        self.indices = indices
-        self.noisemodel = noisemodel
-
-    def __len__(self):
-        return len(self.indices)
-
-    def __getitem__(self, idx):
-        # Obtain x, z
-        i = self.indices[idx]
-        x = self.ds.x[i]
-        z = self.ds.z[i]
-        
-        # Add optional noise
-        if self.noisemodel is not None:
-            x = self.noisemodel(x, z)
-
-        # Tensors
-        x = torch.tensor(x).float()
-        z = torch.tensor(z).float()
-        
-        # Done
-        xz = dict(x=x, z=z)
-        return xz
+#class DataDS(torch.utils.data.Dataset):
+#    """Simple data container class.
+#
+#    Note: The noisemodel allows scheduled noise level increase during training.
+#    """
+#    def __init__(self, datastore, indices, noisemodel = None):
+#        super().__init__()
+#        # Check whether datastore is complete
+#        if len(datastore.require_sim()) > 0:
+#            raise RuntimeError("Datastore entries missing. Run simulator.")
+#
+#        self.ds = datastore
+#        self.indices = indices
+#        self.noisemodel = noisemodel
+#
+#    def __len__(self):
+#        return len(self.indices)
+#
+#    def __getitem__(self, idx):
+#        # Obtain x, z
+#        i = self.indices[idx]
+#        x = self.ds.x[i]
+#        z = self.ds.z[i]
+#        
+#        # Add optional noise
+#        if self.noisemodel is not None:
+#            x = self.noisemodel(x, z)
+#
+#        # Tensors
+#        x = torch.tensor(x).float()
+#        z = torch.tensor(z).float()
+#        
+#        # Done
+#        xz = dict(x=x, z=z)
+#        return xz
 
 
 ##################
 # Simulation loops
 ##################
 
-def simulate_ds(simulator, ds):
-    """Run simulation to fill missing entries in data store."""
-    indices = ds.require_sim()
-    for i in tqdm(indices, desc="Running simulations"):
-        _, z = ds[i]
-        x = simulator(z)
-        ds.add_sim(i, x)
+#def simulate_ds(simulator, ds):
+#    """Run simulation to fill missing entries in data store."""
+#    indices = ds.require_sim()
+#    for i in tqdm(indices, desc="Running simulations"):
+#        _, z = ds[i]
+#        x = simulator(z)
+#        ds.add_sim(i, x)
 
 
 ##################
@@ -152,7 +152,12 @@ def simulate_ds(simulator, ds):
 # Datastore class
 #################
 
-class DataStoreZarr:
+class DataStore:
+    """The iP3 datastore.
+
+    Args:
+        filename (str): Optional. If given, defines path of `zarr.DirectoryStore`.
+    """
     def __init__(self, filename = None):
         # Open (new) datastore
         if filename is None:
@@ -173,7 +178,12 @@ class DataStoreZarr:
         self.u = self.root['metadata/intensity']
         
     def init(self, xdim, zdim):
-        """Initialize data store."""
+        """Initialize data store content dimensions.
+
+        Args:
+            zdim (int): Number of z dimensions
+            xdim (tuple): Shape of x array
+        """
         if 'samples' in self.root.keys():
             print("WARNING: Datastore is already initialized.")
             return
@@ -202,7 +212,11 @@ class DataStoreZarr:
         return len(self.z)
         
     def intensity(self, zlist):
-        """Replace DS intensity function with max of intensity functions."""
+        """Evaluate DataStore intensity function.
+
+        Args:
+            z (array-like): list of parameter values.
+        """
         if len(self.u) == 0:
             return np.zeros(len(zlist))
         else:
@@ -233,6 +247,11 @@ class DataStoreZarr:
             print("No new simulator runs required.")
 
     def sample(self, p):
+        """Sample from DataStore.
+
+        Args:
+            p (intensity function): Target intensity function.
+        """
         self._grow(p)
         
         accepted = []
@@ -250,15 +269,18 @@ class DataStoreZarr:
     def __getitem__(self, i):
         return self.x[i], self.z[i]
                 
-    def require_sim(self):
+    def _require_sim_idx(self):
         indices = []
         m = self.m[:]
         for i in range(len(self.z)):
             if m[i]:
                 indices.append(i)
         return indices
+
+    def requires_sim(self):
+        return len(self._require_sim_idx()0 > 0
     
-    def add_sim(self, i, x):
+    def _add_sim(self, i, x):
         self.x[i] = x
         self.m[i] = False
 
@@ -268,14 +290,14 @@ class DataStoreZarr:
         Args:
             simulator (callable): Simulator
         """
-        idx = self.require_sim()
+        idx = self._require_sim_idx()
         if len(idx) == 0:
             print("No simulations required.")
             return
         for i in tqdm(idx, desc='Simulate'):
             z = self.z[i]
             x = simulator(z)
-            self.add_sim(i, x) 
+            self._add_sim(i, x) 
 
 
 ##########
@@ -512,8 +534,8 @@ class DenseLegs(nn.Module):
         return x
 
 def get_norms(xz, combinations = None):
-    x = get_x(xz)
-    z = get_z(xz)
+    x = [xz['x'] for xz in list_xz]
+    z = [xz['z'] for xz in list_xz]
     x_mean = sum(x)/len(x)
     z_mean = sum(z)/len(z)
     x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
