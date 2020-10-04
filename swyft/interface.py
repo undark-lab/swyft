@@ -8,83 +8,20 @@ from swyft.core import *
 
 from copy import deepcopy
 
-def construct_intervals(x, y):
-    """Get x intervals where y is above 0."""
-    indices = np.argsort(x)
-    x = x[indices]
-    y = y[indices]
-    m = np.where(y > 0., 1., 0.)
-    m = m[1:] - m[:-1]
-    i0 = np.argwhere(m == 1.)[:,0]  # Upcrossings
-    i1 = np.argwhere(m == -1.)[:,0]  # Downcrossings
-    
-    # No crossings --> return entire interval
-    if len(i0) == 0 and len(i1) == 0:
-        return [[x[0], x[-1]]]
-    
-    # One more upcrossing than downcrossing
-    # --> Treat right end as downcrossing
-    if len(i0) - len(i1) == 1:
-        i1 = np.append(i1, -1)
-  
-    # One more downcrossing than upcrossing
-    # --> Treat left end as upcrossing
-    if len(i0) - len(i1) == -1:
-        i0 = np.append(0, i0)
-      
-    intervals = []
-    for i in range(len(i0)):
-        intervals.append([x[i0[i]], x[i1[i]]])
-    
-    return intervals
-    
-def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
-        max_epochs = 50, early_stopping_patience = 1, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
-    print("Start training")
-    nvalid = 512
-    ntrain = len(dataset) - nvalid
-    dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [ntrain, nvalid])
-    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True)
-    valid_loader = torch.utils.data.DataLoader(dataset_valid, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True)
-    # Train!
-
-    train_loss, valid_loss = [], []
-    for i, lr in enumerate(lr_schedule):
-        print(f'LR iteration {i}')
-        #dataset.set_noiselevel(nl_schedule[i])
-        tl, vl, sd = train(net, train_loader, valid_loader,
-                early_stopping_patience = early_stopping_patience, lr = lr,
-                max_epochs = max_epochs, device=device, combinations =
-                combinations)
-        vl_minimum = min(vl)
-        vl_min_idx = vl.index(vl_minimum)
-        train_loss.append(tl[:vl_min_idx + 1])
-        valid_loss.append(vl[:vl_min_idx + 1])
-        net.load_state_dict(sd)
-
-def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
-    x0 = x0.to(device)
-    z = torch.stack(get_z(dataset)).to(device)
-    z = torch.stack([combine_z(zs, combinations) for zs in z])
-    lnL = get_lnL(net, x0, z)
-    return z.cpu(), lnL.cpu()
 
 
 class SWYFT:
-    """Main SWYFT interface."""
+    """
+    `SWYFT` is the top-level interface for a single round of Nested Ratio Estimation.
+
+    Args:
+        x0 (array): Observational data.
+        zdim (int): Number of parameters.
+        head (class): Head network class.
+        noisemodel (function): Function return noise.
+        device (str): Device type.
+    """
     def __init__(self, x0, zdim, head = None, noisemodel = None, device = 'cpu', datastore = None, parent = None, nsamples = 3000, threshold = 1e-7):
-        """Initialize SWYFT.
-
-        Args:
-            x0 (array): Observational data.
-            zdim (int): Number of parameters.
-            head (class): Head network class.
-            noisemodel (function): Function return noise.
-            device (str): Device type.
-
-        Returns:
-            Instance of SWYFT.
-        """
         self.x0 = torch.tensor(x0).float()
         self.noisemodel = noisemodel
         self.zdim = zdim
@@ -130,19 +67,27 @@ class SWYFT:
         net = Network(ydim = ydim, pnum = pnum, pdim = pdim, head = head, datanorms = datanorms).to(self.device)
         return net
 
-    def get_dataset(self):
+    def _get_dataset(self):
         """Retrieve training dataset from datastore and SWYFT object train history."""
         indices = self.train_indices
         dataset = DataDS(self.ds, indices, self.noisemodel)
         return dataset
 
     def train1d(self, max_epochs = 100, nbatch = 16, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 1, nworkers = 0): 
-        """Train 1-dim posteriors."""
+        """Train 1-dim marginal posteriors.
+
+        Args:
+            max_epochs (int): Maximum number of training epochs.
+            nbatch (int): Minibatch size.
+            lr_schedule (list): List of learning rates.
+            early_stopping_patience (int): Early stopping patience.
+            nworkers (int): Number of Dataloader workers.
+        """
         if self.net1d is None:
             self._init_net1d()
         self.need_eval_post1d = True
         net = self.net1d
-        dataset = self.get_dataset()
+        dataset = self._get_dataset()
 
         # Start actual training
         trainloop(net, dataset, device = self.device, max_epochs = max_epochs,
@@ -150,9 +95,20 @@ class SWYFT:
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
     def trainNd(self, combinations = None, max_epochs = 100, nbatch = 8, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 1, nworkers = 0, tag = 'default'): 
-        """Train 1-dim posteriors."""
+        """Train higher-dimensional marginal posteriors.
+
+        Args:
+            combinations (list): List of posteriors of interest.
+            tag (string): Tag indicating network of interest.  Default is "default".
+            max_epochs (int): Maximum number of training epochs.
+            nbatch (int): Minibatch size.
+            lr_schedule (list): List of learning rates.
+            early_stopping_patience (int): Early stopping patience.
+            nworkers (int): Number of Dataloader workers.
+        """
+
         if tag not in self.netNd.keys():
-            self.init_netNd(combinations, tag = tag)
+            self._init_netNd(combinations, tag = tag)
         if combinations is not None:
             assert combinations == self.netNd[tag]['combinations']
 
@@ -160,7 +116,7 @@ class SWYFT:
             
         net = self.netNd[tag]['net']
         combinations = self.netNd[tag]['combinations']
-        dataset = self.get_dataset()
+        dataset = self._get_dataset()
 
         # Start actual training
         trainloop(net, dataset, combinations = combinations, device = self.device, max_epochs = max_epochs,
@@ -178,7 +134,7 @@ class SWYFT:
             # Generate target intensity based on previous round
             net = self.parent.net1d
             intensity = self.parent.intensity
-            intervals_list = self.get_intervals(net, intensity, threshold = threshold)
+            intervals_list = self._get_intervals(net, intensity, threshold = threshold)
             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
 
         factormask = FactorMask(masks_1d)
@@ -193,7 +149,7 @@ class SWYFT:
     def _init_net1d(self, recycle_net = False):
         """Advance SWYFT-internal net1d history."""
         # Set proper data normalizations for network initialization
-        dataset = self.get_dataset()
+        dataset = self._get_dataset()
         datanorms = get_norms(dataset)
 
         # Initialize network
@@ -205,37 +161,12 @@ class SWYFT:
     def _eval_post1d(self):
         # Get 1-dim posteriors
         net = self.net1d
-        dataset = self.get_dataset()
+        dataset = self._get_dataset()
         z, lnL = posteriors(self.x0, net, dataset, device = self.device)
 
         # Store results
         self.post1d = [z, lnL]
         self.need_eval_post1d = False
-
-    def requires_sim(self):
-        """Check whether simulations are required to complete datastore."""
-        return len(self.ds.require_sim()) > 0
-
-#    def run(self, nrounds = 1, nsamples = 3000, threshold = 1e-7, max_epochs =
-#            100, recycle_net = True, nbatch = 8, lr_schedule = [1e-3, 1e-4,
-#                1e-5], nl_schedule = [0.1, 0.3, 1.0], early_stopping_patience =
-#            20, nworkers = 4):
-#        """Iteratively generating training data and train 1-dim posteriors."""
-#        raise NotImplementedError
-#        #for i in range(nrounds):
-#        #    self.advance_train_history(nsamples = nsamples, threshold = threshold)
-#
-#        #    if self.requires_sim():
-#        #        pass  # TODO: Run simulations if needed!
-#
-#        #    self.advance_net1d_history()
-#
-#        #    self.train1d(max_epochs = max_epochs,
-#        #            nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
-#        #            nl_schedule, early_stopping_patience =
-#        #            early_stopping_patience, nworkers=nworkers)
-#
-#        #    self.advance_post1d_history()
 
     @staticmethod
     def _prep_post_1dim(x, y):
@@ -249,7 +180,16 @@ class SWYFT:
         return x, y/I
 
     def posterior(self, indices, x0 = None, tag = 'default'):
-        """Return generated posteriors."""
+        """Retrieve estimated marginal posterior.
+
+        Args:
+            indices (int, list of ints): Parameter indices.
+            x0 (array-like): Overwrites target image. Optional.
+            tag (string): Tag of Ndim network.
+
+        Returns:
+            x-array, p-array
+        """
         if isinstance(indices, int):
             if self.need_eval_post1d:
                 self._eval_post1d()
@@ -269,12 +209,12 @@ class SWYFT:
                 #return self._prep_post_1dim(x, y)
         else:
             if self.need_eval_postNd[tag]:
-                self.eval_postNd(tag = tag)
+                self._eval_postNd(tag = tag)
             combinations = self.postNd[tag][0]
             j = combinations.index(indices)
             return self.postNd[tag][1][:,j], self.postNd[tag][2][:,j]
 
-    def get_intervals(self, net, intensity, N = 10000, threshold = 1e-7):
+    def _get_intervals(self, net, intensity, N = 10000, threshold = 1e-7):
         """Generate intervals from previous posteriors."""
         z = torch.tensor(intensity.sample(N = N)).float().unsqueeze(-1).to(self.device)
         lnL = get_lnL(net, self.x0.to(self.device), z)  
@@ -287,10 +227,10 @@ class SWYFT:
             intervals_list.append(intervals)
         return intervals_list
 
-    def init_netNd(self, combinations, recycle_net = False, tag = 'default'):
+    def _init_netNd(self, combinations, recycle_net = False, tag = 'default'):
         """Generate N-dim posteriors."""
         # Use by default data from last 1-dim round
-        dataset = self.get_dataset()
+        dataset = self._get_dataset()
         datanorms = get_norms(dataset, combinations = combinations)
         
         # Generate network
@@ -305,11 +245,11 @@ class SWYFT:
             
         self.netNd[tag] = dict(net=net, combinations=combinations)
 
-    def eval_postNd(self, tag = 'default'):
+    def _eval_postNd(self, tag = 'default'):
         # Get posteriors and store them internally
         net = self.netNd[tag]['net']
         combinations = self.netNd[tag]['combinations']
-        dataset = self.get_dataset()
+        dataset = self._get_dataset()
         
         zgrid, lnLgrid = posteriors(self.x0, net, dataset, combinations =
                 combinations, device = self.device)

@@ -698,3 +698,66 @@ class Intensity:
         if N is None:
             N = np.random.poisson(self.mu, 1)[0]
         return self.mask.sample(N)
+
+
+def construct_intervals(x, y):
+    """Get x intervals where y is above 0."""
+    indices = np.argsort(x)
+    x = x[indices]
+    y = y[indices]
+    m = np.where(y > 0., 1., 0.)
+    m = m[1:] - m[:-1]
+    i0 = np.argwhere(m == 1.)[:,0]  # Upcrossings
+    i1 = np.argwhere(m == -1.)[:,0]  # Downcrossings
+    
+    # No crossings --> return entire interval
+    if len(i0) == 0 and len(i1) == 0:
+        return [[x[0], x[-1]]]
+    
+    # One more upcrossing than downcrossing
+    # --> Treat right end as downcrossing
+    if len(i0) - len(i1) == 1:
+        i1 = np.append(i1, -1)
+  
+    # One more downcrossing than upcrossing
+    # --> Treat left end as upcrossing
+    if len(i0) - len(i1) == -1:
+        i0 = np.append(0, i0)
+      
+    intervals = []
+    for i in range(len(i0)):
+        intervals.append([x[i0[i]], x[i1[i]]])
+    
+    return intervals
+    
+def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
+        max_epochs = 50, early_stopping_patience = 1, device = 'cpu', lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0]):
+    print("Start training")
+    nvalid = 512
+    ntrain = len(dataset) - nvalid
+    dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [ntrain, nvalid])
+    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True)
+    valid_loader = torch.utils.data.DataLoader(dataset_valid, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True)
+    # Train!
+
+    train_loss, valid_loss = [], []
+    for i, lr in enumerate(lr_schedule):
+        print(f'LR iteration {i}')
+        #dataset.set_noiselevel(nl_schedule[i])
+        tl, vl, sd = train(net, train_loader, valid_loader,
+                early_stopping_patience = early_stopping_patience, lr = lr,
+                max_epochs = max_epochs, device=device, combinations =
+                combinations)
+        vl_minimum = min(vl)
+        vl_min_idx = vl.index(vl_minimum)
+        train_loss.append(tl[:vl_min_idx + 1])
+        valid_loss.append(vl[:vl_min_idx + 1])
+        net.load_state_dict(sd)
+
+def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
+    x0 = x0.to(device)
+    z = torch.stack(get_z(dataset)).to(device)
+    z = torch.stack([combine_z(zs, combinations) for zs in z])
+    lnL = get_lnL(net, x0, z)
+    return z.cpu(), lnL.cpu()
+

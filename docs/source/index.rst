@@ -19,10 +19,10 @@ SWYFT is a flexible and powerful tool for simulator efficient neural marginal po
 Autodoc documentation
 =====================
 
-.. automodule:: swyft.core
+.. automodule:: swyft.interface
   :members:
 
-.. automodule:: swyft.interface
+.. automodule:: swyft.core
   :members:
 
 Indices and tables
