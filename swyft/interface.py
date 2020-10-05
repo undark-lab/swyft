@@ -70,7 +70,7 @@ class SWYFT:
     def _get_dataset(self):
         """Retrieve training dataset from datastore and SWYFT object train history."""
         indices = self.train_indices
-        dataset = DataDS(self.ds, indices, self.noisemodel)
+        dataset = DataContainer(self.ds, indices, self.noisemodel)
         return dataset
 
     def train1d(self, max_epochs = 100, nbatch = 16, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 1, nworkers = 0): 

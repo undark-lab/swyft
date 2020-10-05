@@ -21,6 +21,13 @@ from itertools import compress
 # Convenience functions
 #######################
 
+def comb2d(indices):
+    output = []
+    for i in range(len(indices)):
+        for j in range(i+1, len(indices)):
+            output.append([indices[i], indices[j]])
+    return output
+
 def combine_z(z, combinations):
     """Generate parameter combinations in last dimension. 
     Requires: z.ndim == 1. 
@@ -60,55 +67,55 @@ def set_device(gpu: bool = False) -> torch.device:
 #        Tensor: random samples.
 #    """
 #    return torch.rand(num_samples, num_params)
-#
-#def get_x(list_xz):
-#    """Extract x from batch of samples."""
-#    return [xz['x'] for xz in list_xz]
-#
-#def get_z(list_xz):
-#    """Extract z from batch of samples."""
-#    return [xz['z'] for xz in list_xz]
+
+def get_x(list_xz):
+    """Extract x from batch of samples."""
+    return [xz['x'] for xz in list_xz]
+
+def get_z(list_xz):
+    """Extract z from batch of samples."""
+    return [xz['z'] for xz in list_xz]
 
 
 ###################################
 # New data model based on datastore
 ###################################
 
-#class DataDS(torch.utils.data.Dataset):
-#    """Simple data container class.
-#
-#    Note: The noisemodel allows scheduled noise level increase during training.
-#    """
-#    def __init__(self, datastore, indices, noisemodel = None):
-#        super().__init__()
-#        # Check whether datastore is complete
-#        if len(datastore.require_sim()) > 0:
-#            raise RuntimeError("Datastore entries missing. Run simulator.")
-#
-#        self.ds = datastore
-#        self.indices = indices
-#        self.noisemodel = noisemodel
-#
-#    def __len__(self):
-#        return len(self.indices)
-#
-#    def __getitem__(self, idx):
-#        # Obtain x, z
-#        i = self.indices[idx]
-#        x = self.ds.x[i]
-#        z = self.ds.z[i]
-#        
-#        # Add optional noise
-#        if self.noisemodel is not None:
-#            x = self.noisemodel(x, z)
-#
-#        # Tensors
-#        x = torch.tensor(x).float()
-#        z = torch.tensor(z).float()
-#        
-#        # Done
-#        xz = dict(x=x, z=z)
-#        return xz
+class DataContainer(torch.utils.data.Dataset):
+    """Simple data container class.
+
+    Note: The noisemodel allows scheduled noise level increase during training.
+    """
+    def __init__(self, datastore, indices, noisemodel = None):
+        super().__init__()
+        # Check whether datastore is complete
+        if datastore.requires_sim():
+            raise RuntimeError("Datastore entries missing. Run simulator.")
+
+        self.ds = datastore
+        self.indices = indices
+        self.noisemodel = noisemodel
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        # Obtain x, z
+        i = self.indices[idx]
+        x = self.ds.x[i]
+        z = self.ds.z[i]
+        
+        # Add optional noise
+        if self.noisemodel is not None:
+            x = self.noisemodel(x, z)
+
+        # Tensors
+        x = torch.tensor(x).float()
+        z = torch.tensor(z).float()
+        
+        # Done
+        xz = dict(x=x, z=z)
+        return xz
 
 
 ##################
@@ -533,7 +540,7 @@ class DenseLegs(nn.Module):
         x = self.fc4(x).squeeze(-1)
         return x
 
-def get_norms(xz, combinations = None):
+def get_norms(list_xz, combinations = None):
     x = [xz['x'] for xz in list_xz]
     z = [xz['z'] for xz in list_xz]
     x_mean = sum(x)/len(x)
