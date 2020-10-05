@@ -278,7 +278,7 @@ class DataStore:
         return indices
 
     def requires_sim(self):
-        return len(self._require_sim_idx()0 > 0
+        return len(self._require_sim_idx()) > 0
     
     def _add_sim(self, i, x):
         self.x[i] = x
