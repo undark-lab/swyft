@@ -199,6 +199,8 @@ class DataStore:
         self.m = self.root.zeros('metadata/needs_sim', shape=(0,1), chunks=(10000,)+(1,), dtype='bool')
         self.u = self.root.create('metadata/intensity', shape=(0,), dtype=object, object_codec=numcodecs.Pickle())
         print("Datastore initialized.")
+
+        return self
         
     def _append_z(self, z):
         """Append z to datastore content and new slots for x."""
