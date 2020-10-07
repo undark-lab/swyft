@@ -30,7 +30,7 @@ class RatioEstimation:
     def _get_net(self, pnum, pdim, head = None, datanorms = None, recycle_net = False):
         # Check whether we can jump-start with using a copy of the previous network
         if self.parent is not None and recycle_net:
-            net = deepcopy(self.parent.net1d)
+            net = deepcopy(self.parent.net)
             return net
 
         # Otherwise, initialize new neural network
@@ -59,7 +59,7 @@ class RatioEstimation:
         pdim = len(self.combinations[0])
 
         if recycle_net:
-            head = deepcopy(self.net1d.head)
+            head = deepcopy(self.net.head)
             net = self._get_net(pnum, pdim, head = head, datanorms = datanorms)
         else:
             net = self._get_net(pnum, pdim, datanorms = datanorms)
@@ -213,8 +213,8 @@ class TrainData:
             masks_1d = [mask1d]*self.zdim
         else:
             # Generate target intensity based on previous round
-            net = self.parent.net1d
-            intensity = self.parent.intensity
+            net = self.parent.net
+            intensity = self.parent.traindata.intensity
             intervals_list = self._get_intervals(net, intensity, threshold = threshold)
             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
 
@@ -229,14 +229,14 @@ class TrainData:
 
     def _get_intervals(self, net, intensity, N = 10000, threshold = 1e-7):
         """Generate intervals from previous posteriors."""
-        z = torch.tensor(intensity.sample(N = N)).float().unsqueeze(-1).to(self.device)
-        lnL = get_lnL(net, self.x0.to(self.device), z)  
+        z = torch.tensor(intensity.sample(N = N)).float().unsqueeze(-1).to(self.parent.device)
+        ratios = eval_net(net, self.x0.to(self.parent.device), z)  
         z = z.cpu().numpy()[:,:,0]
-        lnL = lnL.cpu().numpy()
+        ratios = ratios.cpu().numpy()
         intervals_list = []
         for i in range(self.zdim):
-            lnL_max = lnL[:,i].max()
-            intervals = construct_intervals(z[:,i], lnL[:,i] - lnL_max - np.log(threshold))
+            ratios_max = ratios[:,i].max()
+            intervals = construct_intervals(z[:,i], ratios[:,i] - ratios_max - np.log(threshold))
             intervals_list.append(intervals)
         return intervals_list
 
