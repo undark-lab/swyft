@@ -162,11 +162,12 @@ class RatioEstimation:
             z = z[:,0]
             isorted = np.argsort(z)
             z, ratios = z[isorted], ratios[isorted]
-
-        p = np.exp(ratios)
-
+            exp_r = np.exp(ratios)
+            I = trapz(exp_r, z)
+            p = exp_r/I
+        else:
+            p = np.exp(ratios)
         return z, p
-
 
 
 class TrainData:
@@ -177,10 +178,10 @@ class TrainData:
         x0 (array): Observational data.
         zdim (int): Number of parameters.
         head (class): Head network class.
-        noisemodel (function): Function return noise.
+        noisehook (function): Function return noised data.
         device (str): Device type.
     """
-    def __init__(self, x0, zdim, noisemodel = None, datastore = None, parent = None, nsamples = 3000, threshold = 1e-7):
+    def __init__(self, x0, zdim, noisehook = None, datastore = None, parent = None, nsamples = 3000, threshold = 1e-7):
         self.x0 = torch.tensor(x0).float()
         self.zdim = zdim
 
@@ -193,14 +194,14 @@ class TrainData:
         self.intensity = None
         self.train_indices = None
 
-        self.noisemodel = noisemodel
+        self.noisehook = noisehook
 
         self._init_train_data(nsamples = nsamples, threshold = threshold)
 
     def get_dataset(self):
         """Retrieve training dataset from datastore and SWYFT object train history."""
         indices = self.train_indices
-        dataset = DataContainer(self.ds, indices, self.noisemodel)
+        dataset = DataContainer(self.ds, indices, self.noisehook)
         return dataset
 
     def _init_train_data(self, nsamples = 3000, threshold = 1e-7):

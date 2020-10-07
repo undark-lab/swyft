@@ -10,11 +10,14 @@ def get_contour_levels(x, cred_level = [0.68268, 0.95450, 0.99730]):
     levels = np.array(x[idx])
     return levels
 
-def cont2d(ax, sw, i, j, tag = 'default', cmap = 'gray_r'):
-    z, ln_p = sw.posterior([i, j], tag = tag)
-    p = np.exp(ln_p.numpy())
+def cont2d(ax, re, x0, z0, i, j, cmap = 'gray_r'):
+    z, p = re.posterior(x0, [i, j])
     z = z.numpy()
     levels = get_contour_levels(p)
+
+    if z0 is not None:
+        ax.axvline(z0[i], color='r', ls=':')
+        ax.axhline(z0[j], color='r', ls=':')
     
     N = 100*1j
     extent = [z[:,0].min(), z[:,0].max(), z[:,1].min(), z[:,1].max()]
@@ -23,13 +26,36 @@ def cont2d(ax, sw, i, j, tag = 'default', cmap = 'gray_r'):
     ax.imshow(resampled.T, extent = extent, origin='lower', cmap=cmap, aspect = 'auto')
     ax.tricontour(z[:,0], z[:,1], -p, levels = -levels, colors = 'k', linestyles=['-'])
     
-def hist1d(ax, sw, i):
-    z, p = sw.posterior(i)
+def hist1d(ax, re, x0, z0, i):
+    if z0 is not None:
+        ax.axvline(z0[i], color='r', ls=':')
+    z, p = re.posterior(x0, i)
     ax.plot(z, p, 'k')
 
-def corner(sw, tag = 'default', dim = 10, params = None, labels = None, z0 = None, cmap = 'Greys'):
+def plot1d(re1d, x0, dims = (15, 5), MN = None, params = None, labels = None, z0 = None, cmap = 'Greys'):
+    # TODO: Rewrite
     if params is None:
-        params = range(sw.zdim)
+        params = range(re1d.zdim)
+
+    K = len(params)
+    fig, axes = plt.subplots(1, K, figsize=dims)
+    lb = 0.125
+    tr = 0.9
+    whspace = 0.1
+    fig.subplots_adjust(left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace)
+    
+    if labels is None:
+        labels = ['z%i'%params[i] for i in range(K)]
+    for i in range(K):
+        ax = axes[i]
+        hist1d(ax, re1d, x0, z0, params[i])
+        ax.set_xlabel(labels[i])
+
+def corner(re1d, re2d, x0, dim = 10, params = None, labels = None, z0 = None, cmap = 'Greys'):
+    # TODO: Rewrite
+    if params is None:
+        params = range(re1d.zdim)
+
     K = len(params)
     fig, axes = plt.subplots(K, K, figsize=(dim, dim))
     lb = 0.125
@@ -70,10 +96,7 @@ def corner(sw, tag = 'default', dim = 10, params = None, labels = None, z0 = Non
 
             # 2-dim plots
             if j < i:
-                cont2d(ax, sw, params[j], params[i], tag = tag, cmap = cmap)
-                ax.axvline(z0[params[j]], color='r', ls=':')
-                ax.axhline(z0[params[i]], color='r', ls=':')
+                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap = cmap)
 
             if j == i:
-                hist1d(ax, sw, params[i])
-                ax.axvline(z0[params[j]], color='r', ls=':')
+                hist1d(ax, re1d, x0, z0, params[i])
