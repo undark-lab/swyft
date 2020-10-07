@@ -457,8 +457,8 @@ def train(
 # NOTE: z combinations (with pdim > 1) should not be generated here, but just
 # fed it. They can be generated externally.
 
-def get_lnL(net, x0, z, n_batch = 64):
-    """Return current estimate of normalized marginal 1-dim lnL.
+def eval_net(net, x0, z, n_batch = 64):
+    """Evaluates network.
 
     Args:
         net (nn.Module): trained ratio estimation net.
@@ -467,16 +467,16 @@ def get_lnL(net, x0, z, n_batch = 64):
         n_batch (int): minibatch size.
 
     Returns:
-        lnL: (nsamples, pnum)
+        net output: (nsamples, pnum)
     """
     nsamples = len(z)
 
-    lnL = []
+    out = []
     for i in range(nsamples//n_batch+1):
         zbatch = z[i*n_batch:(i+1)*n_batch]
-        lnL += net(x0.unsqueeze(0), zbatch).detach().cpu()
+        out += net(x0.unsqueeze(0), zbatch).detach().cpu()
 
-    return torch.stack(lnL)
+    return torch.stack(out)
 
 
 ##########
@@ -785,10 +785,10 @@ def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
         valid_loss.append(vl[:vl_min_idx + 1])
         net.load_state_dict(sd)
 
-def posteriors(x0, net, dataset, combinations = None, device = 'cpu'):
+def get_ratios(x0, net, dataset, combinations = None, device = 'cpu'):
     x0 = x0.to(device)
     z = torch.stack(get_z(dataset)).to(device)
     z = torch.stack([combine_z(zs, combinations) for zs in z])
-    lnL = get_lnL(net, x0, z)
-    return z.cpu(), lnL.cpu()
+    ratios = eval_net(net, x0, z)
+    return z.cpu(), ratios.cpu()
 

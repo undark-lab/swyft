@@ -19,7 +19,7 @@ class RatioEstimation:
         self.traindata = traindata
         self.parent = parent
         self.net = None
-        self.posterior_cache = dict()
+        self.ratio_cache = dict()
         self.combinations = combinations
 
         self._init_net(self.combinations)
@@ -120,12 +120,12 @@ class RatioEstimation:
 #        self.net1d = net
 
     def _eval_posterior(self, x0):
-        if x0.tobytes() in self.posterior_cache.keys():
+        if x0.tobytes() in self.ratio_cache.keys():
             return
         dataset = self._get_dataset()
-        z, lnL = posteriors(torch.tensor(x0).float(), self.net, dataset, device = self.device,
+        z, ratios = get_ratios(torch.tensor(x0).float(), self.net, dataset, device = self.device,
                 combinations = self.combinations)
-        self.posterior_cache[x0.tobytes()] = [z, lnL]
+        self.ratio_cache[x0.tobytes()] = [z, ratios]
 
 # TODO: Reuse again???
 #    @staticmethod
@@ -139,7 +139,7 @@ class RatioEstimation:
 #        I = trapz(y, x)
 #        return x, y/I
 
-    def posterior(self, indices, x0 = None):
+    def posterior(self, x0, indices):
         """Retrieve estimated marginal posterior.
 
         Args:
@@ -149,15 +149,24 @@ class RatioEstimation:
         Returns:
             x-array, p-array
         """
-        x0 = x0 if x0 is not None else self.x0
-        if x0 is None:
-            raise ValueError("x0 cannot be None")
         self._eval_posterior(x0)
 
         if isinstance(indices, int):
             indices = [indices]
+
         j = self.combinations.index(indices)
-        return self.posterior_cache[x0.tobytes()][0][:,j], self.posterior_cache[x0.tobytes()][1][:,j]
+        z, ratios = self.ratio_cache[x0.tobytes()][0][:,j], self.ratio_cache[x0.tobytes()][1][:,j]
+
+        # 1-dim case
+        if len(indices) == 1:
+            z = z[:,0]
+            isorted = np.argsort(z)
+            z, ratios = z[isorted], ratios[isorted]
+
+        p = np.exp(ratios)
+
+        return z, p
+
 
 
 class TrainData:
