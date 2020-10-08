@@ -39,11 +39,11 @@ class RatioEstimation:
             ds = self._get_dataset()
             ydim = len(ds[0]['x'])
         elif head is not None:
-            ydim = head(self.x0.unsqueeze(0).to(self.device)).shape[1]
+            ydim = head(self.traindata.x0.unsqueeze(0).to(self.device)).shape[1]
             print("Number of output features:", ydim)
         else:
             head = self.head_cls()
-            ydim = head(self.x0.unsqueeze(0)).shape[1]
+            ydim = head(self.traindata.x0.unsqueeze(0)).shape[1]
             print("Number of output features:", ydim)
         net = Network(ydim = ydim, pnum = pnum, pdim = pdim, head = head, datanorms = datanorms).to(self.device)
         return net
