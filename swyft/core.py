@@ -15,7 +15,6 @@ import torch.nn as nn
 from scipy.integrate import cumtrapz
 from torch import Tensor
 from tqdm import tqdm
-from itertools import compress
 
 #######################
 # Convenience functions
@@ -50,23 +49,6 @@ def set_device(gpu: bool = False) -> torch.device:
         device = torch.device("cpu")
         torch.set_default_tensor_type("torch.FloatTensor")
     return device
-
-
-#########################
-# Generate sample batches
-#########################
-
-#def sample_hypercube(num_samples: int, num_params: int) -> Tensor:
-#    """Return uniform samples from the hyper cube.
-#
-#    Args:
-#        num_samples (int): number of samples.
-#        num_params (int): dimension of hypercube.
-#
-#    Returns:
-#        Tensor: random samples.
-#    """
-#    return torch.rand(num_samples, num_params)
 
 def get_x(list_xz):
     """Extract x from batch of samples."""
@@ -118,43 +100,6 @@ class DataContainer(torch.utils.data.Dataset):
         return xz
 
 
-##################
-# Simulation loops
-##################
-
-#def simulate_ds(simulator, ds):
-#    """Run simulation to fill missing entries in data store."""
-#    indices = ds.require_sim()
-#    for i in tqdm(indices, desc="Running simulations"):
-#        _, z = ds[i]
-#        x = simulator(z)
-#        ds.add_sim(i, x)
-
-
-##################
-## Intensity class
-##################
-#
-#class Intensity:
-#    def __init__(self, mu, z0, z1):
-#        self.mu = mu
-#        self.z0 = np.array(z0)
-#        self.z1 = np.array(z1)
-#        
-#    def sample(self):
-#        N = np.random.poisson(self.mu, 1)[0]
-#        q = np.random.rand(N, len(self.z0))
-#        q *= self.z1 - self.z0
-#        q += self.z0
-#        return q
-#    
-#    def __call__(self, z):
-#        return self._pdf(z)*self.mu
-#
-#    def _pdf(self, z):
-#        val = 1./(self.z1 - self.z0).prod()
-#        return np.where(z >= self.z0, np.where(z <= self.z1, val, 0.), 0.).prod(axis=-1)
-    
 #################
 # Datastore class
 #################
@@ -655,12 +600,6 @@ def get_stats(z, p):
             'err68': (xerr68[1] - xerr68[0])/2,
             'err95': (xerr95[1] - xerr95[0])/2,
             }
-
-if __name__ == "__main__":
-    pass
-
-
-
 
 
 ####

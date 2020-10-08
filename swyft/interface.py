@@ -85,40 +85,6 @@ class RatioEstimation:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
-
-#    def train1d(self, max_epochs = 100, nbatch = 16, lr_schedule = [1e-3, 1e-4, 1e-5], nl_schedule = [1.0, 1.0, 1.0], early_stopping_patience = 1, nworkers = 0): 
-#        """Train 1-dim marginal posteriors.
-#
-#        Args:
-#            max_epochs (int): Maximum number of training epochs.
-#            nbatch (int): Minibatch size.
-#            lr_schedule (list): List of learning rates.
-#            early_stopping_patience (int): Early stopping patience.
-#            nworkers (int): Number of Dataloader workers.
-#        """
-#        if self.net1d is None:
-#            self._init_net1d()
-#        self.need_eval_post1d = True
-#        net = self.net1d
-#        dataset = self._get_dataset()
-#
-#        # Start actual training
-#        trainloop(net, dataset, device = self.device, max_epochs = max_epochs,
-#                nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
-#                nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
-
-#    def _init_net1d(self, recycle_net = False):
-#        """Advance SWYFT-internal net1d history."""
-#        # Set proper data normalizations for network initialization
-#        dataset = self._get_dataset()
-#        datanorms = get_norms(dataset)
-#
-#        # Initialize network
-#        net = self._get_net(self.zdim, 1, datanorms = datanorms, recycle_net = recycle_net)
-#
-#        # And append it to history!
-#        self.net1d = net
-
     def _eval_posterior(self, x0):
         if x0.tobytes() in self.ratio_cache.keys():
             return
@@ -126,18 +92,6 @@ class RatioEstimation:
         z, ratios = get_ratios(torch.tensor(x0).float(), self.net, dataset, device = self.device,
                 combinations = self.combinations)
         self.ratio_cache[x0.tobytes()] = [z, ratios]
-
-# TODO: Reuse again???
-#    @staticmethod
-#    def _prep_post_1dim(x, y):
-#        # Sort and normalize posterior
-#        # NOTE: 1-dim posteriors are automatically normalized
-#        # TODO: Normalization should be done based on prior range, not enforced by hand
-#        isorted = np.argsort(x)
-#        x, y = x[isorted], y[isorted]
-#        y = np.exp(y)
-#        I = trapz(y, x)
-#        return x, y/I
 
     def posterior(self, x0, indices):
         """Retrieve estimated marginal posterior.
