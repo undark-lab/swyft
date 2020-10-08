@@ -10,8 +10,8 @@ def get_contour_levels(x, cred_level = [0.68268, 0.95450, 0.99730]):
     levels = np.array(x[idx])
     return levels
 
-def cont2d(ax, re, x0, z0, i, j, cmap = 'gray_r'):
-    z, p = re.posterior(x0, [i, j])
+def cont2d(ax, re, x0, z0, i, j, cmap = 'gray_r', Nmax = 1000):
+    z, p = re.posterior(x0, [i, j], Nmax = Nmax)
     z = z.numpy()
     levels = get_contour_levels(p)
 
@@ -26,32 +26,38 @@ def cont2d(ax, re, x0, z0, i, j, cmap = 'gray_r'):
     ax.imshow(resampled.T, extent = extent, origin='lower', cmap=cmap, aspect = 'auto')
     ax.tricontour(z[:,0], z[:,1], -p, levels = -levels, colors = 'k', linestyles=['-'])
     
-def hist1d(ax, re, x0, z0, i):
+def hist1d(ax, re, x0, z0, i, Nmax = 1000):
     if z0 is not None:
         ax.axvline(z0[i], color='r', ls=':')
-    z, p = re.posterior(x0, i)
+    z, p = re.posterior(x0, i, Nmax = Nmax)
     ax.plot(z, p, 'k')
 
-def plot1d(re1d, x0, dims = (15, 5), MN = None, params = None, labels = None, z0 = None, cmap = 'Greys'):
+def plot1d(re1d, x0, dims = (15, 5), ncol = 6, params = None, labels = None, z0 = None, cmap = 'Greys', Nmax = 1000):
     # TODO: Rewrite
     if params is None:
         params = range(re1d.zdim)
 
     K = len(params)
-    fig, axes = plt.subplots(1, K, figsize=dims)
+    nrow = (K-1)//ncol+1
+
+    fig, axes = plt.subplots(nrow, ncol, figsize=dims)
     lb = 0.125
     tr = 0.9
-    whspace = 0.1
+    whspace = 0.15
     fig.subplots_adjust(left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace)
     
     if labels is None:
         labels = ['z%i'%params[i] for i in range(K)]
-    for i in range(K):
-        ax = axes[i]
-        hist1d(ax, re1d, x0, z0, params[i])
-        ax.set_xlabel(labels[i])
+    for k in range(K):
+        if nrow == 1:
+            ax = axes[k]
+        else:
+            i, j = k%ncol, k//ncol
+            ax = axes[j, i]
+        hist1d(ax, re1d, x0, z0, params[k], Nmax = Nmax)
+        ax.set_xlabel(labels[k])
 
-def corner(re1d, re2d, x0, dim = 10, params = None, labels = None, z0 = None, cmap = 'Greys'):
+def corner(re1d, re2d, x0, dim = 10, params = None, labels = None, z0 = None, cmap = 'Greys', Nmax = 1000):
     # TODO: Rewrite
     if params is None:
         params = range(re1d.zdim)
@@ -96,7 +102,7 @@ def corner(re1d, re2d, x0, dim = 10, params = None, labels = None, z0 = None, cm
 
             # 2-dim plots
             if j < i:
-                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap = cmap)
+                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap = cmap, Nmax = Nmax)
 
             if j == i:
-                hist1d(ax, re1d, x0, z0, params[i])
+                hist1d(ax, re1d, x0, z0, params[i], Nmax = Nmax)

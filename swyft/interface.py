@@ -85,15 +85,15 @@ class RatioEstimation:
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
 
-    def _eval_posterior(self, x0):
+    def _eval_ratios(self, x0, Nmax = 1000):
         if x0.tobytes() in self.ratio_cache.keys():
             return
         dataset = self._get_dataset()
         z, ratios = get_ratios(torch.tensor(x0).float(), self.net, dataset, device = self.device,
-                combinations = self.combinations)
+                combinations = self.combinations, Nmax = Nmax)
         self.ratio_cache[x0.tobytes()] = [z, ratios]
 
-    def posterior(self, x0, indices):
+    def posterior(self, x0, indices, Nmax = 1000):
         """Retrieve estimated marginal posterior.
 
         Args:
@@ -103,7 +103,7 @@ class RatioEstimation:
         Returns:
             x-array, p-array
         """
-        self._eval_posterior(x0)
+        self._eval_ratios(x0, Nmax = Nmax)
 
         if isinstance(indices, int):
             indices = [indices]

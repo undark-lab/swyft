@@ -724,9 +724,10 @@ def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
         valid_loss.append(vl[:vl_min_idx + 1])
         net.load_state_dict(sd)
 
-def get_ratios(x0, net, dataset, combinations = None, device = 'cpu'):
+def get_ratios(x0, net, dataset, combinations = None, device = 'cpu', Nmax = 1000):
     x0 = x0.to(device)
-    z = torch.stack(get_z(dataset)).to(device)
+    z = get_z(dataset)[:Nmax]
+    z = torch.stack(z).to(device)
     z = torch.stack([combine_z(zs, combinations) for zs in z])
     ratios = eval_net(net, x0, z)
     return z.cpu(), ratios.cpu()
