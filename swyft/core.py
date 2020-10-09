@@ -124,6 +124,9 @@ class DataStore:
             return
         
         print("Loading datastore:", filename)
+        self._update()
+
+    def _update(self):
         self.x = self.root['samples/x']
         self.z = self.root['samples/z']
         self.m = self.root['metadata/needs_sim']
@@ -138,7 +141,7 @@ class DataStore:
         """
         if 'samples' in self.root.keys():
             print("WARNING: Datastore is already initialized.")
-            return
+            return self
         self.x = self.root.zeros('samples/x', shape=(0,)+xdim, chunks=(1,)+xdim, dtype='f4')
         self.z = self.root.zeros('samples/z', shape=(0,)+(zdim,), chunks=(10000,)+(zdim,), dtype='f4')
         self.m = self.root.zeros('metadata/needs_sim', shape=(0,1), chunks=(10000,)+(1,), dtype='bool')
@@ -149,6 +152,8 @@ class DataStore:
         
     def _append_z(self, z):
         """Append z to datastore content and new slots for x."""
+        self._update()
+
         # Add simulation slots
         xshape = list(self.x.shape)
         xshape[0] += len(z)
@@ -163,6 +168,8 @@ class DataStore:
         
     def __len__(self):
         """Returns number of samples in the datastore."""
+        self._update()
+
         return len(self.z)
         
     def intensity(self, zlist):
@@ -171,6 +178,8 @@ class DataStore:
         Args:
             z (array-like): list of parameter values.
         """
+        self._update()
+
         if len(self.u) == 0:
             return np.zeros(len(zlist))
         else:
@@ -206,6 +215,8 @@ class DataStore:
         Args:
             p (intensity function): Target intensity function.
         """
+        self._update()
+
         self._grow(p)
         
         accepted = []
@@ -221,6 +232,8 @@ class DataStore:
         return accepted
     
     def __getitem__(self, i):
+        self._update()
+
         return self.x[i], self.z[i]
                 
     def _require_sim_idx(self):
@@ -232,6 +245,8 @@ class DataStore:
         return indices
 
     def requires_sim(self):
+        self._update()
+
         return len(self._require_sim_idx()) > 0
     
     def _add_sim(self, i, x):
@@ -244,6 +259,8 @@ class DataStore:
         Args:
             simulator (callable): Simulator
         """
+        self._update()
+
         idx = self._require_sim_idx()
         if len(idx) == 0:
             print("No simulations required.")
@@ -487,9 +504,10 @@ class DenseLegs(nn.Module):
         x = self.fc4(x).squeeze(-1)
         return x
 
-def get_norms(list_xz, combinations = None):
-    x = [xz['x'] for xz in list_xz]
-    z = [xz['z'] for xz in list_xz]
+def get_norms(xz, combinations = None, N = 300):
+    irand = np.random.choice(len(xz), N)
+    x = [xz[i]['x'] for i in irand]
+    z = [xz[i]['z'] for i in irand]
     x_mean = sum(x)/len(x)
     z_mean = sum(z)/len(z)
     x_var = sum([(x[i]-x_mean)**2 for i in range(len(x))])/len(x)
