@@ -123,6 +123,11 @@ class RatioEstimation:
             p = np.exp(ratios)
         return z, p
 
+    def load_state(self, PATH):
+        self.net.load_state_dict(torch.load(PATH, map_location=self.device))
+
+    def save_state(self, PATH):
+        torch.save(self.net.state_dict(), PATH)
 
 class TrainData:
     """
