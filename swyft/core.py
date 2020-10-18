@@ -389,13 +389,14 @@ def train(
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
     while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
-        print("Epoch:", epoch, end = "\r")
+        #print("Epoch:", epoch, end = "\r")
         network.train()
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
         
         network.eval()
         validation_loss = do_epoch(validation_loader, False)
+        print("Validation loss:", validation_loss)
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
@@ -407,7 +408,7 @@ def train(
             fruitless_epoch += 1
 
     print("Total epochs:", epoch)
-    print("Validation losses:", validation_losses)
+    #print("Validation losses:", validation_losses)
 
     return train_losses, validation_losses, best_state_dict
 
