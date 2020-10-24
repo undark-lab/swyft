@@ -435,7 +435,7 @@ def eval_net(net, x0, z, n_batch = 64):
     nsamples = len(z)
 
     out = []
-    for i in range(nsamples//n_batch+1):
+    for i in tqdm(range(nsamples//n_batch+1)):
         zbatch = z[i*n_batch:(i+1)*n_batch]
         out += net(x0.unsqueeze(0), zbatch).detach().cpu()
 
