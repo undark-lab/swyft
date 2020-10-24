@@ -725,8 +725,8 @@ def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
     nvalid = 512
     ntrain = len(dataset) - nvalid
     dataset_train, dataset_valid = torch.utils.data.random_split(dataset, [ntrain, nvalid])
-    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True)
-    valid_loader = torch.utils.data.DataLoader(dataset_valid, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True, shuffle = True)
+    valid_loader = torch.utils.data.DataLoader(dataset_valid, batch_size=nbatch, num_workers=nworkers, pin_memory=True, drop_last=True, shuffle = False)
     # Train!
 
     train_loss, valid_loss = [], []
