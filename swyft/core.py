@@ -396,7 +396,7 @@ def train(
         
         network.eval()
         validation_loss = do_epoch(validation_loader, False)
-        print("Validation loss:", validation_loss)
+        #print("Validation loss:", validation_loss)
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
@@ -742,6 +742,8 @@ def trainloop(net, dataset, combinations = None, nbatch = 32, nworkers = 4,
         train_loss.append(tl[:vl_min_idx + 1])
         valid_loss.append(vl[:vl_min_idx + 1])
         net.load_state_dict(sd)
+
+    return train_loss, valid_loss
 
 def get_ratios(x0, net, dataset, combinations = None, device = 'cpu', Nmax = 1000):
     x0 = x0.to(device)

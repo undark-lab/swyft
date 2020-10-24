@@ -81,9 +81,11 @@ class RatioEstimation:
         dataset = self._get_dataset()
 
         # Start actual training
-        trainloop(net, dataset, combinations = self.combinations, device = self.device, max_epochs = max_epochs,
+        train_loss, valid_loss = trainloop(net, dataset, combinations = self.combinations, device = self.device, max_epochs = max_epochs,
                 nbatch = nbatch, lr_schedule = lr_schedule, nl_schedule =
                 nl_schedule, early_stopping_patience = early_stopping_patience, nworkers=nworkers)
+
+        return train_loss, valid_loss
 
     def _eval_ratios(self, x0, Nmax = 1000):
         if x0.tobytes() in self.ratio_cache.keys():
