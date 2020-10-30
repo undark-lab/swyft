@@ -1,12 +1,16 @@
-# pylint: disable=no-membeinr, not-callable
+# pylint: disable=no-member, not-callable
+from copy import deepcopy
+
 import numpy as np
 from scipy.integrate import trapz
 
 import torch
 import torch.nn as nn
-from swyft.core import *
 
-from copy import deepcopy
+from .ip3 import DataContainer, construct_intervals, Mask1d, FactorMask, Intensity
+from .train import Network, get_norms, trainloop
+from .eval import get_ratios, eval_net
+
 
 class RatioEstimation:
     """

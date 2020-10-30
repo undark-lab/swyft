@@ -1,13 +1,6 @@
-"""
-This is SWYFT
-=============
-
-Author: Christoph Weniger
-
-Copyright: 2020
-
-"""
-from .core import *
+from .eval import *
 from .interface import *
+from .ip3 import *
+from .plot import *
+from .train import *
 from .utils import *
-__all__ = ['SWYFT']
