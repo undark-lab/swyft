@@ -225,7 +225,7 @@ class DataStore:
         I_target = p(zlist)
         for i, z in enumerate(zlist):
             accept_prob  = I_target[i]/I_ds[i]
-            if accept_prob > 1.:
+            if accept_prob > 1.01:  # allow 1% numerical inaccuracy
                 raise ValueError(accept_prob, I_target[i], I_ds[i], i)
             w = np.random.rand(1)[0]
             if accept_prob > w:
