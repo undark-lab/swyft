@@ -226,12 +226,7 @@ class DataStore:
         for i, z in enumerate(zlist):
             accept_prob  = I_target[i]/I_ds[i]
             if accept_prob > 1.:
-                print("Inconsistent intensity function of data store. This should not happen.")
-                print("accept_prob =", accept_prob)
-                print("I_target =", I_target[i])
-                print("I_ds =", I_ds[i])
-                print("i =", i)
-                raise ValueError
+                raise ValueError(accept_prob, I_target[i], I_ds[i], i)
             w = np.random.rand(1)[0]
             if accept_prob > w:
                 accepted.append(i)
