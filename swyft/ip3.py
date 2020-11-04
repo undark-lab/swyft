@@ -1,73 +1,110 @@
 # pylint: disable=no-member, not-callable
-import torch
-import numpy as np
+from abc import ABC, abstractmethod
+import re
 
+import torch
+
+import numpy as np
 import zarr
 import numcodecs
-
 from tqdm import tqdm
 
+from .types import Shape, DInt, Union
 
-class DataStore:
-    """The iP3 datastore.
 
-    Args:
-        filename (str): Optional. If given, defines path of `zarr.DirectoryStore`.
-    """
-
-    def __init__(self, filename=None):
-        # Open (new) datastore
-        if filename is None:
-            self.store = zarr.MemoryStore()
-        else:
-            self.store = zarr.DirectoryStore(filename)
-        self.root = zarr.group(store=self.store)
-
-        if "samples" not in self.root.keys():
-            print("Creating empty datastore:", filename)
-            print("...don't forget to run `init` to set up storage parameters.")
-            return
-
-        print("Loading datastore:", filename)
-        self._update()
-
-    def _update(self):
-        self.x = self.root["samples/x"]
-        self.z = self.root["samples/z"]
-        self.m = self.root["metadata/needs_sim"]
-        self.u = self.root["metadata/intensity"]
-
-    def init(self, xdim, zdim):
+class Cache(ABC):
+    @abstractmethod
+    def __init__(
+        self,
+        zdim: DInt,
+        xshape: Shape,
+        store: Union[zarr.MemoryStore, zarr.DirectoryStore],
+    ):
         """Initialize data store content dimensions.
 
         Args:
             zdim (int): Number of z dimensions
-            xdim (tuple): Shape of x array
+            xshape (tuple): Shape of x array
+            store (zarr.MemoryStore, zarr.DirectoryStore)
         """
-        if "samples" in self.root.keys():
-            print("WARNING: Datastore is already initialized.")
-            return self
-        self.x = self.root.zeros(
-            "samples/x", shape=(0,) + xdim, chunks=(1,) + xdim, dtype="f4"
-        )
-        self.z = self.root.zeros(
-            "samples/z", shape=(0,) + (zdim,), chunks=(10000,) + (zdim,), dtype="f4"
-        )
-        self.m = self.root.zeros(
-            "metadata/needs_sim", shape=(0, 1), chunks=(10000,) + (1,), dtype="bool"
-        )
-        self.u = self.root.create(
-            "metadata/intensity",
-            shape=(0,),
-            dtype=object,
-            object_codec=numcodecs.Pickle(),
-        )
-        print("Datastore initialized.")
+        self.store = store
+        self.root = zarr.group(store=self.store)
 
-        return self
+        if "samples" in self.root.keys() and "metadata" in self.root.keys():
+            print("Loading existing cache.")
+            self._update()
+        elif len(self.root.keys()) == 0:
+            print("Creating new cache.")
+            self.x = self.root.zeros(
+                "samples/x",
+                shape=(0,) + xshape,
+                chunks=(1,) + xshape,
+                dtype="f4",
+            )
+            self.z = self.root.zeros(
+                "samples/z",
+                shape=(0,) + (zdim,),
+                chunks=(10000,) + (zdim,),
+                dtype="f4",
+            )
+            self.m = self.root.zeros(
+                "metadata/requires_simulation",
+                shape=(0, 1),
+                chunks=(10000,) + (1,),
+                dtype="bool",
+            )
+            self.u = self.root.create(
+                "metadata/intensity",
+                shape=(0,),
+                dtype=object,
+                object_codec=numcodecs.Pickle(),
+            )
+        else:
+            raise KeyError(
+                "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
+            )
+
+        assert (
+            zdim == self.zdim
+        ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
+        assert (
+            xshape == self.xshape
+        ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
+
+    @staticmethod
+    def _extract_xshape_from_zarr_group(array):
+        return array["samples/x"].shape[1:]
+
+    @staticmethod
+    def _extract_zdim_from_zarr_group(array):
+        return array["samples/z"].shape[1]
+
+    @property
+    def xshape(self):
+        return self.x.shape[1:]
+
+    @property
+    def zdim(self):
+        return self.z.shape[1]
+
+    def _update(self):
+        # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
+        self.x = self.root["samples/x"]
+        self.z = self.root["samples/z"]
+        self.m = self.root["metadata/requires_simulation"]
+        self.u = self.root["metadata/intensity"]
+
+    def __len__(self):
+        """Returns number of samples in the cache."""
+        self._update()
+        return len(self.z)
+
+    def __getitem__(self, i):
+        self._update()
+        return self.x[i], self.z[i]
 
     def _append_z(self, z):
-        """Append z to datastore content and new slots for x."""
+        """Append z to cache content and new slots for x."""
         self._update()
 
         # Add simulation slots
@@ -82,14 +119,8 @@ class DataStore:
         m = np.ones((len(z), 1), dtype="bool")
         self.m.append(m)
 
-    def __len__(self):
-        """Returns number of samples in the datastore."""
-        self._update()
-
-        return len(self.z)
-
     def intensity(self, zlist):
-        """Evaluate DataStore intensity function.
+        """Evaluate Cache intensity function.
 
         Args:
             z (array-like): list of parameter values.
@@ -102,7 +133,7 @@ class DataStore:
             return np.array([self.u[i](zlist) for i in range(len(self.u))]).max(axis=0)
 
     def _grow(self, p):
-        """Grow number of samples in datastore."""
+        """Grow number of samples in cache."""
         # Proposed new samples z from p
         z_prop = p.sample()
 
@@ -116,7 +147,7 @@ class DataStore:
             accepted.append(rej_prob < w)
         z_accepted = z_prop[accepted, :]
 
-        # Add new entries to datastore and update intensity function
+        # Add new entries to cache and update intensity function
         self._append_z(z_accepted)
         if len(z_accepted) > 0:
             self.u.resize(len(self.u) + 1)
@@ -126,7 +157,7 @@ class DataStore:
             print("No new simulator runs required.")
 
     def sample(self, p):
-        """Sample from DataStore.
+        """Sample from Cache.
 
         Args:
             p (intensity function): Target intensity function.
@@ -148,11 +179,6 @@ class DataStore:
             if accept_prob > w:
                 accepted.append(i)
         return accepted
-
-    def __getitem__(self, i):
-        self._update()
-
-        return self.x[i], self.z[i]
 
     def _require_sim_idx(self):
         indices = []
@@ -187,6 +213,73 @@ class DataStore:
             z = self.z[i]
             x = simulator(z)
             self._add_sim(i, x)
+
+
+class DirectoryCache(Cache):
+    def __init__(self, zdim: DInt, xshape: Shape, path: str):
+        f"""Instantiate an iP3 cache stored in a directory.
+
+        Args:
+            {re.search('zdim.+', Cache.__init__.__doc__).group()}
+            {re.search('xshape.+', Cache.__init__.__doc__).group()}
+            path (str): path to storage directory
+        """
+        self.store = zarr.DirectoryStore(path)
+        super().__init__(zdim=zdim, xshape=xshape, store=self.store)
+
+    @classmethod
+    def load(cls, path: str):
+        """Load existing DirectoryStore.
+
+        Args:
+            path (str)
+        """
+        store = zarr.DirectoryStore(path)
+        group = zarr.group(store=store)
+        xshape = cls.__extract_xshape_from_zarr_group(group)
+        zdim = cls.__extract_zdim_from_zarr_group(group)
+        return DirectoryCache(zdim=zdim, xshape=xshape, path=path)
+
+
+class MemoryCache(Cache):
+    def __init__(self, zdim: DInt, xshape: Shape, store=None):
+        f"""Instantiate an iP3 cache stored in the memory.
+
+        Args:
+            {re.search('zdim.+', Cache.__init__.__doc__).group()}
+            {re.search('xshape.+', Cache.__init__.__doc__).group()}
+            store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in loading.
+        """
+        if store is None:
+            self.store = zarr.MemoryStore()
+        else:
+            self.store = store
+        super().__init__(zdim=zdim, xshape=xshape, store=self.store)
+
+    def save(self, path: str):
+        """Copy the current state of the MemoryCache to a directory.
+
+        Args:
+            path (str)
+        """
+        store = zarr.DirectoryStore(path)
+        zarr.convenience.copy_store(source=self.store, dest=store)
+
+    @classmethod
+    def load(cls, path: str):
+        """Copy existing DirectoryStore state into a MemoryCache object.
+
+        Args:
+            path (str)
+        """
+        memory_store = zarr.MemoryStore()
+        directory_store = zarr.DirectoryStore(path)
+        zarr.convenience.copy_store(source=directory_store, dest=memory_store)
+
+        group = zarr.group(store=memory_store)
+        xshape = cls.__extract_xshape_from_zarr_group(group)
+        zdim = cls.__extract_zdim_from_zarr_group(group)
+        return MemoryCache(zdim=zdim, xshape=xshape, store=memory_store)
 
 
 class Mask1d:
@@ -293,13 +386,13 @@ class DataContainer(torch.utils.data.Dataset):
     Note: The noisemodel allows scheduled noise level increase during training.
     """
 
-    def __init__(self, datastore, indices, noisemodel=None):
+    def __init__(self, cache, indices, noisemodel=None):
         super().__init__()
-        # Check whether datastore is complete
-        if datastore.requires_sim():
-            raise RuntimeError("Datastore entries missing. Run simulator.")
+        # Check whether cache is complete
+        if cache.requires_sim():
+            raise RuntimeError("cache entries missing. Run simulator.")
 
-        self.ds = datastore
+        self.ds = cache
         self.indices = indices
         self.noisemodel = noisemodel
 

@@ -44,17 +44,17 @@ can be generated simply as well.::
     z, p = SWYFT.posterior([0, 1])
 
 
-Data store
+iP3 Data Caching
 ----------
 
 (IN PROGRESS)
 
 Simulator runs can be automatically re-used.  This is done by specifying the
-datastore when invoking `SWYFT`::
+cache when invoking `SWYFT`::
 
-    from swyft import DataStore
+    from swyft import MemoryCache, DirectoryCache
 
-    ds = DataStore(filename = 'ds.hdf5')
+    ds = DirectoryCache(filename = 'ds.hdf5')
 
     sw = SWYFT(model, x0, zdim = 3, ds = ds)
     sw.run(nrounds = 3, nsamples = 5000)

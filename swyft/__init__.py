@@ -1,5 +1,6 @@
+from .estimation import *
 from .eval import *
-from .interface import *
+from .network import *
 from .ip3 import *
 from .plot import *
 from .train import *

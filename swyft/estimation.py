@@ -8,7 +8,8 @@ import torch
 import torch.nn as nn
 
 from .ip3 import DataContainer, construct_intervals, Mask1d, FactorMask, Intensity
-from .train import Network, get_norms, trainloop
+from .train import get_norms, trainloop
+from .network import Network
 from .eval import get_ratios, eval_net
 
 
@@ -183,7 +184,7 @@ class TrainData:
         x0,
         zdim,
         noisehook=None,
-        datastore=None,
+        cache=None,
         parent=None,
         nsamples=3000,
         threshold=1e-7,
@@ -191,9 +192,9 @@ class TrainData:
         self.x0 = torch.tensor(x0).float()
         self.zdim = zdim
 
-        if datastore == None:
-            raise ValueError("Need datastore!")
-        self.ds = datastore
+        if cache == None:
+            raise ValueError("Need cache!")
+        self.ds = cache
 
         self.parent = parent
 
@@ -205,7 +206,7 @@ class TrainData:
         self._init_train_data(nsamples=nsamples, threshold=threshold)
 
     def get_dataset(self):
-        """Retrieve training dataset from datastore and SWYFT object train history."""
+        """Retrieve training dataset from cache and SWYFT object train history."""
         indices = self.train_indices
         dataset = DataContainer(self.ds, indices, self.noisehook)
         return dataset
