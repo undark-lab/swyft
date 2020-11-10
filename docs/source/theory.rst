@@ -13,7 +13,7 @@ Nested marginal posterior estimation
 TODO
 
 
-Data store
+Cache
 ----------
 
 TODO

@@ -7,7 +7,7 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
-from .ip3 import DataContainer, construct_intervals, Mask1d, FactorMask, Intensity
+from .ip3 import Cache, DataContainer, construct_intervals, Mask1d, FactorMask, Intensity
 from .train import get_norms, trainloop
 from .network import Network
 from .eval import get_ratios, eval_net
@@ -165,6 +165,21 @@ class RatioEstimation:
 
     def save_state(self, PATH):
         torch.save(self.net.state_dict(), PATH)
+
+
+class Points:
+    """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
+    Points implements this via a list of indices corresponding to data contained in a cache which is provided at initialization.
+
+    Args:  
+        cache (Cache): iP3 cache for zarr storage
+        intensity (function): inhomogenous Poisson Point Proccess intensity function on parameters
+        noisehook (function): maps from (x, z) to x with noise
+    """
+    def __init__(self, cache: Cache, intensity, noisehook):
+        pass
+
+    # TODO tomorrow!
 
 
 class TrainData:
