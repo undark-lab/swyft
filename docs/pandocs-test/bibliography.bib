@@ -1,0 +1,321 @@
+@ARTICLE{Cranmer2020,
+  title    = "The frontier of simulation-based inference",
+  author   = "Cranmer, Kyle and Brehmer, Johann and Louppe, Gilles",
+  abstract = "Many domains of science have developed complex simulations to
+              describe phenomena of interest. While these simulations provide
+              high-fidelity models, they are poorly suited for inference and
+              lead to challenging inverse problems. We review the rapidly
+              developing field of simulation-based inference and identify the
+              forces giving additional momentum to the field. Finally, we
+              describe how the frontier is expanding so that a broad audience
+              can appreciate the profound influence these developments may have
+              on science.",
+  journal  = "Proc. Natl. Acad. Sci. U. S. A.",
+  month    =  may,
+  year     =  2020,
+  keywords = "approximate Bayesian computation; implicit models;
+              likelihood-free inference; neural density estimation; statistical
+              inference",
+  language = "en"
+}
+
+
+@ARTICLE{Durkan2020,
+  title         = "On Contrastive Learning for Likelihood-free Inference",
+  author        = "Durkan, Conor and Murray, Iain and Papamakarios, George",
+  abstract      = "Likelihood-free methods perform parameter inference in
+                   stochastic simulator models where evaluating the likelihood
+                   is intractable but sampling synthetic data is possible. One
+                   class of methods for this likelihood-free problem uses a
+                   classifier to distinguish between pairs of
+                   parameter-observation samples generated using the simulator
+                   and pairs sampled from some reference distribution, which
+                   implicitly learns a density ratio proportional to the
+                   likelihood. Another popular class of methods fits a
+                   conditional distribution to the parameter posterior
+                   directly, and a particular recent variant allows for the use
+                   of flexible neural density estimators for this task. In this
+                   work, we show that both of these approaches can be unified
+                   under a general contrastive learning scheme, and clarify how
+                   they should be run and compared.",
+  month         =  feb,
+  year          =  2020,
+  keywords      = "stat.ML, cs.LG",
+  archivePrefix = "arXiv",
+  primaryClass  = "stat.ML",
+  eprint        = "2002.03712"
+}
+
+
+
+@ARTICLE{Mohamed2016,
+	title         = "Learning in Implicit Generative Models",
+	author        = "Mohamed, Shakir and Lakshminarayanan, Balaji",
+	abstract      = "Generative adversarial networks (GANs) provide an
+	algorithmic framework for constructing generative models
+	with several appealing properties: they do not require a
+	likelihood function to be specified, only a generating
+	procedure; they provide samples that are sharp and
+	compelling; and they allow us to harness our knowledge of
+	building highly accurate neural network classifiers. Here,
+	we develop our understanding of GANs with the aim of forming
+	a rich view of this growing area of machine learning---to
+	build connections to the diverse set of statistical thinking
+	on this topic, of which much can be gained by a mutual
+	exchange of ideas. We frame GANs within the wider landscape
+	of algorithms for learning in implicit generative
+	models--models that only specify a stochastic procedure with
+	which to generate data--and relate these ideas to modelling
+	problems in related fields, such as econometrics and
+	approximate Bayesian computation. We develop likelihood-free
+	inference methods and highlight hypothesis testing as a
+	principle for learning in implicit generative models, using
+	which we are able to derive the objective function used by
+	GANs, and many other related objectives. The testing
+	viewpoint directs our focus to the general problem of
+	density ratio estimation. There are four approaches for
+	density ratio estimation, one of which is a solution using
+	classifiers to distinguish real from generated data. Other
+	approaches such as divergence minimisation and moment
+	matching have also been explored in the GAN literature, and
+	we synthesise these views to form an understanding in terms
+	of the relationships between them and the wider literature,
+	highlighting avenues for future exploration and
+	cross-pollination.",
+	month         =  oct,
+	year          =  2016,
+	archivePrefix = "arXiv",
+	primaryClass  = "stat.ML",
+	eprint        = "1610.03483"
+}
+
+
+@ARTICLE{Hermans2019,
+	title         = "Likelihood-free {MCMC} with Amortized Approximate Ratio
+	Estimators",
+	author        = "Hermans, Joeri and Begy, Volodimir and Louppe, Gilles",
+	abstract      = "Posterior inference with an intractable likelihood is
+	becoming an increasingly common task in scientific domains
+	which rely on sophisticated computer simulations. Typically,
+	these forward models do not admit tractable densities
+	forcing practitioners to make use of approximations. This
+	work introduces a novel approach to address the
+	intractability of the likelihood and the marginal model. We
+	achieve this by learning a flexible amortized estimator
+	which approximates the likelihood-to-evidence ratio. We
+	demonstrate that the learned ratio estimator can be embedded
+	in MCMC samplers to approximate likelihood-ratios between
+	consecutive states in the Markov chain, allowing us to draw
+	samples from the intractable posterior. Techniques are
+	presented to improve the numerical stability and to measure
+	the quality of an approximation. The accuracy of our
+	approach is demonstrated on a variety of benchmarks against
+	well-established techniques. Scientific applications in
+	physics show its applicability.",
+	month         =  mar,
+	year          =  2019,
+	archivePrefix = "arXiv",
+	primaryClass  = "stat.ML",
+	eprint        = "1903.04057"
+}
+
+
+@ARTICLE{Skilling2006,
+	title     = "Nested sampling for general Bayesian computation",
+	author    = "Skilling, John",
+	abstract  = "Project Euclid - mathematics and statistics online",
+	journal   = "Bayesian Anal.",
+	publisher = "International Society for Bayesian Analysis",
+	volume    =  1,
+	number    =  4,
+	pages     = "833--859",
+	month     =  dec,
+	year      =  2006,
+	keywords  = "Bayesian computation; evidence; marginal likelihood; algorithm;
+	nest; annealing; phase change; model selection",
+	language  = "en"
+}
+
+
+@ARTICLE{Feroz2008,
+	title    = "{MultiNest}: an efficient and robust Bayesian inference tool for
+	cosmology and particle physics",
+	author   = "Feroz, F and Hobson, M P and Bridges, M",
+	abstract = "We present further development and the first public release of
+	our multimodal nested sampling algorithm, called MultiNest. This
+	Bayesian inference tool calculates the evidence, with an
+	associated error estimate, and produces posterior samples from
+	distributions that may contain multiple modes and pronounced
+	(curving) degeneracies in high dimensions. The developments
+	presented here lead to further substantial improvements in
+	sampling efficiency and robustness, as compared to the original
+	algorithm presented in Feroz \& Hobson (2008), which itself
+	significantly outperformed existing MCMC techniques in a wide
+	range of astrophysical inference problems. The accuracy and
+	economy of the MultiNest algorithm is demonstrated by application
+	to two toy problems and to a cosmological inference problem
+	focussing on the extension of the vanilla $\Lambda$CDM model to
+	include spatial curvature and a varying equation of state for
+	dark energy. The MultiNest software, which is fully parallelized
+	using MPI and includes an interface to CosmoMC, is available at
+	http://www.mrao.cam.ac.uk/software/multinest/. It will also be
+	released as part of the SuperBayeS package, for the analysis of
+	supersymmetric theories of particle physics, at
+	http://www.superbayes.org",
+	journal  = "Mon. Not. Roy. Astron. Soc. 398: 1601-1614,2009",
+	month    =  sep,
+	year     =  2008,
+	keywords = "astro-ph"
+}
+
+
+@ARTICLE{Handley2015,
+	title     = "polychord : next-generation nested sampling",
+	author    = "Handley, W J and Hobson, M P and Lasenby, A N",
+	abstract  = "Abstract. polychord is a novel nested sampling algorithm
+	tailored for high-dimensional parameter spaces. This paper
+	coincides with the release of polychord v1.",
+	journal   = "Mon. Not. R. Astron. Soc.",
+	publisher = "Oxford Academic",
+	volume    =  453,
+	number    =  4,
+	pages     = "4384--4398",
+	month     =  sep,
+	year      =  2015,
+	language  = "en"
+}
+
+@article{pymultinest,
+	author = {{Buchner, J.} and {Georgakakis, A.} and {Nandra, K.} and {Hsu, L.} and {Rangel, C.} and {Brightman, M.} and {Merloni, A.} and {Salvato, M.} and {Donley, J.} and {Kocevski, D.}},
+	title = {X-ray spectral modelling of the AGN obscuring region in the
+          CDFS: Bayesian model selection and catalogue},
+	DOI= "10.1051/0004-6361/201322971",
+	url= "https://doi.org/10.1051/0004-6361/201322971",
+	journal = {A\&A},
+	year = 2014,
+	volume = 564,
+	pages = "A125",
+	month = "",
+}
+
+
+
+
+@book{sisson2018handbook,
+	title={Handbook of approximate Bayesian computation},
+	author={Sisson, Scott A and Fan, Yanan and Beaumont, Mark},
+	year={2018},
+	publisher={CRC Press}
+}
+
+
+@ARTICLE{Cranmer2015,
+  title         = "Approximating Likelihood Ratios with Calibrated
+                   Discriminative Classifiers",
+  author        = "Cranmer, Kyle and Pavez, Juan and Louppe, Gilles",
+  abstract      = "In many fields of science, generalized likelihood ratio
+                   tests are established tools for statistical inference. At
+                   the same time, it has become increasingly common that a
+                   simulator (or generative model) is used to describe complex
+                   processes that tie parameters $\theta$ of an underlying
+                   theory and measurement apparatus to high-dimensional
+                   observations $\mathbf\{x\}\in \mathbb\{R\}^p$. However,
+                   simulator often do not provide a way to evaluate the
+                   likelihood function for a given observation $\mathbf\{x\}$,
+                   which motivates a new class of likelihood-free inference
+                   algorithms. In this paper, we show that likelihood ratios
+                   are invariant under a specific class of dimensionality
+                   reduction maps $\mathbb\{R\}^p \mapsto \mathbb\{R\}$. As a
+                   direct consequence, we show that discriminative classifiers
+                   can be used to approximate the generalized likelihood ratio
+                   statistic when only a generative model for the data is
+                   available. This leads to a new machine learning-based
+                   approach to likelihood-free inference that is complementary
+                   to Approximate Bayesian Computation, and which does not
+                   require a prior on the model parameters. Experimental
+                   results on artificial problems with known exact likelihoods
+                   illustrate the potential of the proposed method.",
+  month         =  jun,
+  year          =  2015,
+  archivePrefix = "arXiv",
+  primaryClass  = "stat.AP",
+  eprint        = "1506.02169"
+}
+
+
+
+@incollection{pytorch,
+title = {PyTorch: An Imperative Style, High-Performance Deep Learning Library},
+author = {Paszke, Adam and Gross, Sam and Massa, Francisco and Lerer, Adam and Bradbury, James and Chanan, Gregory and Killeen, Trevor and Lin, Zeming and Gimelshein, Natalia and Antiga, Luca and Desmaison, Alban and Kopf, Andreas and Yang, Edward and DeVito, Zachary and Raison, Martin and Tejani, Alykhan and Chilamkurthy, Sasank and Steiner, Benoit and Fang, Lu and Bai, Junjie and Chintala, Soumith},
+booktitle = {Advances in Neural Information Processing Systems 32},
+editor = {H. Wallach and H. Larochelle and A. Beygelzimer and F. d\textquotesingle Alch\'{e}-Buc and E. Fox and R. Garnett},
+pages = {8024--8035},
+year = {2019},
+publisher = {Curran Associates, Inc.},
+url = {http://papers.neurips.cc/paper/9015-pytorch-an-imperative-style-high-performance-deep-learning-library.pdf}
+}
+
+% simulators
+@article{Bartels_2016,
+   title={Strong Support for the Millisecond Pulsar Origin of the Galactic Center GeV Excess},
+   volume={116},
+   ISSN={1079-7114},
+   url={http://dx.doi.org/10.1103/PhysRevLett.116.051102},
+   DOI={10.1103/physrevlett.116.051102},
+   number={5},
+   journal={Physical Review Letters},
+   publisher={American Physical Society (APS)},
+   author={Bartels, Richard and Krishnamurthy, Suraj and Weniger, Christoph},
+   year={2016},
+   month={Feb}
+}
+
+@article{Banik_2018,
+   title={Probing the nature of dark matter particles with stellar streams},
+   volume={2018},
+   ISSN={1475-7516},
+   url={http://dx.doi.org/10.1088/1475-7516/2018/07/061},
+   DOI={10.1088/1475-7516/2018/07/061},
+   number={07},
+   journal={Journal of Cosmology and Astroparticle Physics},
+   publisher={IOP Publishing},
+   author={Banik, Nilanjan and Bertone, Gianfranco and Bovy, Jo and Bozorgnia, Nassim},
+   year={2018},
+   month={Jul},
+   pages={061–061}
+}
+
+@article{Rodr_guez_Puebla_2016,
+   title={Halo and subhalo demographics with Planck cosmological parameters: Bolshoi–Planck and MultiDark–Planck simulations},
+   volume={462},
+   ISSN={1365-2966},
+   url={http://dx.doi.org/10.1093/mnras/stw1705},
+   DOI={10.1093/mnras/stw1705},
+   number={1},
+   journal={Monthly Notices of the Royal Astronomical Society},
+   publisher={Oxford University Press (OUP)},
+   author={Rodríguez-Puebla, Aldo and Behroozi, Peter and Primack, Joel and Klypin, Anatoly and Lee, Christoph and Hellinger, Doug},
+   year={2016},
+   month={Jul},
+   pages={893–916}
+}
+
+
+@article{swyft_future,
+   title={Nested Ratio Estimation and iP3 sample caching},
+   author={Authors et. al.},
+   year={2020},
+}
+
+@article{lensing,
+   title={Precision analysis of gravitational strong lensing images with nested likelihood-free inference},
+   author={Authors et. al.},
+   year={2020},
+}
+
+@book{ppp,
+    title={Poisson Processes},
+    author={J. F. C. Kingman},
+    publisher = {Oxford University Press},
+    year={1993}
+}
