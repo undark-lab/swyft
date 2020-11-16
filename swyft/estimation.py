@@ -81,7 +81,7 @@ class RatioEstimator:
         # TODO network should be able to handle shape or dim. right now we are forcing dim, that is bad.
         if self.head is None:
             # yshape = self.xshape
-            yshape = len(self.xshape)
+            yshape = self.xshape[0]
         else:
             # yshape = self.head(self.x0.unsqueeze(0)).shape[1:]
             yshape = self.head(self.x0.unsqueeze(0)).shape[1]

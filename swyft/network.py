@@ -87,9 +87,7 @@ class LinearWithChannel(nn.Module):
         torch.nn.init.uniform_(bias, -bound, bound)
 
     def forward(self, x):
-        print(self.w.shape, self.b.shape, x.shape)
         x = x.unsqueeze(-1)
-        print(x.shape)
         return torch.matmul(self.w, x).squeeze(-1) + self.b
 
 
@@ -108,9 +106,7 @@ class DenseLegs(nn.Module):
         self.af2 = lambda x: x * torch.sigmoid(x * 10.0)
 
     def forward(self, y, z):
-        print(y.shape, z.shape)
         x = combine(y, z)
-        print(x.shape)
         x = self.af(self.fc1(x))
         x = self.drop(x)
         x = self.af(self.fc2(x))
