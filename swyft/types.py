@@ -18,11 +18,13 @@ import numpy as np
 import torch
 
 Device = Union[torch.device, str]
-
-Shape = Union[torch.Size, Tuple[int, ...]]
-
-DictInt = Union[int, Dict[str, int]]
-DictShape = Union[ Shape, Dict[str, Shape] ]
+Dataset = torch.utils.data.Dataset
 
 Tensor = torch.Tensor
 Array = Union[np.ndarray, torch.Tensor]
+
+Combinations = Sequence[Sequence[int]]
+
+Shape = Union[torch.Size, Tuple[int, ...]]
+DictInt = Union[int, Dict[str, int]]
+DictShape = Union[Shape, Dict[str, Shape]]

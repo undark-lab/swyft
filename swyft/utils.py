@@ -1,10 +1,11 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
 
-import numpy as np 
+import numpy as np
 import torch
 
 from .types import Optional, Device, Tensor, Array, List
+
 
 def comb2d(indices):
     output = []
@@ -16,18 +17,15 @@ def comb2d(indices):
 
 def combine_z(z: Tensor, combinations: Optional[List]) -> Tensor:
     """Generate parameter combinations in last dimension using fancy indexing.
-    
+
     Args:
-        z: Parameters of shape [..., Z]
-        combinations: List of parameter combinations.
-    
+        z: parameters of shape [..., Z]
+        combinations: list of parameter combinations.
+
     Returns:
-        output = z[..., combinations]. When combinations is None, unsqueeze last dim.
+        output = z[..., combinations]
     """
-    if combinations is None:
-        return z.unsqueeze(-1)
-    else:
-        return z[..., combinations]
+    return z[..., combinations]
 
 
 # def combine_z(z, combinations):
@@ -70,24 +68,60 @@ def get_device_if_not_none(device: Optional[Device], tensor: Tensor) -> Device:
     return tensor.device if device is None else device
 
 
-def array_to_tensor(array: Array, dtype: Optional[torch.dtype] = None, device: Optional[Device] = None) -> Tensor:
-    """Converts np.ndarray and torch.Tensor to torch.Tensor with dtype and on device. 
-    When dtype is None, unsafe casts all float-type arrays to torch.get_default_dtype()
+np_bool_types = [np.bool]
+np_int_types = [np.int8, np.int16, np.int32, np.int64]
+np_float_types = [np.float32, np.float64]
+torch_bool_types = [torch.bool]
+torch_int_types = [torch.int8, torch.int16, torch.int32, torch.int64]
+torch_float_types = [torch.float32, torch.float64]
+
+
+def array_to_tensor(
+    array: Array, dtype: Optional[torch.dtype] = None, device: Optional[Device] = None
+) -> Tensor:
+    """Converts np.ndarray and torch.Tensor to torch.Tensor with dtype and on device.
+    When dtype is None, unsafe casts all float-type arrays to torch.float32 and all int-type arrays to torch.int64
     """
-    torch_float_types = [torch.half, torch.bfloat16, torch.float, torch.double]
-    
     input_dtype = array.dtype
     if isinstance(input_dtype, np.dtype):
-        # When the ndarray type is any float send to the torch default (when torch default is a float).
-        if dtype is None and input_dtype == np.float and torch.get_default_dtype() in torch_float_types:
-            dtype = torch.get_default_dtype()
+        if dtype is None:
+            if input_dtype in np_float_types:
+                dtype = torch.float32
+            elif input_dtype in np_int_types:
+                dtype = torch.int64
+            elif input_dtype in np_bool_types:
+                dtype = torch.bool
+            else:
+                raise TypeError(
+                    f"{input_dtype} was not a supported numpy int, float, or bool."
+                )
         return torch.from_numpy(array).to(dtype=dtype, device=device)
     elif isinstance(input_dtype, torch.dtype):
-        if dtype is None and dtype in torch_float_types and torch.get_default_dtype() in torch_float_types:
-            dtype = torch.get_default_dtype()
+        if dtype is None:
+            if input_dtype in torch_float_types:
+                dtype = torch.float32
+            elif input_dtype in torch_int_types:
+                dtype = torch.int64
+            elif input_dtype in torch_bool_types:
+                dtype = torch.bool
+            else:
+                raise TypeError(
+                    f"{input_dtype} was not a supported torch int, float, or bool."
+                )
         return array.to(dtype=dtype, device=device)
     else:
-        raise TypeError(f"{input_dtype} was neither numpy.dtype or torch.dtype.")
+        raise TypeError(
+            f"{input_dtype} was not recognized as a supported numpy.dtype or torch.dtype."
+        )
+
+
+def tobytes(x: Array):
+    if isinstance(x, np.ndarray):
+        return x.tobytes()
+    elif isinstance(x, Tensor):
+        return x.numpy().tobytes()
+    else:
+        raise TypeError(f"{type(x)} does not support tobytes.")
 
 
 if __name__ == "__main__":

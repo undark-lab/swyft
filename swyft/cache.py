@@ -73,20 +73,20 @@ class Cache(ABC):
         ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
 
     @staticmethod
-    def _extract_xshape_from_zarr_group(array):
-        return array["samples/x"].shape[1:]
+    def _extract_xshape_from_zarr_group(group):
+        return group["samples/x"].shape[1:]
 
     @staticmethod
-    def _extract_zdim_from_zarr_group(array):
-        return array["samples/z"].shape[1]
+    def _extract_zdim_from_zarr_group(group):
+        return group["samples/z"].shape[1]
 
     @cached_property
     def xshape(self):
-        return self.x.shape[1:]
+        return self._extract_xshape_from_zarr_group(self.root)
 
     @cached_property
     def zdim(self):
-        return self.z.shape[1]
+        return self._extract_zdim_from_zarr_group(self.root)
 
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO

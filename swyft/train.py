@@ -156,7 +156,7 @@ def trainloop(
     net,
     dataset,
     combinations=None,
-    nbatch=32,
+    batch_size=32,
     nworkers=4,
     max_epochs=50,
     early_stopping_patience=1,
@@ -172,14 +172,14 @@ def trainloop(
     )
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
-        batch_size=nbatch,
+        batch_size=batch_size,
         num_workers=nworkers,
         pin_memory=True,
         drop_last=True,
     )
     valid_loader = torch.utils.data.DataLoader(
         dataset_valid,
-        batch_size=nbatch,
+        batch_size=batch_size,
         num_workers=nworkers,
         pin_memory=True,
         drop_last=True,
@@ -189,6 +189,7 @@ def trainloop(
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
         print(f"LR iteration {i}")
+        # TODO noise level is currently not implemented
         # dataset.set_noiselevel(nl_schedule[i])
         tl, vl, sd = train(
             net,

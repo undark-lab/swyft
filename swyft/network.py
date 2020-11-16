@@ -32,6 +32,7 @@ class OnlineNormalizationLayer(nn.Module):
         self.register_buffer("n", torch.zeros(1, dtype=torch.long))
         self.register_buffer("_mean", torch.zeros(shape, dtype=torch.float))
         self.register_buffer("_var", torch.zeros(shape, dtype=torch.float))
+        # TODO this needs to have the option of using
 
     def _update_one(self, x):
         self.n += 1
@@ -86,7 +87,9 @@ class LinearWithChannel(nn.Module):
         torch.nn.init.uniform_(bias, -bound, bound)
 
     def forward(self, x):
+        print(self.w.shape, self.b.shape, x.shape)
         x = x.unsqueeze(-1)
+        print(x.shape)
         return torch.matmul(self.w, x).squeeze(-1) + self.b
 
 
@@ -105,7 +108,9 @@ class DenseLegs(nn.Module):
         self.af2 = lambda x: x * torch.sigmoid(x * 10.0)
 
     def forward(self, y, z):
+        print(y.shape, z.shape)
         x = combine(y, z)
+        print(x.shape)
         x = self.af(self.fc1(x))
         x = self.drop(x)
         x = self.af(self.fc2(x))
@@ -129,6 +134,8 @@ class Network(nn.Module):
         returns intermediate state `y`.
         """
         super().__init__()
+        # TODO make this handle yshape rather than ydim
+        # TODO remove pnum and pdim
         self.head = head
         self.legs = DenseLegs(ydim, pnum, pdim=pdim, p=p)
 

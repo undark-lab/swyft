@@ -29,9 +29,9 @@ def eval_net(net, x0, z, n_batch=64):
     return torch.stack(out)
 
 
-def get_ratios(x0, net, dataset, combinations=None, device="cpu", Nmax=1000):
+def get_ratios(x0, net, dataset, combinations=None, device="cpu", max_n_points=1000):
     x0 = x0.to(device)
-    z = get_z(dataset)[:Nmax]
+    z = get_z(dataset)[:max_n_points]
     z = torch.stack(z).to(device)
     z = torch.stack([combine_z(zs, combinations) for zs in z])
     ratios = eval_net(net, x0, z)

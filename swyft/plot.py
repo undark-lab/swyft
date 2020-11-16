@@ -12,8 +12,8 @@ def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
     return levels
 
 
-def cont2d(ax, re, x0, z0, i, j, cmap="gray_r", Nmax=1000):
-    z, p = re.posterior(x0, [i, j], Nmax=Nmax)
+def cont2d(ax, re, x0, z0, i, j, cmap="gray_r", max_n_points=1000):
+    z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
     z = z.numpy()
     levels = get_contour_levels(p)
 
@@ -31,10 +31,10 @@ def cont2d(ax, re, x0, z0, i, j, cmap="gray_r", Nmax=1000):
     ax.tricontour(z[:, 0], z[:, 1], -p, levels=-levels, colors="k", linestyles=["-"])
 
 
-def hist1d(ax, re, x0, z0, i, Nmax=1000):
+def hist1d(ax, re, x0, z0, i, max_n_points=1000):
     if z0 is not None:
         ax.axvline(z0[i], color="r", ls=":")
-    z, p = re.posterior(x0, i, Nmax=Nmax)
+    z, p = re.posterior(x0, i, max_n_points=max_n_points)
     ax.plot(z, p, "k")
 
 
@@ -47,7 +47,7 @@ def plot1d(
     labels=None,
     z0=None,
     cmap="Greys",
-    Nmax=1000,
+    max_n_points=1000,
 ):
     # TODO: Rewrite
     if params is None:
@@ -72,12 +72,12 @@ def plot1d(
         else:
             i, j = k % ncol, k // ncol
             ax = axes[j, i]
-        hist1d(ax, re1d, x0, z0, params[k], Nmax=Nmax)
+        hist1d(ax, re1d, x0, z0, params[k], max_n_points=max_n_points)
         ax.set_xlabel(labels[k])
 
 
 def corner(
-    re1d, re2d, x0, dim=10, params=None, labels=None, z0=None, cmap="Greys", Nmax=1000
+    re1d, re2d, x0, dim=10, params=None, labels=None, z0=None, cmap="Greys", max_n_points=1000
 ):
     # TODO: Rewrite
     if params is None:
@@ -125,10 +125,10 @@ def corner(
 
             # 2-dim plots
             if j < i:
-                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap=cmap, Nmax=Nmax)
+                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap=cmap, max_n_points=max_n_points)
 
             if j == i:
-                hist1d(ax, re1d, x0, z0, params[i], Nmax=Nmax)
+                hist1d(ax, re1d, x0, z0, params[i], max_n_points=max_n_points)
 
 
 if __name__ == "__main__":

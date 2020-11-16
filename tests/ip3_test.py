@@ -12,14 +12,21 @@ class TestCacheIO:
 
     @pytest.mark.parametrize("zdim, xshape", zip(zdims, xshapes))
     def test_memory_cache_save(self, zdim, xshape):
-        target = ['metadata', 'metadata/intensity', 'metadata/requires_simulation', 'samples', 'samples/x', 'samples/z']
-        
+        target = [
+            "metadata",
+            "metadata/intensity",
+            "metadata/requires_simulation",
+            "samples",
+            "samples/x",
+            "samples/z",
+        ]
+
         cache = MemoryCache(zdim, xshape)
         with tempfile.TemporaryDirectory() as td:
             cache.save(td)
-            items = glob.glob(td + '/**', recursive=True)
-        
-        without_prefix = [item[len(td) + 1:] for item in items]
+            items = glob.glob(td + "/**", recursive=True)
+
+        without_prefix = [item[len(td) + 1 :] for item in items]
         without_blanks = [item for item in without_prefix if item]
         assert all(item == truth for item, truth in zip(without_blanks, target))
 
@@ -44,6 +51,7 @@ class TestCacheIO:
             loaded = DirectoryCache.load(td)
             loaded_stats = (loaded.zdim, loaded.xshape, len(loaded))
             assert cache_states == loaded_stats
+
 
 # class TestCache:
 #     def test_cache(self, ):
