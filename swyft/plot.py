@@ -52,7 +52,7 @@ def plot1d(
     # TODO: Rewrite
     if params is None:
         params = range(re1d.zdim)
-    
+
     if ncol is None:
         ncol = re1d.zdim
 

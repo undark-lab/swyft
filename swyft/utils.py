@@ -28,17 +28,6 @@ def combine_z(z: Tensor, combinations: Optional[List]) -> Tensor:
     return z[..., combinations]
 
 
-# def combine_z(z, combinations):
-#     """Generate parameter combinations in last dimension.
-#     Requires: z.ndim == 1.
-#     output.shape == (n_posteriors, parameter shape)
-#     """
-#     if combinations is None:
-#         return z.unsqueeze(-1)
-#     else:
-#         return torch.stack([z[c] for c in combinations])
-
-
 def set_device(gpu: bool = False) -> torch.device:
     if gpu and torch.cuda.is_available():
         device = torch.device("cuda")

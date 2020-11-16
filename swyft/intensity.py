@@ -153,7 +153,9 @@ def construct_intervals(x, y):
         elif up < down:
             intervals.append([x[up], x[down]])
         elif up < 0 or down < 0:
-            raise ValueError("Constructing intervals with negative indexes is not allowed.")
+            raise ValueError(
+                "Constructing intervals with negative indexes is not allowed."
+            )
         else:
             raise ValueError("Cannot have an up and down crossing at the same index.")
     return intervals

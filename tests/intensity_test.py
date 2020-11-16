@@ -54,6 +54,7 @@ class TestConstructIntervals:
         [[0.18371837183718373, 0.8161816181618162]],
         [[0.4999499949995, 1.0]],
     ]
+
     @pytest.mark.parametrize("fn, target, xmax", zip(fns, targets, xmaxs))
     def test_construct_intervals(self, fn, target, xmax):
         x = np.linspace(0, xmax, 10000)
