@@ -131,7 +131,7 @@ def train(
         # print("Epoch:", epoch, end = "\r")
         network.train()
         train_loss = do_epoch(train_loader, True)
-        train_losses.append(train_loss / n_train_batches)
+        train_losses.append(train_loss / n_train_batches)  # TODO Error when n_train_batches is zero.
 
         network.eval()
         validation_loss = do_epoch(validation_loader, False)
