@@ -42,7 +42,7 @@ def plot1d(
     re1d,
     x0,
     dims=(15, 5),
-    ncol=6,
+    ncol=None,
     params=None,
     labels=None,
     z0=None,
@@ -52,6 +52,9 @@ def plot1d(
     # TODO: Rewrite
     if params is None:
         params = range(re1d.zdim)
+    
+    if ncol is None:
+        ncol = re1d.zdim
 
     K = len(params)
     nrow = (K - 1) // ncol + 1
@@ -77,7 +80,15 @@ def plot1d(
 
 
 def corner(
-    re1d, re2d, x0, dim=10, params=None, labels=None, z0=None, cmap="Greys", max_n_points=1000
+    re1d,
+    re2d,
+    x0,
+    dim=10,
+    params=None,
+    labels=None,
+    z0=None,
+    cmap="Greys",
+    max_n_points=1000,
 ):
     # TODO: Rewrite
     if params is None:
@@ -125,7 +136,16 @@ def corner(
 
             # 2-dim plots
             if j < i:
-                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap=cmap, max_n_points=max_n_points)
+                cont2d(
+                    ax,
+                    re2d,
+                    x0,
+                    z0,
+                    params[j],
+                    params[i],
+                    cmap=cmap,
+                    max_n_points=max_n_points,
+                )
 
             if j == i:
                 hist1d(ax, re1d, x0, z0, params[i], max_n_points=max_n_points)

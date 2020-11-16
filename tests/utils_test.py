@@ -27,8 +27,8 @@ class TestArrayToTensor:
     ]
 
     @pytest.mark.parametrize(
-        "shape, dtype", 
-        product(shapes, np_bool_types + np_int_types + np_float_types + [None])
+        "shape, dtype",
+        product(shapes, np_bool_types + np_int_types + np_float_types + [None]),
     )
     def test_shape(self, shape, dtype):
         array = np.empty(shape, dtype)
@@ -36,8 +36,14 @@ class TestArrayToTensor:
         assert tensor.shape == array.shape
 
     @pytest.mark.parametrize(
-        "shape, dtypes", 
-        product(shapes, zip(np_int_types + np_int_types, torch_int_types + [None] * len(np_int_types)))
+        "shape, dtypes",
+        product(
+            shapes,
+            zip(
+                np_int_types + np_int_types,
+                torch_int_types + [None] * len(np_int_types),
+            ),
+        ),
     )
     def test_np_to_tensor_int(self, shape, dtypes):
         np_dtype, torch_dtype = dtypes
@@ -48,18 +54,15 @@ class TestArrayToTensor:
         else:
             assert tensor.dtype == torch_dtype
 
-    @pytest.mark.parametrize(
-        "shape, dtype", 
-        product(shapes, np_bool_types)
-    )
+    @pytest.mark.parametrize("shape, dtype", product(shapes, np_bool_types))
     def test_np_to_tensor_bool(self, shape, dtype):
         array = np.empty(shape, dtype)
         tensor = array_to_tensor(array)
         assert tensor.dtype == torch.bool
 
     @pytest.mark.parametrize(
-        "shape, np_dtype, torch_dtype", 
-        product(shapes, np_float_types, torch_float_types + [None])
+        "shape, np_dtype, torch_dtype",
+        product(shapes, np_float_types, torch_float_types + [None]),
     )
     def test_np_to_tensor_float(self, shape, np_dtype, torch_dtype):
         array = np.empty(shape, np_dtype)

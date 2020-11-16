@@ -40,7 +40,9 @@ class RatioEstimator:
         """
         self.x0 = array_to_tensor(x0, device=device)
         self.points = points
-        self.combinations = combinations if combinations is not None else self._default_combinations()
+        self.combinations = (
+            combinations if combinations is not None else self._default_combinations()
+        )
         self.head = head
         self.prev_re = previous_ratio_estimator
         self.device = device
@@ -56,8 +58,9 @@ class RatioEstimator:
     def xshape(self):
         assert self.points.xshape == self.x0.shape
         return self.points.xshape
-    
+
     def _default_combinations(self):
+        # TODO make it work with just a regular list
         return [[i] for i in range(self.zdim)]
 
     def init_net(self, statistics=None, recycle_net: bool = False):
@@ -141,17 +144,22 @@ class RatioEstimator:
             pass
         else:
             z, ratios = get_ratios(
-                array_to_tensor(x0, self.device),
+                array_to_tensor(x0, device=self.device),
                 self.net,
                 self.points,
                 device=self.device,
                 combinations=self.combinations,
                 max_n_points=max_n_points,
             )
-            self.ratio_cache[binary_x0] = {'z': z, 'ratios': ratios}
+            self.ratio_cache[binary_x0] = {"z": z, "ratios": ratios}
         return None
 
-    def posterior(self, x0: Array, combination_indices: Union[int, Sequence[int]], max_n_points: int = 1000):
+    def posterior(
+        self,
+        x0: Array,
+        combination_indices: Union[int, Sequence[int]],
+        max_n_points: int = 1000,
+    ):
         """Retrieve estimated marginal posterior.
 
         Args:
@@ -168,8 +176,8 @@ class RatioEstimator:
             combination_indices = [combination_indices]
 
         j = self.combinations.index(combination_indices)
-        z = self.ratio_cache[x0.tobytes()]['z'][:, j]
-        ratios = self.ratio_cache[x0.tobytes()]['ratios'][:, j]
+        z = self.ratio_cache[x0.tobytes()]["z"][:, j]
+        ratios = self.ratio_cache[x0.tobytes()]["ratios"][:, j]
 
         # 1-dim case
         if len(combination_indices) == 1:

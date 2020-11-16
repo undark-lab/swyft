@@ -6,6 +6,7 @@ import numpy as np
 
 from .types import Shape, Union, Sequence, Tensor
 from .eval import eval_net
+from .utils import array_to_tensor
 
 
 class Intensity:
@@ -86,10 +87,9 @@ def get_constrained_intensity(
         factor_mask = get_unit_factor_mask(zdim)
 
     # TODO make this into something which does not depend on ratio estimator
-    # TODO apply the right functions so this uses array_to_tensor, etc.
 
-    z = torch.from_numpy(factor_mask.sample(samples)).float().unsqueeze(-1).to(device)
-    x0 = x0.to(device)
+    z = array_to_tensor(factor_mask.sample(samples), device=device).unsqueeze(-1)
+    x0 = array_to_tensor(x0, device=device)
     ratios = eval_net(net, x0, z)
     z = z.cpu().numpy()[:, :, 0]
     ratios = ratios.cpu().numpy()
@@ -116,6 +116,8 @@ def construct_intervals(x, y):
     and downcrossing means y crosses from above zero to below zero in that region.
     """
     assert x.shape == y.shape
+    max_index = len(x) - 1
+
     indices = np.argsort(x)
     x = x[indices]
     y = y[indices]
@@ -132,7 +134,7 @@ def construct_intervals(x, y):
     if len(upcrossings) - len(downcrossings) == 1:
         # One more upcrossing than downcrossing
         # --> Treat right end as downcrossing
-        downcrossings = np.append(downcrossings, -1)
+        downcrossings = np.append(downcrossings, max_index)
     elif len(upcrossings) - len(downcrossings) == -1:
         # One more downcrossing than upcrossing
         # --> Treat left end as upcrossing
@@ -150,6 +152,8 @@ def construct_intervals(x, y):
             intervals.append([x[down], x[up]])
         elif up < down:
             intervals.append([x[up], x[down]])
+        elif up < 0 or down < 0:
+            raise ValueError("Constructing intervals with negative indexes is not allowed.")
         else:
             raise ValueError("Cannot have an up and down crossing at the same index.")
     return intervals
@@ -243,7 +247,6 @@ def get_factor_mask_from_intervals(intervals):
     if intervals.ndim == 2:
         return FactorMask([Mask1d(intervals)])
     elif intervals.ndim == 3:
-        print(intervals)
         return FactorMask([Mask1d(set_of_intervals) for set_of_intervals in intervals])
     else:
         raise ValueError(

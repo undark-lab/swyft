@@ -133,7 +133,7 @@ class Cache(ABC):
         else:
             return np.array([self.u[i](zlist) for i in range(len(self.u))]).max(axis=0)
 
-    def _grow(self, p):
+    def grow(self, p):
         """Grow number of samples in cache."""
         # Proposed new samples z from p
         z_prop = p.sample()
@@ -165,7 +165,7 @@ class Cache(ABC):
         """
         self._update()
 
-        self._grow(p)
+        self.grow(p)
 
         accepted = []
         zlist = self.z[:]

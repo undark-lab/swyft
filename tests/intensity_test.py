@@ -36,12 +36,13 @@ class TestFactorMask:
 
 
 class TestConstructIntervals:
-    xmaxs = [4 * np.pi, 4 * np.pi, 1.0, 1.0]
+    xmaxs = [4 * np.pi, 4 * np.pi, 1.0, 1.0, 1.0]
     fns = [
         np.sin,
         np.cos,
         lambda x: (x - 0.5) ** 2 - 0.1,
         lambda x: -((x - 0.5) ** 2) + 0.1,
+        lambda x: x - 0.5,
     ]
     targets = [
         [[0.0, 3.140650081536511], [6.282556925810732, 9.424463770084952]],
@@ -51,8 +52,8 @@ class TestConstructIntervals:
         ],
         [[0.18371837183718373, 0.8161816181618162]],
         [[0.18371837183718373, 0.8161816181618162]],
+        [[0.4999499949995, 1.0]],
     ]
-
     @pytest.mark.parametrize("fn, target, xmax", zip(fns, targets, xmaxs))
     def test_construct_intervals(self, fn, target, xmax):
         x = np.linspace(0, xmax, 10000)
