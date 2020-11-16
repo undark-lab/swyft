@@ -1,5 +1,6 @@
 # pylint: disable=no-member, not-callable
 from copy import deepcopy
+from functools import cached_property
 
 import numpy as np
 from scipy.integrate import trapz
@@ -7,10 +8,11 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
-from .ip3 import DataContainer, construct_intervals, Mask1d, FactorMask, Intensity
+from .cache import Cache, DataContainer
 from .train import get_norms, trainloop
 from .network import Network
 from .eval import get_ratios, eval_net
+from .intensity import construct_intervals, Mask1d, FactorMask, Intensity
 
 
 class RatioEstimation:
@@ -167,89 +169,171 @@ class RatioEstimation:
         torch.save(self.net.state_dict(), PATH)
 
 
-class TrainData:
+class Points(torch.utils.data.Dataset):
+    """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
+    Points implements this via a list of indices corresponding to data contained in a cache which is provided at initialization.
+
+    Args:  
+        cache (Cache): iP3 cache for zarr storage
+        intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
+        noisehook (function): (optional) maps from (x, z) to x with noise
     """
-    `TrainData` on contrained priors for Nested Ratio Estimation.
+    def __init__(self, cache: Cache, intensity, noisehook=None):
+        super().__init__()
+        if cache.requires_sim():
+            raise RuntimeError("The cache has parameters without a corresponding observation. Try running the simulator.")
 
-    Args:
-        x0 (array): Observational data.
-        zdim (int): Number of parameters.
-        head (class): Head network class.
-        noisehook (function): Function return noised data.
-        device (str): Device type.
-    """
-
-    def __init__(
-        self,
-        x0,
-        zdim,
-        noisehook=None,
-        cache=None,
-        parent=None,
-        nsamples=3000,
-        threshold=1e-7,
-    ):
-        self.x0 = torch.tensor(x0).float()
-        self.zdim = zdim
-
-        if cache == None:
-            raise ValueError("Need cache!")
-        self.ds = cache
-
-        self.parent = parent
-
-        self.intensity = None
-        self.train_indices = None
-
-        self.noisehook = noisehook
-
-        self._init_train_data(nsamples=nsamples, threshold=threshold)
-
-    def get_dataset(self):
-        """Retrieve training dataset from cache and SWYFT object train history."""
-        indices = self.train_indices
-        dataset = DataContainer(self.ds, indices, self.noisehook)
-        return dataset
-
-    def _init_train_data(self, nsamples=3000, threshold=1e-7):
-        """Advance SWYFT internal training data history on constrained prior."""
-
-        if self.parent is None:
-            # Generate initial intensity over hypercube
-            mask1d = Mask1d([[0.0, 1.0]])
-            masks_1d = [mask1d] * self.zdim
-        else:
-            # Generate target intensity based on previous round
-            net = self.parent.net
-            intensity = self.parent.traindata.intensity
-            intervals_list = self._get_intervals(net, intensity, threshold=threshold)
-            masks_1d = [Mask1d(tmp) for tmp in intervals_list]
-
-        factormask = FactorMask(masks_1d)
-        print("Constrained posterior area:", factormask.area())
-        intensity = Intensity(nsamples, factormask)
-        indices = self.ds.sample(intensity)
-
-        # Append new training samples to train history, including intensity function
+        self.cache = cache
         self.intensity = intensity
-        self.train_indices = indices
+        self.noisehook = noisehook
+        self._indices = None
 
-    def _get_intervals(self, net, intensity, N=10000, threshold=1e-7):
-        """Generate intervals from previous posteriors."""
-        z = (
-            torch.tensor(intensity.sample(N=N))
-            .float()
-            .unsqueeze(-1)
-            .to(self.parent.device)
-        )
-        ratios = eval_net(net, self.x0.to(self.parent.device), z)
-        z = z.cpu().numpy()[:, :, 0]
-        ratios = ratios.cpu().numpy()
-        intervals_list = []
-        for i in range(self.zdim):
-            ratios_max = ratios[:, i].max()
-            intervals = construct_intervals(
-                z[:, i], ratios[:, i] - ratios_max - np.log(threshold)
-            )
-            intervals_list.append(intervals)
-        return intervals_list
+    def __len__(self):
+        assert len(self.indices) <= len(self.cache), "You gave more indices than there are parameter samples in the cache."
+        return len(self.indices)
+    
+    def __getitem__(self, idx):
+        i = self.indices[idx]
+        x = self.cache.x[i]
+        z = self.cache.z[i]
+
+        if self.noisemodel is not None:
+            x = self.noisemodel(x, z)
+
+        x = torch.from_numpy(x).float()
+        z = torch.from_numpy(z).float()
+        return {
+            'x': x, 
+            'z': z,
+        }
+
+    @cached_property
+    def indices(self):
+        if self._indices is None:
+            self._indices = self.cache.sample(self.intensity)
+        return self._indices
+    
+    @classmethod
+    def load(cls, path):
+        raise NotImplementedError()
+
+
+# class DataContainer(torch.utils.data.Dataset):
+#     """Simple data container class.
+
+#     Note: The noisemodel allows scheduled noise level increase during training.
+#     """
+#     def __init__(self, cache, indices, noisemodel=None):
+#         super().__init__()
+#         if cache.requires_sim():
+#             raise RuntimeError("The cache has parameters without a corresponding observation. Try running the simulator.")
+#         assert len(indices) <= len(cache), "You gave more indices than there are parameter samples in the cache."
+
+#         self.cache = cache
+#         self.indices = indices
+#         self.noisemodel = noisemodel
+
+#     def __len__(self):
+#         return len(self.indices)
+
+#     def __getitem__(self, idx):
+#         i = self.indices[idx]
+#         x = self.cache.x[i]
+#         z = self.cache.z[i]
+
+#         if self.noisemodel is not None:
+#             x = self.noisemodel(x, z)
+
+#         x = torch.from_numpy(x).float()
+#         z = torch.from_numpy(z).float()
+
+#         xz = dict(x=x, z=z)
+#         return xz
+
+
+# class TrainData:
+#     """
+#     `TrainData` on contrained priors for Nested Ratio Estimation.
+
+#     Args:
+#         x0 (array): Observational data.
+#         zdim (int): Number of parameters.
+#         head (class): Head network class.
+#         noisehook (function): Function return noised data.
+#         device (str): Device type.
+#     """
+
+#     def __init__(
+#         self,
+#         x0,
+#         zdim,
+#         noisehook=None,
+#         cache=None,
+#         parent=None,
+#         nsamples=3000,
+#         threshold=1e-7,
+#     ):
+#         self.x0 = torch.tensor(x0).float()
+#         self.zdim = zdim
+
+#         if cache == None:
+#             raise ValueError("Need cache!")
+#         self.ds = cache
+
+#         self.parent = parent
+
+#         self.intensity = None
+#         self.train_indices = None
+
+#         self.noisehook = noisehook
+
+#         self._init_train_data(nsamples=nsamples, threshold=threshold)
+
+#     def get_dataset(self):
+#         """Retrieve training dataset from cache and SWYFT object train history."""
+#         indices = self.train_indices
+#         dataset = DataContainer(self.ds, indices, self.noisehook)
+#         return dataset
+
+#     def _init_train_data(self, nsamples=3000, threshold=1e-7):
+#         """Advance SWYFT internal training data history on constrained prior."""
+
+#         if self.parent is None:
+#             # Generate initial intensity over hypercube
+#             mask1d = Mask1d([[0.0, 1.0]])
+#             masks_1d = [mask1d] * self.zdim
+#         else:
+#             # Generate target intensity based on previous round
+#             net = self.parent.net
+#             intensity = self.parent.traindata.intensity
+#             intervals_list = self._get_intervals(net, intensity, threshold=threshold)
+#             masks_1d = [Mask1d(tmp) for tmp in intervals_list]
+
+#         factormask = FactorMask(masks_1d)
+#         print("Constrained posterior area:", factormask.area())
+#         intensity = Intensity(nsamples, factormask)
+#         indices = self.ds.sample(intensity)
+
+#         # Append new training samples to train history, including intensity function
+#         self.intensity = intensity
+#         self.train_indices = indices
+
+#     def _get_intervals(self, net, intensity, N=10000, threshold=1e-7):
+#         """Generate intervals from previous posteriors."""
+#         z = (
+#             torch.tensor(intensity.sample(n=N))
+#             .float()
+#             .unsqueeze(-1)
+#             .to(self.parent.device)
+#         )
+#         ratios = eval_net(net, self.x0.to(self.parent.device), z)
+#         z = z.cpu().numpy()[:, :, 0]
+#         ratios = ratios.cpu().numpy()
+#         intervals_list = []
+#         for i in range(self.zdim):
+#             ratios_max = ratios[:, i].max()
+#             intervals = construct_intervals(
+#                 z[:, i], ratios[:, i] - ratios_max - np.log(threshold)
+#             )
+#             intervals_list.append(intervals)
+#         return intervals_list
