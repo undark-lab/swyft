@@ -1,0 +1,111 @@
+\addbibresource{bibliography.bib}
+\section{Introduction}
+
+Parametric stochastic simulators are ubiquitous in the physical sciences \cite{Banik_2018, Bartels_2016, Rodr_guez_Puebla_2016}.  However, performing parameter inference based on simulator runs using Markov chain Monte Carlo is inconvenient or even impossible if the model parameter space is large or the likelihood function is intractable.  This problem is addressed by so-called likelihood-free inference \cite{sisson2018handbook} or simulation-based inference \cite{Cranmer2020} techniques. Deep learning based likelihood-free inference algorithms were organized into a taxonomy in Ref.~\cite{Durkan2020}, where methods that estimated likelihood ratios in a series of rounds were denoted Sequential Ratio Estimation (SRE)~\cite{Hermans2019}. Our presented method is closely related.
+
+We propose \emph{Nested Ratio Estimation} (NRE), which approximates the likelihood-to-evidence ratio in a sequence of rounds. Loosely inspired by the contour sorting method of nested sampling \cite{Skilling2006, Feroz2008, Handley2015}, the scheme alternates between sampling from a constrained prior and estimating likelihood-to-evidence ratios. It allows for efficient estimation of any marginal posteriors of interest. Furthermore, we propose an algorithm that we call \emph{iP3 sample caching}, which facilitates simulator efficiency by automatizing the reuse of previous simulator runs through resampling of cached simulations.
+
+The primary use case for these algorithms is the calculation of arbitrary, low-dimensional marginal posteriors, typically in one or two dimensions. In physics and astronomy, such marginals serve as the basis for scientific conclusions by constraining individual model parameters within uncertainty bounds. 
+We implement a multi-target training regime where all marginal posteriors of interest can be learned simultaneously.  We find that learning is simplified when one calculates each marginal distribution directly rather than computing the full joint posterior and marginalizing numerically.  
+Furthermore, the method facilitates effortless marginalization over arbitrary numbers of nuisance parameters, increasing its utility in high-dimensional parameter regimes--even to simulators with a tractable, yet high-dimensional, likelihood \cite{lensing}.
+
+\section{Nested Ratio Estimation (NRE).} 
+% 
+We operate in the context of simulation-based inference where our simulator $\bg$ is a nonlinear function mapping a vector of parameters $\btheta= (\theta_{1}, \dots, \theta_{d}) \in \mathbb{R}^{d}$ and a stochastic latent state $\bz$ to an observation $\bx = \bg(\btheta, \bz)$. The likelihood function is therefore $p(\bx \vert \btheta) = \int \delta(\bx - \bg(\btheta, \bz)) \, p(\bz \vert \btheta) \, d\bz$, with $\delta(\cdot)$ denoting the Dirac delta.  Consider a factorizable prior $p(\btheta) = p(\theta_{1}) \cdots p(\theta_{d})$ over the parameters, the joint posterior is given via Bayes' rule as $p(\btheta|\bx) = p(\bx|\btheta)p(\btheta)/p(\bx) $, where $p(\bx)$ is the evidence.
+
+Our goal is to compute the marginal posterior, $p(\bvartheta \vert \bx)$, where $\bvartheta$ are the parameters of interest.  We will denote all other parameters by $\bfeta$, such that $\btheta = (\bvartheta, \bfeta)$. 
+The marginal posterior is obtained from the joint distribution $p(\bvartheta, \bfeta|\bx) \equiv p(\btheta|\bx)$ by integrating over all components of $\bfeta$,
+\begin{equation}
+\label{eqn:post}
+p(\bvartheta \vert \bx)  \equiv \int p(\bvartheta, \bfeta | \bx) d\bfeta
+= \int \frac{p(\bx | \bvartheta, \bfeta)}{p(\bx)}  
+p(\btheta) 
+%\prod_{j \notin \texttt{idx}} d\theta_{j}
+d\bfeta
+= \frac{p(\bx|\bvartheta)}{p(\bx)}p(\bvartheta)\;,
+\end{equation}
+where we used Bayes' rule and defined the marginal likelihood $p(\bx|\bvartheta)$ in the last step.
+
+Just like in SRE, we focus on a specific observation of interest, $\bx_0$.  
+Only parameter values $\btheta$ 
+% todo what about this instead
+that could have plausibly generated observation $\bx_0$
+% with a non-negligible likelihood
+will significantly contribute to the integrals in Eq.~\eqref{eqn:post}. For implausible values the likelihood $p(\bx_0|\btheta)$ will be negligible.  We denote priors that are suitably constrained to plausible parameter values by $\tp(\theta_1, \dots, \theta_d)$. Similarly, $\tilde{\square}$ indicates quantities $\square$ that are calculated using the constrained prior. Therefore, using a judiciously chosen constrained prior, accurately approximates the marginal posterior in place of our true prior beliefs,
+\begin{equation}
+p(\bvartheta | \bx_0) =  
+\frac{p(\bx_0|\bvartheta)}{p(\bx_0)} p(\bvartheta) \simeq
+\frac{\tp(\bx_0|\bvartheta)}{\tp(\bx_0)} \tp(\bvartheta)\;.
+\end{equation}
+The increased probability that constrained priors assign to the plausible parameter region cancels when dividing by the constrained evidence $\tilde p(\bx)$. We define the marginal likelihood-to-evidence ratio
+\begin{equation}
+	\label{eqn:likelihood_ratio}
+	\tr(\bx, \bvartheta) 
+	\equiv \frac{\tp(\bx \vert \bvartheta)}{\tp(\bx)} 
+	= \frac{\tp(\bx, \bvartheta)}{\tp(\bx) \tp(\bvartheta)} 
+	= \frac{\tp(\bvartheta \vert\bx )}{\tp(\bvartheta)}\;,
+\end{equation}
+which is sufficient to evaluate the marginal posterior in Eq.~\eqref{eqn:post}, and which we will now estimate.
+%
+Under the assumption of equal class population, it is known \cite{Durkan2020, Cranmer2015} that one can recover density ratios using binary classification to distinguish between samples from two distributions.  Our binary classification problem is to distinguish positive samples,
+$(\bx, \bvartheta) \sim \tp(\bx, \bvartheta) = p(\bx \vert \bvartheta) \tp(\bvartheta)$, drawn jointly, and negative samples, $(\bx, \bvartheta) \sim \tp(\bx) \tp(\bvartheta)$, drawn marginally. 
+%
+The binary classifier $\sigma(f_{\phi}(\bx, \bvartheta))$ performs optimally when $f_{\phi}(\bx, \bvartheta) = \log \tr(\bx, \bvartheta)$, where $\sigma(\cdot)$ is the sigmoid function and $f_{\phi}$ is a neural network parameterized by $\phi$.  The associated binary cross-entropy loss function used to train the ratio $\tr(\bvartheta, \bx_0)$ via stochastic gradient descent is given by 
+%
+\begin{equation}
+    \ell = -\int \left[ \tp(\bx|\bvartheta)\tp(\bvartheta) \ln \sigma(f_\phi(\bx, \bvartheta)) + \tp(\bx)\tp(\bvartheta) \ln \sigma(-f_\phi(\bx,\bvartheta)) \right] d\bx\, d\bvartheta\;.
+\end{equation}
+
+We propose to iteratively improve marginal posterior estimates in $R$ rounds by employing posterior estimates from previous rounds to define constrained priors.
+In each round $r$, we estimate \emph{all} 1-dim marginal posteriors, using $d$ instances of the above marginal likelihood-to-evidence ratio estimation in parallel by setting $\bvartheta = (\theta_i)$ for $i=1, \dots, d$. 
+To this end, we utilize the factorized constrained prior, $\tp_r(\theta) = \tp_r(\theta_1)\cdots\tp_r(\theta_d)$, which is defined recursively by a cutoff criterion,
+%
+% todo make sure this is consistent with likelihood ratios defined above
+\begin{equation}
+    \tp_{r}(\theta_{i}) 
+    \propto 
+    p(\theta_{i}) \Theta_{H} \left[ \frac{\tr_{r-1}(\theta_{i}, \bx)}{\max_{\theta_{i}} \tr_{r-1}(\theta_{i}, \bx)} - \epsilon \right],
+    \label{eqn:it}
+\end{equation}
+%
+where $\Theta_{H}$ denotes the Heaviside step function and $\epsilon$ denotes the minimum likelihood-ratio which passes through the threshold. We use $\tp_1(\btheta) = p(\btheta)$ as an initial prior in the iterative scheme.
+
+In every round, each 1-dim posterior approximates a marginalization of the same underlying constrained posterior, allowing us to effectively reuse training data and train efficiently in a multi-target regime. The inference network is therefore divided into a featurizer $\mathbf{F}(\bx)$ with shared parameters and a set of $d$ independent Multi-layer Perceptons $\{\textrm{MLP}_i(\cdot, \cdot)\}_{i=1}^{d}$ which estimate individual 1-dim marginal posteriors and do not share parameters, such that 
+% $\log r_i(\bx, \theta_i) = \textrm{MLP}_i(\mathbf{F}(\bx), \theta_i)$.
+$f_{\phi}(\bx, \theta_i) = \textrm{MLP}_i(\mathbf{F}(\bx), \theta_i)$.
+
+This technique is valid as long as the excluded prior regions do not significantly affect the integrals in Eq.~\eqref{eqn:post}.  For uncorrelated parameters, a sufficient criterion is that the impact on the marginal posteriors is small, which we guarantee through the iteration criterion Eq.~\eqref{eqn:it}.  In the case of a very large number of strongly correlated parameters the algorithm can inadvertently cut away tails of the marginal posteriors. Decreasing $\epsilon$ mitigates this effect. Discussion is left for future study \cite{swyft_future}.
+
+With this design, the posteriors from the final round can be used to approximate the true 1-dim marginal posteriors, $\tp_{R}(\theta_i \vert \bx_{0}) \approx p(\theta_i\vert \bx_{0})$, while previous rounds were used to iteratively focus on relevant parts of the parameter space. The key result and value of NRE lies in the utility of our constrained prior from round $R$. The final constrainted prior, along with previously generated and cached samples, allows for estimation of \emph{any} higher dimensional marginal posterior $\tp_R(\bvartheta|\bx_0) \approx p(\bvartheta|\bx_0)$ of interest by doing likelihood-to-evidence ratio estimation, often without further simulation. 
+
+\section{Inhomogeneous Poisson Point Process (iP3) Sample Caching.}
+%
+%We need $(\bx, \btheta)$ pairs to do round $r$ of NRE. 
+Simulating $(\bx, \btheta)\sim p(\bx|\btheta)p(\btheta)$ can be extremely expensive. We develop a scheme to systematically reuse appropriate subsets of previous simulator runs. Our method samples $N\sim \pois(\hat N)$ parameter vectors from an arbitrary distribution $p(\btheta)$, where $\hat N$ is the expected number of samples. 
+%
+Taking $N$ samples from $p(\btheta)$ is equivalent to drawing a single sample
+$\Theta \equiv \{\btheta^{(n)}\}_{n=1}^{N}$
+from an inhomogenous Poisson point process (PPP) with intensity function $\lambda_{r}(\btheta) = \hat{N} p(\btheta)$. In this context, $\Theta$ is known as a set of \emph{points}. This formulation provides convenient mathematical properties \cite{ppp}, at the low price of introducing variance in the number of samples drawn. 
+% The precise number of samples doesn't really matter as long as $N$ is big enough.
+The precise number of samples doesn't matter as long as $N \approx \hat{N}$, which is true in our regime of order $\geq 1000$.
+% The effect is negligible as we sample in the regime $\hat{N} \gg \textrm{Var}(N)$. THIS ISN'T TRUE since variance of poisson is equal to the mean.
+%
+% The fact that the total number of samples is Poisson distributed allows us to interpret this as drawing a single sample $\Theta \equiv \{\btheta\}_i$ from an inhomogenous Poisson point process with intensity function $\lambda_{r}(\btheta) = \hat{N} p(\btheta)$.  This will enable us to exploit convenient mathematical properties of the Poisson point process.  Since usually the number of requested training samples will be much larger than $1000$, differences between $\hat N$ and $N$ will be of little practical consequence.
+
+We will need two properties of PPPs.  \emph{Superposition:} Given two independent PPPs with intensity functions $\lambda_{1}(\btheta)$ and  $\lambda_{2}(\btheta)$, the sum yields another PPP with intensity function $\lambda(\btheta) = \lambda_{1}(\btheta) + \lambda_{2}(\btheta)$. 
+The union of two sets of points  $\Theta = \Theta_1 \cup \Theta_2$ from the individual PPPs is equivalent to a single set of points from the combined PPP.
+\emph{Thinning:} Consider a PPP with intensity function $\lambda(\btheta)$, and an arbitrary function $q(\btheta): \mathbb{R}^{d} \to [0, 1]$. 
+If we are interested in drawing from a PPP with intensity function $\lambda_{q}(\btheta) = q(\btheta) \lambda(\btheta)$, we can achieve this by drawing a set of points $\Theta$ distributed like $\lambda(\btheta)$ and then rejecting individual points $\btheta^{(n)}$ with probability $1 - q(\btheta^{(n)})$.
+
+The parameter cache is defined by a set of points $\Theta_{sc}$ drawn from a PPP with intensity function $\lambda_{sc}(\btheta)$.  For every point $\btheta\in\Theta_{sc}$, a corresponding observation $\bx$ is stored in an observation cache $\mathcal{X}_{sc}$.
+The iP3 cache sampling algorithm that is responsible for maintaining the caches and sampling from a PPP with target intensity function $\lambda_t(\btheta) = \hat{N} p(\btheta)$ is written out in the supplementary material.
+It is summarized in two steps: First, consider all points $\btheta \in \Theta_{sc}$ from the cache and accept them with probability 
+$\min(1, \lambda_t(\btheta)/\lambda_{sc}(\btheta))$.
+The thinning operation yields a sample $\Theta_1$ from a PPP with intensity function 
+$\lambda_1(\btheta) = \min(\lambda_t(\btheta), \lambda_{sc}(\btheta))$. Second, draw a new set of points $\Theta_p$ from $\lambda_t(\btheta)$, and accept each $\btheta\in\Theta_p$ 
+with probability $\max(0, 1-\lambda_{sc}(\btheta)/\lambda_t(\btheta))$.  This yields a sample $\Theta_2$ from a PPP with intensity function $\lambda_2(\btheta) = \max(0, \lambda_t(\btheta) - \lambda_{sc}(\btheta))$.  Thanks to superposition, the union $\Theta_1 \cup \Theta_2 = \Theta_t$ yields a sample from the PPP with intensity function $\lambda_t(\btheta)$--the sample we were looking for. We only need to run simulations on points from $\Theta_1$. Points in $\Theta_2$ already have corresponding observations in $\mathcal{X}_{sc}$ which we can reuse. Finally, the new parameters are appended to the set of points in the parameter cache, $\Theta_{sc} \to \Theta_{sc} \cup \Theta_2$. Similar for $\mathcal{X}_{sc}$. On the basis of the superposition principle, the intensity function of the $\Theta_{sc}$ cache is updated
+$\lambda_{sc}(\btheta) \to \max(\lambda_{sc}(\btheta), \lambda_t(\btheta))$.
+
+Storing and updating the parameter cache's intensity function $\lambda_{sc}(\btheta)$ can pose challenges when it is complex and high-dimensional. Our NRE implementation overcomes these challenges by learning marginal 1-dim posteriors, guaranteeing that the relevant target intensities always factorize, $\lambda_t(\btheta) = \lambda_t(\theta_1)\cdots \lambda_t(\theta_d)$. Storage of and calculation with factorizable functions simplifies matters.
+
+\printbibliography
