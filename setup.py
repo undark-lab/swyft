@@ -9,6 +9,7 @@ setup(
         'tqdm',
         'torch',
         'sklearn',
+        'dask[complete]',
     ],
     zip_safe=False,
 )
