@@ -255,10 +255,10 @@ class DataStore:
         self.m[i] = False
 
     def simulate(self, simulator):
-        """Run simulator sequentially for missing points.
+        """Run simulator for missing points.
 
         Args:
-            simulator (callable): Simulator
+            simulator (Simulator object): initialized simulator object
         """
         self._update()
 
@@ -266,10 +266,9 @@ class DataStore:
         if len(idx) == 0:
             print("No simulations required.")
             return
-        for i in tqdm(idx, desc='Simulate'):
-            z = self.z[i]
-            x = simulator(z)
-            self._add_sim(i, x) 
+        x = simulator.run(self.z.oindex[idx])
+        for i, x_i in zip(idx, x):
+            self._add_sim(i, x_i)
 
 
 ##########
