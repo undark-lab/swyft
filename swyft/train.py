@@ -23,7 +23,7 @@ def loss_fn(network, xz, combinations=None):
 
     Returns:
         Tensor: training loss.
-    """  # TODO does the loss function depend on which distribution the z was drawn from? it does in SBI for the SNPE versions
+    """ 
     assert xz["x"].size(0) == xz["z"].size(0), "Number of x and z must be equal."
     assert (
         xz["x"].size(0) % 2 == 0

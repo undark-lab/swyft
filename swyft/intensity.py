@@ -126,7 +126,7 @@ def construct_intervals(x, y):
     upcrossings = np.argwhere(m == 1.0)[:, 0]
     downcrossings = np.argwhere(m == -1.0)[:, 0]
 
-    # TODO a y which is entirely above zero will return the whole interval. This is bad.
+    # TODO a y which is entirely above or below zero will return the whole interval. This is bad.
     # No crossings --> return entire interval
     if len(upcrossings) == 0 and len(downcrossings) == 0:
         return [[x[0], x[-1]]]

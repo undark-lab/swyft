@@ -20,37 +20,48 @@ def combine(y, z):
 
 
 class OnlineNormalizationLayer(nn.Module):
-    def __init__(self, shape):
-        """Accumulate mean and variance online using a as-of-yet-undecided algorithm from [1].
+    def __init__(self, shape, stable: bool = False, epsilon: float = 1e-10):
+        """Accumulate mean and variance online using the "parallel algorithm" algorithm from [1].
 
         Args:
-            shape (tuple): shape of mean, variance, and std array.
+            shape (tuple): shape of mean, variance, and std array. do not include batch dimension!
+            stable (bool): (optional) compute using the stable version of the algorithm [1]
+            epsilon (float): (optional) added to the computation of the standard deviation for numerical stability.
 
         References:
-            [1] https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+            [1] https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
         """
-        self.register_buffer("n", torch.zeros(1, dtype=torch.long))
-        self.register_buffer("_mean", torch.zeros(shape, dtype=torch.float))
-        self.register_buffer("_var", torch.zeros(shape, dtype=torch.float))
-        # TODO this needs to have the option of using
+        super().__init__()
+        self.register_buffer("n", torch.tensor(0, dtype=torch.long))
+        self.register_buffer("_mean", torch.zeros(shape))
+        self.register_buffer("_M2", torch.zeros(shape))
+        self.register_buffer("epsilon", torch.tensor(epsilon))
+        self.shape = shape
+        self.stable = stable
+    
+    def _parallel_algorithm(self, x):
+        assert x.shape[1:] == self.shape
+        na = self.n.clone()
+        nb = x.shape[0]
+        nab = na + nb
 
-    def _update_one(self, x):
-        self.n += 1
-        mean = self._mean + (x - self._mean) / self.n
-        var = self._var + (x - self._mean) * (x - mean)
-        self._mean = mean
-        self._var = var
-
-    def _update_many(self, x):
-        for xx in x:
-            self._push_one(xx)
-
-    def forward(self, x):  # TODO
-        if self.training:
-            pass
+        xa = self._mean.clone()
+        xb = x.mean(dim=0)
+        delta = xb - xa
+        if self.stable:
+            xab = (na * xa + nb * xb) / nab
         else:
-            pass
-        raise NotImplementedError
+            xab = xa + delta * nb / nab
+        
+        m2a = self._M2.clone()
+        m2b = x.var(dim=(0,), unbiased=False) * nb  # do not use bessel's correction then multiply by total number of items in batch.
+        m2ab = m2a + m2b + delta ** 2 * na * nb / nab
+        return nab, xab, m2ab
+
+    def forward(self, x):
+        if self.training:
+            self.n, self._mean, self._M2 = self._parallel_algorithm(x)
+        return (x - self.mean) / self.std
 
     @property
     def mean(self):
@@ -59,13 +70,13 @@ class OnlineNormalizationLayer(nn.Module):
     @property
     def var(self):
         if self.n > 1:
-            return self._var / (self.n - 1)
+            return self._M2 / (self.n - 1)
         else:
-            return 0.0
+            return torch.zeros_like(self._M2)
 
     @property
     def std(self):
-        return torch.sqrt(self.var)
+        return torch.sqrt(self.var + self.epsilon)
 
 
 # From: https://github.com/pytorch/pytorch/issues/36591

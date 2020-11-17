@@ -15,7 +15,7 @@ from .network import Network
 from .eval import get_ratios, eval_net
 from .intensity import construct_intervals, Mask1d, FactorMask, Intensity
 from .types import Sequence, Tuple, Device, Dataset, Combinations, Array, Union
-from .utils import array_to_tensor, tobytes
+from .utils import array_to_tensor, tobytes, process_combinations
 
 
 class RatioEstimator:
@@ -27,6 +27,8 @@ class RatioEstimator:
         head: nn.Module = None,
         previous_ratio_estimator=None,
         device: Device = "cpu",
+        statistics=None, 
+        recycle_net: bool = False
     ):
         """RatioEstimator takes a real observation and simulated points from the iP3 sample cache and handles training and posterior calculation.
 
@@ -37,17 +39,17 @@ class RatioEstimator:
             head (nn.Module): (optional) initialized module which processes observations, head(x0) = y
             previous_ratio_estimator: (optional) ratio estimator from another round
             device: (optional) default is cpu
+            statistics (): mean and std for x and z
+            recycle_net (bool): set net with the previous ratio estimator's net
         """
         self.x0 = array_to_tensor(x0, device=device)
         self.points = points
-        self.combinations = (
-            combinations if combinations is not None else self._default_combinations()
-        )
+        self._combinations = combinations
         self.head = head
         self.prev_re = previous_ratio_estimator
         self.device = device
 
-        self.net = None
+        self.net = self._init_net(statistics, recycle_net)
         self.ratio_cache = {}
 
     @property
@@ -59,11 +61,14 @@ class RatioEstimator:
         assert self.points.xshape == self.x0.shape
         return self.points.xshape
 
-    def _default_combinations(self):
-        # TODO make it work with just a regular list
-        return [[i] for i in range(self.zdim)]
+    @cached_property
+    def combinations(self):
+        if self._combinations is None:
+            return [[i] for i in range(self.zdim)]
+        else:
+            return process_combinations(self._combinations)
 
-    def init_net(self, statistics=None, recycle_net: bool = False):
+    def _init_net(self, statistics, recycle_net: bool):
         """Options for custom network initialization.
 
         Args:
@@ -112,12 +117,6 @@ class RatioEstimator:
             early_stopping_patience (int): early stopping patience
             nworkers (int): number of Dataloader workers
         """
-        if self.net is None:
-            print("Initializing network...")
-            self.net = self.init_net()
-        else:
-            print("Using pre-initialized network...")
-
         trainloop(
             self.net,
             self.points,

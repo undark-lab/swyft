@@ -4,7 +4,7 @@ from warnings import warn
 import numpy as np
 import torch
 
-from .types import Optional, Device, Tensor, Array, List
+from .types import Optional, Device, Tensor, Array, List, Sequence, Combinations
 
 
 def comb2d(indices):
@@ -111,6 +111,24 @@ def tobytes(x: Array):
         return x.numpy().tobytes()
     else:
         raise TypeError(f"{type(x)} does not support tobytes.")
+
+
+def depth(seq: Sequence):
+    if seq and isinstance(seq, Sequence):
+        return 1 + max(depth(item) for item in seq) 
+    else:
+        return 0
+
+def process_combinations(comb: Combinations):
+    d = depth(comb)
+    if d == 0:
+        return [[comb]]
+    elif d == 1:
+        return [[i] for i in comb]
+    elif d == 2:
+        return comb
+    else:
+        raise ValueError(f"{comb} is not understood to be of type Combinations.")
 
 
 if __name__ == "__main__":
