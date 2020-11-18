@@ -1,10 +1,11 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
+from pathlib import Path
 
 import numpy as np
 import torch
 
-from .types import Optional, Device, Tensor, Array, List, Sequence, Combinations
+from .types import Optional, Device, Tensor, Array, List, Sequence, Combinations, PathType
 
 
 def comb2d(indices):
@@ -129,6 +130,14 @@ def process_combinations(comb: Combinations):
         return comb
     else:
         raise ValueError(f"{comb} is not understood to be of type Combinations.")
+
+
+def is_empty(directory: PathType):
+    directory = Path(directory)
+    if next(directory.iterdir(), None) is None:
+        return True
+    else:
+        return False
 
 
 if __name__ == "__main__":

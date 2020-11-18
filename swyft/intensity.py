@@ -1,10 +1,11 @@
 # pylint: disable=no-member, not-callable, undefined-variable
 from functools import cached_property
-import re
+from pathlib import Path
+import pickle
 
 import numpy as np
 
-from .types import Shape, Union, Sequence, Tensor
+from .types import Shape, Union, Sequence, Tensor, PathType
 from .eval import eval_net
 from .utils import array_to_tensor
 
@@ -48,6 +49,18 @@ class Intensity:
     @property
     def zdim(self):
         return self.factor_mask.dim
+    
+    def save(self, path: PathType):
+        path = Path(path)
+        with path.open('wb') as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(path: PathType):
+        path = Path(path)
+        with path.open('rb') as f:
+            obj = pickle.load(f)
+        return obj
 
 
 def get_unit_intensity(expected_n: int, dim: int):

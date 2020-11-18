@@ -1,5 +1,7 @@
 # pylint: disable=no-member
 import pytest
+from itertools import product
+import tempfile
 
 import torch
 import numpy as np
@@ -63,3 +65,24 @@ class TestConstructIntervals:
         intervals = np.asarray(intervals)
         target = np.asarray(target)
         assert np.allclose(target, intervals)
+
+
+class TestIntensityIO:
+    expected_ns = [0, 1, 100]
+    intervals = [
+        [[0.0, 3.140650081536511], [6.282556925810732, 9.424463770084952]],
+        [[0.18371837183718373, 0.8161816181618162]],
+    ]
+
+    @pytest.mark.parametrize("expected_n, intervals", product(expected_ns, intervals))
+    def test_intensity_save_load(self, expected_n, intervals):
+        factor_mask = get_factor_mask_from_intervals(intervals)
+        intensity = Intensity(expected_n, factor_mask)
+        with tempfile.NamedTemporaryFile() as tf:
+            intensity.save(tf.name)
+
+            loaded = Intensity.load(tf.name)
+
+        gather_to_check = lambda x: (x.expected_n, x.area, x.factor_mask.intervals)
+        objs = list(map(gather_to_check, [loaded, intensity]))
+        assert [np.isclose(i, j) for i, j in zip(objs[0], objs[1])]

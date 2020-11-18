@@ -12,10 +12,13 @@ from typing import (
     Union,
     cast,
 )
+from pathlib import Path
 from collections.abc import Collection
 
 import numpy as np
 import torch
+
+PathType = Union[str, Path]
 
 Device = Union[torch.device, str]
 Dataset = torch.utils.data.Dataset

@@ -1,7 +1,7 @@
 # pylint: disable=no-member, not-callable
 from abc import ABC, abstractmethod
 from functools import cached_property
-import re
+from pathlib import Path
 
 import torch
 
@@ -10,10 +10,20 @@ import zarr
 import numcodecs
 from tqdm import tqdm
 
-from .types import Shape, Union, Sequence
+from .utils import is_empty
+from .types import Shape, Union, Sequence, PathType
 
 
 class Cache(ABC):
+    filesystem = (
+        "metadata",
+        "metadata/intensity",
+        "metadata/requires_simulation",
+        "samples",
+        "samples/x",
+        "samples/z",
+    )
+
     @abstractmethod
     def __init__(
         self,
@@ -37,25 +47,25 @@ class Cache(ABC):
         elif len(self.root.keys()) == 0:
             print("Creating new cache.")
             self.x = self.root.zeros(
-                "samples/x",
-                shape=(0,) + xshape,
-                chunks=(1,) + xshape,
+                self.filesystem[4],  # samples/x
+                shape=(0, *xshape),
+                chunks=(1, *xshape),
                 dtype="f4",
             )
             self.z = self.root.zeros(
-                "samples/z",
-                shape=(0,) + (zdim,),
-                chunks=(10000,) + (zdim,),
+                self.filesystem[5],  # samples/z
+                shape=(0, zdim),
+                chunks=(10000, zdim),
                 dtype="f4",
             )
             self.m = self.root.zeros(
-                "metadata/requires_simulation",
+                self.filesystem[2],  # metadata/requires_simulation
                 shape=(0, 1),
-                chunks=(10000,) + (1,),
+                chunks=(10000, 1),
                 dtype="bool",
             )
             self.u = self.root.create(
-                "metadata/intensity",
+                self.filesystem[1],  # metadata/intensity
                 shape=(0,),
                 dtype=object,
                 object_codec=numcodecs.Pickle(),
@@ -217,23 +227,23 @@ class Cache(ABC):
 
 
 class DirectoryCache(Cache):
-    def __init__(self, zdim: int, xshape: Shape, path: str):
-        f"""Instantiate an iP3 cache stored in a directory.
+    def __init__(self, zdim: int, xshape: Shape, path: PathType):
+        """Instantiate an iP3 cache stored in a directory.
 
         Args:
-            {re.search('zdim.+', Cache.__init__.__doc__).group()}
-            {re.search('xshape.+', Cache.__init__.__doc__).group()}
-            path (str): path to storage directory
+            zdim (int): Number of z dimensions
+            xshape (tuple): Shape of x array
+            path: path to storage directory
         """
         self.store = zarr.DirectoryStore(path)
         super().__init__(zdim=zdim, xshape=xshape, store=self.store)
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: PathType):
         """Load existing DirectoryStore.
 
         Args:
-            path (str)
+            path
         """
         store = zarr.DirectoryStore(path)
         group = zarr.group(store=store)
@@ -244,11 +254,11 @@ class DirectoryCache(Cache):
 
 class MemoryCache(Cache):
     def __init__(self, zdim: int, xshape: Shape, store=None):
-        f"""Instantiate an iP3 cache stored in the memory.
+        """Instantiate an iP3 cache stored in the memory.
 
         Args:
-            {re.search('zdim.+', Cache.__init__.__doc__).group()}
-            {re.search('xshape.+', Cache.__init__.__doc__).group()}
+            zdim (int): Number of z dimensions
+            xshape (tuple): Shape of x array
             store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in loading.
         """
         if store is None:
@@ -257,21 +267,25 @@ class MemoryCache(Cache):
             self.store = store
         super().__init__(zdim=zdim, xshape=xshape, store=self.store)
 
-    def save(self, path: str):
-        """Copy the current state of the MemoryCache to a directory.
-
-        Args:
-            path (str)
-        """
-        store = zarr.DirectoryStore(path)
-        zarr.convenience.copy_store(source=self.store, dest=store)
+    def save(self, path: PathType):
+        """Copy the current state of the MemoryCache to a directory."""
+        path = Path(path)
+        if path.exists() and not path.is_dir():
+            raise NotADirectoryError(f"{path} should be a directory")
+        elif path.exists() and not is_empty(path):
+            raise FileExistsError(f"{path} is not empty")            
+        else:
+            path.mkdir(parents=True, exist_ok=True)
+            store = zarr.DirectoryStore(path)
+            zarr.convenience.copy_store(source=self.store, dest=store)
+            return None
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: PathType):
         """Copy existing DirectoryStore state into a MemoryCache object.
 
         Args:
-            path (str)
+            path
         """
         memory_store = zarr.MemoryStore()
         directory_store = zarr.DirectoryStore(path)
