@@ -25,15 +25,19 @@ class Simulator:
         """
         self.client = Client(cluster)
 
-    def run(self, input_parameters):
+    def run(self, input_parameters, npartitions=None):
         """
         Run the simulator on the input parameters
 
         Args:
             input_parameters (iterable): set of input parameters that need to
                                          be run by the simulator
+            npartitions (int): number of partitions in which the input
+                               parameters are divided for the parallelization
+                               (default is about 100)
         """
-        bag = db.from_sequence(input_parameters).map(self.simulator)
+        bag = db.from_sequence(input_parameters, npartitions=npartitions)
+        bag = bag.map(self.simulator)
         return bag.compute(scheduler=self.client or 'processes')
 
     @classmethod
