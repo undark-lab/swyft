@@ -240,11 +240,7 @@ class DirectoryCache(Cache):
 
     @classmethod
     def load(cls, path: PathType):
-        """Load existing DirectoryStore.
-
-        Args:
-            path
-        """
+        """Load existing DirectoryStore."""
         store = zarr.DirectoryStore(path)
         group = zarr.group(store=store)
         xshape = cls._extract_xshape_from_zarr_group(group)
@@ -273,7 +269,7 @@ class MemoryCache(Cache):
         if path.exists() and not path.is_dir():
             raise NotADirectoryError(f"{path} should be a directory")
         elif path.exists() and not is_empty(path):
-            raise FileExistsError(f"{path} is not empty")            
+            raise FileExistsError(f"{path} is not empty")
         else:
             path.mkdir(parents=True, exist_ok=True)
             store = zarr.DirectoryStore(path)
@@ -282,11 +278,7 @@ class MemoryCache(Cache):
 
     @classmethod
     def load(cls, path: PathType):
-        """Copy existing DirectoryStore state into a MemoryCache object.
-
-        Args:
-            path
-        """
+        """Copy existing DirectoryStore state into a MemoryCache object."""
         memory_store = zarr.MemoryStore()
         directory_store = zarr.DirectoryStore(path)
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)

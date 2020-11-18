@@ -21,7 +21,9 @@ class TestCacheIO:
 
         without_prefix = [item[len(td) + 1 :] for item in items]
         without_blanks = [item for item in without_prefix if item]
-        assert all(item == truth for item, truth in zip(without_blanks, Cache.filesystem))
+        assert all(
+            item == truth for item, truth in zip(without_blanks, Cache.filesystem)
+        )
 
     @pytest.mark.parametrize("zdim, xshape", product(zdims, xshapes))
     def test_memory_cache_load(self, zdim, xshape):

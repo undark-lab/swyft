@@ -27,8 +27,8 @@ class RatioEstimator:
         head: nn.Module = None,
         previous_ratio_estimator=None,
         device: Device = "cpu",
-        statistics=None, 
-        recycle_net: bool = False
+        statistics=None,
+        recycle_net: bool = False,
     ):
         """RatioEstimator takes a real observation and simulated points from the iP3 sample cache and handles training and posterior calculation.
 

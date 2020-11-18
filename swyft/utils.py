@@ -5,7 +5,16 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .types import Optional, Device, Tensor, Array, List, Sequence, Combinations, PathType
+from .types import (
+    Optional,
+    Device,
+    Tensor,
+    Array,
+    List,
+    Sequence,
+    Combinations,
+    PathType,
+)
 
 
 def comb2d(indices):
@@ -116,9 +125,10 @@ def tobytes(x: Array):
 
 def depth(seq: Sequence):
     if seq and isinstance(seq, Sequence):
-        return 1 + max(depth(item) for item in seq) 
+        return 1 + max(depth(item) for item in seq)
     else:
         return 0
+
 
 def process_combinations(comb: Combinations):
     d = depth(comb)

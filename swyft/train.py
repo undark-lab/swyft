@@ -23,7 +23,7 @@ def loss_fn(network, xz, combinations=None):
 
     Returns:
         Tensor: training loss.
-    """ 
+    """
     assert xz["x"].size(0) == xz["z"].size(0), "Number of x and z must be equal."
     assert (
         xz["x"].size(0) % 2 == 0
@@ -131,7 +131,9 @@ def train(
         # print("Epoch:", epoch, end = "\r")
         network.train()
         train_loss = do_epoch(train_loader, True)
-        train_losses.append(train_loss / n_train_batches)  # TODO Error when n_train_batches is zero.
+        train_losses.append(
+            train_loss / n_train_batches
+        )  # TODO Error when n_train_batches is zero.
 
         network.eval()
         validation_loss = do_epoch(validation_loader, False)

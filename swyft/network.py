@@ -38,7 +38,7 @@ class OnlineNormalizationLayer(nn.Module):
         self.register_buffer("epsilon", torch.tensor(epsilon))
         self.shape = shape
         self.stable = stable
-    
+
     def _parallel_algorithm(self, x):
         assert x.shape[1:] == self.shape
         na = self.n.clone()
@@ -52,9 +52,11 @@ class OnlineNormalizationLayer(nn.Module):
             xab = (na * xa + nb * xb) / nab
         else:
             xab = xa + delta * nb / nab
-        
+
         m2a = self._M2.clone()
-        m2b = x.var(dim=(0,), unbiased=False) * nb  # do not use bessel's correction then multiply by total number of items in batch.
+        m2b = (
+            x.var(dim=(0,), unbiased=False) * nb
+        )  # do not use bessel's correction then multiply by total number of items in batch.
         m2ab = m2a + m2b + delta ** 2 * na * nb / nab
         return nab, xab, m2ab
 

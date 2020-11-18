@@ -49,16 +49,16 @@ class Intensity:
     @property
     def zdim(self):
         return self.factor_mask.dim
-    
+
     def save(self, path: PathType):
         path = Path(path)
-        with path.open('wb') as f:
+        with path.open("wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def load(path: PathType):
         path = Path(path)
-        with path.open('rb') as f:
+        with path.open("rb") as f:
             obj = pickle.load(f)
         return obj
 
