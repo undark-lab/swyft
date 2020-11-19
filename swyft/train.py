@@ -150,7 +150,6 @@ def train(
 
     print("Total epochs:", epoch)
     # print("Validation losses:", validation_losses)
-
     return train_losses, validation_losses, best_state_dict
 
 
@@ -164,10 +163,9 @@ def trainloop(
     early_stopping_patience=1,
     device="cpu",
     lr_schedule=[1e-3, 1e-4, 1e-5],
-    nl_schedule=[1.0, 1.0, 1.0],
 ):
     print("Start training")
-    nvalid = 512
+    nvalid = 512  # TODO huge bug?? Why does it look like this?? validation set size should be adaptive and in percentage
     ntrain = len(dataset) - nvalid
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]
@@ -186,13 +184,11 @@ def trainloop(
         pin_memory=True,
         drop_last=True,
     )
-    # Train!
 
+    # Train!
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
         print(f"LR iteration {i}")
-        # TODO noise level is currently not implemented
-        # dataset.set_noiselevel(nl_schedule[i])
         tl, vl, sd = train(
             net,
             train_loader,

@@ -1,7 +1,9 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
 from copy import deepcopy
-from functools import cached_property
+from functools import cached_property, wraps
+from pathlib import Path
+import pickle
 
 import numpy as np
 from scipy.integrate import trapz
@@ -14,7 +16,16 @@ from .train import get_norms, trainloop
 from .network import Network
 from .eval import get_ratios, eval_net
 from .intensity import construct_intervals, Mask1d, FactorMask, Intensity
-from .types import Sequence, Tuple, Device, Dataset, Combinations, Array, Union
+from .types import (
+    Sequence,
+    Tuple,
+    Device,
+    Dataset,
+    Combinations,
+    Array,
+    Union,
+    PathType,
+)
 from .utils import array_to_tensor, tobytes, process_combinations
 
 
@@ -80,7 +91,7 @@ class RatioEstimator:
                 warn(
                     "Since the network is being recycled, your statistics are being ignored."
                 )
-            return deepcopy(self.previous_re.net)
+            return deepcopy(self.prev_re.net)
 
         # TODO this is an antipattern address it in network by removing pnum and pdim
         pnum = len(self.combinations)
@@ -103,7 +114,6 @@ class RatioEstimator:
         max_epochs: int = 100,
         batch_size: int = 8,
         lr_schedule: Sequence[float] = [1e-3, 1e-4, 1e-5],
-        nl_schedule: Sequence[float] = [1.0, 1.0, 1.0],
         early_stopping_patience: int = 1,
         nworkers: int = 0,
     ) -> None:
@@ -113,7 +123,6 @@ class RatioEstimator:
             max_epochs (int): maximum number of training epochs
             batch_size (int): minibatch size
             lr_schedule (list): list of learning rates
-            nl_schedule (list): list of noise levels
             early_stopping_patience (int): early stopping patience
             nworkers (int): number of Dataloader workers
         """
@@ -125,7 +134,6 @@ class RatioEstimator:
             max_epochs=max_epochs,
             batch_size=batch_size,
             lr_schedule=lr_schedule,
-            nl_schedule=nl_schedule,
             early_stopping_patience=early_stopping_patience,
             nworkers=nworkers,
         )
@@ -190,18 +198,45 @@ class RatioEstimator:
             p = np.exp(ratios)
         return z, p
 
+    def save(self, path: PathType):
+        # TODO save all dependencies except for cache, which is required on reload. (and description of head)
+        # path = Path(path)
+        # with path.open("wb") as f:
+        #     pickle.dump({
+        #         "indices": self.indices,
+        #         "intensity": self.intensity
+        #     }, f)
+        # return None
+        pass
+
+    @classmethod
+    def load(cls, cache: Cache, path: PathType, noisehook=None):
+        # path = Path(path)
+        # with path.open("rb") as f:
+        #     obj = pickle.load(f)
+        # intensity = obj["intensity"]
+        # indices = obj["indices"]
+
+        # instance = cls(cache, intensity, noisehook=noisehook)
+        # instance._indices = indices
+        # instance._check_fidelity_to_cache(indices)
+        # return instance
+        pass
+
 
 class Points(torch.utils.data.Dataset):
     """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
     Points implements this via a list of indices corresponding to data contained in a cache which is provided at initialization.
-
-    Args:
-        cache (Cache): iP3 cache for zarr storage
-        intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
-        noisehook (function): (optional) maps from (x, z) to x with noise
     """
 
     def __init__(self, cache: Cache, intensity, noisehook=None):
+        """Create a points dataset
+
+        Args:
+            cache (Cache): iP3 cache for zarr storage
+            intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
+            noisehook (function): (optional) maps from (x, z) to x with noise
+        """
         super().__init__()
         if cache.requires_sim():
             raise RuntimeError(
@@ -249,17 +284,40 @@ class Points(torch.utils.data.Dataset):
     def indices(self):
         if self._indices is None:
             self._indices = self.cache.sample(self.intensity)
+        self._check_fidelity_to_cache(self._indices)
+        return self._indices
 
-        first = self._indices[0]
+    def _check_fidelity_to_cache(self, indices):
+        first = indices[0]
         assert self.zdim == len(
             self.cache.z[first]
         ), "Item in cache did not agree with zdim."
         assert (
             self.xshape == self.cache.x[first].shape
         ), "Item in cache did not agree with xshape."
+        return None
 
-        return self._indices
+    @property
+    def _save_dict(self):
+        return {"indices": self.indices, "intensity": self.intensity}
+
+    def save(self, path: PathType):
+        """Saves indices and intensity in a pickle."""
+        path = Path(path)
+        with path.open("wb") as f:
+            pickle.dump(self._save_dict, f)
+        return None
 
     @classmethod
-    def load(cls, path):
-        raise NotImplementedError()
+    def load(cls, cache: Cache, path: PathType, noisehook=None):
+        """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
+        path = Path(path)
+        with path.open("rb") as f:
+            obj = pickle.load(f)
+        intensity = obj["intensity"]
+        indices = obj["indices"]
+
+        instance = cls(cache, intensity, noisehook=noisehook)
+        instance._indices = indices
+        instance._check_fidelity_to_cache(indices)
+        return instance
