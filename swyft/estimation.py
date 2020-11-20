@@ -116,6 +116,7 @@ class RatioEstimator:
         lr_schedule: Sequence[float] = [1e-3, 1e-4, 1e-5],
         early_stopping_patience: int = 1,
         nworkers: int = 0,
+        percent_validation=0.1,
     ) -> None:
         """Train higher-dimensional marginal posteriors.
 
@@ -125,6 +126,7 @@ class RatioEstimator:
             lr_schedule (list): list of learning rates
             early_stopping_patience (int): early stopping patience
             nworkers (int): number of Dataloader workers
+            percent_validation (float): percentage to allocate to validation set
         """
         trainloop(
             self.net,
@@ -136,6 +138,7 @@ class RatioEstimator:
             lr_schedule=lr_schedule,
             early_stopping_patience=early_stopping_patience,
             nworkers=nworkers,
+            percent_validation=percent_validation,
         )
         return None
 
