@@ -71,11 +71,13 @@ def loss_fn(network, xz, combinations=None):
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
     assert np.isclose(sum(percents), 1.0), f"{percents} does not sum to 1."
     lengths = [int(percent * length) for percent in percents]
-    
+
     # Any extra from round off goes to the first split.
     difference = length - sum(lengths)
     lengths[0] += difference
-    assert length == sum(lengths), f"Splitting into {lengths} should equal total {length}."
+    assert length == sum(
+        lengths
+    ), f"Splitting into {lengths} should equal total {length}."
     return lengths
 
 
@@ -179,7 +181,9 @@ def trainloop(
 ):
     print("Start training")
     percent_train = 1.0 - percent_validation
-    ntrain, nvalid = split_length_by_percentage(len(dataset), (percent_train, percent_validation))
+    ntrain, nvalid = split_length_by_percentage(
+        len(dataset), (percent_train, percent_validation)
+    )
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]
     )

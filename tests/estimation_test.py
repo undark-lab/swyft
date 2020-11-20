@@ -5,7 +5,8 @@ import tempfile
 
 import numpy as np
 
-from swyft import MemoryCache, get_unit_intensity, Points
+from swyft.estimation import Points, RatioEstimator
+from swyft import MemoryCache, get_unit_intensity
 
 
 def sim_repeat_noise(theta, num_copies):
@@ -14,8 +15,7 @@ def sim_repeat_noise(theta, num_copies):
     return expanded_theta + noise
 
 
-class TestPoints:
-    def test_points_io(self):
+def setup_points():
         zdim = 10
         num_copies = 6
         xshape = (num_copies, zdim)
@@ -26,8 +26,12 @@ class TestPoints:
         intensity = get_unit_intensity(expected_n, zdim)
         cache.grow(intensity)
         cache.simulate(simulator)
-        points = Points(cache, intensity)
+        return cache, Points(cache, intensity)
 
+
+class TestPoints:
+    def test_points_save_load(self):
+        cache, points = setup_points()
         with tempfile.NamedTemporaryFile() as tf:
             points.save(tf.name)
 
@@ -44,6 +48,28 @@ class TestPoints:
         gathered = list(map(gather_to_check, [loaded, points]))
         assert [np.allclose(i, j) for i, j in zip(gathered[0], gathered[1])]
 
+
+class TestRatioEstimator:
+    def test_ratio_estimator_save_load(self):
+        cache, points = setup_points()
+        re = RatioEstimator(points)
+        with tempfile.NamedTemporaryFile() as tf:
+            re.save(tf.name)
+
+            loaded = RatioEstimator.load(cache, tf.name)
+        
+        gather_to_check = lambda x: (
+            x.combinations,
+            # TODO
+            x.points.indices,
+            x.points.xshape,
+            x.points.zdim,
+            x.points.intensity.expected_n,
+            x.points.intensity.area,
+            x.points.intensity.factor_mask.intervals,
+        )
+        gathered = list(map(gather_to_check, [loaded, points]))
+        assert [np.allclose(i, j) for i, j in zip(gathered[0], gathered[1])]
 
 if __name__ == "__main__":
     pass

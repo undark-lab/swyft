@@ -25,26 +25,29 @@ from .types import (
     Array,
     Union,
     PathType,
+    Dict,
+    Optional,
 )
 from .utils import array_to_tensor, tobytes, process_combinations
 
 
 class RatioEstimator:
+
+    _save_attrs = ["net_state_dict", "ratio_cache", "combinations"]
+
     def __init__(
         self,
-        x0: Array,
         points: Dataset,
-        combinations: Combinations = None,
-        head: nn.Module = None,
+        combinations: Optional[Combinations] = None,
+        head: Optional[nn.Module] = None,
         previous_ratio_estimator=None,
         device: Device = "cpu",
         statistics=None,
         recycle_net: bool = False,
     ):
-        """RatioEstimator takes a real observation and simulated points from the iP3 sample cache and handles training and posterior calculation.
+        """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
 
         Args:
-            x0 (array): real observation
             points: points dataset from the iP3 sample cache
             combinations: which combinations of z parameters to learn
             head (nn.Module): (optional) initialized module which processes observations, head(x0) = y
@@ -53,15 +56,14 @@ class RatioEstimator:
             statistics (): mean and std for x and z
             recycle_net (bool): set net with the previous ratio estimator's net
         """
-        self.x0 = array_to_tensor(x0, device=device)
         self.points = points
         self._combinations = combinations
-        self.head = head
+        self.head = head if head is None else head.to(device)
         self.prev_re = previous_ratio_estimator
         self.device = device
 
         self.net = self._init_net(statistics, recycle_net)
-        self.ratio_cache = {}
+        self.ratio_cache: Dict[bytes : np.ndarray] = {}
 
     @property
     def zdim(self):
@@ -69,7 +71,6 @@ class RatioEstimator:
 
     @property
     def xshape(self):
-        assert self.points.xshape == self.x0.shape
         return self.points.xshape
 
     @cached_property
@@ -83,7 +84,7 @@ class RatioEstimator:
         """Options for custom network initialization.
 
         Args:
-            statistics (): mean and std for x and z
+            statistics: mean and std for x and z
             recycle_net (bool): set net with the previous ratio estimator's net
         """
         if recycle_net:
@@ -92,7 +93,6 @@ class RatioEstimator:
                     "Since the network is being recycled, your statistics are being ignored."
                 )
             return deepcopy(self.prev_re.net)
-
         # TODO this is an antipattern address it in network by removing pnum and pdim
         pnum = len(self.combinations)
         pdim = len(self.combinations[0])
@@ -102,8 +102,9 @@ class RatioEstimator:
             # yshape = self.xshape
             yshape = self.xshape[0]
         else:
-            # yshape = self.head(self.x0.unsqueeze(0)).shape[1:]
-            yshape = self.head(self.x0.unsqueeze(0)).shape[1]
+            input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
+            # yshape = self.head(input_x).shape[1:]
+            yshape = self.head(input_x).shape[1]
         print("yshape (shape of features between head and legs):", yshape)
         return Network(
             ydim=yshape, pnum=pnum, pdim=pdim, head=self.head, datanorms=statistics
@@ -201,36 +202,55 @@ class RatioEstimator:
             p = np.exp(ratios)
         return z, p
 
+    @property
+    def net_state_dict(self):
+        return self.net.state_dict()
+
+    @property
+    def _save_dict(self):
+        return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
+
     def save(self, path: PathType):
-        # TODO save all dependencies except for cache, which is required on reload. (and description of head)
-        # path = Path(path)
-        # with path.open("wb") as f:
-        #     pickle.dump({
-        #         "indices": self.indices,
-        #         "intensity": self.intensity
-        #     }, f)
-        # return None
-        pass
+        complete = {}
+        complete.update(self.points._save_dict)
+        complete.update(self._save_dict)
+
+        path = Path(path)
+        with path.open("wb") as f:
+            pickle.dump(complete, f)
+        return None
 
     @classmethod
-    def load(cls, cache: Cache, path: PathType, noisehook=None):
-        # path = Path(path)
-        # with path.open("rb") as f:
-        #     obj = pickle.load(f)
-        # intensity = obj["intensity"]
-        # indices = obj["indices"]
+    def load(
+        cls,
+        cache: Cache,
+        path: PathType,
+        head: nn.Module = None,
+        noisehook=None,
+        device: Device = None,
+    ):
+        path = Path(path)
+        with path.open("rb") as f:
+            complete = pickle.load(f)
 
-        # instance = cls(cache, intensity, noisehook=noisehook)
-        # instance._indices = indices
-        # instance._check_fidelity_to_cache(indices)
-        # return instance
-        pass
+        point_attrs = {attr: complete[attr] for attr in Points._save_attrs}
+        points = Points._load(cache, point_attrs, noisehook)
+
+        re_attrs = {attr: complete[attr] for attr in RatioEstimator._save_attrs}
+        instance = cls(points, re_attrs["combinations"], head, device)
+        instance.net.load_state_dict(
+            re_attrs["net_state_dict"],
+        )
+        instance.ratio_cache = re_attrs["ratio_cache"]
+        return instance
 
 
 class Points(torch.utils.data.Dataset):
     """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
     Points implements this via a list of indices corresponding to data contained in a cache which is provided at initialization.
     """
+
+    _save_attrs = ["intensity", "indices"]
 
     def __init__(self, cache: Cache, intensity, noisehook=None):
         """Create a points dataset
@@ -302,7 +322,7 @@ class Points(torch.utils.data.Dataset):
 
     @property
     def _save_dict(self):
-        return {"indices": self.indices, "intensity": self.intensity}
+        return {attr: getattr(self, attr) for attr in Points._save_attrs}
 
     def save(self, path: PathType):
         """Saves indices and intensity in a pickle."""
@@ -312,15 +332,16 @@ class Points(torch.utils.data.Dataset):
         return None
 
     @classmethod
+    def _load(cls, cache, attrs: dict, noisehook):
+        instance = cls(cache, attrs["intensity"], noisehook=noisehook)
+        instance._indices = attrs["indices"]
+        instance._check_fidelity_to_cache(attrs["indices"])
+        return instance
+
+    @classmethod
     def load(cls, cache: Cache, path: PathType, noisehook=None):
         """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
         path = Path(path)
         with path.open("rb") as f:
-            obj = pickle.load(f)
-        intensity = obj["intensity"]
-        indices = obj["indices"]
-
-        instance = cls(cache, intensity, noisehook=noisehook)
-        instance._indices = indices
-        instance._check_fidelity_to_cache(indices)
-        return instance
+            attrs = pickle.load(f)
+        return cls._load(cache, attrs, noisehook)

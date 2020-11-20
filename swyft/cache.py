@@ -3,8 +3,6 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from pathlib import Path
 
-import torch
-
 import numpy as np
 import zarr
 import numcodecs
