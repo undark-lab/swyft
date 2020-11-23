@@ -105,11 +105,11 @@ def get_constrained_intensity(
 
     z = factor_mask.sample(samples)
     ratios = eval_net(
-        x0=x0, 
-        net=net, 
-        z=np.expand_dims(z, axis=-1), 
-        batch_size=batch_size, 
-        device=device
+        x0=x0,
+        net=net,
+        z=np.expand_dims(z, axis=-1),
+        batch_size=batch_size,
+        device=device,
     )
 
     intervals_list = []

@@ -7,7 +7,9 @@ from .utils import combine_z, get_z, array_to_tensor
 from .types import Array, Combinations, Device, Optional
 
 
-def eval_net(x0: Array, net: nn.Module, z: Array, batch_size: int, device: Device = None) -> ndarray:
+def eval_net(
+    x0: Array, net: nn.Module, z: Array, batch_size: int, device: Device = None
+) -> ndarray:
     """Evaluate estimated likelihood ratios with a trained network.
 
     Args:

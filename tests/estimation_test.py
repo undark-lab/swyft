@@ -1,7 +1,9 @@
 import pytest
+
 from functools import partial
 from itertools import product
 import tempfile
+from copy import deepcopy
 
 import torch
 import torch.nn as nn
@@ -33,12 +35,19 @@ def setup_points():
 
 
 class Head(nn.Module):
-    def __init__(self):
+    def __init__(self, in_features, out_features):
         super().__init__()
         self.flatten = torch.nn.Flatten()
-    
+        self.layer = torch.nn.Linear(in_features, out_features)
+
     def forward(self, x):
-        return self.flatten(x)
+        return self.layer(self.flatten(x))
+
+    @staticmethod
+    def featurize(xshape):
+        in_features = np.product(xshape)
+        out_features = 100
+        return in_features, out_features
 
 
 class TestPoints:
@@ -64,14 +73,23 @@ class TestPoints:
 
 
 class TestRatioEstimator:
-    @pytest.mark.parametrize("head", (None, Head()))
+    @pytest.mark.parametrize("head", (None, Head))
     def test_ratio_estimator_save_load(self, head):
         cache, points = setup_points()
-        re = RatioEstimator(points, head=head)
+
+        if head is None:
+            head1 = None
+            head2 = None
+        else:
+            in_features, out_features = Head.featurize(points.xshape)
+            head1 = head(in_features, out_features)
+            head2 = head(in_features, out_features)
+
+        re = RatioEstimator(points, head=head1)
         with tempfile.NamedTemporaryFile() as tf:
             re.save(tf.name)
 
-            loaded = RatioEstimator.load(cache, tf.name)
+            loaded = RatioEstimator.load(cache, tf.name, head=head2)
 
         gather_attrs = lambda x: (
             x.combinations,
@@ -87,8 +105,6 @@ class TestRatioEstimator:
         assert [
             np.allclose(i, j) for i, j in zip(gather_attrs(loaded), gather_attrs(re))
         ]
-
-        # TODO fix error with loading a flattened head.
 
 
 if __name__ == "__main__":
