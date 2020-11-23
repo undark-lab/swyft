@@ -6,12 +6,9 @@ from numpy import ndarray
 from .utils import combine_z, get_z, array_to_tensor
 from .types import Array, Combinations, Device, Optional
 
-# NOTE: z combinations (with pdim > 1) should not be generated here, but just
-# fed it. They can be generated externally.
-
 
 def eval_net(x0: Array, net: nn.Module, z: Array, batch_size: int, device: Device = None) -> ndarray:
-    """Evaluates network.
+    """Evaluate estimated likelihood ratios with a trained network.
 
     Args:
         x0 (Array): true observation

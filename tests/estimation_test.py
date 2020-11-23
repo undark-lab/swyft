@@ -3,6 +3,8 @@ from functools import partial
 from itertools import product
 import tempfile
 
+import torch
+import torch.nn as nn
 import numpy as np
 
 from swyft.estimation import Points, RatioEstimator
@@ -18,7 +20,7 @@ def sim_repeat_noise(theta, num_copies):
 
 def setup_points():
     zdim = 10
-    num_copies = 6
+    num_copies = 3
     xshape = (num_copies, zdim)
     expected_n = 100
     simulator = partial(sim_repeat_noise, num_copies=num_copies)
@@ -28,6 +30,15 @@ def setup_points():
     cache.grow(intensity)
     cache.simulate(simulator)
     return cache, Points(cache, intensity)
+
+
+class Head(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = torch.nn.Flatten()
+    
+    def forward(self, x):
+        return self.flatten(x)
 
 
 class TestPoints:
@@ -53,9 +64,10 @@ class TestPoints:
 
 
 class TestRatioEstimator:
-    def test_ratio_estimator_save_load(self):
+    @pytest.mark.parametrize("head", (None, Head()))
+    def test_ratio_estimator_save_load(self, head):
         cache, points = setup_points()
-        re = RatioEstimator(points)
+        re = RatioEstimator(points, head=head)
         with tempfile.NamedTemporaryFile() as tf:
             re.save(tf.name)
 
@@ -75,6 +87,8 @@ class TestRatioEstimator:
         assert [
             np.allclose(i, j) for i, j in zip(gather_attrs(loaded), gather_attrs(re))
         ]
+
+        # TODO fix error with loading a flattened head.
 
 
 if __name__ == "__main__":
