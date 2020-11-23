@@ -6,7 +6,8 @@ import tempfile
 import numpy as np
 
 from swyft.estimation import Points, RatioEstimator
-from swyft import MemoryCache, get_unit_intensity
+from swyft.cache import MemoryCache
+from swyft.intensity import get_unit_intensity
 
 
 def sim_repeat_noise(theta, num_copies):
@@ -16,17 +17,17 @@ def sim_repeat_noise(theta, num_copies):
 
 
 def setup_points():
-        zdim = 10
-        num_copies = 6
-        xshape = (num_copies, zdim)
-        expected_n = 100
-        simulator = partial(sim_repeat_noise, num_copies=num_copies)
+    zdim = 10
+    num_copies = 6
+    xshape = (num_copies, zdim)
+    expected_n = 100
+    simulator = partial(sim_repeat_noise, num_copies=num_copies)
 
-        cache = MemoryCache(zdim, xshape)
-        intensity = get_unit_intensity(expected_n, zdim)
-        cache.grow(intensity)
-        cache.simulate(simulator)
-        return cache, Points(cache, intensity)
+    cache = MemoryCache(zdim, xshape)
+    intensity = get_unit_intensity(expected_n, zdim)
+    cache.grow(intensity)
+    cache.simulate(simulator)
+    return cache, Points(cache, intensity)
 
 
 class TestPoints:
@@ -37,7 +38,7 @@ class TestPoints:
 
             loaded = Points.load(cache, tf.name)
 
-        gather_to_check = lambda x: (
+        gather_attrs = lambda x: (
             x.indices,
             x.xshape,
             x.zdim,
@@ -45,8 +46,10 @@ class TestPoints:
             x.intensity.area,
             x.intensity.factor_mask.intervals,
         )
-        gathered = list(map(gather_to_check, [loaded, points]))
-        assert [np.allclose(i, j) for i, j in zip(gathered[0], gathered[1])]
+        assert [
+            np.allclose(i, j)
+            for i, j in zip(gather_attrs(loaded), gather_attrs(points))
+        ]
 
 
 class TestRatioEstimator:
@@ -57,10 +60,11 @@ class TestRatioEstimator:
             re.save(tf.name)
 
             loaded = RatioEstimator.load(cache, tf.name)
-        
-        gather_to_check = lambda x: (
+
+        gather_attrs = lambda x: (
             x.combinations,
-            # TODO
+            *(v for _, v in x.net_state_dict.items()),
+            *(v for _, v in x.ratio_cache.items()),
             x.points.indices,
             x.points.xshape,
             x.points.zdim,
@@ -68,8 +72,10 @@ class TestRatioEstimator:
             x.points.intensity.area,
             x.points.intensity.factor_mask.intervals,
         )
-        gathered = list(map(gather_to_check, [loaded, points]))
-        assert [np.allclose(i, j) for i, j in zip(gathered[0], gathered[1])]
+        assert [
+            np.allclose(i, j) for i, j in zip(gather_attrs(loaded), gather_attrs(re))
+        ]
+
 
 if __name__ == "__main__":
     pass

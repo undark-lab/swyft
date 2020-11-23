@@ -13,7 +13,7 @@ from .types import Shape, Union, Sequence, PathType
 
 
 class Cache(ABC):
-    filesystem = (
+    _filesystem = (
         "metadata",
         "metadata/intensity",
         "metadata/requires_simulation",
@@ -45,25 +45,25 @@ class Cache(ABC):
         elif len(self.root.keys()) == 0:
             print("Creating new cache.")
             self.x = self.root.zeros(
-                self.filesystem[4],  # samples/x
+                self._filesystem[4],  # samples/x
                 shape=(0, *xshape),
                 chunks=(1, *xshape),
                 dtype="f4",
             )
             self.z = self.root.zeros(
-                self.filesystem[5],  # samples/z
+                self._filesystem[5],  # samples/z
                 shape=(0, zdim),
                 chunks=(10000, zdim),
                 dtype="f4",
             )
             self.m = self.root.zeros(
-                self.filesystem[2],  # metadata/requires_simulation
+                self._filesystem[2],  # metadata/requires_simulation
                 shape=(0, 1),
                 chunks=(10000, 1),
                 dtype="bool",
             )
             self.u = self.root.create(
-                self.filesystem[1],  # metadata/intensity
+                self._filesystem[1],  # metadata/intensity
                 shape=(0,),
                 dtype=object,
                 object_codec=numcodecs.Pickle(),
