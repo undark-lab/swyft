@@ -74,6 +74,7 @@ def get_unit_intensity(expected_n: int, dim: int):
     factor_mask = get_unit_factor_mask(dim)
     return Intensity(expected_n, factor_mask)
 
+
 def constrain_intensity(
     expected_n: int,
     x0: Array,
