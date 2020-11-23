@@ -136,8 +136,8 @@ def train(
     max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs
     optimizer = torch.optim.Adam(network.parameters(), lr=lr)
 
-    n_train_batches = len(train_loader)
-    n_validation_batches = len(validation_loader)
+    n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
+    n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
 
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
@@ -145,9 +145,7 @@ def train(
         # print("Epoch:", epoch, end = "\r")
         network.train()
         train_loss = do_epoch(train_loader, True)
-        train_losses.append(
-            train_loss / n_train_batches
-        )  # TODO Error when n_train_batches is zero.
+        train_losses.append(train_loss / n_train_batches)
 
         network.eval()
         validation_loss = do_epoch(validation_loader, False)

@@ -150,20 +150,22 @@ class Cache(ABC):
         accepted = []
         ds_intensities = self.intensity(z_prop)
         target_intensities = p(z_prop)
-        for z, Ids, It in zip(z_prop, ds_intensities, target_intensities):
+        for _, Ids, It in zip(z_prop, ds_intensities, target_intensities):
             rej_prob = np.minimum(1, Ids / It)
             w = np.random.rand()
             accepted.append(rej_prob < w)
         z_accepted = z_prop[accepted, :]
 
-        # Add new entries to cache and update intensity function
-        self._append_z(z_accepted)
+        # Add new entries to cache
         if len(z_accepted) > 0:
-            self.u.resize(len(self.u) + 1)
-            self.u[-1] = p
+            self._append_z(z_accepted)
             print("Adding %i new samples. Run simulator!" % len(z_accepted))
         else:
             print("No new simulator runs required.")
+
+        # save intensity function. We collect them all to find their maximum.
+        self.u.resize(len(self.u) + 1)
+        self.u[-1] = p
 
     def sample(self, p):
         """Sample from Cache.
@@ -181,10 +183,12 @@ class Cache(ABC):
         I_target = p(zlist)
         for i, z in enumerate(zlist):
             accept_prob = I_target[i] / I_ds[i]
-            assert (
-                accept_prob <= 1.0
-            ), "Inconsistent intensity function of cache. This should not happen."
-            w = np.random.rand(1)[0]
+            assert accept_prob <= 1.0, (
+                f"{accept_prob} > 1, but we expected the ratio of target intensity function to the cache <= 1. "
+                "There may not be enough samples in the cache "
+                "or a constrained intensity function was not accounted for."
+            )
+            w = np.random.rand()
             if accept_prob > w:
                 accepted.append(i)
         return accepted

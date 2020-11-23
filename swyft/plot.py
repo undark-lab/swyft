@@ -14,7 +14,6 @@ def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
 
 def cont2d(ax, re, x0, z0, i, j, cmap="gray_r", max_n_points=1000):
     z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
-    z = z.numpy()
     levels = get_contour_levels(p)
 
     if z0 is not None:

@@ -155,7 +155,7 @@ class RatioEstimator:
             pass
         else:
             z, ratios = get_ratios(
-                array_to_tensor(x0, device=self.device),
+                x0,
                 self.net,
                 self.points,
                 device=self.device,
@@ -274,7 +274,7 @@ class Points(torch.utils.data.Dataset):
     def __len__(self):
         assert len(self.indices) <= len(
             self.cache
-        ), "You gave more indices than there are parameter samples in the cache."
+        ), f"You wanted {len(self.indices)} indices but there are only {len(self.cache)} parameter samples in the cache."
         return len(self.indices)
 
     def __getitem__(self, idx):

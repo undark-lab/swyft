@@ -5,7 +5,7 @@ import pickle
 
 import numpy as np
 
-from .types import Shape, Union, Sequence, Tensor, PathType
+from .types import Shape, Union, Sequence, PathType, Array
 from .eval import eval_net
 from .utils import array_to_tensor
 
@@ -77,9 +77,10 @@ def get_unit_intensity(expected_n: int, dim: int):
 def get_constrained_intensity(
     expected_n: int,
     ratio_estimator,
-    x0: Tensor,
+    x0: Array,
     threshold: float,
     factor_mask=None,
+    batch_size: int = 64,
     samples: int = 10000,
 ):
     """Creates a expected_n intensity function constrained to ratio estimates over the treshold.
@@ -88,9 +89,10 @@ def get_constrained_intensity(
     Args:
         expected_n (int): expected target number of samples
         ratio_estimator (RatioEstimator): takes signature ratio_estimator(x, z) and returns a likelihood ratio
-        x0 (tensor): true observation
+        x0 (Array): true observation
         threshold (float): threshold for constraint
         factor_mask (Intensity): (Optional) factorized region, in which to search for constraints
+        batch_size (int): evaluation minibatch size
         samples (int): number of samples to produce inorder to find the constrained intervals
     """
     device = ratio_estimator.device
@@ -101,11 +103,14 @@ def get_constrained_intensity(
 
     # TODO make this into something which does not depend on ratio estimator
 
-    z = array_to_tensor(factor_mask.sample(samples), device=device).unsqueeze(-1)
-    x0 = array_to_tensor(x0, device=device)
-    ratios = eval_net(net, x0, z)
-    z = z.cpu().numpy()[:, :, 0]
-    ratios = ratios.cpu().numpy()
+    z = factor_mask.sample(samples)
+    ratios = eval_net(
+        x0=x0, 
+        net=net, 
+        z=np.expand_dims(z, axis=-1), 
+        batch_size=batch_size, 
+        device=device
+    )
 
     intervals_list = []
     for i in range(zdim):
