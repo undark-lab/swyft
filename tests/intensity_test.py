@@ -15,9 +15,10 @@ from swyft.intensity import (
 
 
 class TestFactorMask:
+    resolution = 100000
+
     xmaxes = [2 * np.pi, 4 * np.pi, 6 * np.pi]
     areas = [np.pi, 2 * np.pi, 3 * np.pi]
-    resolution = 100000
 
     @pytest.mark.parametrize("xmax, area", zip(xmaxes, areas))
     def test_get_factor_mask_from_intervals_1dim(self, xmax, area):
@@ -25,16 +26,37 @@ class TestFactorMask:
         y = np.sin(x)
         intervals = construct_intervals(x, y)
         factor_mask = get_factor_mask_from_intervals(intervals)
-        assert round(area, 2) == round(factor_mask.area(), 2)
+        assert np.isclose(
+            area, factor_mask.area(), rtol=1e-4
+        ), f"Truth {area} != factor mask {factor_mask.area()}."
 
-    @pytest.mark.parametrize("xmax, area", zip(xmaxes, areas))
-    def test_get_factor_mask_from_intervals_2dim(self, xmax, area):
-        x = np.linspace(0, xmax, TestFactorMask.resolution)
-        y1 = np.sin(x)
-        y2 = np.cos(x)
+    fns = [
+        np.sin,
+        np.cos,
+        lambda x: -((x - 0.5) ** 2) + 0.1,
+    ]
+    area_over_4pi = [
+        2 * np.pi,
+        2 * np.pi,
+        0.816228 - 0.183772,
+    ]
+    fn_area = list(zip(fns, area_over_4pi))
+
+    @pytest.mark.parametrize("fn_area1, fn_area2", product(fn_area, fn_area))
+    def test_get_factor_mask_from_intervals_2dim(self, fn_area1, fn_area2):
+        fn1, area1 = fn_area1
+        fn2, area2 = fn_area2
+
+        x = np.linspace(0, 4 * np.pi, TestFactorMask.resolution)
+        y1 = fn1(x)
+        y2 = fn2(x)
+        area = area1 * area2
+
         intervals = [construct_intervals(x, y) for y in (y1, y2)]
         factor_mask = get_factor_mask_from_intervals(intervals)
-        assert np.isclose(round(area ** 2, 2), round(factor_mask.area(), 2), rtol=0.001)
+        assert np.isclose(
+            area, factor_mask.area(), rtol=1e-4
+        ), f"Truth {area} != factor mask {factor_mask.area()}."
 
 
 class TestConstructIntervals:
