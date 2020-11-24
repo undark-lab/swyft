@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quickstart with SWYFT &#8212; swyft 0.1 documentation</title>
+    <title>Quickstart with swyft &#8212; swyft 0.1 documentation</title>
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -33,33 +33,111 @@
           <div class="body" role="main">
             
   <div class="section" id="quickstart-with-swyft">
-<h1>Quickstart with SWYFT<a class="headerlink" href="#quickstart-with-swyft" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="quickstart-example">
-<h2>Quickstart example<a class="headerlink" href="#quickstart-example" title="Permalink to this headline">¶</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">model</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
+<h1>Quickstart with <em>swyft</em><a class="headerlink" href="#quickstart-with-swyft" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="example">
+<h2>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h2>
+<p>As a quick example, the following code (1) defines a simple <a href="#id1"><span class="problematic" id="id2">`</span></a>simulator’ and noise model (2) instantiates a sample cache in memory (3) trains a headless network to estimate likelihood ratios.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">DEVICE</span> <span class="o">=</span> <span class="s1">&#39;cuda:0&#39;</span> <span class="c1">#your gpu, or &#39;cpu&#39; if a gpu is not available</span>
+<span class="n">MAX_EPOCHS</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="n">EXPECTED_N</span> <span class="o">=</span> <span class="mi">10000</span> <span class="c1">#the average number of samples for the algorithm to see per training round</span>
+
+<span class="c1">#a simple simulator</span>
+<span class="k">def</span> <span class="nf">simulator</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">z</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">2</span><span class="o">*</span><span class="n">z</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+<span class="c1">#a simple noise model</span>
+<span class="k">def</span> <span class="nf">noise</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">noise</span><span class="o">=</span><span class="mf">0.01</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">*</span><span class="n">noise</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">n</span>
+<span class="c1">#</span>
+<span class="n">z0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.55</span><span class="p">,</span><span class="mf">0.45</span><span class="p">])</span>
+<span class="n">zdim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">z0</span><span class="p">)</span>
+<span class="n">x0</span> <span class="o">=</span> <span class="n">simulator</span><span class="p">(</span><span class="n">z0</span><span class="p">)</span>  <span class="c1"># Using Asimov data</span>
+
+<span class="c1">#create cache in memory</span>
+<span class="n">cache</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">MemoryCache</span><span class="p">(</span><span class="n">zdim</span> <span class="o">=</span> <span class="n">zdim</span><span class="p">,</span> <span class="n">xshape</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+<span class="n">intensity</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">intensity</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">intensity</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">get_unit_intensity</span><span class="p">(</span><span class="n">expected_n</span><span class="o">=</span><span class="n">EXPECTED_N</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="n">zdim</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">intensity</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">get_constrained_intensity</span><span class="p">(</span>
+            <span class="n">expected_n</span><span class="o">=</span><span class="n">EXPECTED_N</span><span class="p">,</span>
+            <span class="n">ratio_estimator</span><span class="o">=</span><span class="n">re</span><span class="p">,</span>
+            <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">,</span>
+            <span class="n">threshold</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="n">cache</span><span class="o">.</span><span class="n">grow</span><span class="p">(</span><span class="n">intensity</span><span class="p">)</span>
+    <span class="n">cache</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">simulator</span><span class="p">)</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">Points</span><span class="p">(</span><span class="n">cache</span><span class="p">,</span> <span class="n">intensity</span><span class="p">,</span> <span class="n">noise</span><span class="p">)</span>
+    <span class="n">re</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">RatioEstimator</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">DEVICE</span><span class="p">)</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">max_epochs</span><span class="o">=</span><span class="n">MAX_EPOCHS</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">lr_schedule</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-3</span><span class="p">,</span> <span class="mf">3e-4</span><span class="p">,</span> <span class="mf">1e-4</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>The resulting 1-dimensional posteriors can be plotted:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">swyft</span><span class="o">.</span><span class="n">plot1d</span><span class="p">(</span><span class="n">re</span><span class="p">,</span> <span class="n">x0</span> <span class="o">=</span> <span class="n">x0</span><span class="p">,</span> <span class="n">z0</span> <span class="o">=</span> <span class="n">z0</span><span class="p">,</span> <span class="n">cmap</span> <span class="o">=</span> <span class="s1">&#39;Greys&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<a class="reference internal image-reference" href=".ipynb_checkpoints/images/quickstart-1d.png"><img alt=".ipynb_checkpoints/images/quickstart-1d.png" src=".ipynb_checkpoints/images/quickstart-1d.png" style="width: 600px;" /></a>
+<p>The 2-dimensional posterior is first trained:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">re2</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">RatioEstimator</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">combinations</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="n">device</span><span class="o">=</span><span class="n">DEVICE</span><span class="p">)</span>
+<span class="n">re2</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">max_epochs</span><span class="o">=</span><span class="n">MAX_EPOCHS</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">lr_schedule</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-3</span><span class="p">,</span> <span class="mf">3e-4</span><span class="p">,</span> <span class="mf">1e-4</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Allowing one to generate a classic triangle plot:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">swyft</span><span class="o">.</span><span class="n">corner</span><span class="p">(</span><span class="n">re</span><span class="p">,</span> <span class="n">re2</span><span class="p">,</span> <span class="n">x0</span> <span class="o">=</span> <span class="n">x0</span><span class="p">,</span> <span class="n">z0</span> <span class="o">=</span> <span class="n">z0</span><span class="p">,</span> <span class="n">cmap</span> <span class="o">=</span> <span class="s1">&#39;Greys&#39;</span><span class="p">,</span> <span class="n">dim</span> <span class="o">=</span> <span class="mi">10</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
-<div class="section" id="general-philosophy">
-<h2>General philosophy<a class="headerlink" href="#general-philosophy" title="Permalink to this headline">¶</a></h2>
-<p><em>swyft</em> implements algorithms for (a) nested neural likelihood-to-evidence ratio estimation and (b) simulation reuse via an inhomogeneous Poisson point process cache of parameters and corresponding simulations. Together, these algorithms enable automatic and extremely simulator efficient estimation of marginal and joint posteriors.  Simulator runs are never rejected and can be automatically reused in future analysis, enabling efficient initial runs and hyper-efficient follow-up studies.</p>
-</div>
-<div class="section" id="general-usage">
-<h2>General usage<a class="headerlink" href="#general-usage" title="Permalink to this headline">¶</a></h2>
-<p>SWYFT is simple to use.  First, we define a model function which takes an
-argument numpy vector <span class="math notranslate nohighlight">\(z\)</span> and returns simulated data <span class="math notranslate nohighlight">\(x\)</span>.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">model</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">fancy_simulator</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
-    <span class="n">n</span> <span class="o">=</span> <span class="n">noise</span><span class="p">()</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="n">m</span> <span class="o">+</span> <span class="n">n</span>
-    <span class="k">return</span> <span class="n">x</span>
+<div class="section" id="usage-in-steps">
+<h2>Usage in steps<a class="headerlink" href="#usage-in-steps" title="Permalink to this headline">¶</a></h2>
+<p>Let’s examine the above example in more detail.  First, we define a simulator function, which takes an
+argument numpy vector <span class="math notranslate nohighlight">\(z\)</span> and returns simulated data <span class="math notranslate nohighlight">\(x\)</span>. We also define a noise model, which takes the output the simulator and adds noise.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1">#a simple simulator</span>
+<span class="k">def</span> <span class="nf">simulator</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">z</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">z</span><span class="p">[</span><span class="mi">0</span><span class="p">])])</span>
+<span class="c1">#a simple noise model</span>
+<span class="k">def</span> <span class="nf">noise</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">noise</span><span class="o">=</span><span class="mf">0.01</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">*</span><span class="n">noise</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">n</span>
 </pre></div>
 </div>
 <p>We then use the model to generate mock observational data.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">z0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">])</span>
-<span class="n">x0</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">z0</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">z0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.55</span><span class="p">,</span><span class="mf">0.45</span><span class="p">])</span>
+<span class="n">zdim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">z0</span><span class="p">)</span>
+<span class="n">x0</span> <span class="o">=</span> <span class="n">simulator</span><span class="p">(</span><span class="n">z0</span><span class="p">)</span>  <span class="c1"># Using Asimov data</span>
 </pre></div>
 </div>
+<p>Part of why <em>swyft</em> is so simulator-efficient is its sample cache. We instantiate an empty cache in memory.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cache</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">MemoryCache</span><span class="p">(</span><span class="n">zdim</span> <span class="o">=</span> <span class="n">zdim</span><span class="p">,</span> <span class="n">xshape</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The cache can also live on your hard drive.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cache</span><span class="o">=</span><span class="n">swyft</span><span class="o">.</span><span class="n">DirectoryCache</span><span class="p">(</span><span class="n">zdim</span> <span class="o">=</span> <span class="n">zdim</span><span class="p">,</span> <span class="n">xshape</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;path/to/cache.zarr&quot;</span><span class="p">):</span>
+</pre></div>
+</div>
+<p>The training loop then takes the following form.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">intensity</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">intensity</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">intensity</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">get_unit_intensity</span><span class="p">(</span><span class="n">expected_n</span><span class="o">=</span><span class="n">EXPECTED_N</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="n">zdim</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">intensity</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">get_constrained_intensity</span><span class="p">(</span>
+            <span class="n">expected_n</span><span class="o">=</span><span class="n">EXPECTED_N</span><span class="p">,</span>
+            <span class="n">ratio_estimator</span><span class="o">=</span><span class="n">re</span><span class="p">,</span>
+            <span class="n">x0</span><span class="o">=</span><span class="n">x0</span><span class="p">,</span>
+            <span class="n">threshold</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="n">cache</span><span class="o">.</span><span class="n">grow</span><span class="p">(</span><span class="n">intensity</span><span class="p">)</span>
+    <span class="n">cache</span><span class="o">.</span><span class="n">simulate</span><span class="p">(</span><span class="n">simulator</span><span class="p">)</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">Points</span><span class="p">(</span><span class="n">cache</span><span class="p">,</span> <span class="n">intensity</span><span class="p">,</span> <span class="n">noise</span><span class="p">)</span>
+    <span class="n">re</span> <span class="o">=</span> <span class="n">swyft</span><span class="o">.</span><span class="n">RatioEstimator</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">DEVICE</span><span class="p">)</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">max_epochs</span><span class="o">=</span><span class="n">MAX_EPOCHS</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">lr_schedule</span><span class="o">=</span><span class="p">[</span><span class="mf">1e-3</span><span class="p">,</span> <span class="mf">3e-4</span><span class="p">,</span> <span class="mf">1e-4</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>The intensity function describes the Poisson process from which simulations are drawn from the cache. Initially all points are equally likely. In subsequent rounds, the ratio estimator is used to computed a constrained intensity, zooming into relevant regions of the parameter space. From the intensity function, the cache is grown (i.e. relevant points in parameter space are added) and simulator runs are evaluated. From the cache, points are drawn according to the intensity and noise is sampled for each simulation.</p>
 <p>The analysis is then started by invoking SWYFT as follows.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">swyft</span> <span class="kn">import</span> <span class="n">SWYFT</span>
 
@@ -69,7 +147,7 @@ argument numpy vector <span class="math notranslate nohighlight">\(z\)</span> an
 </div>
 <p>This will call the simulator <cite>model</cite> around 15000 times, and sequentially zoom
 into the parameter range that is consistent with mock data $x0$.  After
-training, the 1-dim marginal posteriors can be plot using</p>
+training, the 1-dim marginal posteriors can be plotted using</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pylab</span> <span class="kn">import</span> <span class="n">plot</span><span class="p">,</span> <span class="n">show</span>
 
 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">zdim</span><span class="p">):</span>
