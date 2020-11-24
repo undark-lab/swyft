@@ -1,6 +1,5 @@
 # pylint: disable=no-member, not-callable
 from abc import ABC, abstractmethod
-from functools import cached_property
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +35,8 @@ class Cache(ABC):
             xshape (tuple): Shape of x array
             store (zarr.MemoryStore, zarr.DirectoryStore)
         """
+        self._zdim = None
+        self._xshape = None
         self.store = store
         self.root = zarr.group(store=self.store)
 
@@ -88,13 +89,17 @@ class Cache(ABC):
     def _extract_zdim_from_zarr_group(group):
         return group["samples/z"].shape[1]
 
-    @cached_property
+    @property
     def xshape(self):
-        return self._extract_xshape_from_zarr_group(self.root)
+        if self._xshape is None:
+            self._xshape = self._extract_xshape_from_zarr_group(self.root)
+        return self._xshape
 
-    @cached_property
+    @property
     def zdim(self):
-        return self._extract_zdim_from_zarr_group(self.root)
+        if self._zdim is None:
+            self._zdim = self._extract_zdim_from_zarr_group(self.root)
+        return self._zdim
 
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO

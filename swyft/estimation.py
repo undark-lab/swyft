@@ -1,7 +1,7 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
 from copy import deepcopy
-from functools import cached_property, wraps
+from functools import wraps
 from pathlib import Path
 import pickle
 
@@ -73,7 +73,7 @@ class RatioEstimator:
     def xshape(self):
         return self.points.xshape
 
-    @cached_property
+    @property
     def combinations(self):
         if self._combinations is None:
             return [[i] for i in range(self.zdim)]
@@ -292,22 +292,22 @@ class Points(torch.utils.data.Dataset):
             "z": z,
         }
 
-    @cached_property
+    @property
     def zdim(self):
         assert (
             self.intensity.zdim == self.cache.zdim
         ), "The cache and intensity functions did not agree on the zdim."
         return self.intensity.zdim
 
-    @cached_property
+    @property
     def xshape(self):
         return self.cache.xshape
 
-    @cached_property
+    @property
     def indices(self):
         if self._indices is None:
             self._indices = self.cache.sample(self.intensity)
-        self._check_fidelity_to_cache(self._indices)
+            self._check_fidelity_to_cache(self._indices)
         return self._indices
 
     def _check_fidelity_to_cache(self, indices):

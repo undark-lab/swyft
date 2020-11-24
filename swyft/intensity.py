@@ -1,5 +1,4 @@
 # pylint: disable=no-member, not-callable, undefined-variable
-from functools import cached_property
 from pathlib import Path
 import pickle
 
@@ -31,12 +30,11 @@ class Intensity:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.expected_n}, {repr(self.factor_mask)})"
 
-    @cached_property
+    @property
     def area(self):
         if self._area is None:
-            return self.factor_mask.area()
-        else:
-            return self._area
+            self._area = self.factor_mask.area()
+        return self._area
 
     def sample(self, n=None):
         if n is None:
