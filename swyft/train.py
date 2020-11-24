@@ -1,6 +1,6 @@
 # pylint: disable=no-member, not-callable
 from copy import deepcopy
-from contextlib import nullcontext
+from contextlib import suppress
 
 import numpy as np
 import torch
@@ -116,8 +116,8 @@ def train(
     """
     # TODO consider that the user might want other training stats, like number of correct samples for example
     def do_epoch(loader: torch.utils.data.dataloader.DataLoader, train: bool):
-        accumulated_loss = 0
-        training_context = nullcontext() if train else torch.no_grad()
+        accumulated_loss = 0  
+        training_context = suppress() if train else torch.no_grad()
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
