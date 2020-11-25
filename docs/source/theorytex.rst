@@ -1,5 +1,8 @@
+Theoretical concepts
+====================
+
 Introduction
-============
+------------
 
 Parametric stochastic simulators are ubiquitous in the physical sciences
  [1–3]. However, performing parameter inference based on simulator runs
@@ -36,8 +39,8 @@ parameters, increasing its utility in high-dimensional parameter
 regimes–even to simulators with a tractable, yet high-dimensional,
 likelihood  [11].
 
-Nested Ratio Estimation (NRE).
-==============================
+Nested Ratio Estimation (NRE)
+-----------------------------
 
 We operate in the context of simulation-based inference where our
 simulator :math:`\mathbf{g}` is a nonlinear function mapping a vector of
@@ -185,8 +188,8 @@ allows for estimation of *any* higher dimensional marginal posterior
 of interest by doing likelihood-to-evidence ratio estimation, often
 without further simulation.
 
-Inhomogeneous Poisson Point Process (iP3) Sample Caching.
-=========================================================
+Inhomogeneous Poisson Point Process (iP3) Sample Caching
+--------------------------------------------------------
 
 Simulating
 :math:`(\mathbf{x}, \boldsymbol{\theta})\sim p(\mathbf{x}|\boldsymbol{\theta})p(\boldsymbol{\theta})`

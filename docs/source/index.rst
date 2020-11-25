@@ -11,7 +11,7 @@ Welcome to swyft's documentation!
    :caption: Contents:
 
    quickstart
-   theory
+   theorytex
    hero
 
 Autodoc documentation
