@@ -5,7 +5,7 @@ import pickle
 import torch.nn as nn
 import numpy as np
 
-from .types import Shape, Union, Sequence, PathType, Array, Device, Union
+from .types import Shape, Union, Sequence, PathType, Array, Device
 from .eval import eval_net
 from .utils import array_to_tensor, depth
 
