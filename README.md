@@ -26,9 +26,10 @@ Simulator efficient nested neural marginal posterior estimation
 
 ## Caveats
 
-- You need a GPU and minimal experience with pytorch.
 - If data is complex (large images, volumina, etc), a hand-crafted neural
   network as featurization engine is necessary for optimal results.
+- Life is eaiser if you have minimal experience with pytorch. A gpu makes 
+  training the neural networks faster.
 
 ## Documentation
 
