@@ -7,12 +7,12 @@ Example
 As a quick example, the following code (1) defines a simple `simulator' and noise model (2) instantiates a sample cache in memory (3) trains a headless network to estimate likelihood ratios.
 :: 
     DEVICE = 'cuda:0' #your gpu, or 'cpu' if a gpu is not available
-    MAX_EPOCHS = 100
-    EXPECTED_N = 10000 #the average number of samples for the algorithm to see per training round
+    MAX_EPOCHS = 100 #maximum number of epochs per training round
+    EXPECTED_N = 20000 #the average number of samples for the algorithm to see per training round
     
     #a simple simulator
     def simulator(z):
-        return np.array([z[0],2*z[1]])
+        return np.array([z[0],2*(z[1]-z[0])])
     #a simple noise model
     def noise(x, z = None, noise=0.01):
         n = np.random.randn(*x.shape)*noise
@@ -58,6 +58,9 @@ The 2-dimensional posterior is first trained:
 Allowing one to generate a classic triangle plot:
 ::
     swyft.corner(re, re2, x0 = x0, z0 = z0, cmap = 'Greys', dim = 10)
+    
+.. image:: images/quickstart-2d.png
+   :width: 1000
 
 Usage in steps
 -------------
