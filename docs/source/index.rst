@@ -30,6 +30,7 @@ Autodoc documentation
 
 .. automodule:: swyft
   :members:
+  :undoc-members:
 
 Indices and tables
 ==================
