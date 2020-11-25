@@ -1,108 +1,154 @@
+# pylint: disable=no-member, not-callable
+from warnings import warn
+from pathlib import Path
+
 import numpy as np
-import pylab as plt
-from scipy.interpolate import griddata
+import torch
 
-def get_contour_levels(x, cred_level = [0.68268, 0.95450, 0.99730]):
-    x = np.sort(x)[::-1]  # Sort backwards
-    total_mass = x.sum()
-    enclosed_mass = np.cumsum(x)
-    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
-    levels = np.array(x[idx])
-    return levels
+from .types import (
+    Optional,
+    Device,
+    Tensor,
+    Array,
+    List,
+    Sequence,
+    Combinations,
+    PathType,
+)
 
-def cont2d(ax, re, x0, z0, i, j, cmap = 'gray_r', Nmax = 1000):
-    z, p = re.posterior(x0, [i, j], Nmax = Nmax)
-    z = z.numpy()
-    levels = get_contour_levels(p)
 
-    if z0 is not None:
-        ax.axvline(z0[i], color='r', ls=':')
-        ax.axhline(z0[j], color='r', ls=':')
-    
-    N = 100*1j
-    extent = [z[:,0].min(), z[:,0].max(), z[:,1].min(), z[:,1].max()]
-    xs,ys = np.mgrid[z[:,0].min():z[:,0].max():N, z[:,1].min():z[:,1].max():N]
-    resampled = griddata(z, p, (xs, ys))
-    ax.imshow(resampled.T, extent = extent, origin='lower', cmap=cmap, aspect = 'auto')
-    ax.tricontour(z[:,0], z[:,1], -p, levels = -levels, colors = 'k', linestyles=['-'])
-    
-def hist1d(ax, re, x0, z0, i, Nmax = 1000):
-    if z0 is not None:
-        ax.axvline(z0[i], color='r', ls=':')
-    z, p = re.posterior(x0, i, Nmax = Nmax)
-    ax.plot(z, p, 'k')
+def comb2d(indices):
+    output = []
+    for i in range(len(indices)):
+        for j in range(i + 1, len(indices)):
+            output.append([indices[i], indices[j]])
+    return output
 
-def plot1d(re1d, x0, dims = (15, 5), ncol = 6, params = None, labels = None, z0 = None, cmap = 'Greys', Nmax = 1000):
-    # TODO: Rewrite
-    if params is None:
-        params = range(re1d.zdim)
 
-    K = len(params)
-    nrow = (K-1)//ncol+1
+def combine_z(z: Tensor, combinations: Optional[List]) -> Tensor:
+    """Generate parameter combinations in last dimension using fancy indexing.
 
-    fig, axes = plt.subplots(nrow, ncol, figsize=dims)
-    lb = 0.125
-    tr = 0.9
-    whspace = 0.15
-    fig.subplots_adjust(left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace)
-    
-    if labels is None:
-        labels = ['z%i'%params[i] for i in range(K)]
-    for k in range(K):
-        if nrow == 1:
-            ax = axes[k]
-        else:
-            i, j = k%ncol, k//ncol
-            ax = axes[j, i]
-        hist1d(ax, re1d, x0, z0, params[k], Nmax = Nmax)
-        ax.set_xlabel(labels[k])
+    Args:
+        z: parameters of shape [..., Z]
+        combinations: list of parameter combinations.
 
-def corner(re1d, re2d, x0, dim = 10, params = None, labels = None, z0 = None, cmap = 'Greys', Nmax = 1000):
-    # TODO: Rewrite
-    if params is None:
-        params = range(re1d.zdim)
+    Returns:
+        output = z[..., combinations]
+    """
+    return z[..., combinations]
 
-    K = len(params)
-    fig, axes = plt.subplots(K, K, figsize=(dim, dim))
-    lb = 0.125
-    tr = 0.9
-    whspace = 0.1
-    fig.subplots_adjust(left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace)
-    
-    if labels is None:
-        labels = ['z%i'%params[i] for i in range(K)]
-    for i in range(K):
-        for j in range(K):
-            ax = axes[i, j]
-            # Switch off upper left triangle
-            if i < j:
-                ax.set_yticklabels([])
-                ax.set_xticklabels([])
-                ax.set_xticks([])
-                ax.set_yticks([])
-                ax.set_frame_on(False)
-                continue
 
-            # Formatting labels
-            if j > 0 or i == 0:
-                ax.set_yticklabels([])
-                #ax.set_yticks([])
-            if i < K-1:
-                ax.set_xticklabels([])
-                #ax.set_xticks([])
-            if i == K-1:
-                ax.set_xlabel(labels[j])
-            if j == 0 and i > 0:
-                ax.set_ylabel(labels[i])
+def set_device(gpu: bool = False) -> torch.device:
+    if gpu and torch.cuda.is_available():
+        device = torch.device("cuda")
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    elif gpu and not torch.cuda.is_available():
+        warn("Although the gpu flag was true, the gpu is not avaliable.")
+        device = torch.device("cpu")
+        torch.set_default_tensor_type("torch.FloatTensor")
+    else:
+        device = torch.device("cpu")
+        torch.set_default_tensor_type("torch.FloatTensor")
+    return device
 
-            # Set limits
-            #ax.set_xlim(x_lims[j])
-            #if i != j:
-            #    ax.set_ylim(y_lims[i])
 
-            # 2-dim plots
-            if j < i:
-                cont2d(ax, re2d, x0, z0, params[j], params[i], cmap = cmap, Nmax = Nmax)
+def get_x(list_xz):
+    """Extract x from batch of samples."""
+    return [xz["x"] for xz in list_xz]
 
-            if j == i:
-                hist1d(ax, re1d, x0, z0, params[i], Nmax = Nmax)
+
+def get_z(list_xz):
+    """Extract z from batch of samples."""
+    return [xz["z"] for xz in list_xz]
+
+
+def get_device_if_not_none(device: Optional[Device], tensor: Tensor) -> Device:
+    """Returns device if not None, else returns tensor.device."""
+    return tensor.device if device is None else device
+
+
+np_bool_types = [np.bool]
+np_int_types = [np.int8, np.int16, np.int32, np.int64]
+np_float_types = [np.float32, np.float64]
+torch_bool_types = [torch.bool]
+torch_int_types = [torch.int8, torch.int16, torch.int32, torch.int64]
+torch_float_types = [torch.float32, torch.float64]
+
+
+def array_to_tensor(
+    array: Array, dtype: Optional[torch.dtype] = None, device: Optional[Device] = None
+) -> Tensor:
+    """Converts np.ndarray and torch.Tensor to torch.Tensor with dtype and on device.
+    When dtype is None, unsafe casts all float-type arrays to torch.float32 and all int-type arrays to torch.int64
+    """
+    input_dtype = array.dtype
+    if isinstance(input_dtype, np.dtype):
+        if dtype is None:
+            if input_dtype in np_float_types:
+                dtype = torch.float32
+            elif input_dtype in np_int_types:
+                dtype = torch.int64
+            elif input_dtype in np_bool_types:
+                dtype = torch.bool
+            else:
+                raise TypeError(
+                    f"{input_dtype} was not a supported numpy int, float, or bool."
+                )
+        return torch.from_numpy(array).to(dtype=dtype, device=device)
+    elif isinstance(input_dtype, torch.dtype):
+        if dtype is None:
+            if input_dtype in torch_float_types:
+                dtype = torch.float32
+            elif input_dtype in torch_int_types:
+                dtype = torch.int64
+            elif input_dtype in torch_bool_types:
+                dtype = torch.bool
+            else:
+                raise TypeError(
+                    f"{input_dtype} was not a supported torch int, float, or bool."
+                )
+        return array.to(dtype=dtype, device=device)
+    else:
+        raise TypeError(
+            f"{input_dtype} was not recognized as a supported numpy.dtype or torch.dtype."
+        )
+
+
+def tobytes(x: Array):
+    if isinstance(x, np.ndarray):
+        return x.tobytes()
+    elif isinstance(x, Tensor):
+        return x.numpy().tobytes()
+    else:
+        raise TypeError(f"{type(x)} does not support tobytes.")
+
+
+def depth(seq: Sequence):
+    if seq and isinstance(seq, Sequence):
+        return 1 + max(depth(item) for item in seq)
+    else:
+        return 0
+
+
+def process_combinations(comb: Combinations):
+    d = depth(comb)
+    if d == 0:
+        return [[comb]]
+    elif d == 1:
+        return [[i] for i in comb]
+    elif d == 2:
+        return comb
+    else:
+        raise ValueError(f"{comb} is not understood to be of type Combinations.")
+
+
+def is_empty(directory: PathType):
+    directory = Path(directory)
+    if next(directory.iterdir(), None) is None:
+        return True
+    else:
+        return False
+
+
+if __name__ == "__main__":
+    pass
