@@ -1,21 +1,5 @@
-Landing page information
-========================
-
-Disclaimer
-----------
-
-**SWYFT is research software under heavy development in late alpha
-stage. We do use it in production for research papers, but it should be
-handled with care. If you encounter problems, please contact the authors
-or submit a bug report as a github issue. Pull requests are welcome.**
-
-SWYFT
-=====
-
-*Cursed by the dimensionality of your nuisance space? Wasted by Markov
-chains that reject your simulations? Exhausted from messing with
-simplistic models, because your inference algorithm cannot handle the
-truth? Try SWYFT for some pain relief.*
+Why SWYFT?
+==========
 
 SWYFT estimates marginal posteriors for parameters of interest
 :math:`\mathbf{z}`, which are formally obtained by integrating over all
