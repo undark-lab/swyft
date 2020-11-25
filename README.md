@@ -30,7 +30,7 @@ Simulator efficient nested neural marginal posterior estimation
 
 ## Documentation
 
-Documentation can be found [here](https://swyft.readthedocs.io/en/latest/).
-A getting started example is avaliable on google colab! 
+Documentation can be found [here](https://swyft.readthedocs.io/en/latest/).  
+A quickstart example is avaliable on google colab! 
 (Don't forget to use the gpu runtime!)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cweniger/swyft/blob/arxiv/notebooks/QuickStart.ipynb)
