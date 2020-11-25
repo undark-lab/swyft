@@ -12,6 +12,7 @@ Welcome to swyft's documentation!
 
    quickstart
    theory
+   hero
 
 Autodoc documentation
 =====================
