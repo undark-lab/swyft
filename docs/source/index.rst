@@ -10,7 +10,14 @@ Welcome to swyft's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   quickstart
+   theory
 
+Autodoc documentation
+=====================
+
+.. automodule:: swyft.estimation
+  :members:
 
 Indices and tables
 ==================
