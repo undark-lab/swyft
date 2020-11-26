@@ -25,10 +25,13 @@ Amortized Approximate Likelihood Ratio Estimation (AALR) [1], Nested Ratio
 Estimation (NRE, [2]) and the iP3 sample caching ([2]). In short, SWYFT = AALR
 + NRE + iP3.**
 
+[1] AALR paper
+
+[2] SWYFT paper
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Contents:
 
    context
