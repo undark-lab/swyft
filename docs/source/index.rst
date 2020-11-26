@@ -31,8 +31,8 @@ Estimation (NRE, [2]) and the iP3 sample caching ([2]). In short, SWYFT = AALR
    :maxdepth: 1
    :caption: Contents:
 
-   goals
    context
+   goals
    quickstart
    theorytex
 

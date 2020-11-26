@@ -1,5 +1,5 @@
-Context and goals of *swyft*
-============================
+What is *swyft*?
+================
 
 SWYFT estimates marginal posteriors for parameters of interest
 :math:`\mathbf{z}`, given some observation :math:`\mathbf{x}`. These are

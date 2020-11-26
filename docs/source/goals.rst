@@ -1,5 +1,8 @@
-Goals of *swyft*
-================
+Goals and plans
+===============
+
+Goals
+-----
 
 We are developing *swyft* to help solving our data analysis problems from
 various fields of astroparticle physics, and make an effort that the software
