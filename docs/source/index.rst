@@ -30,6 +30,7 @@ The latest version of *swyft* can be found on `github <https://github.com/undark
 
    goals
    context
+   install
    quickstart
    theorytex
 
