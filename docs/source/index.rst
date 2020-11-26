@@ -4,9 +4,9 @@
    contain the root `toctree` directive.
 
 .. warning::
-   SWYFT is research software under heavy development and still in its alpha
+   *swyft* is research software under heavy development and still in its alpha
    phase.  There are many rough edges, and things might break.  However, the
-   core algorithms work, and we use SWYFT in production for research papers.
+   core algorithms work, and we use *swyft* in production for research papers.
    If you encounter problems, please contact the authors or submit a bug
    report.**
 
@@ -16,7 +16,7 @@ Welcome to swyft's documentation!
 *Cursed by the dimensionality of your nuisance space? Wasted by Markov
 chains that reject your simulations? Exhausted from messing with
 simplistic models, because your inference algorithm cannot handle the
-truth? Try SWYFT for some pain relief.*
+truth? Try *swyft* for some pain relief.*
 
 
 .. toctree::

@@ -5,27 +5,27 @@ Goals and plans
 Overview
 --------
 
-SWYFT aims at combining the convenience and precision of traditional
+*swyft* aims at combining the convenience and precision of traditional
 likelihood-based inference with the flexibility and power of modern neural
-network based likelihood-free methods.  SWYFT is based on the concepts of
+network based likelihood-free methods.  *swyft* is based on the concepts of
 Amortized Approximate Likelihood Ratio Estimation (AALR), Nested Ratio
-Estimation (NRE) and the iP3 sample caching. In short, SWYFT = AALR + NRE +
+Estimation (NRE) and the iP3 sample caching. In short, *swyft* = AALR + NRE +
 iP3.
 
 
 Our goals
 ---------
 
-We are developing *swyft* to help solving our data analysis problems from
-various fields of astroparticle physics, and make an effort that the software
-will be useufl for others as well.  We have the following goals in mind.
+We are developing *swyft* to help solving our data analysis problems in
+astroparticle physics, and make an effort that the software is useful for
+others as well.  We have the following goals in mind.
 
-- Convenience: SWYFT enables neural network based inference with the
+- Convenience: *swyft* enables neural network based inference with the
   convenience of traditional sampling tools.
-- Precision: SWYFT is as precise as likelihood-based methods where those can be
+- Precision: *swyft* is as precise as likelihood-based methods where those can be
   applied, and flexible enough to cover the wide range of scenarios where they
   fail.
-- Efficiency: SWYFT is simulator efficient, and automatically re-uses previous
+- Efficiency: *swyft* is simulator efficient, and automatically re-uses previous
   simulator runs in new analyses.
 
 The current version of the code provides a prototype implementation of
@@ -45,8 +45,8 @@ Future plans
 - Flexible handling of high-dimensional constrained priors.
 
 .. note::
-   Our ultimate goal is to develop *swyft* into a flexible and reliable
-   inference tool, in collaboration with engineers from the Dutch eScience
-   center and SURFsara, as part of the eTEC-BIG grant “Dark Generators”. Any
+   The future development of *swyft* happens in collaboration with engineers
+   from the Dutch `eScience center <https://www.esciencecenter.nl/>`_ and
+   `SURFsara <https://surf.nl>`_, as part of the eTEC-BIG grant `Dark
+   Generators <https://www.esciencecenter.nl/projects/darkgenerators/>`_. Any
    feedback will be useful to shape the development of this tool. Stay tuned!
-
