@@ -8,7 +8,7 @@
    phase.  There are many rough edges, and things might break.  However, the
    core algorithms work, and we use *swyft* in production for research papers.
    If you encounter problems, please contact the authors or submit a bug
-   report.**
+   report.
 
 Welcome to swyft's documentation!
 =================================
