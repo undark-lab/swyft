@@ -20,3 +20,15 @@ For installation instructions, a quickstart guide, and documentation, see
 
 A quickstart example is avaliable on google colab (see badge link
 above).
+
+## Installation
+
+After installing [pytorch](https://pytorch.org/get-started/locally/) run the command:
+
+`pip install swyft`
+
+## Development
+
+If you would like to contribute to swyft, please use the development environment:
+
+`pip install -e swyft[dev]`
