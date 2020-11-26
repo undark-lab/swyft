@@ -7,4 +7,4 @@ from .plot import *
 from .train import *
 from .utils import *
 
-__all__ = ['Points']
+__all__ = ["Points"]
