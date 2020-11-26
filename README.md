@@ -23,7 +23,7 @@ above).
 
 ## Installation
 
-After installing [pytorch](https://pytorch.org/get-started/locally/) run the command:
+**After installing [pytorch](https://pytorch.org/get-started/locally/)** run the command:
 
 `pip install swyft`
 
