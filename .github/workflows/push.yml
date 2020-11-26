@@ -28,6 +28,7 @@ jobs:
     #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=180 --statistics
     - name: Black Code Formatter
       run: |
+        pip install black
         black . --check
     - name: Install dependencies
       run: |
