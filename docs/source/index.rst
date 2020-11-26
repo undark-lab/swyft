@@ -16,7 +16,7 @@ Welcome to swyft's documentation!
 *Cursed by the dimensionality of your nuisance space? Wasted by Markov
 chains that reject your simulations? Exhausted from messing with
 simplistic models, because your inference algorithm cannot handle the
-truth? Try *swyft* for some pain relief.*
+truth? Try swyft for some pain relief.*
 
 
 .. toctree::
