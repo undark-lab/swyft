@@ -4,7 +4,7 @@ Installation
 
 pip
 --------
-**After installing `pytorch`_**, please run the command:
+**After installing** `pytorch <https://pytorch.org/get-started/locally/>`_, please run the command:
 ::
   pip install swyft
 ::
