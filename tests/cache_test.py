@@ -19,8 +19,8 @@ class TestCacheIO:
             cache.save(td)
             items = glob.glob(td + "/**", recursive=True)
 
-        without_prefix = [item[len(td) + 1 :] for item in items]
-        without_blanks = [item for item in without_prefix if item]
+        without_prefix = sorted([item[len(td) + 1 :] for item in items])
+        without_blanks = sorted([item for item in without_prefix if item])
         assert all(
             [item == truth for item, truth in zip(without_blanks, Cache._filesystem)]
         )
