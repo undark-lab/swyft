@@ -16,16 +16,16 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: 3.6
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        # custom removed:
-        #    F401 - imported but unused
-        #    W291 - trailing whitespace
-        flake8 . --count --select=E9,F63,F7,F82,E251,F811,E302,E261,E231,F841,W293,W605,W292,W391,E128,E305,W503,W504 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=180 --statistics
+    # - name: Lint with flake8
+    #   run: |
+    #     pip install flake8
+    #     # stop the build if there are Python syntax errors or undefined names
+    #     # custom removed:
+    #     #    F401 - imported but unused
+    #     #    W291 - trailing whitespace
+    #     flake8 . --count --select=E9,F63,F7,F82,E251,F811,E302,E261,E231,F841,W293,W605,W292,W391,E128,E305,W503,W504 --show-source --statistics
+    #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+    #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=180 --statistics
     - name: Black Code Formatter
       run: |
         black . --check
