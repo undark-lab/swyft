@@ -12,9 +12,10 @@ model that includes the includes both the physics and detector
 simulator, :math:`p(\mathbf{z})` and :math:`p(\boldsymbol{\eta})` are
 parameter priors, and :math:`p(\mathbf{x})` is the Bayesian evidence.
 
-SWYFT aims at combining the flexibility and power of likelihood-free
-with the convenience and precision of likelihood-based inference. It
-follows the formula SWYFT = AALR + NRE + iP3.
+.. note::
+   SWYFT aims at combining the flexibility and power of likelihood-free with
+   the convenience and precision of likelihood-based inference. It follows the
+   formula SWYFT = AALR + NRE + iP3.
 
 Nuisance parameters — Yes please!
 ---------------------------------
@@ -36,9 +37,10 @@ no matter the dimension of the nuisance parameter space. For a given
 of :math:`\mathbf{x}` (which oddly enough can make the inference problem
 simpler rather than more difficult).
 
-SWYFT uses likelihood-free inference, which means that models can be as
-complex as they need to be to describe reality (more specifically, we
-use the effective AALR [1]).
+.. note::
+   SWYFT uses likelihood-free inference, which means that models can be as
+   complex as they need to be to describe reality (more specifically, we use
+   the effective AALR [1]).
 
 Not a Markov Chain
 ------------------
@@ -51,8 +53,9 @@ are lost afterwards.
 (constrained) prior*. Reusing these simulations is allowed, we don’t
 have to worry about breaking the Markov chain.
 
-SWYFT automatizes the re-use of simulator runs where appropriate, using
-a new resampling approach (iP3 sample caching [2]).
+.. note::
+   SWYFT automatizes the re-use of simulator runs where appropriate, using a
+   new resampling approach (iP3 sample caching [2]).
 
 High precision
 --------------
@@ -64,10 +67,11 @@ observation.
 Likelihood-free inference techniques can be less precise when there are
 too few simulations in parameter regions that matter most.
 
-SWYFT uses a new nested sampling scheme to target parameter regions most
-relevant for a given observation. This allows similar precision to
-likelihood-based approaches, without the high number of simulator runs
-(nested ratio estimation, NRE [2]).
+.. note::
+   SWYFT uses a new nested sampling scheme to target parameter regions most
+   relevant for a given observation. This allows similar precision to
+   likelihood-based approaches, without the high number of simulator runs
+   (nested ratio estimation, NRE [2]).
 
 Where is the catch?
 -------------------
@@ -78,8 +82,9 @@ complex and/or high-dimensional data (think of high-resolution images or
 spectra, combination of multiple data sets) requires some basic skills
 in writing neural networks using pytorch.
 
-SWYFT provides a simple gateway for spicing up your analysis with the
-power of neural network-based inference.
+.. note::
+   SWYFT provides a simple gateway for spicing up your analysis with the power
+   of neural network-based inference.
 
 Our aspirational goals
 ----------------------
@@ -95,18 +100,12 @@ have the following goals in mind, which are already partially realized.
    studies.
 -  …
 
-We are currently developing SWYFT towards a full-fledged reliable
-inference tool, together with engineers the Dutch eScience center and
-SURFsara, as part of the eTEC-BIG grant “Dark Generators”. Any feedback
-will be useful to shape the development of this tool. Stay tuned!
+.. note::
+   We are currently developing SWYFT towards a full-fledged reliable inference
+   tool, together with engineers the Dutch eScience center and SURFsara, as
+   part of the eTEC-BIG grant “Dark Generators”. Any feedback will be useful to
+   shape the development of this tool. Stay tuned!
 
-How does it work?
------------------
-
-Details can be found here:
-
-`SWYFT theory
-documentation <https://www.notion.so/SWYFT-theory-documentation-061804b34f0447178a5904617cf76745>`__
 
 References
 ----------
