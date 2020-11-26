@@ -1,7 +1,10 @@
 What is *swyft*?
 ================
 
-SWYFT estimates marginal posteriors for parameters of interest
+Marginal posteriors
+-------------------
+
+*swyft* directly estimates marginal posteriors for parameters of interest
 :math:`\mathbf{z}`, given some observation :math:`\mathbf{x}`. These are
 formally obtained by integrating over all remaining (nuisance) parameters
 :math:`\boldsymbol{\eta}`,
@@ -36,7 +39,7 @@ parameters just increase the variance of :math:`\mathbf{x}` (which oddly enough
 can make the inference problem simpler rather than more difficult).
 
 .. note::
-   SWYFT uses likelihood-free inference, which means that models can be as
+   *swyft* uses likelihood-free inference, which means that models can be as
    complex as they need to be to describe reality (more specifically, we use
    the effective AALR [1]).
 
@@ -53,7 +56,7 @@ are lost afterwards.
 have to worry about breaking the Markov chain.
 
 .. note::
-   SWYFT automatizes the re-use of simulator runs where appropriate, using a
+   *swyft* automatizes the re-use of simulator runs where appropriate, using a
    new resampling approach (iP3 sample caching [2]).
 
 
@@ -68,7 +71,7 @@ Likelihood-free inference techniques can be less precise when there are
 too few simulations in parameter regions that matter most.
 
 .. note::
-   SWYFT uses a new nested sampling scheme to target parameter regions most
+   *swyft* uses a new nested sampling scheme to target parameter regions most
    relevant for a given observation. This allows similar precision to
    likelihood-based approaches, without the high number of simulator runs
    (nested ratio estimation, NRE [2]).
@@ -77,14 +80,14 @@ too few simulations in parameter regions that matter most.
 Where is the catch?
 -------------------
 
-SWYFT uses neural likelihood estimation. The package is supposed to work
+*swyft* uses neural likelihood estimation. The package is supposed to work
 out-of-the-box for simple low-dimensional data. However, tackling
 complex and/or high-dimensional data (think of high-resolution images or
 spectra, combination of multiple data sets) requires some basic skills
 in writing neural networks using pytorch.
 
 .. note::
-   SWYFT provides a simple gateway to spice up your analysis with the power of
+   *swyft* provides a simple gateway to spice up your analysis with the power of
    neural network-based inference.
 
 
@@ -93,4 +96,4 @@ References
 
 [1] AALR
 
-[2] SWYFT paper
+[2] *swyft* paper

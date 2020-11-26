@@ -1,8 +1,20 @@
 Goals and plans
 ===============
 
-Goals
------
+
+Overview
+--------
+
+SWYFT aims at combining the convenience and precision of traditional
+likelihood-based inference with the flexibility and power of modern neural
+network based likelihood-free methods.  SWYFT is based on the concepts of
+Amortized Approximate Likelihood Ratio Estimation (AALR), Nested Ratio
+Estimation (NRE) and the iP3 sample caching. In short, SWYFT = AALR + NRE +
+iP3.
+
+
+Our goals
+---------
 
 We are developing *swyft* to help solving our data analysis problems from
 various fields of astroparticle physics, and make an effort that the software
@@ -20,8 +32,8 @@ The current version of the code provides a prototype implementation of
 algorithms that are capable of fullfilling the above goals.
 
 
-Plans
------
+Future plans
+------------
 
 - Automatized parallelization of simulator runs on computing clusters using
   `dask`.
@@ -37,5 +49,4 @@ Plans
    inference tool, in collaboration with engineers from the Dutch eScience
    center and SURFsara, as part of the eTEC-BIG grant “Dark Generators”. Any
    feedback will be useful to shape the development of this tool. Stay tuned!
-
 

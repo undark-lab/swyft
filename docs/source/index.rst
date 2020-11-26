@@ -18,24 +18,13 @@ chains that reject your simulations? Exhausted from messing with
 simplistic models, because your inference algorithm cannot handle the
 truth? Try SWYFT for some pain relief.*
 
-**SWYFT aims at combining the convenience and precision of traditional
-likelihood-based inference with the flexibility and power of modern neural
-network based likelihood-free methods.  SWYFT is based on the concepts of
-Amortized Approximate Likelihood Ratio Estimation (AALR) [1], Nested Ratio
-Estimation (NRE, [2]) and the iP3 sample caching ([2]). In short, SWYFT = AALR
-+ NRE + iP3.**
-
-[1] AALR paper
-
-[2] SWYFT paper
-
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   context
    goals
+   context
    quickstart
    theorytex
 
