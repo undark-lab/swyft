@@ -9,20 +9,20 @@ Overview
 likelihood-based inference with the flexibility and power of modern neural
 network based likelihood-free methods.  *swyft* is based on the concepts of
 Amortized Approximate Likelihood Ratio Estimation (AALR), Nested Ratio
-Estimation (NRE) and the iP3 sample caching. In short, *swyft* = AALR + NRE +
+Estimation (NRE), and iP3 sample caching. In short, *swyft* = AALR + NRE +
 iP3.
 
 
 Our goals
 ---------
 
-We are developing *swyft* to help solving our data analysis problems in
-astroparticle physics, and make an effort that the software is useful for
-others as well.  We have the following goals in mind.
+We are developing *swyft* to help solve our data analysis problems in
+astroparticle physics, and provide a useful software tool for others simultanously.
+We have the following goals in mind.
 
-- Convenience: *swyft* enables neural network based inference with the
-  convenience of traditional sampling tools.
-- Precision: *swyft* is as precise as likelihood-based methods where those can be
+- Convenience: *swyft* utilizes neural networks for likelihood-free inference with
+  the simplicity of traditional sampling tools.
+- Precision: *swyft* is as precise as likelihood-based methods, where those can be
   applied, and flexible enough to cover the wide range of scenarios where they
   fail.
 - Efficiency: *swyft* is simulator efficient, and automatically re-uses previous
