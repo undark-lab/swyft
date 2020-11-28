@@ -23,6 +23,9 @@ truth? Try swyft for some pain relief.*
 
 The latest version of *swyft* can be found on `github <https://github.com/undark-lab/swyft>`_.
 
+On google colab we put a [quickstart guide](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb),
+and a [tutorial](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Tutorial1.ipynb).
+
 
 .. toctree::
    :maxdepth: 2
@@ -33,13 +36,8 @@ The latest version of *swyft* can be found on `github <https://github.com/undark
    install
    quickstart
    theorytex
+   autodoc
 
-Autodoc documentation
-=====================
-
-.. automodule:: swyft
-  :members:
-  :undoc-members:
 
 Indices and tables
 ==================
