@@ -1,4 +1,4 @@
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/QuickStart1.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb)
 [![Documentation Status](https://readthedocs.org/projects/swyft/badge/?version=latest)](https://swyft.readthedocs.io/en/latest/?badge=latest)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -18,7 +18,7 @@ truth? Try swyft for some pain relief.*
 For a quickstart guide, documentation, and more see
 [readthedocs](https://swyft.readthedocs.io/en/latest/).  
 
-A simple example is avaliable on [google colab](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/QuickStart1.ipynb).
+A simple example is avaliable on [google colab](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb).
 
 ## Installation
 
