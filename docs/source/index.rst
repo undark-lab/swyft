@@ -23,8 +23,8 @@ truth? Try swyft for some pain relief.*
 
 The latest version of *swyft* can be found on `github <https://github.com/undark-lab/swyft>`_.
 
-On google colab we put a [quickstart guide](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb),
-and a [tutorial](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Tutorial.ipynb).
+On google colab we put a `quickstart guide <https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb>`_,
+and a `tutorial <https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Tutorial.ipynb>`_.
 
 
 .. toctree::
