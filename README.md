@@ -18,7 +18,7 @@ truth? Try swyft for some pain relief.*
 For a quickstart guide, documentation, and more see
 [readthedocs](https://swyft.readthedocs.io/en/latest/).  
 
-A simple example is avaliable on [google colab](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/QuickStart.ipynb).
+A simple example is avaliable on [google colab](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/QuickStart1.ipynb).
 
 ## Installation
 
