@@ -167,7 +167,7 @@ def get_stats(z, p):
             }
 
 
-def cred1d(re, x0 = x0):
+def cred1d(re, x0):
     zdim = re.zdim
     for i in range(zdim):
         z, p = re.posterior(x0, i)
