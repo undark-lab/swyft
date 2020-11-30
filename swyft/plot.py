@@ -1,6 +1,12 @@
 import numpy as np
+
+# import matplotlib
+# import matplotlib.pyplot as plt
 import pylab as plt
 from scipy.interpolate import griddata
+
+from .estimation import RatioEstimator
+from .types import Array, Tuple, Sequence
 
 
 def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
@@ -12,7 +18,28 @@ def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
     return levels
 
 
-def cont2d(ax, re, x0, z0, i, j, cmap="gray_r", max_n_points=1000):
+def cont2d(
+    ax,
+    re: RatioEstimator,
+    x0: Array,
+    z0: Array,
+    i: int,
+    j: int,
+    cmap: str = "gray_r",
+    max_n_points: int = 1000,
+):
+    """Create a 2d contour plot.
+
+    Args:
+        ax (matplotlib.axes.Axes): matplotlib axes
+        re: train ratio estimator
+        x0: true observation
+        z0: true parameters
+        i: combination index
+        j: combination index
+        cmap: color map
+        max_n_points: number of points to train on
+    """
     z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
     levels = get_contour_levels(p)
 
@@ -38,16 +65,29 @@ def hist1d(ax, re, x0, z0, i, max_n_points=1000):
 
 
 def plot1d(
-    re1d,
-    x0,
-    dims=(15, 5),
-    ncol=None,
-    params=None,
-    labels=None,
-    z0=None,
-    cmap="Greys",
-    max_n_points=1000,
+    re1d: RatioEstimator,
+    x0: Array,
+    dims: Tuple[int, int] = (15, 5),
+    ncol: int = None,
+    params: Sequence[str] = None,
+    labels: Sequence[str] = None,
+    z0: Array = None,
+    cmap: str = "Greys",
+    max_n_points: int = 1000,
 ):
+    """Create a one dimensional plot.
+
+    Args:
+        re1d:
+        x0:
+        dims: dimension of output plot
+        ncol: =None
+        params: =None
+        labels: =None,
+        z0: =None,
+        cmap: color map
+        max_n_points: number of points to train on
+    """
     # TODO: Rewrite
     if params is None:
         params = range(re1d.zdim)
@@ -79,16 +119,16 @@ def plot1d(
 
 
 def corner(
-    re1d,
-    re2d,
-    x0,
-    dim=10,
-    params=None,
-    labels=None,
-    z0=None,
-    cmap="Greys",
-    max_n_points=1000,
-):
+    re1d: RatioEstimator,
+    re2d: RatioEstimator,
+    x0: Array,
+    dim: int = 10,
+    params: Sequence[str] = None,
+    labels: Sequence[str] = None,
+    z0: Array = None,
+    cmap: str = "Greys",
+    max_n_points: int = 1000,
+) -> None:
     # TODO: Rewrite
     if params is None:
         params = range(re1d.zdim)

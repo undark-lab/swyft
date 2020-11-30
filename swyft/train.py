@@ -6,10 +6,10 @@ import numpy as np
 import torch
 
 from .utils import combine_z
-from .types import Sequence
+from .types import Sequence, Combinations
 
 
-def loss_fn(network, xz, combinations=None):
+def loss_fn(network, xz, combinations: Combinations = None):
     """Evaluate binary-cross-entropy loss function. Mean over batch.
 
     Args:
@@ -221,7 +221,17 @@ def trainloop(
         net.load_state_dict(sd)
 
 
-def get_norms(xz, combinations=None, N=300):
+def get_norms(xz, combinations: Combinations = None, N: int = 300):
+    """Calculate the statistics of xz.
+
+    Args:
+        xz: x and z in a dict
+        combinations:
+        N: size of sample
+
+    Returns:
+        x_mean, x_std, z_mean, z_std
+    """
     irand = np.random.choice(len(xz), N)
     x = [xz[i]["x"] for i in irand]
     z = [xz[i]["z"] for i in irand]

@@ -22,6 +22,7 @@ from .types import (
     Device,
     Dataset,
     Combinations,
+    Callable,
     Array,
     Union,
     PathType,
@@ -53,7 +54,7 @@ class RatioEstimator:
             head: initialized module which processes observations, head(x0) = y
             previous_ratio_estimator: ratio estimator from another round
             device: default is cpu
-            statistics: mean and std for x and z
+            statistics: x_mean, x_std, z_mean, z_std
             recycle_net: set net with the previous ratio estimator's net
         """
         self.points = points
@@ -81,11 +82,11 @@ class RatioEstimator:
         else:
             return process_combinations(self._combinations)
 
-    def _init_net(self, statistics, recycle_net: bool):
+    def _init_net(self, statistics: Tuple, recycle_net: bool):
         """Options for custom network initialization.
 
         Args:
-            statistics: mean and std for x and z
+            statistics: x_mean, x_std, z_mean, z_std
             recycle_net (bool): set net with the previous ratio estimator's net
         """
         if recycle_net:
@@ -123,12 +124,12 @@ class RatioEstimator:
         """Train higher-dimensional marginal posteriors.
 
         Args:
-            max_epochs (int): maximum number of training epochs
-            batch_size (int): minibatch size
-            lr_schedule (list): list of learning rates
-            early_stopping_patience (int): early stopping patience
-            nworkers (int): number of Dataloader workers
-            percent_validation (float): percentage to allocate to validation set
+            max_epochs: maximum number of training epochs
+            batch_size: minibatch size
+            lr_schedule: list of learning rates
+            early_stopping_patience: early stopping patience
+            nworkers: number of Dataloader workers (0 for no dataloader parallelization)
+            percent_validation: percentage to allocate to validation set
         """
         trainloop(
             self.net,
@@ -171,16 +172,16 @@ class RatioEstimator:
         x0: Array,
         combination_indices: Union[int, Sequence[int]],
         max_n_points: int = 1000,
-    ):
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve estimated marginal posterior.
 
         Args:
-            x0 (array): real observation to calculate posterior
-            combination_indices (int, list of ints): z indices in self.combinations
-            max_n_points (int): number of points to calculate ratios
+            x0: real observation to calculate posterior
+            combination_indices: z indices in self.combinations
+            max_n_points: number of points to calculate ratios on
 
         Returns:
-            parameter (z) array, posterior array
+            parameter array, posterior array
         """
         self._eval_ratios(x0, max_n_points=max_n_points)
 
@@ -227,9 +228,18 @@ class RatioEstimator:
         cache: Cache,
         path: PathType,
         head: nn.Module = None,
-        noisehook=None,
+        noisehook: Callable = None,
         device: Device = None,
     ):
+        """Load pickled ratio estimator.
+
+        Args:
+            cache: cache object on which the estimator was trained
+            path: path to pickled ratio estimator
+            head: head network utilized in pickled ratio estimator
+            noisehook: maps from (x, z) to x with noise
+            device
+        """
         path = Path(path)
         with path.open("rb") as f:
             complete = pickle.load(f)

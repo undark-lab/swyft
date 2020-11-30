@@ -19,7 +19,13 @@ from .types import (
 )
 
 
-def comb2d(indices):
+def get_2d_combinations(indices: List[int]):
+    """Given a list of indices, calculate the lower triangular part of the cartesian product.
+    Appropriate for retrieving all 2d combinations of indices (up to permutation).
+
+    Args:
+        indices: a list of indices
+    """
     output = []
     for i in range(len(indices)):
         for j in range(i + 1, len(indices)):
@@ -41,6 +47,7 @@ def combine_z(z: Tensor, combinations: Optional[List]) -> Tensor:
 
 
 def set_device(gpu: bool = False) -> torch.device:
+    """Select device, defaults to cpu."""
     if gpu and torch.cuda.is_available():
         device = torch.device("cuda")
         torch.set_default_tensor_type("torch.cuda.FloatTensor")
@@ -170,7 +177,13 @@ def get_stats(z, p):
     }
 
 
-def cred1d(re, x0):
+def cred1d(re, x0: Array):
+    """Calculate credible regions.
+
+    Args:
+        re (RatioEstimator): ratio estimators
+        x0: true observation
+    """
     zdim = re.zdim
     for i in range(zdim):
         z, p = re.posterior(x0, i)

@@ -4,7 +4,7 @@ from .intensity import get_unit_intensity, get_constrained_intensity
 from .network import OnlineNormalizationLayer
 from .plot import cont2d, plot1d, corner
 from .train import get_norms
-from .utils import set_device, comb2d, cred1d
+from .utils import set_device, get_2d_combinations, cred1d
 
 __all__ = [
     "Cache",
@@ -20,6 +20,6 @@ __all__ = [
     "corner",
     "get_norms",
     "set_device",
-    "comb2d",
+    "get_2d_combinations",
     "cred1d",
 ]
