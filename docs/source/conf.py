@@ -44,6 +44,16 @@ autodoc_typehints = "description"
 napoleon_numpy_docstring = False
 autoclass_content = "both"
 
+autodoc_type_aliases = {
+    "PathType": "swyft.typing.PathType",
+    "Device": "swyft.typing.Device",
+    "Array": "swyft.typing.Array",
+    "Combinations": "swyft.typing.Combinations",
+    "Shape": "swyft.typing.Shape",
+    "DictInt": "swyft.typing.DictInt",
+    "DictShape": "swyft.typing.DictShape",
+}
+
 
 # -- General configuration ------------------------------------------------
 
