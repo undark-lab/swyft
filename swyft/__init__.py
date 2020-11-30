@@ -23,4 +23,5 @@ __all__ = [
     "set_device",
     "comb2d",
     "cred1d",
+    "__version__",
 ]
