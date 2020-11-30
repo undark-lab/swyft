@@ -155,16 +155,19 @@ def is_empty(directory: PathType):
 def get_stats(z, p):
     # Returns central credible intervals
     zmax = z[p.argmax()]
-    c = scipy.integrate.cumtrapz(p, z, initial = 0)
+    c = scipy.integrate.cumtrapz(p, z, initial=0)
     res = np.interp([0.025, 0.16, 0.5, 0.84, 0.975], c, z)
     xmedian = res[2]
     xerr68 = [res[1], res[3]]
     xerr95 = [res[0], res[4]]
-    return {'mode': zmax, 'median': xmedian,
-            'cred68': xerr68, 'cred95': xerr95,
-            'err68': (xerr68[1] - xerr68[0])/2,
-            'err95': (xerr95[1] - xerr95[0])/2,
-            }
+    return {
+        "mode": zmax,
+        "median": xmedian,
+        "cred68": xerr68,
+        "cred95": xerr95,
+        "err68": (xerr68[1] - xerr68[0]) / 2,
+        "err95": (xerr95[1] - xerr95[0]) / 2,
+    }
 
 
 def cred1d(re, x0):
@@ -172,7 +175,7 @@ def cred1d(re, x0):
     for i in range(zdim):
         z, p = re.posterior(x0, i)
         res = get_stats(z, p)
-        print("z%i = %.5f +- %.5f"%(i, res['median'], res['err68']))
+        print("z%i = %.5f +- %.5f" % (i, res["median"], res["err68"]))
 
 
 if __name__ == "__main__":

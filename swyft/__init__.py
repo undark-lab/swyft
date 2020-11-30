@@ -1,12 +1,14 @@
-from .cache import DirectoryCache, MemoryCache
+from .cache import Cache, DirectoryCache, MemoryCache
 from .estimation import RatioEstimator, Points
 from .intensity import get_unit_intensity, get_constrained_intensity
 from .network import OnlineNormalizationLayer
 from .plot import cont2d, plot1d, corner
 from .train import get_norms
 from .utils import set_device, comb2d, cred1d
+from .__version__ import __version__
 
 __all__ = [
+    "Cache",
     "DirectoryCache",
     "MemoryCache",
     "RatioEstimator",
@@ -21,4 +23,5 @@ __all__ = [
     "set_device",
     "comb2d",
     "cred1d",
+    "__version__",
 ]

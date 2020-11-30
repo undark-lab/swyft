@@ -7,11 +7,14 @@ import zarr
 import numcodecs
 from tqdm import tqdm
 
+from .intensity import Intensity
 from .utils import is_empty
-from .types import Shape, Union, Sequence, PathType
+from .types import Shape, Union, Sequence, PathType, Callable, Array
 
 
 class Cache(ABC):
+    """Abstract base class for various caches."""
+
     _filesystem = (
         "metadata",
         "metadata/intensity",
@@ -31,9 +34,9 @@ class Cache(ABC):
         """Initialize Cache content dimensions.
 
         Args:
-            zdim (int): Number of z dimensions
-            xshape (tuple): Shape of x array
-            store (zarr.MemoryStore, zarr.DirectoryStore)
+            zdim: Number of z dimensions
+            xshape: Shape of x array
+            store
         """
         self._zdim = None
         self._xshape = None
@@ -90,13 +93,15 @@ class Cache(ABC):
         return group["samples/z"].shape[1]
 
     @property
-    def xshape(self):
+    def xshape(self) -> Shape:
+        """Shape of observations."""
         if self._xshape is None:
             self._xshape = self._extract_xshape_from_zarr_group(self.root)
         return self._xshape
 
     @property
-    def zdim(self):
+    def zdim(self) -> int:
+        """Dimension of parameters."""
         if self._zdim is None:
             self._zdim = self._extract_zdim_from_zarr_group(self.root)
         return self._zdim
@@ -133,28 +138,32 @@ class Cache(ABC):
         m = np.ones((len(z), 1), dtype="bool")
         self.m.append(m)
 
-    def intensity(self, zlist):
-        """Evaluate Cache intensity function.
+    def intensity(self, z: Array) -> np.ndarray:
+        """Evaluate the cache's intensity function.
 
         Args:
-            z (array-like): list of parameter values.
+            z: list of parameter values.
         """
         self._update()
 
         if len(self.u) == 0:
-            return np.zeros(len(zlist))
+            return np.zeros(len(z))
         else:
-            return np.array([self.u[i](zlist) for i in range(len(self.u))]).max(axis=0)
+            return np.array([self.u[i](z) for i in range(len(self.u))]).max(axis=0)
 
-    def grow(self, p):
-        """Grow number of samples in cache."""
+    def grow(self, intensity: Intensity):
+        """Given an intensity function, add parameter samples to the cache.
+
+        Args:
+            intensity: target parameter intensity function
+        """
         # Proposed new samples z from p
-        z_prop = p.sample()
+        z_prop = intensity.sample()
 
         # Rejection sampling from proposal list
         accepted = []
         ds_intensities = self.intensity(z_prop)
-        target_intensities = p(z_prop)
+        target_intensities = intensity(z_prop)
         for _, Ids, It in zip(z_prop, ds_intensities, target_intensities):
             rej_prob = np.minimum(1, Ids / It)
             w = np.random.rand()
@@ -170,22 +179,22 @@ class Cache(ABC):
 
         # save intensity function. We collect them all to find their maximum.
         self.u.resize(len(self.u) + 1)
-        self.u[-1] = p
+        self.u[-1] = intensity
 
-    def sample(self, p):
+    def sample(self, intensity: Intensity):
         """Sample from Cache.
 
         Args:
-            p (intensity function): Target intensity function.
+            intensity: target parameter intensity function
         """
         self._update()
 
-        self.grow(p)
+        self.grow(intensity)
 
         accepted = []
         zlist = self.z[:]
         I_ds = self.intensity(zlist)
-        I_target = p(zlist)
+        I_target = intensity(zlist)
         for i, z in enumerate(zlist):
             accept_prob = I_target[i] / I_ds[i]
             assert accept_prob <= 1.0, (
@@ -215,11 +224,11 @@ class Cache(ABC):
         self.x[i] = x
         self.m[i] = False
 
-    def simulate(self, simulator):
-        """Run simulator sequentially for missing points.
+    def simulate(self, simulator: Callable):
+        """Run simulator sequentially on parameter cache with missing corresponding simulations.
 
         Args:
-            simulator (callable): Simulator
+            simulator: simulates an observation given a parameter input
         """
         self._update()
 
