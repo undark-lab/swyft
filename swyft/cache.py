@@ -248,8 +248,8 @@ class DirectoryCache(Cache):
         """Instantiate an iP3 cache stored in a directory.
 
         Args:
-            zdim (int): Number of z dimensions
-            xshape (tuple): Shape of x array
+            zdim: Number of z dimensions
+            xshape: Shape of x array
             path: path to storage directory
         """
         self.store = zarr.DirectoryStore(path)
@@ -270,8 +270,8 @@ class MemoryCache(Cache):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
-            zdim (int): Number of z dimensions
-            xshape (tuple): Shape of x array
+            zdim: Number of z dimensions
+            xshape: Shape of x array
             store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in loading.
         """
         if store is None:
