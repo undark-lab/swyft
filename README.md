@@ -22,7 +22,7 @@ A simple example is avaliable on [google colab](https://colab.research.google.co
 
 ## Installation
 
-<ins>**After installing [pytorch](https://pytorch.org/get-started/locally/)**</ins>, please run the command:
+**After installing [pytorch](https://pytorch.org/get-started/locally/)**, please run the command:
 
 `pip install swyft`
 
