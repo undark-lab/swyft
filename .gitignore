@@ -1,3 +1,6 @@
+# Generated versions
+swyft/__version__.py
+
 # Mac Item
 .DS_Store
 

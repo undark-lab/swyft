@@ -5,7 +5,6 @@ from .network import OnlineNormalizationLayer
 from .plot import cont2d, plot1d, corner
 from .train import get_norms
 from .utils import set_device, comb2d, cred1d
-from .__version__ import __version__
 
 __all__ = [
     "Cache",
@@ -23,5 +22,4 @@ __all__ = [
     "set_device",
     "comb2d",
     "cred1d",
-    "__version__",
 ]
