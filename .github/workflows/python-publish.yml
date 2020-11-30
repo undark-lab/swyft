@@ -27,5 +27,5 @@ jobs:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        python -m pep517.build
+        python -m pep517.build .
         twine upload dist/*
