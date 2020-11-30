@@ -36,7 +36,7 @@ class Cache(ABC):
         Args:
             zdim: Number of z dimensions
             xshape: Shape of x array
-            store
+            store: zarr storage.
         """
         self._zdim = None
         self._xshape = None
@@ -215,7 +215,8 @@ class Cache(ABC):
                 indices.append(i)
         return indices
 
-    def requires_sim(self):
+    def requires_sim(self) -> bool:
+        """Check whether there are parameters which require a matching simulation."""
         self._update()
 
         return len(self._require_sim_idx()) > 0
@@ -279,8 +280,8 @@ class MemoryCache(Cache):
             self.store = store
         super().__init__(zdim=zdim, xshape=xshape, store=self.store)
 
-    def save(self, path: PathType):
-        """Copy the current state of the MemoryCache to a directory."""
+    def save(self, path: PathType) -> None:
+        """Save the current state of the MemoryCache to a directory."""
         path = Path(path)
         if path.exists() and not path.is_dir():
             raise NotADirectoryError(f"{path} should be a directory")
@@ -294,7 +295,7 @@ class MemoryCache(Cache):
 
     @classmethod
     def load(cls, path: PathType):
-        """Copy existing DirectoryStore state into a MemoryCache object."""
+        """Load existing DirectoryStore state into a MemoryCache object."""
         memory_store = zarr.MemoryStore()
         directory_store = zarr.DirectoryStore(path)
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)

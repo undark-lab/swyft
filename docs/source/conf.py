@@ -42,6 +42,7 @@ autodoc_mock_imports = [
 
 autodoc_typehints = "description"
 napoleon_numpy_docstring = False
+autoclass_content = "both"
 
 
 # -- General configuration ------------------------------------------------
@@ -57,7 +58,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
-    "sphinxcontrib.napoleon",
+    "sphinx.ext.napoleon",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

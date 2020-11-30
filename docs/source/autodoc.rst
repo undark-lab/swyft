@@ -1,4 +1,4 @@
-Autodoc documentation
+swyft API
 =====================
 
 .. automodule:: swyft

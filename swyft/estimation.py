@@ -50,11 +50,11 @@ class RatioEstimator:
         Args:
             points: points dataset from the iP3 sample cache
             combinations: which combinations of z parameters to learn
-            head (nn.Module): (optional) initialized module which processes observations, head(x0) = y
-            previous_ratio_estimator: (optional) ratio estimator from another round
-            device: (optional) default is cpu
-            statistics (): mean and std for x and z
-            recycle_net (bool): set net with the previous ratio estimator's net
+            head: initialized module which processes observations, head(x0) = y
+            previous_ratio_estimator: ratio estimator from another round
+            device: default is cpu
+            statistics: mean and std for x and z
+            recycle_net: set net with the previous ratio estimator's net
         """
         self.points = points
         self._combinations = combinations
@@ -74,7 +74,8 @@ class RatioEstimator:
         return self.points.xshape
 
     @property
-    def combinations(self):
+    def combinations(self) -> Combinations:
+        """Marginals that the ratio estimator learns."""
         if self._combinations is None:
             return [[i] for i in range(self.zdim)]
         else:
