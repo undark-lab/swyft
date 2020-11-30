@@ -24,18 +24,15 @@ import sphinx_rtd_theme
 from pkg_resources import get_distribution
 
 
-autodoc_mock_imports = [
-    "pylab",
-    "tqdm",
-    "numcodecs",
-    "zarr",
-    "yaml",
-    "pyro",
-    "numpy",
-    "torch",
-    "pykeops",
-    "scipy",
-]
+# autodoc_mock_imports = [
+#     "pylab",
+#     "tqdm",
+#     "numcodecs",
+#     "zarr",
+#     "numpy",
+#     "torch",
+#     "scipy",
+# ]
 
 
 # -- Custom config --------------------------------------------------------
