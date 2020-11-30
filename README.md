@@ -25,3 +25,7 @@ A simple example is avaliable on [google colab](https://colab.research.google.co
 <ins>**After installing [pytorch](https://pytorch.org/get-started/locally/)**</ins>, please run the command:
 
 `pip install swyft`
+
+## Relevant Tools
+
+swyft exists in an ecosystem of posterior estimators. The project [sbi](https://github.com/mackelab/sbi) is particularly relevant as it is a collection of likelihood-free / simulator-based methods.
