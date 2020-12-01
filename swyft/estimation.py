@@ -90,11 +90,11 @@ class RatioEstimator:
             recycle_net (bool): set net with the previous ratio estimator's net
         """
         if recycle_net:
-            if statistics is not None:
+            if self.head is not None:
                 warn(
-                    "Since the network is being recycled, your statistics are being ignored."
-                )
-            return deepcopy(self.prev_re.net)
+                    "using previous re head rather than yours."
+                )  # TODO change this to state_dict
+            self.head = deepcopy(self.prev_re.net.head)
         # TODO this is an antipattern address it in network by removing pnum and pdim
         pnum = len(self.combinations)
         pdim = len(self.combinations[0])
