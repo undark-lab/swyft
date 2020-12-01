@@ -3,7 +3,7 @@ from .estimation import RatioEstimator, Points
 from .intensity import get_unit_intensity, get_constrained_intensity
 from .network import OnlineNormalizationLayer
 from .plot import cont2d, plot1d, corner
-from .train import get_norms
+from .train import calculate_statistics
 from .utils import set_device, get_2d_combinations, cred1d
 
 __all__ = [
@@ -18,7 +18,7 @@ __all__ = [
     "cont2d",
     "plot1d",
     "corner",
-    "get_norms",
+    "calculate_statistics",
     "set_device",
     "get_2d_combinations",
     "cred1d",
