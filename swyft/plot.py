@@ -1,11 +1,8 @@
 import numpy as np
 
-# import matplotlib
-# import matplotlib.pyplot as plt
 import pylab as plt
 from scipy.interpolate import griddata
 
-from .estimation import RatioEstimator
 from .types import Array, Tuple, Sequence
 
 
@@ -20,7 +17,7 @@ def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
 
 def cont2d(
     ax,
-    re: RatioEstimator,
+    re: "swyft.estimation.RatioEstimator",
     x0: Array,
     z0: Array,
     i: int,
@@ -65,7 +62,7 @@ def hist1d(ax, re, x0, z0, i, max_n_points=1000):
 
 
 def plot1d(
-    re1d: RatioEstimator,
+    re1d: "swyft.estimation.RatioEstimator",
     x0: Array,
     dims: Tuple[int, int] = (15, 5),
     ncol: int = None,
@@ -119,8 +116,8 @@ def plot1d(
 
 
 def corner(
-    re1d: RatioEstimator,
-    re2d: RatioEstimator,
+    re1d: "swyft.estimation.RatioEstimator",
+    re2d: "swyft.estimation.RatioEstimator",
     x0: Array,
     dim: int = 10,
     params: Sequence[str] = None,

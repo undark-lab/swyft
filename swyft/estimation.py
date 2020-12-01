@@ -11,11 +11,9 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
-from .cache import Cache
-from .train import get_norms, trainloop
+from .train import trainloop
 from .network import Network
-from .eval import get_ratios, eval_net
-from .intensity import construct_intervals, Mask1d, FactorMask, Intensity
+from .eval import get_ratios
 from .types import (
     Sequence,
     Tuple,
@@ -89,13 +87,9 @@ class RatioEstimator:
         """
         # TODO change this to state_dict and deal with the self.head is None case more gracefully.
         if previous_ratio_estimator is not None:
-            if self.head is None:
-                raise ValueError(
-                    "You didn't define a head for this network, but the previous ratio estimator did. That's strange."
-                )
-            else:
+            if self.head is not None:
                 warn("using previous ratio estimator's head rather than yours.")
-                self.head = deepcopy(self.prev_re.net.head)
+            self.head = deepcopy(self.prev_re.net.head)
         # TODO this is an antipattern address it in network by removing pnum and pdim
         pnum = len(self.combinations)
         pdim = len(self.combinations[0])
@@ -190,8 +184,8 @@ class RatioEstimator:
             combination_indices = [combination_indices]
 
         j = self.combinations.index(combination_indices)
-        z = self.ratio_cache[x0.tobytes()]["z"][:, j]
-        ratios = self.ratio_cache[x0.tobytes()]["ratios"][:, j]
+        z = self.ratio_cache[tobytes(x0)]["z"][:, j]
+        ratios = self.ratio_cache[tobytes(x0)]["ratios"][:, j]
 
         # 1-dim case
         if len(combination_indices) == 1:
@@ -226,7 +220,7 @@ class RatioEstimator:
     @classmethod
     def load(
         cls,
-        cache: Cache,
+        cache: "swyft.cache.Cache",
         path: PathType,
         head: nn.Module = None,
         noisehook: Callable = None,
@@ -264,7 +258,7 @@ class Points(torch.utils.data.Dataset):
 
     _save_attrs = ["intensity", "indices"]
 
-    def __init__(self, cache: Cache, intensity, noisehook=None):
+    def __init__(self, cache: "swyft.cache.Cache", intensity, noisehook=None):
         """Create a points dataset
 
         Args:
@@ -351,7 +345,7 @@ class Points(torch.utils.data.Dataset):
         return instance
 
     @classmethod
-    def load(cls, cache: Cache, path: PathType, noisehook=None):
+    def load(cls, cache: "swyft.cache.Cache", path: PathType, noisehook=None):
         """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
         path = Path(path)
         with path.open("rb") as f:

@@ -5,7 +5,6 @@ from contextlib import suppress
 import numpy as np
 import torch
 
-from .estimation import Points
 from .utils import combine_z
 from .types import Sequence, Combinations, Dict, Union, Array
 
@@ -222,8 +221,8 @@ def trainloop(
         net.load_state_dict(sd)
 
 
-def calculate_statistics(
-    points: Union[Points, Sequence[Dict[str, Array]]],
+def get_statistics(
+    points: Union["swyft.estimation.Points", Sequence[Dict[str, Array]]],
     combinations: Combinations = None,
     n_samples: int = 300,
 ):

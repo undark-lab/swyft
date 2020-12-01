@@ -7,7 +7,6 @@ import zarr
 import numcodecs
 from tqdm import tqdm
 
-from .intensity import Intensity
 from .utils import is_empty
 from .types import Shape, Union, Sequence, PathType, Callable, Array
 
@@ -151,7 +150,7 @@ class Cache(ABC):
         else:
             return np.array([self.u[i](z) for i in range(len(self.u))]).max(axis=0)
 
-    def grow(self, intensity: Intensity):
+    def grow(self, intensity: "swyft.intensity.Intensity"):
         """Given an intensity function, add parameter samples to the cache.
 
         Args:
@@ -181,7 +180,7 @@ class Cache(ABC):
         self.u.resize(len(self.u) + 1)
         self.u[-1] = intensity
 
-    def sample(self, intensity: Intensity):
+    def sample(self, intensity: "swyft.intensity.Intensity"):
         """Sample from Cache.
 
         Args:
