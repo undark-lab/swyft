@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from .utils import combine_z
-from .types import Sequence, Combinations
+from .types import Sequence, Combinations, Dict, Union, Array
 
 
 def loss_fn(network, xz, combinations: Combinations = None):
@@ -221,20 +221,24 @@ def trainloop(
         net.load_state_dict(sd)
 
 
-def get_norms(xz, combinations: Combinations = None, N: int = 300):
-    """Calculate the statistics of xz.
+def get_statistics(
+    points: Union["swyft.estimation.Points", Sequence[Dict[str, Array]]],
+    combinations: Combinations = None,
+    n_samples: int = 300,
+):
+    """Calculate the mean and std of both x and z.
 
     Args:
-        xz: x and z in a dict
-        combinations:
-        N: size of sample
+        points: list of dictionaries with keys 'x' and 'z'.
+        combinations
+        n_samples: size of sample
 
     Returns:
         x_mean, x_std, z_mean, z_std
     """
-    irand = np.random.choice(len(xz), N)
-    x = [xz[i]["x"] for i in irand]
-    z = [xz[i]["z"] for i in irand]
+    irand = np.random.choice(len(points), n_samples)
+    x = [points[i]["x"] for i in irand]
+    z = [points[i]["z"] for i in irand]
     x_mean = sum(x) / len(x)
     z_mean = sum(z) / len(z)
     x_var = sum([(x[i] - x_mean) ** 2 for i in range(len(x))]) / len(x)
@@ -242,12 +246,6 @@ def get_norms(xz, combinations: Combinations = None, N: int = 300):
 
     z_mean = combine_z(z_mean, combinations)
     z_var = combine_z(z_var, combinations)
-
-    # print("Normalizations")
-    # print("x_mean", x_mean)
-    # print("x_err", x_var**0.5)
-    # print("z_mean", z_mean)
-    # print("z_err", z_var**0.5)
 
     return x_mean, x_var ** 0.5, z_mean, z_var ** 0.5
 

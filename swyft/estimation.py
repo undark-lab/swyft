@@ -11,11 +11,9 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
-from .cache import Cache
-from .train import get_norms, trainloop
+from .train import trainloop
 from .network import Network
-from .eval import get_ratios, eval_net
-from .intensity import construct_intervals, Mask1d, FactorMask, Intensity
+from .eval import get_ratios
 from .types import (
     Sequence,
     Tuple,
@@ -44,7 +42,6 @@ class RatioEstimator:
         previous_ratio_estimator=None,
         device: Device = "cpu",
         statistics=None,
-        recycle_net: bool = False,
     ):
         """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
 
@@ -52,10 +49,9 @@ class RatioEstimator:
             points: points dataset from the iP3 sample cache
             combinations: which combinations of z parameters to learn
             head: initialized module which processes observations, head(x0) = y
-            previous_ratio_estimator: ratio estimator from another round
+            previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
             device: default is cpu
             statistics: x_mean, x_std, z_mean, z_std
-            recycle_net: set net with the previous ratio estimator's net
         """
         self.points = points
         self._combinations = combinations
@@ -63,7 +59,7 @@ class RatioEstimator:
         self.prev_re = previous_ratio_estimator
         self.device = device
 
-        self.net = self._init_net(statistics, recycle_net)
+        self.net = self._init_net(statistics, self.prev_re)
         self.ratio_cache: Dict[bytes : np.ndarray] = {}
 
     @property
@@ -82,19 +78,18 @@ class RatioEstimator:
         else:
             return process_combinations(self._combinations)
 
-    def _init_net(self, statistics: Tuple, recycle_net: bool):
+    def _init_net(self, statistics: Tuple, previous_ratio_estimator):
         """Options for custom network initialization.
 
         Args:
             statistics: x_mean, x_std, z_mean, z_std
-            recycle_net (bool): set net with the previous ratio estimator's net
+            previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
         """
-        if recycle_net:
-            if statistics is not None:
-                warn(
-                    "Since the network is being recycled, your statistics are being ignored."
-                )
-            return deepcopy(self.prev_re.net)
+        # TODO change this to state_dict and deal with the self.head is None case more gracefully.
+        if previous_ratio_estimator is not None:
+            if self.head is not None:
+                warn("using previous ratio estimator's head rather than yours.")
+            self.head = deepcopy(self.prev_re.net.head)
         # TODO this is an antipattern address it in network by removing pnum and pdim
         pnum = len(self.combinations)
         pdim = len(self.combinations[0])
@@ -189,8 +184,8 @@ class RatioEstimator:
             combination_indices = [combination_indices]
 
         j = self.combinations.index(combination_indices)
-        z = self.ratio_cache[x0.tobytes()]["z"][:, j]
-        ratios = self.ratio_cache[x0.tobytes()]["ratios"][:, j]
+        z = self.ratio_cache[tobytes(x0)]["z"][:, j]
+        ratios = self.ratio_cache[tobytes(x0)]["ratios"][:, j]
 
         # 1-dim case
         if len(combination_indices) == 1:
@@ -225,7 +220,7 @@ class RatioEstimator:
     @classmethod
     def load(
         cls,
-        cache: Cache,
+        cache: "swyft.cache.Cache",
         path: PathType,
         head: nn.Module = None,
         noisehook: Callable = None,
@@ -263,7 +258,7 @@ class Points(torch.utils.data.Dataset):
 
     _save_attrs = ["intensity", "indices"]
 
-    def __init__(self, cache: Cache, intensity, noisehook=None):
+    def __init__(self, cache: "swyft.cache.Cache", intensity, noisehook=None):
         """Create a points dataset
 
         Args:
@@ -350,7 +345,7 @@ class Points(torch.utils.data.Dataset):
         return instance
 
     @classmethod
-    def load(cls, cache: Cache, path: PathType, noisehook=None):
+    def load(cls, cache: "swyft.cache.Cache", path: PathType, noisehook=None):
         """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
         path = Path(path)
         with path.open("rb") as f:

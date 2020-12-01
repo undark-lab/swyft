@@ -11,6 +11,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    TYPE_CHECKING,
 )
 from pathlib import Path
 from collections.abc import Collection
