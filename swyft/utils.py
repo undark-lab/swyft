@@ -177,7 +177,7 @@ def get_stats(z, p):
     }
 
 
-def cred1d(re, x0: Array):
+def cred1d(re, x0: "swyft.types.Array"):
     """Calculate credible regions.
 
     Args:
