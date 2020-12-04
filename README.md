@@ -29,3 +29,10 @@ A simple example is avaliable on [google colab](https://colab.research.google.co
 ## Relevant Tools
 
 swyft exists in an ecosystem of posterior estimators. The project [sbi](https://github.com/mackelab/sbi) is particularly relevant as it is a collection of likelihood-free / simulator-based methods.
+
+
+## Citing
+
+If you use *swyft* in scientific publications, please cite:
+
+*Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time*, Benjamin Kurt Miller, Alex Cole, Gilles Louppe, Christoph Weniger, https://arxiv.org/abs/2011.13951
