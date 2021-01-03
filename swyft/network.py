@@ -105,8 +105,9 @@ class LinearWithChannel(nn.Module):
 
 
 class DenseLegs(nn.Module):
-    def __init__(self, ydim, pnum, pdim=1, p=0.0, NH=256):
+    def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
         super().__init__()
+        p = 0.2
         self.fc1 = LinearWithChannel(ydim + pdim, NH, pnum)
         self.fc2 = LinearWithChannel(NH, NH, pnum)
         self.fc3 = LinearWithChannel(NH, NH, pnum)
@@ -130,7 +131,7 @@ class DenseLegs(nn.Module):
 
 
 class Network(nn.Module):
-    def __init__(self, ydim, pnum, pdim=1, head=None, p=0.0, datanorms=None):
+    def __init__(self, ydim, pnum, pdim=1, head=None, datanorms=None, tail = None):
         """Base network combining z-independent head and parallel tail.
 
         :param ydim: Number of data dimensions going into DenseLeg network
@@ -146,7 +147,10 @@ class Network(nn.Module):
         # TODO make this handle yshape rather than ydim
         # TODO remove pnum and pdim
         self.head = head
-        self.legs = DenseLegs(ydim, pnum, pdim=pdim, p=p)
+        if tail is None:
+            self.legs = DenseLegs(ydim, pnum, pdim)
+        else:
+            self.legs = tail(ydim, pnum, pdim)
 
         # Set datascaling
         if datanorms is None:

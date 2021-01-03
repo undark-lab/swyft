@@ -39,6 +39,7 @@ class RatioEstimator:
         points: Dataset,
         combinations: Optional[Combinations] = None,
         head: Optional[nn.Module] = None,
+        tail: Optional[nn.Module] = None,
         previous_ratio_estimator=None,
         device: Device = "cpu",
         statistics=None,
@@ -55,7 +56,8 @@ class RatioEstimator:
         """
         self.points = points
         self._combinations = combinations
-        self.head = head if head is None else head.to(device)
+        self.head = None if head is None else head().to(device)
+        self.tail = tail
         self.prev_re = previous_ratio_estimator
         self.device = device
 
@@ -104,7 +106,7 @@ class RatioEstimator:
             yshape = self.head(input_x).shape[1]
         print("yshape (shape of features between head and legs):", yshape)
         return Network(
-            ydim=yshape, pnum=pnum, pdim=pdim, head=self.head, datanorms=statistics
+            ydim=yshape, pnum=pnum, pdim=pdim, head=self.head, datanorms=statistics, tail = self.tail
         ).to(self.device)
 
     def train(
