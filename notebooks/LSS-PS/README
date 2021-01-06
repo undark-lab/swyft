@@ -1,0 +1,31 @@
+README:
+
+Nbody data 
+
+files: "avgps_hh_z0.0_BX_byagox_gaussian_1536_2Gpc_085.dat" 
+
+with X=1,2,3 corresponding to 3 different mass bins. We should run the analysis on each of them (separaterly).
+
+-The k values are the ones on the second column, corresponding to "avgk". The theory data should be evaluated on these data points.
+
+-The measured power spectrum is avgP-pSN + SN, i.e. you need to add column 3 and 5 together. This is because avgP-pSN is the measured PS with poissonian shot noise subtracted, but we want to model it so we put it back in.
+
+-The noise at each k value is given by s_avgP (4th column). This corresponds to the standard deviation from the mean over 10 realizations.
+
+Simulator Data
+
+file: "EOS_gaussian_pk_nl_pt.dat"
+
+Each column corresponds to a term in the galaxy PS prediction. Because of a different fourier transform convention, you need to divide all of the terms in this file by (2pi)^3. 
+
+The expression you need to implement is the following (where I assume you already divided by (2pi)^3), where I indicate in parenthesis the number of the column
+
+P_g = b1^2 (P_Tree [10] + P_1loop[2]) + b1 b2 Id2[5] + 2 b1 bg2 Ig2[6] + b1(2 bg2+4/5 bg3) IFG2[9] + 1/4 b2^2 Id2d2[4] + bg2^2 IG2G2[8] + b2 bg2 Id2G2[7] + cs^2 P_CTR[3] + (1+ alpha) SN + ek2 SN k^2
+
+Note that the last term has to be taken from the Nbody data file, last column, and it *does not* have to be divided by (2pi)^3.
+
+Free parameters with priors are:
+
+b1, b2, bg2, bg3,ek2 --> [-10,10]
+cs --> [-100,100]
+alpha --> [-1,1]
