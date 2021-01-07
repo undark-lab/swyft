@@ -4,6 +4,8 @@ import math
 import torch
 import torch.nn as nn
 
+from collections import defaultdict
+
 
 def combine(y, z):
     """Combines data vectors y and parameter vectors z.
@@ -129,6 +131,49 @@ class DenseLegs(nn.Module):
         x = self.fc4(x).squeeze(-1)
         return x
 
+
+#    @staticmethod
+#    def _get_configuration(combinations):
+#        "Return dict (posterior dim) -> (number of cases)."
+#        result = defaultdict(int)
+#        for c in combinations:
+#            result[len(c)] += 1
+#        return result
+#    
+#class NetworkNew(nn.Module):
+#    def __init__(self, n_features, pnum, pdim, head=None, datanorms=None, tail = DenseLegs):
+#        """Base network combining z-independent head and parallel tail.
+#
+#        :param ydim: Number of data dimensions going into DenseLeg network
+#        :param pnum: Number of posteriors to estimate
+#        :param pdim: Dimensionality of posteriors
+#        :param head: Head network, z-independent
+#        :type head: `torch.nn.Module`, optional
+#
+#        The forward method of the `head` network takes data `x` as input, and
+#        returns intermediate state `y`.
+#        """
+#        super().__init__()
+#        self.n_features = n_features
+#        self.pnum = pnum
+#        self.pdim = pdim
+#
+#        self.head = head
+#        self.tail = tail(n_features, pnum, pdim)
+#
+#
+#    def _combine_z(self, z):
+#        "Return dict (posterior dim) -> (list of parameter arrays)."
+#        result = defaultdict(list)
+#        for c in self.combinations:
+#            pars = torch.stack([z[k] for k in c]).T
+#            result[len(c)].append(pars)
+#        return result
+#
+#    def forward(self, x, z):
+#        f = self.head(x)
+#        out = tail(f, z) self.tails(f, z)
+#        return out
 
 class Network(nn.Module):
     def __init__(self, ydim, pnum, pdim=1, head=None, datanorms=None, tail = None):

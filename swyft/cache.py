@@ -10,6 +10,13 @@ from tqdm import tqdm
 from .utils import is_empty
 from .types import Shape, Union, Sequence, PathType, Callable, Array
 
+from .intensity import IntensityNew
+
+class MissingSimulationError(Exception):
+    pass
+
+class LowIntensityError(Exception):
+    pass
 
 class Cache(ABC):
     """Abstract base class for various caches."""
@@ -26,15 +33,15 @@ class Cache(ABC):
     @abstractmethod
     def __init__(
         self,
-        zdim: int,
-        xshape: Shape,
+        param_names,
+        obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
     ):
         """Initialize Cache content dimensions.
 
         Args:
-            zdim: Number of z dimensions
-            xshape: Shape of x array
+            param_names (list of strings): List of paramater names 
+            obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
         """
         self._zdim = None
@@ -47,41 +54,48 @@ class Cache(ABC):
             self._update()
         elif len(self.root.keys()) == 0:
             print("Creating new cache.")
-            self.x = self.root.zeros(
-                self._filesystem[4],  # samples/x
-                shape=(0, *xshape),
-                chunks=(1, *xshape),
-                dtype="f4",
-            )
-            self.z = self.root.zeros(
-                self._filesystem[5],  # samples/z
-                shape=(0, zdim),
-                chunks=(10000, zdim),
-                dtype="f4",
-            )
-            self.m = self.root.zeros(
-                self._filesystem[2],  # metadata/requires_simulation
-                shape=(0, 1),
-                chunks=(10000, 1),
-                dtype="bool",
-            )
-            self.u = self.root.create(
-                self._filesystem[1],  # metadata/intensity
-                shape=(0,),
-                dtype=object,
-                object_codec=numcodecs.Pickle(),
-            )
+            self._setup_new_cache(param_names, obs_shapes, self.root)
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
-        assert (
-            zdim == self.zdim
-        ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
-        assert (
-            xshape == self.xshape
-        ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
+        #assert (
+        #    zdim == self.zdim
+        #), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
+        #assert (
+        #    xshape == self.xshape
+        #), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
+
+    def _setup_new_cache(self, param_names, obs_shapes, root):
+        # Add parameter names to store
+        z = root.create_group(self._filesystem[5])
+        for name in param_names:
+            z.zeros(name, shape=(0,), chunks=(100000,), dtype="f4")
+            # FIX: Too mall chunks lead to problems with appending
+
+        # Adding observational shapes to store
+        x = root.create_group(self._filesystem[4])
+        for name, shape in obs_shapes.items():
+            x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f4")
+
+        # Requires simulation flag
+        m = root.zeros(
+            self._filesystem[2],  # metadata/requires_simulation
+            shape=(0, 1),
+            chunks=(100000, 1),
+            dtype="bool",
+        )
+
+        # Intensity object
+        u = root.create(
+            self._filesystem[1],  # metadata/intensity
+            shape=(0,),
+            dtype=object,
+            object_codec=numcodecs.Pickle(),
+        )
+
+        return dict(u=u, m=m, x=x, z=z)
 
     @staticmethod
     def _extract_xshape_from_zarr_group(group):
@@ -90,6 +104,10 @@ class Cache(ABC):
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
         return group["samples/z"].shape[1]
+
+    @property
+    def param_names(self):
+        return list(self.z)
 
     @property
     def xshape(self) -> Shape:
@@ -115,26 +133,43 @@ class Cache(ABC):
     def __len__(self):
         """Returns number of samples in the cache."""
         self._update()
-        return len(self.z)
+        # Return len of first entry
+        param_names = list(self.z)
+        return len(self.z[param_names[0]])
 
     def __getitem__(self, i):
         self._update()
-        return self.x[i], self.z[i]
+
+        result_x = {}
+        for key, value in self.x.items():
+            result_x[key] = value[i]
+
+        result_z = {}
+        for key, value in self.z.items():
+            result_z[key] = value[i]
+
+        return dict(x=result_x, z=result_z)
 
     def _append_z(self, z):
         """Append z to cache content and new slots for x."""
         self._update()
 
-        # Add simulation slots
-        xshape = list(self.x.shape)
-        xshape[0] += len(z)
-        self.x.resize(*xshape)
+        # Length of first element
+        n = len(z[list(z)[0]])
+
+        # Add slots for x
+        for key, value in self.x.items():
+            shape = list(value.shape)
+            shape[0] += n
+            value.resize(*shape)
 
         # Add z samples
-        self.z.append(z)
+        for key, value in self.z.items():
+            print(z[key].shape)
+            value.append(z[key])
 
         # Register as missing
-        m = np.ones((len(z), 1), dtype="bool")
+        m = np.ones((n, 1), dtype="bool")
         self.m.append(m)
 
     def intensity(self, z: Array) -> np.ndarray:
@@ -146,16 +181,19 @@ class Cache(ABC):
         self._update()
 
         if len(self.u) == 0:
-            return np.zeros(len(z))
+            d = len(z[list(z)[0]])
+            return np.zeros(d)
         else:
             return np.array([self.u[i](z) for i in range(len(self.u))]).max(axis=0)
 
-    def grow(self, intensity: "swyft.intensity.Intensity"):
+    def grow(self, prior: "swyft.intensity.Intensity", N):
         """Given an intensity function, add parameter samples to the cache.
 
         Args:
             intensity: target parameter intensity function
         """
+        intensity = IntensityNew(prior, N)
+
         # Proposed new samples z from p
         z_prop = intensity.sample()
 
@@ -163,16 +201,16 @@ class Cache(ABC):
         accepted = []
         ds_intensities = self.intensity(z_prop)
         target_intensities = intensity(z_prop)
-        for _, Ids, It in zip(z_prop, ds_intensities, target_intensities):
+        for Ids, It in zip(ds_intensities, target_intensities):
             rej_prob = np.minimum(1, Ids / It)
             w = np.random.rand()
             accepted.append(rej_prob < w)
-        z_accepted = z_prop[accepted, :]
+        z_accepted = {k: z[accepted, ...] for k, z in z_prop.items()}
 
         # Add new entries to cache
-        if len(z_accepted) > 0:
+        if sum(accepted) > 0:
             self._append_z(z_accepted)
-            print("Adding %i new samples. Run simulator!" % len(z_accepted))
+            print("Adding %i new samples. Run simulator!" % sum(accepted))
         else:
             print("No new simulator runs required.")
 
@@ -180,23 +218,27 @@ class Cache(ABC):
         self.u.resize(len(self.u) + 1)
         self.u[-1] = intensity
 
-    def sample(self, intensity: "swyft.intensity.Intensity"):
+    def sample(self, prior: "swyft.intensity.Intensity", N):
         """Sample from Cache.
 
         Args:
             intensity: target parameter intensity function
         """
+        intensity = IntensityNew(prior, N)
+
         self._update()
 
-        self.grow(intensity)
+        #self.grow(prior, N)
 
         accepted = []
-        zlist = self.z[:]
+        zlist = {k: self.z[k][:] for k in (self.z)}
+
         I_ds = self.intensity(zlist)
         I_target = intensity(zlist)
-        for i, z in enumerate(zlist):
+        for i in range(len(self)):
             accept_prob = I_target[i] / I_ds[i]
-            assert accept_prob <= 1.0, (
+            if accept_prob > 1.0:
+                raise LowIntensityError(
                 f"{accept_prob} > 1, but we expected the ratio of target intensity function to the cache <= 1. "
                 "There may not be enough samples in the cache "
                 "or a constrained intensity function was not accounted for."
@@ -209,7 +251,7 @@ class Cache(ABC):
     def _require_sim_idx(self):
         indices = []
         m = self.m[:]
-        for i in range(len(self.z)):
+        for i in range(len(self)):
             if m[i]:
                 indices.append(i)
         return indices
@@ -221,7 +263,8 @@ class Cache(ABC):
         return len(self._require_sim_idx()) > 0
 
     def _add_sim(self, i, x):
-        self.x[i] = x
+        for k, v in x.items():
+            self.x[k][i] = v
         self.m[i] = False
 
     def simulate(self, simulator: Callable):
@@ -237,7 +280,7 @@ class Cache(ABC):
             print("No simulations required.")
             return
         for i in tqdm(idx, desc="Simulate"):
-            z = self.z[i]
+            z = {k: v[i] for k, v in self.z.items()}
             x = simulator(z)
             self._add_sim(i, x)
 
@@ -265,19 +308,19 @@ class DirectoryCache(Cache):
 
 
 class MemoryCache(Cache):
-    def __init__(self, zdim: int, xshape: Shape, store=None):
+    def __init__(self, param_names: int, obs_shapes: Shape, store=None):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
             zdim: Number of z dimensions
-            xshape: Shape of x array
+            obs_shapes: Shape of x array
             store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in loading.
         """
         if store is None:
             self.store = zarr.MemoryStore()
         else:
             self.store = store
-        super().__init__(zdim=zdim, xshape=xshape, store=self.store)
+        super().__init__(param_names=param_names, obs_shapes=obs_shapes, store=self.store)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryCache to a directory."""

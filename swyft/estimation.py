@@ -30,6 +30,18 @@ from .types import (
 from .utils import array_to_tensor, tobytes, process_combinations
 
 
+class DefaultHead:
+    def __init__(self):
+        pass
+    
+    def forward(self, **kwargs):
+        x = []
+        for key, value in sorted(kwargs.items()):
+            x.append(value.flatten())
+        x = torch.cat(x)
+        return x
+
+
 class RatioEstimator:
 
     _save_attrs = ["net_state_dict", "ratio_cache", "combinations"]
@@ -38,7 +50,7 @@ class RatioEstimator:
         self,
         points: Dataset,
         combinations: Optional[Combinations] = None,
-        head: Optional[nn.Module] = None,
+        head: Optional[nn.Module] = DefaultHead,
         tail: Optional[nn.Module] = None,
         previous_ratio_estimator=None,
         device: Device = "cpu",
@@ -56,7 +68,7 @@ class RatioEstimator:
         """
         self.points = points
         self._combinations = combinations
-        self.head = None if head is None else head().to(device)
+        self.head = head().to(device)
         self.tail = tail
         self.prev_re = previous_ratio_estimator
         self.device = device
@@ -97,13 +109,10 @@ class RatioEstimator:
         pdim = len(self.combinations[0])
 
         # TODO network should be able to handle shape or dim. right now we are forcing dim, that is bad.
-        if self.head is None:
-            # yshape = self.xshape
-            yshape = self.xshape[0]
-        else:
-            input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
-            # yshape = self.head(input_x).shape[1:]
-            yshape = self.head(input_x).shape[1]
+        input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
+        # yshape = self.head(input_x).shape[1:]
+        yshape = self.head(input_x).shape[1]
+
         print("yshape (shape of features between head and legs):", yshape)
         return Network(
             ydim=yshape, pnum=pnum, pdim=pdim, head=self.head, datanorms=statistics, tail = self.tail
@@ -260,7 +269,7 @@ class Points(torch.utils.data.Dataset):
 
     _save_attrs = ["intensity", "indices"]
 
-    def __init__(self, cache: "swyft.cache.Cache", intensity, noisehook=None):
+    def __init__(self, cache: "swyft.cache.Cache", indices, noisehook=None):
         """Create a points dataset
 
         Args:
@@ -275,30 +284,27 @@ class Points(torch.utils.data.Dataset):
             )
 
         self.cache = cache
-        self.intensity = intensity
+        #self.intensity = intensity
         self.noisehook = noisehook
-        self._indices = None
+        self.indices = np.array(indices)
 
     def __len__(self):
-        assert len(self.indices) <= len(
-            self.cache
-        ), f"You wanted {len(self.indices)} indices but there are only {len(self.cache)} parameter samples in the cache."
+        #assert len(self.indices) <= len(
+        #    self.cache
+        #), f"You wanted {len(self.indices)} indices but there are only {len(self.cache)} parameter samples in the cache."
         return len(self.indices)
 
     def __getitem__(self, idx):
         i = self.indices[idx]
-        x = self.cache.x[i]
-        z = self.cache.z[i]
+        x_keys = list(self.cache.x)
+        z_keys = list(self.cache.z)
+        x = {k: torch.from_numpy(self.cache.x[k][i]).float() for k in x_keys}
+        z = {k: torch.from_numpy(self.cache.z[k][i:i+1]).float() for k in z_keys}
 
         if self.noisehook is not None:
             x = self.noisehook(x, z)
 
-        x = torch.from_numpy(x).float()
-        z = torch.from_numpy(z).float()
-        return {
-            "x": x,
-            "z": z,
-        }
+        return dict(x=x, z=z)
 
     @property
     def zdim(self):
@@ -311,12 +317,12 @@ class Points(torch.utils.data.Dataset):
     def xshape(self):
         return self.cache.xshape
 
-    @property
-    def indices(self):
-        if self._indices is None:
-            self._indices = self.cache.sample(self.intensity)
-            self._check_fidelity_to_cache(self._indices)
-        return self._indices
+#    @property
+#    def indices(self):
+#        if self._indices is None:
+#            self._indices = self.cache.sample(self.intensity)
+#            self._check_fidelity_to_cache(self._indices)
+#        return self._indices
 
     def _check_fidelity_to_cache(self, indices):
         first = indices[0]
