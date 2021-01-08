@@ -2,6 +2,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+import torch
 import numpy as np
 import zarr
 import numcodecs
@@ -18,6 +19,65 @@ class MissingSimulationError(Exception):
 class LowIntensityError(Exception):
     pass
 
+
+class Transform:
+    def __init__(self, par_combinations, par_trans = None, obs_trans = None):
+        self.obs_trans = (lambda x: x) if obs_trans is None else obs_trans
+        self.par_trans = (lambda z: z) if par_trans is None else par_trans
+        self.par_combinations = par_combinations
+        self.par_comb_shape = self._get_par_comb_shape(par_combinations)
+        
+    def _get_par_comb_shape(self, par_combinations):
+        n = len(par_combinations)
+        m = max([len(c) for c in par_combinations])
+        return (n, m)
+    
+    def _combine(self, par):
+        shape = par[list(par)[0]].shape
+        if len(shape) == 0:
+            out = torch.zeros(self.par_comb_shape)
+            for i, c in enumerate(self.par_combinations):
+                pars = torch.stack([par[k] for k in c]).T
+                out[i,:pars.shape[0]] = pars
+        else:
+            n = shape[0]
+            out = torch.zeros((n,)+self.par_comb_shape)
+            for i, c in enumerate(self.par_combinations):
+                pars = torch.stack([par[k] for k in c]).T
+                out[:,i,:pars.shape[1]] = pars
+        return out
+    
+    def _tensorfy(self, x):
+        return {k: torch.tensor(v).float() for k, v in x.items()}
+    
+    def __call__(self, obs = None, par = None):
+        out = {}
+        if obs is not None:
+            tmp = self._tensorfy(obs)
+            out['obs'] = self.obs_trans(tmp)
+        if par is not None:
+            tmp = self._tensorfy(par)
+            z = self.par_trans(tmp)
+            out['par'] = self._combine(z)
+        return out
+
+
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, points, transform):
+        self.points = points
+        self.transform = transform
+        
+    @property
+    def zdim(self):
+        return self.points.zdim
+    
+    def __len__(self):
+        return len(self.points)
+    
+    def __getitem__(self, i):
+        return self.transform(**self.points[i])
+
+
 class Cache(ABC):
     """Abstract base class for various caches."""
 
@@ -26,21 +86,21 @@ class Cache(ABC):
         "metadata/intensity",
         "metadata/requires_simulation",
         "samples",
-        "samples/x",
-        "samples/z",
+        "samples/obs",
+        "samples/par",
     )
 
     @abstractmethod
     def __init__(
         self,
-        param_names,
+        par_names,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
     ):
         """Initialize Cache content dimensions.
 
         Args:
-            param_names (list of strings): List of paramater names 
+            par_names (list of strings): List of paramater names 
             obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
         """
@@ -54,7 +114,7 @@ class Cache(ABC):
             self._update()
         elif len(self.root.keys()) == 0:
             print("Creating new cache.")
-            self._setup_new_cache(param_names, obs_shapes, self.root)
+            self._setup_new_cache(par_names, obs_shapes, self.root)
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
@@ -67,17 +127,17 @@ class Cache(ABC):
         #    xshape == self.xshape
         #), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
 
-    def _setup_new_cache(self, param_names, obs_shapes, root):
+    def _setup_new_cache(self, par_names, obs_shapes, root):
         # Add parameter names to store
         z = root.create_group(self._filesystem[5])
-        for name in param_names:
-            z.zeros(name, shape=(0,), chunks=(100000,), dtype="f4")
+        for name in par_names:
+            z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
             # FIX: Too mall chunks lead to problems with appending
 
         # Adding observational shapes to store
         x = root.create_group(self._filesystem[4])
         for name, shape in obs_shapes.items():
-            x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f4")
+            x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
 
         # Requires simulation flag
         m = root.zeros(
@@ -106,7 +166,7 @@ class Cache(ABC):
         return group["samples/z"].shape[1]
 
     @property
-    def param_names(self):
+    def par_names(self):
         return list(self.z)
 
     @property
@@ -125,8 +185,8 @@ class Cache(ABC):
 
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
-        self.x = self.root["samples/x"]
-        self.z = self.root["samples/z"]
+        self.x = self.root["samples/obs"]
+        self.z = self.root["samples/par"]
         self.m = self.root["metadata/requires_simulation"]
         self.u = self.root["metadata/intensity"]
 
@@ -134,8 +194,8 @@ class Cache(ABC):
         """Returns number of samples in the cache."""
         self._update()
         # Return len of first entry
-        param_names = list(self.z)
-        return len(self.z[param_names[0]])
+        par_names = list(self.z)
+        return len(self.z[par_names[0]])
 
     def __getitem__(self, i):
         self._update()
@@ -308,7 +368,7 @@ class DirectoryCache(Cache):
 
 
 class MemoryCache(Cache):
-    def __init__(self, param_names: int, obs_shapes: Shape, store=None):
+    def __init__(self, par_names: int, obs_shapes: Shape, store=None):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
@@ -320,7 +380,7 @@ class MemoryCache(Cache):
             self.store = zarr.MemoryStore()
         else:
             self.store = store
-        super().__init__(param_names=param_names, obs_shapes=obs_shapes, store=self.store)
+        super().__init__(par_names=par_names, obs_shapes=obs_shapes, store=self.store)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryCache to a directory."""

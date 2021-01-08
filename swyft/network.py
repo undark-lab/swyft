@@ -109,7 +109,6 @@ class LinearWithChannel(nn.Module):
 class DenseLegs(nn.Module):
     def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
         super().__init__()
-        p = 0.2
         self.fc1 = LinearWithChannel(ydim + pdim, NH, pnum)
         self.fc2 = LinearWithChannel(NH, NH, pnum)
         self.fc3 = LinearWithChannel(NH, NH, pnum)
@@ -176,7 +175,7 @@ class DenseLegs(nn.Module):
 #        return out
 
 class Network(nn.Module):
-    def __init__(self, ydim, pnum, pdim=1, head=None, datanorms=None, tail = None):
+    def __init__(self, ydim, pnum, pdim, head=None, tail = DenseLegs):
         """Base network combining z-independent head and parallel tail.
 
         :param ydim: Number of data dimensions going into DenseLeg network
@@ -189,41 +188,49 @@ class Network(nn.Module):
         returns intermediate state `y`.
         """
         super().__init__()
-        # TODO make this handle yshape rather than ydim
-        # TODO remove pnum and pdim
         self.head = head
-        if tail is None:
-            self.legs = DenseLegs(ydim, pnum, pdim)
-        else:
-            self.legs = tail(ydim, pnum, pdim)
+        self.legs = tail(ydim, pnum, pdim)
 
-        # Set datascaling
-        if datanorms is None:
-            datanorms = [
-                torch.tensor(0.0),
-                torch.tensor(1.0),
-                torch.tensor(0.5),
-                torch.tensor(0.5),
-            ]
-        self._set_datanorms(*datanorms)
-
-    def _set_datanorms(self, x_mean, x_std, z_mean, z_std):
-        self.x_loc = torch.nn.Parameter(x_mean)
-        self.x_scale = torch.nn.Parameter(x_std)
-        self.z_loc = torch.nn.Parameter(z_mean)
-        self.z_scale = torch.nn.Parameter(z_std)
+#        # Set datascaling
+#        if datanorms is None:
+#            datanorms = [
+#                torch.tensor(0.0),
+#                torch.tensor(1.0),
+#                torch.tensor(0.5),
+#                torch.tensor(0.5),
+#            ]
+#        self._set_datanorms(*datanorms)
+#
+#    def _set_datanorms(self, x_mean, x_std, z_mean, z_std):
+#        self.x_loc = torch.nn.Parameter(x_mean)
+#        self.x_scale = torch.nn.Parameter(x_std)
+#        self.z_loc = torch.nn.Parameter(z_mean)
+#        self.z_scale = torch.nn.Parameter(z_std)
 
     def forward(self, x, z):
-        x = (x - self.x_loc) / self.x_scale
-        z = (z - self.z_loc) / self.z_scale
+        #x = (x - self.x_loc) / self.x_scale
+        #z = (z - self.z_loc) / self.z_scale
 
-        if self.head is not None:
-            y = self.head(x)
-        else:
-            y = x  # Use 1-dim data vector as features
+        #if self.head is not None:
+        y = self.head(x)
+        #else:
+        #    y = x  # Use 1-dim data vector as features
 
         out = self.legs(y, z)
         return out
+
+
+class DefaultHead(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, x):
+        f = []
+        for key, value in sorted(x.items()):
+            f.append(value)
+        f = torch.cat(f)
+        return f
+
 
 
 if __name__ == "__main__":

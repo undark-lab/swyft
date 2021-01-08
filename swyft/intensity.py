@@ -465,17 +465,16 @@ class Prior1d:
             raise KeyError("Tag unknown")
             
     def sample(self, N):
-        return self.prior.sample((N,))
+        return self.prior.sample((N,)).type(torch.float64).numpy()
     
     def log_prob(self, value):
-        return self.prior.log_prob(value)
+        return self.prior.log_prob(value).numpy()
     
     def to_cube(self, value):
-        return self.prior.cdf(value)
+        return self.prior.cdf(torch.tensor(value)).numpy()
     
     def from_cube(self, value):
-        value = torch.tensor(value)
-        return self.prior.icdf(value).numpy()
+        return self.prior.icdf(torch.tensor(value)).numpy()
     
     def dump(self):
         return dict(tag = self.tag, args = self.args)
@@ -508,14 +507,14 @@ class Prior:
     def _sample_from_priors(self, N):
         result = {}
         for key, value in self.priors.items():
-            result[key] = value.sample(N)
+            result[key] = np.array(value.sample(N))
         return result
 
     def log_prob(self, values):
         log_prob = []
         for key, value in self.priors.items():
             x = torch.tensor(values[key])
-            log_prob.append(value.log_prob(x).numpy())
+            log_prob.append(value.log_prob(x))
         return sum(log_prob)
 
     def to_cube(self, X):
@@ -524,7 +523,7 @@ class Prior:
     def from_cube(self, values):
         result = {}
         for key, value in values.items():
-            result[key] = self.priors[key].from_cube(value)
+            result[key] = np.array(self.priors[key].from_cube(value))
         return result
 
     def dump(self):

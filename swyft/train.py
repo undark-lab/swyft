@@ -9,7 +9,7 @@ from .utils import combine_z
 from .types import Sequence, Combinations, Dict, Union, Array
 
 
-def loss_fn(network, xz, combinations: Combinations = None):
+def loss_fn(head, tail, xz, combinations: Combinations = None):
     """Evaluate binary-cross-entropy loss function. Mean over batch.
 
     Args:
@@ -25,32 +25,32 @@ def loss_fn(network, xz, combinations: Combinations = None):
     Returns:
         Tensor: training loss.
     """
-    assert xz["x"].size(0) == xz["z"].size(0), "Number of x and z must be equal."
     assert (
-        xz["x"].size(0) % 2 == 0
+        xz["par"].size(0) % 2 == 0
     ), "There must be an even number of samples in the batch for contrastive learning."
-    n_batch = xz["x"].size(0)
+    n_batch = xz["par"].size(0)
 
     # Is it the removal of replacement that made it stop working?!
 
     # bring x into shape
     # (n_batch*2, data-shape)  - repeat twice each sample of x - there are n_batch samples
     # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
-    x = xz["x"]
-    x = torch.repeat_interleave(x, 2, dim=0)
+    x = xz["obs"]
+    f = head(x)
+    f = torch.repeat_interleave(f, 2, dim=0)
 
     # bring z into shape
     # (n_batch*2, param-shape)  - repeat twice each sample of z - there are n_batch samples
     # repetition is alternating in first dimension: [a, b, a, b, c, d, c, d, ...]
-    z = xz["z"]
-    z = torch.stack([combine_z(zs, combinations) for zs in z])
+    z = xz["par"]
+    #z = torch.stack([combine_z(zs, combinations) for zs in z])
     zdim = len(z[0])
     z = z.view(n_batch // 2, -1, *z.shape[-1:])
     z = torch.repeat_interleave(z, 2, dim=0)
     z = z.view(n_batch * 2, -1, *z.shape[-1:])
 
     # call network
-    lnL = network(x, z)
+    lnL = tail(f, z)
     lnL = lnL.view(n_batch // 2, 4, zdim)
 
     # Evaluate cross-entropy loss
@@ -84,7 +84,7 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
 # We have the posterior exactly because our proir is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def train(
-    network,
+    head, tail,
     train_loader,
     validation_loader,
     early_stopping_patience,
@@ -121,12 +121,13 @@ def train(
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
+                batch['par'] = batch['par'].to(device, non_blocking=non_blocking)
                 if device is not None:
-                    batch = {
+                    batch['obs'] = {
                         k: v.to(device, non_blocking=non_blocking)
-                        for k, v in batch.items()
+                        for k, v in batch['obs'].items()
                     }
-                loss = loss_fn(network, batch, combinations=combinations)
+                loss = loss_fn(head, tail, batch, combinations=combinations)
                 if train:
                     loss.backward()
                     optimizer.step()
@@ -134,7 +135,8 @@ def train(
         return accumulated_loss
 
     max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs
-    optimizer = torch.optim.Adam(network.parameters(), lr=lr)
+    params = list(head.parameters()) + list(tail.parameters())
+    optimizer = torch.optim.Adam(params, lr=lr)
 
     n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
     n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
@@ -143,11 +145,11 @@ def train(
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
     while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
         # print("Epoch:", epoch, end = "\r")
-        network.train()
+        #network.train()
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
 
-        network.eval()
+        #network.eval()
         validation_loss = do_epoch(validation_loader, False)
         print("Validation loss:", validation_loss)
         validation_losses.append(validation_loss / n_validation_batches)
@@ -156,17 +158,19 @@ def train(
         if epoch == 0 or min_loss > validation_loss:
             fruitless_epoch = 0
             min_loss = validation_loss
-            best_state_dict = deepcopy(network.state_dict())
+            # TODO update
+            best_state_dict_head = deepcopy(head.state_dict())
+            best_state_dict_tail = deepcopy(tail.state_dict())
         else:
             fruitless_epoch += 1
 
     print("Total epochs:", epoch)
     # print("Validation losses:", validation_losses)
-    return train_losses, validation_losses, best_state_dict
+    return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 
 
 def trainloop(
-    net,
+    head, tail,
     dataset,
     combinations=None,
     batch_size=32,
@@ -204,8 +208,8 @@ def trainloop(
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
         print(f"LR iteration {i}")
-        tl, vl, sd = train(
-            net,
+        tl, vl, sd_head, sd_tail = train(
+            head, tail,
             train_loader,
             valid_loader,
             early_stopping_patience=early_stopping_patience,
@@ -218,7 +222,8 @@ def trainloop(
         vl_min_idx = vl.index(vl_minimum)
         train_loss.append(tl[: vl_min_idx + 1])
         valid_loss.append(vl[: vl_min_idx + 1])
-        net.load_state_dict(sd)
+        head.load_state_dict(sd_head)
+        tail.load_state_dict(sd_tail)
 
 
 def get_statistics(

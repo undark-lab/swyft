@@ -1,4 +1,4 @@
-from .cache import Cache, DirectoryCache, MemoryCache
+from .cache import Cache, DirectoryCache, MemoryCache, Transform, Dataset
 from .estimation import RatioEstimator, Points
 from .intensity import get_unit_intensity, get_constrained_intensity
 from .network import OnlineNormalizationLayer
@@ -7,6 +7,8 @@ from .train import get_statistics
 from .utils import set_device, get_2d_combinations, cred1d
 
 __all__ = [
+    "Transform",
+    "Dataset",
     "Cache",
     "DirectoryCache",
     "MemoryCache",

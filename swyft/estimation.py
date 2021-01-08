@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 from .train import trainloop
-from .network import Network
+from .network import Network, DenseLegs, DefaultHead
 from .eval import get_ratios
 from .types import (
     Sequence,
@@ -30,20 +30,7 @@ from .types import (
 from .utils import array_to_tensor, tobytes, process_combinations
 
 
-class DefaultHead:
-    def __init__(self):
-        pass
-    
-    def forward(self, **kwargs):
-        x = []
-        for key, value in sorted(kwargs.items()):
-            x.append(value.flatten())
-        x = torch.cat(x)
-        return x
-
-
 class RatioEstimator:
-
     _save_attrs = ["net_state_dict", "ratio_cache", "combinations"]
 
     def __init__(
@@ -51,7 +38,7 @@ class RatioEstimator:
         points: Dataset,
         combinations: Optional[Combinations] = None,
         head: Optional[nn.Module] = DefaultHead,
-        tail: Optional[nn.Module] = None,
+        tail: Optional[nn.Module] = DenseLegs,
         previous_ratio_estimator=None,
         device: Device = "cpu",
         statistics=None,
@@ -67,14 +54,18 @@ class RatioEstimator:
             statistics: x_mean, x_std, z_mean, z_std
         """
         self.points = points
-        self._combinations = combinations
-        self.head = head().to(device)
-        self.tail = tail
         self.prev_re = previous_ratio_estimator
         self.device = device
+        self.head = head().to(device)
 
-        self.net = self._init_net(statistics, self.prev_re)
-        self.ratio_cache: Dict[bytes : np.ndarray] = {}
+        self.n_features = len(self.head(self.points[0]['obs']))
+        self.pnum, self.pdim = self.points[0]['par'].shape
+
+        self.tail = tail(self.n_features, self.pnum, self.pdim).to(device)
+
+        print("Number of features from head network:", self.n_features)
+        print("Number of parameters to estimate:", self.pnum)
+        print("Maximum posterior dimensionality:", self.pdim)
 
     @property
     def zdim(self):
@@ -105,17 +96,18 @@ class RatioEstimator:
                 warn("using previous ratio estimator's head rather than yours.")
             self.head = deepcopy(self.prev_re.net.head)
         # TODO this is an antipattern address it in network by removing pnum and pdim
-        pnum = len(self.combinations)
-        pdim = len(self.combinations[0])
+        #pnum = len(self.combinations)
+        #pdim = len(self.combinations[0])
 
         # TODO network should be able to handle shape or dim. right now we are forcing dim, that is bad.
-        input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
+        #input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
         # yshape = self.head(input_x).shape[1:]
-        yshape = self.head(input_x).shape[1]
+        #yshape = self.head(input_x).shape[1]
 
-        print("yshape (shape of features between head and legs):", yshape)
+        #print("yshape (shape of features between head and legs):", yshape)
+        self.head
         return Network(
-            ydim=yshape, pnum=pnum, pdim=pdim, head=self.head, datanorms=statistics, tail = self.tail
+            ydim=self.n_features, pnum=self.pnum, pdim=self.pdim, head=self.head, datanorms=statistics, tail = self.tail
         ).to(self.device)
 
     def train(
@@ -138,9 +130,9 @@ class RatioEstimator:
             percent_validation: percentage to allocate to validation set
         """
         trainloop(
-            self.net,
+            self.head, self.tail,
             self.points,
-            combinations=self.combinations,
+            combinations=None,
             device=self.device,
             max_epochs=max_epochs,
             batch_size=batch_size,
@@ -172,6 +164,42 @@ class RatioEstimator:
             )
             self.ratio_cache[binary_x0] = {"z": z, "ratios": ratios}
         return None
+
+    def lnL(
+        self,
+        obs: Array,
+        par: Array,
+        transform,
+        max_n_points: int = 1000,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Retrieve estimated marginal posterior.
+
+        Args:
+            x0: real observation to calculate posterior
+            combination_indices: z indices in self.combinations
+            max_n_points: number of points to calculate ratios on
+
+        Returns:
+            parameter array, posterior array
+        """
+
+        obs = transform(obs=obs)['obs']
+        obs = {k: v.to(self.device) for k, v in obs.items()}
+        f = self.head(obs)
+        z = transform(par=par)['par']
+        if len(z.shape) == 2:
+            lnL = self.tail(f, z.to(self.device))
+            lnL = lnL.detach().cpu().numpy()
+        else:
+            N = len(z)
+            batch_size = 1000
+            lnL = []
+            for i in range(N // batch_size + 1):
+                zbatch = z[i * batch_size : (i + 1) * batch_size]
+                lnL.append(self.tail(f, zbatch.to(self.device)).detach().cpu().numpy())
+            lnL = np.vstack(lnL)
+
+        return {k: lnL[..., i] for i, k in enumerate(transform.par_combinations)}
 
     def posterior(
         self,
@@ -262,7 +290,7 @@ class RatioEstimator:
         return instance
 
 
-class Points(torch.utils.data.Dataset):
+class Points:
     """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
     Points implements this via a list of indices corresponding to data contained in a cache which is provided at initialization.
     """
@@ -277,7 +305,7 @@ class Points(torch.utils.data.Dataset):
             intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
             noisehook (function): (optional) maps from (x, z) to x with noise
         """
-        super().__init__()
+        #super().__init__()
         if cache.requires_sim():
             raise RuntimeError(
                 "The cache has parameters without a corresponding observation. Try running the simulator."
@@ -298,20 +326,23 @@ class Points(torch.utils.data.Dataset):
         i = self.indices[idx]
         x_keys = list(self.cache.x)
         z_keys = list(self.cache.z)
-        x = {k: torch.from_numpy(self.cache.x[k][i]).float() for k in x_keys}
-        z = {k: torch.from_numpy(self.cache.z[k][i:i+1]).float() for k in z_keys}
+        x = {k: self.cache.x[k][i] for k in x_keys}
+        z = {k: self.cache.z[k][i] for k in z_keys}
 
         if self.noisehook is not None:
             x = self.noisehook(x, z)
 
-        return dict(x=x, z=z)
+        return dict(obs=x, par=z)
+
+    def z(self):
+        return {k: v[:] for k, v in self.cache.z.items()}
 
     @property
     def zdim(self):
-        assert (
-            self.intensity.zdim == self.cache.zdim
-        ), "The cache and intensity functions did not agree on the zdim."
-        return self.intensity.zdim
+        #assert (
+        #    self.intensity.zdim == self.cache.zdim
+        #), "The cache and intensity functions did not agree on the zdim."
+        return self.cache.zdim
 
     @property
     def xshape(self):
