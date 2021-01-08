@@ -53,14 +53,14 @@ class Intensity:
 
     def save(self, path: PathType):
         path = Path(path)
-        with path.open("wb") as f:
-            pickle.dump(self, f)
+        #with path.open("wb") as f:
+        #    pickle.dump(self, f)
 
     @staticmethod
     def load(path: PathType):
         path = Path(path)
-        with path.open("rb") as f:
-            obj = pickle.load(f)
+        #with path.open("rb") as f:
+        #    obj = pickle.load(f)
         return obj
 
 
@@ -354,9 +354,10 @@ class BallMask:
     
     @staticmethod
     def _get_volume(X, epsilon, bt):
-        N = 30
+        N = 100
         vol_est = []
         d = X.shape[-1]
+        area = {1: 2*epsilon, 2: np.pi*epsilon**2}[d]
         for i in range(N):
             n = np.random.randn(*X.shape)  
             norm = (n**2).sum(axis=1)**0.5
@@ -366,14 +367,18 @@ class BallMask:
             in_bounds = ((Y>=0.) & (Y<=1.)).prod(axis=1, dtype='bool')
             Y = Y[in_bounds]
             counts = bt.query_radius(Y, epsilon, count_only = True)
-            #print(counts.min(), counts.max(), len(counts), counts.mean())
-            vol_est.append(np.pi*epsilon**2 * sum(1./counts))
+            vol_est.append(area * sum(1./counts))
         vol_est = np.array(vol_est)
-        return vol_est.mean(), vol_est.std()
-    
-    def log_prob(self, points):
-        return np.where(self.__call__(points), -np.log(self.volume), -np.inf)
-    
+        out, err = vol_est.mean(), vol_est.std()/np.sqrt(N)
+        rel = err/out
+        if rel > 0.01:
+            print("WARNING: Rel volume uncertainty is:", rel)
+        return out
+
+#    def log_prob(self, points):
+#        print(self.volume)
+#        return np.where(self.__call__(points), -np.log(self.volume), -np.inf)
+#    
     def sample(self, N):
         counter = 0
         samples = []
@@ -398,8 +403,9 @@ class BallMask:
 
     def __call__(self, points):
         """Evaluate points in mask."""
+        points = points.reshape(len(points), -1)
         dist, ind = self.bt.query(points, k = 1)
-        return self.M[ind][:,0]
+        return (dist < self.epsilon)[:,0]
 
 
 class ComboMask:
@@ -428,14 +434,19 @@ class ComboMask:
                 raise KeyError("ComboMask keys must be strings or string tuples.")
         return result
             
+    @property
     def volume(self):
         volume = 1.
         for key in self.samplers:
-            volume *= self.samplers[key].volume[0]
+            volume *= self.samplers[key].volume
         return volume
     
     def __call__(self, X):
-        raise NotImplementedError
+        res = []
+        for k in self.samplers:
+            r = self.samplers[k](X[k])
+            res.append(r)
+        return sum(res) == len(res)
     
     @classmethod
     def load(cls, state_dict):
@@ -515,10 +526,19 @@ class Prior:
         for key, value in self.priors.items():
             x = torch.tensor(values[key])
             log_prob.append(value.log_prob(x))
-        return sum(log_prob)
+        log_prob = sum(log_prob)
+
+        if self.mask is not None:
+            cube_values = self.to_cube(values)
+            m = self.mask(cube_values)
+            log_prob = np.where(m, log_prob-np.log(self.mask.volume), -np.inf)
+        return log_prob
 
     def to_cube(self, X):
-        raise NotImplementedError
+        out = {}
+        for k, v in self.priors.items():
+            out[k] = v.to_cube(X[k])
+        return out
 
     def from_cube(self, values):
         result = {}
@@ -534,6 +554,20 @@ class Prior:
     def load(cls, state_dict):
         mask = None if state_dict['mask'] is None else ComboMask.load(state_dict['mask'])
         return cls(state_dict['priors_dict'], mask = mask)
+
+    def get_masked(self, obs, re, N = 10000, th = -7):
+        if re is None:
+            return self
+        pars = self.sample(N)
+        masklist = {}
+        lnL = re.lnL(obs, pars)
+        for k, v in self.to_cube(pars).items():
+            mask = lnL[k].max() - lnL[k] < -th
+            ind_points = v[mask].reshape(-1,1)
+            masklist[k] = BallMask(ind_points)
+        mask = ComboMask(masklist)
+        return Prior(self.priors_dict, mask = mask)
+
 
 
 class IntensityNew:

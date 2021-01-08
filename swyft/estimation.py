@@ -12,13 +12,13 @@ import torch
 import torch.nn as nn
 
 from .train import trainloop
+from .cache import Dataset, Normalize
 from .network import Network, DenseLegs, DefaultHead
 from .eval import get_ratios
 from .types import (
     Sequence,
     Tuple,
     Device,
-    Dataset,
     Combinations,
     Callable,
     Array,
@@ -35,8 +35,10 @@ class RatioEstimator:
 
     def __init__(
         self,
-        points: Dataset,
-        combinations: Optional[Combinations] = None,
+        points,
+        par_combinations,
+        par_trans = None,
+        obs_trans = None,
         head: Optional[nn.Module] = DefaultHead,
         tail: Optional[nn.Module] = DenseLegs,
         previous_ratio_estimator=None,
@@ -53,7 +55,12 @@ class RatioEstimator:
             device: default is cpu
             statistics: x_mean, x_std, z_mean, z_std
         """
-        self.points = points
+        if obs_trans is None and par_trans is None:
+            p = points.get_range(range(100))
+            obs_trans = Normalize(p['obs'])
+            par_trans = Normalize(p['par'])
+
+        self.points = Dataset(points, par_combinations, par_trans = par_trans, obs_trans = obs_trans)
         self.prev_re = previous_ratio_estimator
         self.device = device
         self.head = head().to(device)
@@ -169,7 +176,6 @@ class RatioEstimator:
         self,
         obs: Array,
         par: Array,
-        transform,
         max_n_points: int = 1000,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve estimated marginal posterior.
@@ -183,10 +189,10 @@ class RatioEstimator:
             parameter array, posterior array
         """
 
-        obs = transform(obs=obs)['obs']
+        obs = self.points.transform(obs=obs)['obs']
         obs = {k: v.to(self.device) for k, v in obs.items()}
         f = self.head(obs)
-        z = transform(par=par)['par']
+        z = self.points.transform(par=par)['par']
         if len(z.shape) == 2:
             lnL = self.tail(f, z.to(self.device))
             lnL = lnL.detach().cpu().numpy()
@@ -199,7 +205,7 @@ class RatioEstimator:
                 lnL.append(self.tail(f, zbatch.to(self.device)).detach().cpu().numpy())
             lnL = np.vstack(lnL)
 
-        return {k: lnL[..., i] for i, k in enumerate(transform.par_combinations)}
+        return {k: lnL[..., i] for i, k in enumerate(self.points.transform.par_combinations)}
 
     def posterior(
         self,
@@ -252,8 +258,8 @@ class RatioEstimator:
         complete.update(self._save_dict)
 
         path = Path(path)
-        with path.open("wb") as f:
-            pickle.dump(complete, f)
+        #with path.open("wb") as f:
+        #    pickle.dump(complete, f)
         return None
 
     @classmethod
@@ -275,8 +281,8 @@ class RatioEstimator:
             device
         """
         path = Path(path)
-        with path.open("rb") as f:
-            complete = pickle.load(f)
+        #with path.open("rb") as f:
+        #    complete = pickle.load(f)
 
         point_attrs = {attr: complete[attr] for attr in Points._save_attrs}
         points = Points._load(cache, point_attrs, noisehook)
@@ -321,6 +327,20 @@ class Points:
         #    self.cache
         #), f"You wanted {len(self.indices)} indices but there are only {len(self.cache)} parameter samples in the cache."
         return len(self.indices)
+
+    def get_range(self, indices):
+        N = len(indices)
+        obs_comb = {k: np.empty((N,)+v.shape) for k, v in self[0]['obs'].items()}
+        par_comb = {k: np.empty((N,)+v.shape) for k, v in self[0]['par'].items()}
+        
+        for i in indices:
+            p = self[i]
+            for k,v in p['obs'].items():
+                obs_comb[k][i] = v
+            for k,v in p['par'].items():
+                par_comb[k][i] = v
+
+        return dict(obs=obs_comb, par=par_comb)
 
     def __getitem__(self, idx):
         i = self.indices[idx]
@@ -372,8 +392,8 @@ class Points:
     def save(self, path: PathType):
         """Saves indices and intensity in a pickle."""
         path = Path(path)
-        with path.open("wb") as f:
-            pickle.dump(self._save_dict, f)
+        #with path.open("wb") as f:
+        #    pickle.dump(self._save_dict, f)
         return None
 
     @classmethod
@@ -387,6 +407,6 @@ class Points:
     def load(cls, cache: "swyft.cache.Cache", path: PathType, noisehook=None):
         """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
         path = Path(path)
-        with path.open("rb") as f:
-            attrs = pickle.load(f)
+        #with path.open("rb") as f:
+        #    attrs = pickle.load(f)
         return cls._load(cache, attrs, noisehook)

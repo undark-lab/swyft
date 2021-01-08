@@ -8,6 +8,8 @@ import zarr
 import numcodecs
 from tqdm import tqdm
 
+from scipy.interpolate import interp1d
+
 from .utils import is_empty
 from .types import Shape, Union, Sequence, PathType, Callable, Array
 
@@ -19,6 +21,24 @@ class MissingSimulationError(Exception):
 class LowIntensityError(Exception):
     pass
 
+class Normalize:
+    def __init__(self, values):
+        self.median = {}
+        self.perc = {}
+        
+        for k, v in values.items():
+            median = np.percentile(v, 50, axis = 0)
+            perc = np.percentile(v-median, np.linspace(0, 100, 101))
+            self.median[k] = median
+            self.perc[k] = perc
+        
+    def __call__(self, values):
+        out = {}
+        for k, v in values.items():
+            v = v - self.median[k] 
+            v = interp1d(self.perc[k], np.linspace(-1, 1, 101), fill_value = "extrapolate")(v)
+            out[k] = v
+        return out
 
 class Transform:
     def __init__(self, par_combinations, par_trans = None, obs_trans = None):
@@ -53,19 +73,19 @@ class Transform:
     def __call__(self, obs = None, par = None):
         out = {}
         if obs is not None:
-            tmp = self._tensorfy(obs)
-            out['obs'] = self.obs_trans(tmp)
+            tmp = self.obs_trans(obs)
+            out['obs'] = self._tensorfy(tmp)
         if par is not None:
-            tmp = self._tensorfy(par)
-            z = self.par_trans(tmp)
+            tmp = self.par_trans(par)
+            z = self._tensorfy(tmp)
             out['par'] = self._combine(z)
         return out
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, points, transform):
+    def __init__(self, points, par_combinations, par_trans = None, obs_trans = None):
         self.points = points
-        self.transform = transform
+        self.transform = Transform(par_combinations, par_trans = par_trans, obs_trans = obs_trans)
         
     @property
     def zdim(self):
@@ -107,6 +127,7 @@ class Cache(ABC):
         self._zdim = None
         self._xshape = None
         self.store = store
+        self.par_names = par_names
         self.root = zarr.group(store=self.store)
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
@@ -165,9 +186,9 @@ class Cache(ABC):
     def _extract_zdim_from_zarr_group(group):
         return group["samples/z"].shape[1]
 
-    @property
-    def par_names(self):
-        return list(self.z)
+#    @property
+#    def par_names(self):
+#        return list(self.par)
 
     @property
     def xshape(self) -> Shape:
@@ -225,7 +246,6 @@ class Cache(ABC):
 
         # Add z samples
         for key, value in self.z.items():
-            print(z[key].shape)
             value.append(z[key])
 
         # Register as missing
