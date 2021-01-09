@@ -73,7 +73,6 @@ def run(
         )
     return points, res[-1]
 
-
 class SWYFT:
     def __init__(self, model, noise, prior_conf, cache, obs = None, device = 'cpu'):
         self.base_prior = Prior(prior_conf)
@@ -88,37 +87,40 @@ class SWYFT:
         self.par_combs = []
         
         self.par_combinations = cache.par_names
+
+    def set_obs(self, obs):
+        if self.obs is None:
+            self.obs = obs
+        else:
+            print("WARNING: Reference observation is already set and unchanged.")
         
-    def run(self, N = [300, 300, 1000]):
-        for n in N:
-            self.round(n)
-        
-    def round(self, N, par_combinations = None):
+    def round(self, Nsim = 3000, batch_size = 8, max_epochs = 10, lr_schedule=[1e-3, 1e-4], par_combinations = None):
         print("Round:", len(self.re)+1)
+
         # Generate potentially masked prior from previous round
         prev_re = None if len(self.re) == 0 else self.re[-1]
         prior = self.base_prior.get_masked(self.obs, prev_re)
         
         # Generate simulations
-        self.cache.grow(prior, N)
+        self.cache.grow(prior, Nsim)
         self.cache.simulate(self.model)
 
         # And extract them
-        indices = self.cache.sample(prior, N)
+        indices = self.cache.sample(prior, Nsim)
         points = Points(self.cache, indices, self.noise)
 
         # Training!
         if par_combinations is None:
             par_combinations = self.par_combinations
         re = RatioEstimator(points, par_combinations, device=self.device)
-        re.train(max_epochs=10, batch_size=8, lr_schedule=[1e-3, 1e-4])
+        re.train(max_epochs=max_epochs, batch_size=batch_size, lr_schedule=lr_schedule)
         
         # Done!
         self.par_combs.append(par_combinations)
         self.re.append(re)
         self.prior.append(prior)
         
-    def lnL(self, R = -1):
-        pars = self.prior[R].sample(100000)
+    def lnL(self, R = -1, n_points = 100000):
+        pars = self.prior[R].sample(n_points)
         lnL = self.re[R].lnL(self.obs, pars)
         return pars, lnL
