@@ -56,7 +56,7 @@ class RatioEstimator:
             statistics: x_mean, x_std, z_mean, z_std
         """
         if obs_trans is None and par_trans is None:
-            p = points.get_range(range(100))
+            p = points.get_range(range(min(100, len(points))))
             obs_trans = Normalize(p['obs'])
             par_trans = Normalize(p['par'])
 

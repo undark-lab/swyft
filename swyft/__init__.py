@@ -86,7 +86,7 @@ class SWYFT:
         self.prior = []
         self.par_combs = []
         
-        self.par_combinations = cache.par_names
+        self.par_combinations = [(n,) for n in cache.par_names]
 
     def set_obs(self, obs):
         if self.obs is None:
@@ -120,7 +120,8 @@ class SWYFT:
         self.re.append(re)
         self.prior.append(prior)
         
-    def lnL(self, R = -1, n_points = 100000):
+    def lnL(self, obs = None, R = -1, n_points = 100000):
         pars = self.prior[R].sample(n_points)
-        lnL = self.re[R].lnL(self.obs, pars)
+        obs = self.obs if obs is None else obs
+        lnL = self.re[R].lnL(obs, pars)
         return pars, lnL
