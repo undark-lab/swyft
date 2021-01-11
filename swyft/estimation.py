@@ -60,13 +60,14 @@ class RatioEstimator:
             obs_trans = Normalize(p['obs'])
             par_trans = Normalize(p['par'])
 
-        self.points = Dataset(points, par_combinations, par_trans = par_trans, obs_trans = obs_trans)
+        self.dataset = Dataset(points, par_combinations, par_trans = par_trans, obs_trans = obs_trans)
         self.prev_re = previous_ratio_estimator
         self.device = device
         self.head = head().to(device)
 
-        self.n_features = len(self.head(self.points[0]['obs']))
-        self.pnum, self.pdim = self.points[0]['par'].shape
+        ref_obs = {k: v.to(device) for k, v in self.dataset[0]['obs'].items()}
+        self.n_features = len(self.head(ref_obs))
+        self.pnum, self.pdim = self.dataset[0]['par'].shape
 
         self.tail = tail(self.n_features, self.pnum, self.pdim).to(device)
 
@@ -76,11 +77,11 @@ class RatioEstimator:
 
     @property
     def zdim(self):
-        return self.points.zdim
+        return self.dataset.zdim
 
     @property
     def xshape(self):
-        return self.points.xshape
+        return self.dataset.xshape
 
     @property
     def combinations(self) -> Combinations:
@@ -138,7 +139,7 @@ class RatioEstimator:
         """
         trainloop(
             self.head, self.tail,
-            self.points,
+            self.dataset,
             combinations=None,
             device=self.device,
             max_epochs=max_epochs,
@@ -164,7 +165,7 @@ class RatioEstimator:
             z, ratios = get_ratios(
                 x0,
                 self.net,
-                self.points,
+                self.dataset,
                 device=self.device,
                 combinations=self.combinations,
                 max_n_points=max_n_points,
@@ -189,23 +190,23 @@ class RatioEstimator:
             parameter array, posterior array
         """
 
-        obs = self.points.transform(obs=obs)['obs']
+        obs = self.dataset.transform(obs=obs)['obs']
         obs = {k: v.to(self.device) for k, v in obs.items()}
         f = self.head(obs)
-        z = self.points.transform(par=par)['par']
+        z = self.dataset.transform(par=par)['par']
         if len(z.shape) == 2:
             lnL = self.tail(f, z.to(self.device))
             lnL = lnL.detach().cpu().numpy()
         else:
             N = len(z)
-            batch_size = 1000
+            batch_size = 100
             lnL = []
             for i in range(N // batch_size + 1):
                 zbatch = z[i * batch_size : (i + 1) * batch_size]
                 lnL.append(self.tail(f, zbatch.to(self.device)).detach().cpu().numpy())
             lnL = np.vstack(lnL)
 
-        return {k: lnL[..., i] for i, k in enumerate(self.points.transform.par_combinations)}
+        return {k: lnL[..., i] for i, k in enumerate(self.dataset.transform.par_combinations)}
 
     def posterior(
         self,
@@ -254,7 +255,7 @@ class RatioEstimator:
 
     def save(self, path: PathType):
         complete = {}
-        complete.update(self.points._save_dict)
+        complete.update(self.dataset._save_dict)
         complete.update(self._save_dict)
 
         path = Path(path)

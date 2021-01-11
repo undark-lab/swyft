@@ -1,7 +1,7 @@
 from .cache import Cache, DirectoryCache, MemoryCache, Transform, Dataset, Normalize
 from .estimation import RatioEstimator, Points
 from .intensity import get_unit_intensity, get_constrained_intensity, Prior
-from .network import OnlineNormalizationLayer
+from .network import OnlineNormalizationLayer, DefaultHead
 from .plot import cont2d, plot1d, corner
 from .train import get_statistics
 from .utils import set_device, get_2d_combinations, cred1d
@@ -94,7 +94,8 @@ class SWYFT:
         else:
             print("WARNING: Reference observation is already set and unchanged.")
         
-    def round(self, Nsim = 3000, batch_size = 8, max_epochs = 10, lr_schedule=[1e-3, 1e-4], par_combinations = None):
+    def round(self, Nsim = 3000, batch_size = 8, max_epochs = 10, lr_schedule=[1e-3, 1e-4], par_combinations = None, head = DefaultHead,
+            par_trans = None, obs_trans = None, re_conf = {}):
         print("Round:", len(self.re)+1)
 
         # Generate potentially masked prior from previous round
@@ -112,7 +113,7 @@ class SWYFT:
         # Training!
         if par_combinations is None:
             par_combinations = self.par_combinations
-        re = RatioEstimator(points, par_combinations, device=self.device)
+        re = RatioEstimator(points, par_combinations, device=self.device, head = head, par_trans = par_trans, obs_trans = obs_trans)
         re.train(max_epochs=max_epochs, batch_size=batch_size, lr_schedule=lr_schedule)
         
         # Done!

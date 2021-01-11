@@ -109,6 +109,50 @@ class LinearWithChannel(nn.Module):
 class DenseLegs(nn.Module):
     def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
         super().__init__()
+        self.fcA = LinearWithChannel(ydim, NH, pnum)
+        self.fcB = LinearWithChannel(NH, NH, pnum)
+        self.fcC = LinearWithChannel(NH, pdim*2, pnum)
+        self.fc1 = LinearWithChannel(pdim*2 + pdim, NH, pnum)
+        self.fc2 = LinearWithChannel(NH, NH, pnum)
+        self.fc3 = LinearWithChannel(NH, 1, pnum)
+        self.drop = nn.Dropout(p=p)
+
+        self.af = torch.relu
+
+        # swish activation function for smooth posteriors
+        self.af2 = lambda x: x * torch.sigmoid(x * 10.0)
+
+        self.pnum = pnum
+
+    def forward(self, y, z):
+        # Defining test statistic
+        #print(y.shape)
+        y = y.unsqueeze(-2).repeat(1, self.pnum, 1)
+        #print(y.shape)
+        y = self.af(self.fcA(y))
+        y = self.drop(y)
+        y = self.af(self.fcB(y))
+        y = self.drop(y)
+        y = self.fcC(y)
+
+        # Combination
+        #x = combine(y, z)
+
+        y = y.expand(z.shape[0], -1, -1)
+        x = torch.cat([y, z], -1)
+        #print(x.shape)
+
+        x = self.af(self.fc1(x))
+        x = self.drop(x)
+        x = self.af(self.fc2(x))
+        x = self.drop(x)
+        x = self.fc3(x).squeeze(-1)
+        return x
+
+
+class DenseLegsOld(nn.Module):
+    def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
+        super().__init__()
         self.fc1 = LinearWithChannel(ydim + pdim, NH, pnum)
         self.fc2 = LinearWithChannel(NH, NH, pnum)
         self.fc3 = LinearWithChannel(NH, NH, pnum)

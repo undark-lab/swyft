@@ -21,7 +21,22 @@ class MissingSimulationError(Exception):
 class LowIntensityError(Exception):
     pass
 
-class Normalize:
+class NormalizeStd:
+    def __init__(self, values):
+        self.mean = {}
+        self.std= {}
+        
+        for k, v in values.items():
+            self.mean[k] = v.mean(axis=0)
+            self.std[k] = v.std(axis=0).mean()
+        
+    def __call__(self, values):
+        out = {}
+        for k, v in values.items():
+            out[k] = (v - self.mean[k])/self.std[k]
+        return out
+
+class NormalizeScale:
     def __init__(self, values):
         self.median = {}
         self.perc = {}
@@ -39,6 +54,8 @@ class Normalize:
             v = interp1d(self.perc[k], np.linspace(-1, 1, 101), fill_value = "extrapolate")(v)
             out[k] = v
         return out
+
+Normalize = NormalizeStd
 
 class Transform:
     def __init__(self, par_combinations, par_trans = None, obs_trans = None):
