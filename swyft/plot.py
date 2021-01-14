@@ -113,6 +113,7 @@ def plot1d(
             ax = axes[j, i]
         hist1d(ax, re1d, x0, z0, params[k], max_n_points=max_n_points)
         ax.set_xlabel(labels[k])
+    return fig, axes
 
 
 def corner(
@@ -185,6 +186,7 @@ def corner(
 
             if j == i:
                 hist1d(ax, re1d, x0, z0, params[i], max_n_points=max_n_points)
+    return fig, axes
 
 
 if __name__ == "__main__":

@@ -149,13 +149,16 @@ class Network(nn.Module):
         self.legs = DenseLegs(ydim, pnum, pdim=pdim, p=p)
 
         # Set datascaling
+        _datanorms = [
+            torch.tensor(0.0),
+            torch.tensor(1.0),
+            torch.tensor(0.5),
+            torch.tensor(math.sqrt(1/12)),
+        ]
         if datanorms is None:
-            datanorms = [
-                torch.tensor(0.0),
-                torch.tensor(1.0),
-                torch.tensor(0.5),
-                torch.tensor(0.5),
-            ]
+            datanorms = _datanorms
+        else:
+            datanorms = [default if user is None else user for user, default in zip(datanorms, _datanorms)]
         self._set_datanorms(*datanorms)
 
     def _set_datanorms(self, x_mean, x_std, z_mean, z_std):

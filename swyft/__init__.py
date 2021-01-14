@@ -4,7 +4,7 @@ from .intensity import get_unit_intensity, get_constrained_intensity
 from .network import OnlineNormalizationLayer
 from .plot import cont2d, plot1d, corner
 from .train import get_statistics
-from .utils import set_device, get_2d_combinations, cred1d
+from .utils import set_device, get_2d_combinations, cred1d, corner_combinations
 
 __all__ = [
     "Cache",
@@ -23,6 +23,7 @@ __all__ = [
     "get_2d_combinations",
     "cred1d",
     "run",
+    "corner_combinations"
 ]
 
 
@@ -40,6 +41,7 @@ def run(
     lr_schedule=[1e-3, 1e-4],
     threshold=1e-5,
     early_stopping_patience=1,
+    statistics=None,
 ):
     """Default training loop. Possible to call just from observation x0 and simulator. Optionally, can tweak training details."""
     if cache is None:
@@ -60,7 +62,7 @@ def run(
         cache.grow(intensities[-1])
         cache.simulate(simulator)
         points = Points(cache, intensities[-1], noise)
-        re = RatioEstimator(points, device=device)
+        re = RatioEstimator(points, statistics=statistics, device=device)
         res.append(re)
         res[-1].train(
             max_epochs=max_epochs,

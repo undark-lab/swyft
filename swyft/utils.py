@@ -1,6 +1,7 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
 from pathlib import Path
+import itertools
 
 import numpy as np
 import torch
@@ -16,6 +17,7 @@ from .types import (
     Sequence,
     Combinations,
     PathType,
+    Union,
 )
 
 
@@ -46,18 +48,24 @@ def combine_z(z: Tensor, combinations: Optional[List]) -> Tensor:
     return z[..., combinations]
 
 
-def set_device(gpu: bool = False) -> torch.device:
+def set_device(gpu: Union[bool, str] = False) -> torch.device:
     """Select device, defaults to cpu."""
-    if gpu and torch.cuda.is_available():
-        device = torch.device("cuda")
+    if isinstance(gpu, str):
+        device = torch.device(gpu)
         torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    elif gpu and not torch.cuda.is_available():
-        warn("Although the gpu flag was true, the gpu is not avaliable.")
-        device = torch.device("cpu")
-        torch.set_default_tensor_type("torch.FloatTensor")
+    elif isinstance(gpu, bool):
+        if gpu and torch.cuda.is_available():
+            device = torch.device("cuda")
+            torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        elif gpu and not torch.cuda.is_available():
+            warn("Although the gpu flag was true, the gpu is not avaliable.")
+            device = torch.device("cpu")
+            torch.set_default_tensor_type("torch.FloatTensor")
+        else:
+            device = torch.device("cpu")
+            torch.set_default_tensor_type("torch.FloatTensor")
     else:
-        device = torch.device("cpu")
-        torch.set_default_tensor_type("torch.FloatTensor")
+        raise TypeError("gpu should be a string or bool.")
     return device
 
 
@@ -123,6 +131,11 @@ def array_to_tensor(
         )
 
 
+def tensor_to_array(tensor: Tensor) -> Array:
+    return tensor.detach().cpu().numpy()
+
+
+
 def tobytes(x: Array):
     if isinstance(x, np.ndarray):
         return x.tobytes()
@@ -149,6 +162,18 @@ def process_combinations(comb: Combinations):
         return comb
     else:
         raise ValueError(f"{comb} is not understood to be of type Combinations.")
+
+
+def corner_combinations(zdim: int) -> Combinations:
+    """The pairwise combinations required for creating a corner plot.
+    
+    Args:
+        zdim
+        
+    Returns:
+        pairwise combinations, i.e. [[0,1], [0,2], [1,2]]
+    """
+    return [list(i) for i in itertools.combinations(range(zdim), 2)] 
 
 
 def is_empty(directory: PathType):
