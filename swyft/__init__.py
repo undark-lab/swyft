@@ -95,7 +95,7 @@ class SWYFT:
             print("WARNING: Reference observation is already set and unchanged.")
         
     def round(self, Nsim = 3000, batch_size = 8, max_epochs = 10, lr_schedule=[1e-3, 1e-4], par_combinations = None, head = DefaultHead,
-            par_trans = None, obs_trans = None, re_conf = {}):
+            param_transform = None, obs_trans = None, re_conf = {}):
         print("Round:", len(self.re)+1)
 
         # Generate potentially masked prior from previous round
@@ -113,7 +113,7 @@ class SWYFT:
         # Training!
         if par_combinations is None:
             par_combinations = self.par_combinations
-        re = RatioEstimator(points, par_combinations, device=self.device, head = head, par_trans = par_trans, obs_trans = obs_trans)
+        re = RatioEstimator(points, par_combinations, device=self.device, head = head, param_transform = param_transform, obs_trans = obs_trans)
         re.train(max_epochs=max_epochs, batch_size=batch_size, lr_schedule=lr_schedule)
         
         # Done!

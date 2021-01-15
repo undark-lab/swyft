@@ -106,7 +106,7 @@ class LinearWithChannel(nn.Module):
         return torch.matmul(self.w, x).squeeze(-1) + self.b
 
 
-class DenseLegs(nn.Module):
+class DefaultTail(nn.Module):
     def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
         super().__init__()
         self.fcA = LinearWithChannel(ydim, NH, pnum)
@@ -184,7 +184,7 @@ class DenseLegsOld(nn.Module):
 #        return result
 #    
 #class NetworkNew(nn.Module):
-#    def __init__(self, n_features, pnum, pdim, head=None, datanorms=None, tail = DenseLegs):
+#    def __init__(self, n_features, pnum, pdim, head=None, datanorms=None, tail = DefaultTail):
 #        """Base network combining z-independent head and parallel tail.
 #
 #        :param ydim: Number of data dimensions going into DenseLeg network
@@ -219,7 +219,7 @@ class DenseLegsOld(nn.Module):
 #        return out
 
 class Network(nn.Module):
-    def __init__(self, ydim, pnum, pdim, head=None, tail = DenseLegs):
+    def __init__(self, ydim, pnum, pdim, head=None, tail = DefaultTail):
         """Base network combining z-independent head and parallel tail.
 
         :param ydim: Number of data dimensions going into DenseLeg network

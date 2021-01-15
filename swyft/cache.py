@@ -58,9 +58,9 @@ class NormalizeScale:
 Normalize = NormalizeStd
 
 class Transform:
-    def __init__(self, par_combinations, par_trans = None, obs_trans = None):
-        self.obs_trans = (lambda x: x) if obs_trans is None else obs_trans
-        self.par_trans = (lambda z: z) if par_trans is None else par_trans
+    def __init__(self, par_combinations, param_transform = None, obs_transform = None):
+        self.obs_transform = (lambda x: x) if obs_transform is None else obs_transform
+        self.param_transform = (lambda z: z) if param_transform is None else param_transform
         self.par_combinations = par_combinations
         self.par_comb_shape = self._get_par_comb_shape(par_combinations)
         
@@ -90,19 +90,25 @@ class Transform:
     def __call__(self, obs = None, par = None):
         out = {}
         if obs is not None:
-            tmp = self.obs_trans(obs)
+            tmp = self.obs_transform(obs)
             out['obs'] = self._tensorfy(tmp)
         if par is not None:
-            tmp = self.par_trans(par)
+            tmp = self.param_transform(par)
             z = self._tensorfy(tmp)
             out['par'] = self._combine(z)
         return out
 
-
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, points, par_combinations, par_trans = None, obs_trans = None):
+    def __init__(self, points, param_list, param_transform = None, obs_transform = None):
         self.points = points
-        self.transform = Transform(par_combinations, par_trans = par_trans, obs_trans = obs_trans)
+#        if obs_transform is None or param_transform is None:
+#            p = points.get_range(range(min(100, len(points))))
+#        if obs_transform is None:
+#            obs_transform = Normalize(p['obs'])
+#        if param_transform is None:
+#            param_transform = Normalize(p['par'])
+
+        self.transform = Transform(param_list, param_transform = param_transform, obs_transform = obs_transform)
         
     @property
     def zdim(self):

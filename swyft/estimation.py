@@ -13,7 +13,7 @@ import torch.nn as nn
 
 from .train import trainloop
 from .cache import Dataset, Normalize
-from .network import Network, DenseLegs, DefaultHead
+from .network import DefaultTail, DefaultHead
 from .eval import get_ratios
 from .types import (
     Sequence,
@@ -36,14 +36,12 @@ class RatioEstimator:
     def __init__(
         self,
         points,
-        par_combinations,
-        par_trans = None,
-        obs_trans = None,
+        param_list,
+        param_transform = None,
+        obs_transform = None,
         head: Optional[nn.Module] = DefaultHead,
-        tail: Optional[nn.Module] = DenseLegs,
-        previous_ratio_estimator=None,
+        tail: Optional[nn.Module] = DefaultTail,
         device: Device = "cpu",
-        statistics=None,
     ):
         """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
 
@@ -55,13 +53,7 @@ class RatioEstimator:
             device: default is cpu
             statistics: x_mean, x_std, z_mean, z_std
         """
-        if obs_trans is None and par_trans is None:
-            p = points.get_range(range(min(100, len(points))))
-            obs_trans = Normalize(p['obs'])
-            par_trans = Normalize(p['par'])
-
-        self.dataset = Dataset(points, par_combinations, par_trans = par_trans, obs_trans = obs_trans)
-        self.prev_re = previous_ratio_estimator
+        self.dataset = Dataset(points, param_list, param_transform = param_transform , obs_transform = obs_transform)
         self.device = device
         self.head = head().to(device)
 
@@ -75,48 +67,48 @@ class RatioEstimator:
         print("Number of parameters to estimate:", self.pnum)
         print("Maximum posterior dimensionality:", self.pdim)
 
-    @property
-    def zdim(self):
-        return self.dataset.zdim
+#    @property
+#    def zdim(self):
+#        return self.dataset.zdim
 
-    @property
-    def xshape(self):
-        return self.dataset.xshape
+#    @property
+#    def xshape(self):
+#        return self.dataset.xshape
 
-    @property
-    def combinations(self) -> Combinations:
-        """Marginals that the ratio estimator learns."""
-        if self._combinations is None:
-            return [[i] for i in range(self.zdim)]
-        else:
-            return process_combinations(self._combinations)
+#    @property
+#    def combinations(self) -> Combinations:
+#        """Marginals that the ratio estimator learns."""
+#        if self._combinations is None:
+#            return [[i] for i in range(self.zdim)]
+#        else:
+#            return process_combinations(self._combinations)
 
-    def _init_net(self, statistics: Tuple, previous_ratio_estimator):
-        """Options for custom network initialization.
-
-        Args:
-            statistics: x_mean, x_std, z_mean, z_std
-            previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
-        """
-        # TODO change this to state_dict and deal with the self.head is None case more gracefully.
-        if previous_ratio_estimator is not None:
-            if self.head is not None:
-                warn("using previous ratio estimator's head rather than yours.")
-            self.head = deepcopy(self.prev_re.net.head)
-        # TODO this is an antipattern address it in network by removing pnum and pdim
-        #pnum = len(self.combinations)
-        #pdim = len(self.combinations[0])
-
-        # TODO network should be able to handle shape or dim. right now we are forcing dim, that is bad.
-        #input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
-        # yshape = self.head(input_x).shape[1:]
-        #yshape = self.head(input_x).shape[1]
-
-        #print("yshape (shape of features between head and legs):", yshape)
-        self.head
-        return Network(
-            ydim=self.n_features, pnum=self.pnum, pdim=self.pdim, head=self.head, datanorms=statistics, tail = self.tail
-        ).to(self.device)
+#    def _init_net(self, statistics: Tuple, previous_ratio_estimator):
+#        """Options for custom network initialization.
+#
+#        Args:
+#            statistics: x_mean, x_std, z_mean, z_std
+#            previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
+#        """
+#        # TODO change this to state_dict and deal with the self.head is None case more gracefully.
+#        if previous_ratio_estimator is not None:
+#            if self.head is not None:
+#                warn("using previous ratio estimator's head rather than yours.")
+#            self.head = deepcopy(self.prev_re.net.head)
+#        # TODO this is an antipattern address it in network by removing pnum and pdim
+#        #pnum = len(self.combinations)
+#        #pdim = len(self.combinations[0])
+#
+#        # TODO network should be able to handle shape or dim. right now we are forcing dim, that is bad.
+#        #input_x = array_to_tensor(torch.empty(1, *self.xshape, device=self.device))
+#        # yshape = self.head(input_x).shape[1:]
+#        #yshape = self.head(input_x).shape[1]
+#
+#        #print("yshape (shape of features between head and legs):", yshape)
+#        self.head
+#        return Network(
+#            ydim=self.n_features, pnum=self.pnum, pdim=self.pdim, head=self.head, datanorms=statistics, tail = self.tail
+#        ).to(self.device)
 
     def train(
         self,
@@ -151,27 +143,27 @@ class RatioEstimator:
         )
         return None
 
-    def _eval_ratios(self, x0: Array, max_n_points: int):
-        """Evaluate ratios if not already evaluated.
-
-        Args:
-            x0 (array): real observation to calculate posterior
-            max_n_points (int): number of points to calculate ratios
-        """
-        binary_x0 = tobytes(x0)
-        if binary_x0 in self.ratio_cache.keys():
-            pass
-        else:
-            z, ratios = get_ratios(
-                x0,
-                self.net,
-                self.dataset,
-                device=self.device,
-                combinations=self.combinations,
-                max_n_points=max_n_points,
-            )
-            self.ratio_cache[binary_x0] = {"z": z, "ratios": ratios}
-        return None
+#    def _eval_ratios(self, x0: Array, max_n_points: int):
+#        """Evaluate ratios if not already evaluated.
+#
+#        Args:
+#            x0 (array): real observation to calculate posterior
+#            max_n_points (int): number of points to calculate ratios
+#        """
+#        binary_x0 = tobytes(x0)
+#        if binary_x0 in self.ratio_cache.keys():
+#            pass
+#        else:
+#            z, ratios = get_ratios(
+#                x0,
+#                self.net,
+#                self.dataset,
+#                device=self.device,
+#                combinations=self.combinations,
+#                max_n_points=max_n_points,
+#            )
+#            self.ratio_cache[binary_x0] = {"z": z, "ratios": ratios}
+#        return None
 
     def lnL(
         self,
@@ -208,42 +200,42 @@ class RatioEstimator:
 
         return {k: lnL[..., i] for i, k in enumerate(self.dataset.transform.par_combinations)}
 
-    def posterior(
-        self,
-        x0: Array,
-        combination_indices: Union[int, Sequence[int]],
-        max_n_points: int = 1000,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Retrieve estimated marginal posterior.
-
-        Args:
-            x0: real observation to calculate posterior
-            combination_indices: z indices in self.combinations
-            max_n_points: number of points to calculate ratios on
-
-        Returns:
-            parameter array, posterior array
-        """
-        self._eval_ratios(x0, max_n_points=max_n_points)
-
-        if isinstance(combination_indices, int):
-            combination_indices = [combination_indices]
-
-        j = self.combinations.index(combination_indices)
-        z = self.ratio_cache[tobytes(x0)]["z"][:, j]
-        ratios = self.ratio_cache[tobytes(x0)]["ratios"][:, j]
-
-        # 1-dim case
-        if len(combination_indices) == 1:
-            z = z[:, 0]
-            isorted = np.argsort(z)
-            z, ratios = z[isorted], ratios[isorted]
-            exp_r = np.exp(ratios)
-            I = trapz(exp_r, z)
-            p = exp_r / I
-        else:
-            p = np.exp(ratios)
-        return z, p
+#    def posterior(
+#        self,
+#        x0: Array,
+#        combination_indices: Union[int, Sequence[int]],
+#        max_n_points: int = 1000,
+#    ) -> Tuple[np.ndarray, np.ndarray]:
+#        """Retrieve estimated marginal posterior.
+#
+#        Args:
+#            x0: real observation to calculate posterior
+#            combination_indices: z indices in self.combinations
+#            max_n_points: number of points to calculate ratios on
+#
+#        Returns:
+#            parameter array, posterior array
+#        """
+#        self._eval_ratios(x0, max_n_points=max_n_points)
+#
+#        if isinstance(combination_indices, int):
+#            combination_indices = [combination_indices]
+#
+#        j = self.combinations.index(combination_indices)
+#        z = self.ratio_cache[tobytes(x0)]["z"][:, j]
+#        ratios = self.ratio_cache[tobytes(x0)]["ratios"][:, j]
+#
+#        # 1-dim case
+#        if len(combination_indices) == 1:
+#            z = z[:, 0]
+#            isorted = np.argsort(z)
+#            z, ratios = z[isorted], ratios[isorted]
+#            exp_r = np.exp(ratios)
+#            I = trapz(exp_r, z)
+#            p = exp_r / I
+#        else:
+#            p = np.exp(ratios)
+#        return z, p
 
     @property
     def net_state_dict(self):
@@ -355,19 +347,19 @@ class Points:
 
         return dict(obs=x, par=z)
 
-    def z(self):
-        return {k: v[:] for k, v in self.cache.z.items()}
+#    def z(self):
+#        return {k: v[:] for k, v in self.cache.z.items()}
 
-    @property
-    def zdim(self):
-        #assert (
-        #    self.intensity.zdim == self.cache.zdim
-        #), "The cache and intensity functions did not agree on the zdim."
-        return self.cache.zdim
+#    @property
+#    def zdim(self):
+#        #assert (
+#        #    self.intensity.zdim == self.cache.zdim
+#        #), "The cache and intensity functions did not agree on the zdim."
+#        return self.cache.zdim
 
-    @property
-    def xshape(self):
-        return self.cache.xshape
+#    @property
+#    def xshape(self):
+#        return self.cache.xshape
 
 #    @property
 #    def indices(self):
