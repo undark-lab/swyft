@@ -7,19 +7,16 @@ import numpy as np
 import zarr
 import numcodecs
 from tqdm import tqdm
-
 from scipy.interpolate import interp1d
 
 from .utils import is_empty
-from .types import Shape, Union, Sequence, PathType, Callable, Array
+from .types import Shape, Union, PathType, Callable, Array
+from .intensity import Intensity
 
-from .intensity import IntensityNew
-
-class MissingSimulationError(Exception):
-    pass
 
 class LowIntensityError(Exception):
     pass
+
 
 class NormalizeStd:
     def __init__(self, values):
@@ -35,6 +32,7 @@ class NormalizeStd:
         for k, v in values.items():
             out[k] = (v - self.mean[k])/self.std[k]
         return out
+
 
 class NormalizeScale:
     def __init__(self, values):
@@ -56,6 +54,7 @@ class NormalizeScale:
         return out
 
 Normalize = NormalizeStd
+
 
 class Transform:
     def __init__(self, par_combinations, param_transform = None, obs_transform = None):
@@ -97,6 +96,7 @@ class Transform:
             z = self._tensorfy(tmp)
             out['par'] = self._combine(z)
         return out
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, points):
@@ -209,7 +209,7 @@ class Cache(ABC):
         self.z = self.root["samples/par"]
         self.m = self.root["metadata/requires_simulation"]
         self.u = self.root["metadata/intensity"]
-        self.intensities = [IntensityNew.from_state_dict(self.u[i]) for i in range(len(self.u))]
+        self.intensities = [Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))]
 
     def __len__(self):
         """Returns number of samples in the cache."""
@@ -272,7 +272,7 @@ class Cache(ABC):
         Args:
             intensity: target parameter intensity function
         """
-        intensity = IntensityNew(prior, N)
+        intensity = Intensity(prior, N)
 
         # Proposed new samples z from p
         z_prop = intensity.sample()
@@ -308,7 +308,7 @@ class Cache(ABC):
         Args:
             intensity: target parameter intensity function
         """
-        intensity = IntensityNew(prior, N)
+        intensity = Intensity(prior, N)
 
         self._update()
 

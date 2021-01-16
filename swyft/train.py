@@ -55,62 +55,6 @@ def loss_fn(head, tail, obs, params):
     
     return loss
 
-#def loss_fn(head, tail, xz, combinations: Combinations = None):
-#    """Evaluate binary-cross-entropy loss function. Mean over batch.
-#
-#    Args:
-#        network (nn.Module): network taking minibatch of samples and returing ratio estimator.
-#        xz (dict): batch of samples to train on.
-#        combinations (list, optional): determines posteriors that are generated.
-#            examples:
-#                [[0,1], [3,4]]: p(z_0,z_1) and p(z_3,z_4) are generated
-#                    initialize network with zdim = 2, pdim = 2
-#                [[0,1,5,2]]: p(z_0,z_1,z_5,z_2) is generated
-#                    initialize network with zdim = 1, pdim = 4
-#
-#    Returns:
-#        Tensor: training loss.
-#    """
-#    x = xz["obs"]
-#    z = xz["par"]
-#    n_batch = z.size(0)
-#
-#    # Is it the removal of replacement that made it stop working?!
-#
-#    # bring x into shape
-#    # (n_batch*2, data-shape)  - repeat twice each sample of x - there are n_batch samples
-#    # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
-#    f = head(x)
-#    f = torch.repeat_interleave(f, 2, dim=0)
-#
-#    # bring z into shape
-#    # (n_batch*2, param-shape)  - repeat twice each sample of z - there are n_batch samples
-#    # repetition is alternating in first dimension: [a, b, a, b, c, d, c, d, ...]
-#    #z = torch.stack([combine_z(zs, combinations) for zs in z])
-#    zdim = len(z[0])
-#    z = z.view(n_batch // 2, -1, *z.shape[-1:])
-#    z = torch.repeat_interleave(z, 2, dim=0)
-#    z = z.view(n_batch * 2, -1, *z.shape[-1:])
-#
-#    # call network
-#    lnL = tail(f, z)
-#    lnL = lnL.view(n_batch // 2, 4, zdim)
-#
-#    # Evaluate cross-entropy loss
-#    # loss =
-#    # -ln( exp(lnL(x_a, z_a))/(1+exp(lnL(x_a, z_a))) )
-#    # -ln( exp(lnL(x_b, z_b))/(1+exp(lnL(x_b, z_b))) )
-#    # -ln( 1/(1+exp(lnL(x_a, z_b))) )
-#    # -ln( 1/(1+exp(lnL(x_b, z_a))) )
-#    loss = -torch.nn.functional.logsigmoid(lnL[:, 0])
-#    loss += -torch.nn.functional.logsigmoid(-lnL[:, 1])
-#    loss += -torch.nn.functional.logsigmoid(-lnL[:, 2])
-#    loss += -torch.nn.functional.logsigmoid(lnL[:, 3])
-#    loss = loss.sum() / (n_batch // 2)
-#
-#    return loss
-
-
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
     assert np.isclose(sum(percents), 1.0), f"{percents} does not sum to 1."
     lengths = [int(percent * length) for percent in percents]
@@ -270,33 +214,33 @@ def trainloop(
         tail.load_state_dict(sd_tail)
 
 
-def get_statistics(
-    points: Union["swyft.estimation.Points", Sequence[Dict[str, Array]]],
-    combinations: Combinations = None,
-    n_samples: int = 300,
-):
-    """Calculate the mean and std of both x and z.
-
-    Args:
-        points: list of dictionaries with keys 'x' and 'z'.
-        combinations
-        n_samples: size of sample
-
-    Returns:
-        x_mean, x_std, z_mean, z_std
-    """
-    irand = np.random.choice(len(points), n_samples)
-    x = [points[i]["x"] for i in irand]
-    z = [points[i]["z"] for i in irand]
-    x_mean = sum(x) / len(x)
-    z_mean = sum(z) / len(z)
-    x_var = sum([(x[i] - x_mean) ** 2 for i in range(len(x))]) / len(x)
-    z_var = sum([(z[i] - z_mean) ** 2 for i in range(len(z))]) / len(z)
-
-    z_mean = combine_z(z_mean, combinations)
-    z_var = combine_z(z_var, combinations)
-
-    return x_mean, x_var ** 0.5, z_mean, z_var ** 0.5
+#def get_statistics(
+#    points: Union["swyft.estimation.Points", Sequence[Dict[str, Array]]],
+#    combinations: Combinations = None,
+#    n_samples: int = 300,
+#):
+#    """Calculate the mean and std of both x and z.
+#
+#    Args:
+#        points: list of dictionaries with keys 'x' and 'z'.
+#        combinations
+#        n_samples: size of sample
+#
+#    Returns:
+#        x_mean, x_std, z_mean, z_std
+#    """
+#    irand = np.random.choice(len(points), n_samples)
+#    x = [points[i]["x"] for i in irand]
+#    z = [points[i]["z"] for i in irand]
+#    x_mean = sum(x) / len(x)
+#    z_mean = sum(z) / len(z)
+#    x_var = sum([(x[i] - x_mean) ** 2 for i in range(len(x))]) / len(x)
+#    z_var = sum([(z[i] - z_mean) ** 2 for i in range(len(z))]) / len(z)
+#
+#    z_mean = combine_z(z_mean, combinations)
+#    z_var = combine_z(z_var, combinations)
+#
+#    return x_mean, x_var ** 0.5, z_mean, z_var ** 0.5
 
 
 if __name__ == "__main__":
