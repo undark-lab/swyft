@@ -1,7 +1,4 @@
 # pylint: disable=no-member, not-callable, undefined-variable
-from pathlib import Path
-import pickle
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -50,18 +47,6 @@ class Intensity:
     @property
     def zdim(self):
         return self.factor_mask.dim
-
-    def save(self, path: PathType):
-        path = Path(path)
-        #with path.open("wb") as f:
-        #    pickle.dump(self, f)
-
-    @staticmethod
-    def load(path: PathType):
-        path = Path(path)
-        #with path.open("rb") as f:
-        #    obj = pickle.load(f)
-        return obj
 
 
 def get_unit_intensity(expected_n: int, dim: int):
@@ -331,7 +316,7 @@ class BallMask:
         self.volume = self._get_volume(self.X, self.epsilon, self.bt)
        
     @classmethod
-    def load(cls, state_dict):
+    def from_state_dict(cls, state_dict):
         obj = cls.__new__(cls)
         obj.X = state_dict['points']
         assert len(obj.X.shape) == 2
@@ -341,7 +326,7 @@ class BallMask:
         obj.bt = BallTree(obj.X, leaf_size = 2)
         return obj
         
-    def dump(self):
+    def state_dict(self):
         return dict(masktype = "BallMask", points=self.X, epsilon=self.epsilon, volume=self.volume)
         
     @staticmethod
@@ -449,16 +434,16 @@ class ComboMask:
         return sum(res) == len(res)
     
     @classmethod
-    def load(cls, state_dict):
+    def from_state_dict(cls, state_dict):
         samplers = {}
         for key, value in state_dict['samplers'].items():
-            samplers[key] = BallMask.load(value)
+            samplers[key] = BallMask.from_state_dict(value)
         return cls(samplers)
     
-    def dump(self):
+    def state_dict(self):
         samplers = {}
         for key, value in self.samplers.items():
-            samplers[key] = value.dump()
+            samplers[key] = value.state_dict()
         return dict(samplers = samplers)
 
 
@@ -487,11 +472,11 @@ class Prior1d:
     def from_cube(self, value):
         return self.prior.icdf(torch.tensor(value)).numpy()
     
-    def dump(self):
+    def state_dict(self):
         return dict(tag = self.tag, args = self.args)
     
     @classmethod
-    def load(cls, state_dict):
+    def from_state_dict(cls, state_dict):
         return cls(state_dict['tag'], *state_dict['args'])
 
 
@@ -546,13 +531,13 @@ class Prior:
             result[key] = np.array(self.priors[key].from_cube(value))
         return result
 
-    def dump(self):
-        mask_dict = None if self.mask is None else self.mask.dump()
+    def state_dict(self):
+        mask_dict = None if self.mask is None else self.mask.state_dict()
         return dict(priors_dict = self.priors_dict, mask = mask_dict)
 
     @classmethod
-    def load(cls, state_dict):
-        mask = None if state_dict['mask'] is None else ComboMask.load(state_dict['mask'])
+    def from_state_dict(cls, state_dict):
+        mask = None if state_dict['mask'] is None else ComboMask.from_state_dict(state_dict['mask'])
         return cls(state_dict['priors_dict'], mask = mask)
 
     def get_masked(self, obs, re, N = 10000, th = -7):
@@ -569,7 +554,6 @@ class Prior:
         return Prior(self.priors_dict, mask = mask)
 
 
-
 class IntensityNew:
     def __init__(self, prior, mu):
         self.prior = prior
@@ -583,11 +567,11 @@ class IntensityNew:
         return np.exp(self.prior.log_prob(values))*self.mu
     
     @classmethod
-    def load(cls, state_dict):
-        prior = Prior.load(state_dict["prior"])
+    def from_state_dict(cls, state_dict):
+        prior = Prior.from_state_dict(state_dict["prior"])
         mu = state_dict["mu"]
-        return cls(prior, mu)
+        return IntensityNew(prior, mu)
     
-    def dump(self):
-        prior = self.prior.dump()
+    def state_dict(self):
+        prior = self.prior.state_dict()
         return dict(prior = prior, mu = self.mu)

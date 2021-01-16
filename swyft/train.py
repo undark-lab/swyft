@@ -5,67 +5,110 @@ from contextlib import suppress
 import numpy as np
 import torch
 
-from .utils import combine_z
+from .utils import combine_z, dict_to_tensor, dict_to_device
 from .types import Sequence, Combinations, Dict, Union, Array
 
 
-def loss_fn(head, tail, xz, combinations: Combinations = None):
-    """Evaluate binary-cross-entropy loss function. Mean over batch.
-
+def double_features(f):
+    """Double feature vector as (A, B, C, D) --> (A, A, B, B, C, C, D, D)
+    
     Args:
-        network (nn.Module): network taking minibatch of samples and returing ratio estimator.
-        xz (dict): batch of samples to train on.
-        combinations (list, optional): determines posteriors that are generated.
-            examples:
-                [[0,1], [3,4]]: p(z_0,z_1) and p(z_3,z_4) are generated
-                    initialize network with zdim = 2, pdim = 2
-                [[0,1,5,2]]: p(z_0,z_1,z_5,z_2) is generated
-                    initialize network with zdim = 1, pdim = 4
-
+        f (tensor): Feature vectors (n_batch, n_features)
     Returns:
-        Tensor: training loss.
+        f (tensor): Feature vectors (2*n_btach. n_features)
     """
-    assert (
-        xz["par"].size(0) % 2 == 0
-    ), "There must be an even number of samples in the batch for contrastive learning."
-    n_batch = xz["par"].size(0)
+    return torch.repeat_interleave(f, 2, dim = 0)
 
-    # Is it the removal of replacement that made it stop working?!
+def double_params(params):
+    """Double parameters as (A, B, C, D) --> (A, B, A, B, C, D, C, D) etc
+    
+    Args:
+        params (dict): Dictionary of parameters with shape (n_batch).
+    Returns:
+        dict: Dictionary of parameters with shape (2*n_batch).
+    """
+    out = {}
+    for k, v in params.items():
+        out[k] = torch.repeat_interleave(v.view(-1, 2), 2, dim=0).flatten()
+    return out
 
-    # bring x into shape
-    # (n_batch*2, data-shape)  - repeat twice each sample of x - there are n_batch samples
-    # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
-    x = xz["obs"]
-    f = head(x)
-    f = torch.repeat_interleave(f, 2, dim=0)
+def loss_fn(head, tail, obs, params):
+    # Get features
+    f = head(obs)
+    n_batch = f.shape[0]
 
-    # bring z into shape
-    # (n_batch*2, param-shape)  - repeat twice each sample of z - there are n_batch samples
-    # repetition is alternating in first dimension: [a, b, a, b, c, d, c, d, ...]
-    z = xz["par"]
-    #z = torch.stack([combine_z(zs, combinations) for zs in z])
-    zdim = len(z[0])
-    z = z.view(n_batch // 2, -1, *z.shape[-1:])
-    z = torch.repeat_interleave(z, 2, dim=0)
-    z = z.view(n_batch * 2, -1, *z.shape[-1:])
+    assert n_batch%2 == 0, "Loss function can only handle even-numbered batch sizes."
+    
+    # Repeat interleave
+    f_doubled = double_features(f)
+    params_doubled = double_params(params)
 
-    # call network
-    lnL = tail(f, z)
-    lnL = lnL.view(n_batch // 2, 4, zdim)
+    # Get 
+    lnL = tail(f_doubled, params_doubled)
+    lnL = lnL.view(-1, 4, lnL.shape[-1])
 
-    # Evaluate cross-entropy loss
-    # loss =
-    # -ln( exp(lnL(x_a, z_a))/(1+exp(lnL(x_a, z_a))) )
-    # -ln( exp(lnL(x_b, z_b))/(1+exp(lnL(x_b, z_b))) )
-    # -ln( 1/(1+exp(lnL(x_a, z_b))) )
-    # -ln( 1/(1+exp(lnL(x_b, z_a))) )
     loss = -torch.nn.functional.logsigmoid(lnL[:, 0])
     loss += -torch.nn.functional.logsigmoid(-lnL[:, 1])
     loss += -torch.nn.functional.logsigmoid(-lnL[:, 2])
     loss += -torch.nn.functional.logsigmoid(lnL[:, 3])
-    loss = loss.sum() / (n_batch // 2)
-
+    loss = loss.sum(axis=0)/n_batch
+    
     return loss
+
+#def loss_fn(head, tail, xz, combinations: Combinations = None):
+#    """Evaluate binary-cross-entropy loss function. Mean over batch.
+#
+#    Args:
+#        network (nn.Module): network taking minibatch of samples and returing ratio estimator.
+#        xz (dict): batch of samples to train on.
+#        combinations (list, optional): determines posteriors that are generated.
+#            examples:
+#                [[0,1], [3,4]]: p(z_0,z_1) and p(z_3,z_4) are generated
+#                    initialize network with zdim = 2, pdim = 2
+#                [[0,1,5,2]]: p(z_0,z_1,z_5,z_2) is generated
+#                    initialize network with zdim = 1, pdim = 4
+#
+#    Returns:
+#        Tensor: training loss.
+#    """
+#    x = xz["obs"]
+#    z = xz["par"]
+#    n_batch = z.size(0)
+#
+#    # Is it the removal of replacement that made it stop working?!
+#
+#    # bring x into shape
+#    # (n_batch*2, data-shape)  - repeat twice each sample of x - there are n_batch samples
+#    # repetition pattern in first dimension is: [a, a, b, b, c, c, d, d, ...]
+#    f = head(x)
+#    f = torch.repeat_interleave(f, 2, dim=0)
+#
+#    # bring z into shape
+#    # (n_batch*2, param-shape)  - repeat twice each sample of z - there are n_batch samples
+#    # repetition is alternating in first dimension: [a, b, a, b, c, d, c, d, ...]
+#    #z = torch.stack([combine_z(zs, combinations) for zs in z])
+#    zdim = len(z[0])
+#    z = z.view(n_batch // 2, -1, *z.shape[-1:])
+#    z = torch.repeat_interleave(z, 2, dim=0)
+#    z = z.view(n_batch * 2, -1, *z.shape[-1:])
+#
+#    # call network
+#    lnL = tail(f, z)
+#    lnL = lnL.view(n_batch // 2, 4, zdim)
+#
+#    # Evaluate cross-entropy loss
+#    # loss =
+#    # -ln( exp(lnL(x_a, z_a))/(1+exp(lnL(x_a, z_a))) )
+#    # -ln( exp(lnL(x_b, z_b))/(1+exp(lnL(x_b, z_b))) )
+#    # -ln( 1/(1+exp(lnL(x_a, z_b))) )
+#    # -ln( 1/(1+exp(lnL(x_b, z_a))) )
+#    loss = -torch.nn.functional.logsigmoid(lnL[:, 0])
+#    loss += -torch.nn.functional.logsigmoid(-lnL[:, 1])
+#    loss += -torch.nn.functional.logsigmoid(-lnL[:, 2])
+#    loss += -torch.nn.functional.logsigmoid(lnL[:, 3])
+#    loss = loss.sum() / (n_batch // 2)
+#
+#    return loss
 
 
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
@@ -91,7 +134,7 @@ def train(
     max_epochs=None,
     lr=1e-3,
     combinations=None,
-    device=None,
+    device='cpu',
     non_blocking=True,
 ):
     """Network training loop.
@@ -121,17 +164,18 @@ def train(
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
-                batch['par'] = batch['par'].to(device, non_blocking=non_blocking)
-                if device is not None:
-                    batch['obs'] = {
-                        k: v.to(device, non_blocking=non_blocking)
-                        for k, v in batch['obs'].items()
-                    }
-                loss = loss_fn(head, tail, batch, combinations=combinations)
+
+                obs = dict_to_device(batch['obs'], device = device, non_blocking = non_blocking)
+                params = dict_to_device(batch['par'], device = device, non_blocking = non_blocking)
+                loss = loss_fn(head, tail, obs, params)
+                loss = sum(loss)
+
                 if train:
                     loss.backward()
                     optimizer.step()
+
                 accumulated_loss += loss.detach().cpu().numpy().item()
+
         return accumulated_loss
 
     max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs

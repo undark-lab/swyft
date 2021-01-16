@@ -99,26 +99,21 @@ class Transform:
         return out
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, points, param_list, param_transform = None, obs_transform = None):
+    def __init__(self, points):
         self.points = points
-#        if obs_transform is None or param_transform is None:
-#            p = points.get_range(range(min(100, len(points))))
-#        if obs_transform is None:
-#            obs_transform = Normalize(p['obs'])
-#        if param_transform is None:
-#            param_transform = Normalize(p['par'])
 
-        self.transform = Transform(param_list, param_transform = param_transform, obs_transform = obs_transform)
-        
-    @property
-    def zdim(self):
-        return self.points.zdim
+    def _tensorfy(self, x):
+        return {k: torch.tensor(v).float() for k, v in x.items()}
     
     def __len__(self):
         return len(self.points)
     
     def __getitem__(self, i):
-        return self.transform(**self.points[i])
+        p = self.points[i]
+        return dict(
+                obs=self._tensorfy(p['obs']),
+                par=self._tensorfy(p['par'])
+                )
 
 
 class Cache(ABC):
@@ -136,29 +131,28 @@ class Cache(ABC):
     @abstractmethod
     def __init__(
         self,
-        par_names,
+        params,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
     ):
         """Initialize Cache content dimensions.
 
         Args:
-            par_names (list of strings): List of paramater names 
+            params (list of strings): List of paramater names 
             obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
         """
-        self._zdim = None
-        self._xshape = None
         self.store = store
-        self.par_names = par_names
+        self.params = params 
         self.root = zarr.group(store=self.store)
+        self.intensities = []
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
             print("Loading existing cache.")
             self._update()
         elif len(self.root.keys()) == 0:
             print("Creating new cache.")
-            self._setup_new_cache(par_names, obs_shapes, self.root)
+            self._setup_new_cache(params, obs_shapes, self.root)
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
@@ -171,10 +165,10 @@ class Cache(ABC):
         #    xshape == self.xshape
         #), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
 
-    def _setup_new_cache(self, par_names, obs_shapes, root):
+    def _setup_new_cache(self, params, obs_shapes, root):
         # Add parameter names to store
         z = root.create_group(self._filesystem[5])
-        for name in par_names:
+        for name in params:
             z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
             # FIX: Too mall chunks lead to problems with appending
 
@@ -209,37 +203,20 @@ class Cache(ABC):
     def _extract_zdim_from_zarr_group(group):
         return group["samples/z"].shape[1]
 
-#    @property
-#    def par_names(self):
-#        return list(self.par)
-
-    @property
-    def xshape(self) -> Shape:
-        """Shape of observations."""
-        if self._xshape is None:
-            self._xshape = self._extract_xshape_from_zarr_group(self.root)
-        return self._xshape
-
-    @property
-    def zdim(self) -> int:
-        """Dimension of parameters."""
-        if self._zdim is None:
-            self._zdim = self._extract_zdim_from_zarr_group(self.root)
-        return self._zdim
-
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
         self.x = self.root["samples/obs"]
         self.z = self.root["samples/par"]
         self.m = self.root["metadata/requires_simulation"]
         self.u = self.root["metadata/intensity"]
+        self.intensities = [IntensityNew.from_state_dict(self.u[i]) for i in range(len(self.u))]
 
     def __len__(self):
         """Returns number of samples in the cache."""
         self._update()
         # Return len of first entry
-        par_names = list(self.z)
-        return len(self.z[par_names[0]])
+        params = list(self.z)
+        return len(self.z[params[0]])
 
     def __getitem__(self, i):
         self._update()
@@ -287,7 +264,7 @@ class Cache(ABC):
             d = len(z[list(z)[0]])
             return np.zeros(d)
         else:
-            return np.array([self.u[i](z) for i in range(len(self.u))]).max(axis=0)
+            return np.array([self.intensities[i](z) for i in range(len(self.intensities))]).max(axis=0)
 
     def grow(self, prior: "swyft.intensity.Intensity", N):
         """Given an intensity function, add parameter samples to the cache.
@@ -317,9 +294,13 @@ class Cache(ABC):
         else:
             print("No new simulator runs required.")
 
-        # save intensity function. We collect them all to find their maximum.
-        self.u.resize(len(self.u) + 1)
-        self.u[-1] = intensity
+        # save new intensity function. We collect them all to find their maximum.
+        # NOTE: We only do this when new samples are added. This is not
+        # entierly correct statistically, but a pain otherwise.
+        if sum(accepted) > 0:
+            self.u.resize(len(self.u) + 1)
+            self.u[-1] = intensity.state_dict()
+            self.intensities.append(intensity)
 
     def sample(self, prior: "swyft.intensity.Intensity", N):
         """Sample from Cache.
@@ -389,7 +370,7 @@ class Cache(ABC):
 
 
 class DirectoryCache(Cache):
-    def __init__(self, zdim: int, xshape: Shape, path: PathType):
+    def __init__(self, params, obs_shapes: Shape, path: PathType):
         """Instantiate an iP3 cache stored in a directory.
 
         Args:
@@ -398,7 +379,7 @@ class DirectoryCache(Cache):
             path: path to storage directory
         """
         self.store = zarr.DirectoryStore(path)
-        super().__init__(zdim=zdim, xshape=xshape, store=self.store)
+        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
 
     @classmethod
     def load(cls, path: PathType):
@@ -411,7 +392,7 @@ class DirectoryCache(Cache):
 
 
 class MemoryCache(Cache):
-    def __init__(self, par_names: int, obs_shapes: Shape, store=None):
+    def __init__(self, params, obs_shapes, store=None):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
@@ -423,7 +404,7 @@ class MemoryCache(Cache):
             self.store = zarr.MemoryStore()
         else:
             self.store = store
-        super().__init__(par_names=par_names, obs_shapes=obs_shapes, store=self.store)
+        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryCache to a directory."""

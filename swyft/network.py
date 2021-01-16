@@ -4,22 +4,28 @@ import math
 import torch
 import torch.nn as nn
 
-from collections import defaultdict
+def _get_z_shape(param_list):
+    return (len(param_list), max([len(c) for c in param_list]))
 
-
-def combine(y, z):
-    """Combines data vectors y and parameter vectors z.
-
-    z : (..., pnum, pdim)
-    y : (..., ydim)
-
-    returns: (..., pnum, ydim + pdim)
-
-    """
-    y = y.unsqueeze(-2)  # (..., 1, ydim)
-    y = y.expand(*z.shape[:-1], *y.shape[-1:])  # (..., pnum, ydim)
-    return torch.cat([y, z], -1)
-
+# TODO: Remove redundant combine functions
+def _combine(params, param_list):
+    """Combine parameters according to parameter list. Supports one batch dimension."""
+    shape = params[list(params)[0]].shape
+    device = params[list(params)[0]].device
+    z_shape = _get_z_shape(param_list)
+    if len(shape) == 0:  # No batching
+        z = torch.zeros(z_shape).to(device)
+        for i, c in enumerate(param_list):
+            pars = torch.stack([params[k] for k in c]).T
+            z[i,:pars.shape[0]] = pars
+    else:  # Batching
+        n = shape[0]
+        z = torch.zeros((n,)+z_shape).to(device)
+        for i, c in enumerate(param_list):
+            pars = torch.stack([params[k] for k in c]).T
+            z[:,i,:pars.shape[1]] = pars
+    return z 
+    
 
 class OnlineNormalizationLayer(nn.Module):
     def __init__(self, shape, stable: bool = False, epsilon: float = 1e-10):
@@ -103,45 +109,58 @@ class LinearWithChannel(nn.Module):
 
     def forward(self, x):
         x = x.unsqueeze(-1)
-        return torch.matmul(self.w, x).squeeze(-1) + self.b
+        result = torch.matmul(self.w, x).squeeze(-1) + self.b
+        return result
 
 
 class DefaultTail(nn.Module):
-    def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
+    def __init__(self, n_features, param_list, n_short_features = 3, p=0.0, n_hidden=256, param_transform = None):
         super().__init__()
-        self.fcA = LinearWithChannel(ydim, NH, pnum)
-        self.fcB = LinearWithChannel(NH, NH, pnum)
-        self.fcC = LinearWithChannel(NH, pdim*2, pnum)
-        self.fc1 = LinearWithChannel(pdim*2 + pdim, NH, pnum)
-        self.fc2 = LinearWithChannel(NH, NH, pnum)
-        self.fc3 = LinearWithChannel(NH, 1, pnum)
-        self.drop = nn.Dropout(p=p)
+        self.param_list = param_list
 
+        n_channels, pdim = _get_z_shape(param_list)
+        self.n_channels = n_channels
+
+        # Feature compressor
+        self.fcA = LinearWithChannel(n_features, n_hidden, n_channels)
+        self.fcB = LinearWithChannel(n_hidden, n_hidden, n_channels)
+        self.fcC = LinearWithChannel(n_hidden, n_short_features, n_channels)
+
+        # Density estimator
+        self.fc1 = LinearWithChannel(pdim + n_short_features, n_hidden, n_channels)
+        self.fc2 = LinearWithChannel(n_hidden, n_hidden, n_channels)
+        self.fc3 = LinearWithChannel(n_hidden, 1, n_channels)
+
+        self.drop = nn.Dropout(p=p)
         self.af = torch.relu
 
-        # swish activation function for smooth posteriors
-        self.af2 = lambda x: x * torch.sigmoid(x * 10.0)
+        self.param_transform = param_transform
 
-        self.pnum = pnum
+    def forward(self, f, params):
+        """Forward pass tail network.  Can handle one batch dimension.
 
-    def forward(self, y, z):
-        # Defining test statistic
-        #print(y.shape)
-        y = y.unsqueeze(-2).repeat(1, self.pnum, 1)
-        #print(y.shape)
-        y = self.af(self.fcA(y))
-        y = self.drop(y)
-        y = self.af(self.fcB(y))
-        y = self.drop(y)
-        y = self.fcC(y)
+        Args:
+            f (tensor): feature vectors with shape (n_batch, n_features)
+            params (dict): parameter dictionary, with parameter shape (n_batch,)
 
-        # Combination
-        #x = combine(y, z)
+        Returns:
+            lnL (tensor): lnL ratio with shape (n_batch, len(param_list))
+        """
+        # Parameter transform hook
+        if self.param_transform is not None:
+            params = self.param_transform(params)
 
-        y = y.expand(z.shape[0], -1, -1)
-        x = torch.cat([y, z], -1)
-        #print(x.shape)
+        # Feature compressors independent per channel
+        f = f.unsqueeze(1).repeat(1, self.n_channels, 1)  # (n_batch, n_channels, n_features)
+        f = self.af(self.fcA(f))
+        f = self.drop(f)
+        f = self.af(self.fcB(f))
+        f = self.drop(f)
+        f = self.fcC(f)
 
+        # Channeled density estimator
+        z = _combine(params, self.param_list)
+        x = torch.cat([f, z], -1)
         x = self.af(self.fc1(x))
         x = self.drop(x)
         x = self.af(self.fc2(x))
@@ -150,29 +169,53 @@ class DefaultTail(nn.Module):
         return x
 
 
-class DenseLegsOld(nn.Module):
-    def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
+class DefaultHead(nn.Module):
+    def __init__(self, obs_transform = None):
         super().__init__()
-        self.fc1 = LinearWithChannel(ydim + pdim, NH, pnum)
-        self.fc2 = LinearWithChannel(NH, NH, pnum)
-        self.fc3 = LinearWithChannel(NH, NH, pnum)
-        self.fc4 = LinearWithChannel(NH, 1, pnum)
-        self.drop = nn.Dropout(p=p)
 
-        self.af = torch.relu
+        self.obs_transform = obs_transform
+    
+    def forward(self, obs):
+        """Forward pass default head network. Concatenate.
 
-        # swish activation function for smooth posteriors
-        self.af2 = lambda x: x * torch.sigmoid(x * 10.0)
+        Args:
+            obs (dict): Dictionary of tensors with shape (n_batch, m_i)
 
-    def forward(self, y, z):
-        x = combine(y, z)
-        x = self.af(self.fc1(x))
-        x = self.drop(x)
-        x = self.af(self.fc2(x))
-        x = self.drop(x)
-        x = self.af(self.fc3(x))
-        x = self.fc4(x).squeeze(-1)
-        return x
+        Returns:
+            f (tensor): Feature vectors with shape (n_batch, M), with M = sum_i m_i
+        """
+        if self.obs_transform is not None:
+            obs = self.obs_transform(obs)
+        f = []
+        for key, value in sorted(obs.items()):
+            f.append(value)
+        f = torch.cat(f, dim = -1)
+        return f
+
+
+#class DenseLegsOld(nn.Module):
+#    def __init__(self, ydim, pnum, pdim, p=0.0, NH=256):
+#        super().__init__()
+#        self.fc1 = LinearWithChannel(ydim + pdim, NH, pnum)
+#        self.fc2 = LinearWithChannel(NH, NH, pnum)
+#        self.fc3 = LinearWithChannel(NH, NH, pnum)
+#        self.fc4 = LinearWithChannel(NH, 1, pnum)
+#        self.drop = nn.Dropout(p=p)
+#
+#        self.af = torch.relu
+#
+#        # swish activation function for smooth posteriors
+#        self.af2 = lambda x: x * torch.sigmoid(x * 10.0)
+#
+#    def forward(self, y, z):
+#        x = combine(y, z)
+#        x = self.af(self.fc1(x))
+#        x = self.drop(x)
+#        x = self.af(self.fc2(x))
+#        x = self.drop(x)
+#        x = self.af(self.fc3(x))
+#        x = self.fc4(x).squeeze(-1)
+#        return x
 
 
 #    @staticmethod
@@ -218,23 +261,23 @@ class DenseLegsOld(nn.Module):
 #        out = tail(f, z) self.tails(f, z)
 #        return out
 
-class Network(nn.Module):
-    def __init__(self, ydim, pnum, pdim, head=None, tail = DefaultTail):
-        """Base network combining z-independent head and parallel tail.
-
-        :param ydim: Number of data dimensions going into DenseLeg network
-        :param pnum: Number of posteriors to estimate
-        :param pdim: Dimensionality of posteriors
-        :param head: Head network, z-independent
-        :type head: `torch.nn.Module`, optional
-
-        The forward method of the `head` network takes data `x` as input, and
-        returns intermediate state `y`.
-        """
-        super().__init__()
-        self.head = head
-        self.legs = tail(ydim, pnum, pdim)
-
+#class Network(nn.Module):
+#    def __init__(self, ydim, pnum, pdim, head=None, tail = DefaultTail):
+#        """Base network combining z-independent head and parallel tail.
+#
+#        :param ydim: Number of data dimensions going into DenseLeg network
+#        :param pnum: Number of posteriors to estimate
+#        :param pdim: Dimensionality of posteriors
+#        :param head: Head network, z-independent
+#        :type head: `torch.nn.Module`, optional
+#
+#        The forward method of the `head` network takes data `x` as input, and
+#        returns intermediate state `y`.
+#        """
+#        super().__init__()
+#        self.head = head
+#        self.legs = tail(ydim, pnum, pdim)
+#
 #        # Set datascaling
 #        if datanorms is None:
 #            datanorms = [
@@ -250,30 +293,32 @@ class Network(nn.Module):
 #        self.x_scale = torch.nn.Parameter(x_std)
 #        self.z_loc = torch.nn.Parameter(z_mean)
 #        self.z_scale = torch.nn.Parameter(z_std)
+#
+#    def forward(self, x, z):
+#        #x = (x - self.x_loc) / self.x_scale
+#        #z = (z - self.z_loc) / self.z_scale
+#
+#        #if self.head is not None:
+#        y = self.head(x)
+#        #else:
+#        #    y = x  # Use 1-dim data vector as features
+#
+#        out = self.legs(y, z)
+#        return out
 
-    def forward(self, x, z):
-        #x = (x - self.x_loc) / self.x_scale
-        #z = (z - self.z_loc) / self.z_scale
+#def combine(y, z):
+#    """Combines data vectors y and parameter vectors z.
+#
+#    z : (..., pnum, pdim)
+#    y : (..., ydim)
+#
+#    returns: (..., pnum, ydim + pdim)
+#
+#    """
+#    y = y.unsqueeze(-2)  # (..., 1, ydim)
+#    y = y.expand(*z.shape[:-1], *y.shape[-1:])  # (..., pnum, ydim)
+#    return torch.cat([y, z], -1)
 
-        #if self.head is not None:
-        y = self.head(x)
-        #else:
-        #    y = x  # Use 1-dim data vector as features
-
-        out = self.legs(y, z)
-        return out
-
-
-class DefaultHead(nn.Module):
-    def __init__(self):
-        super().__init__()
-    
-    def forward(self, x):
-        f = []
-        for key, value in sorted(x.items()):
-            f.append(value)
-        f = torch.cat(f)
-        return f
 
 
 

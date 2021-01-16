@@ -1,9 +1,6 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
 from copy import deepcopy
-from functools import wraps
-from pathlib import Path
-import pickle
 
 import numpy as np
 from scipy.integrate import trapz
@@ -27,18 +24,14 @@ from .types import (
     Dict,
     Optional,
 )
-from .utils import array_to_tensor, tobytes, process_combinations
-
+from .utils import array_to_tensor, tobytes, process_combinations, dict_to_device, dict_to_tensor
 
 class RatioEstimator:
-    _save_attrs = ["net_state_dict", "ratio_cache", "combinations"]
+    _save_attrs = ["param_list", "_head_state_dict", "_tail_state_dict", "n_features"]
 
     def __init__(
         self,
-        points,
         param_list,
-        param_transform = None,
-        obs_transform = None,
         head: Optional[nn.Module] = DefaultHead,
         tail: Optional[nn.Module] = DefaultTail,
         device: Device = "cpu",
@@ -53,19 +46,18 @@ class RatioEstimator:
             device: default is cpu
             statistics: x_mean, x_std, z_mean, z_std
         """
-        self.dataset = Dataset(points, param_list, param_transform = param_transform , obs_transform = obs_transform)
+        self.param_list = param_list
         self.device = device
         self.head = head().to(device)
+        self.tail = None  # lazy initialization of tail net
+        self._uninitialized_tail = tail
 
-        ref_obs = {k: v.to(device) for k, v in self.dataset[0]['obs'].items()}
-        self.n_features = len(self.head(ref_obs))
-        self.pnum, self.pdim = self.dataset[0]['par'].shape
-
-        self.tail = tail(self.n_features, self.pnum, self.pdim).to(device)
-
-        print("Number of features from head network:", self.n_features)
-        print("Number of parameters to estimate:", self.pnum)
-        print("Maximum posterior dimensionality:", self.pdim)
+    def _init_tail(self, dataset):
+        ref_obs = dict_to_device(dataset[0]['obs'], self.device)
+        n_features = len(self.head(ref_obs))
+        self.n_features = n_features
+        self.tail = self._uninitialized_tail(n_features, self.param_list).to(self.device)
+        print("n_features =", n_features)
 
 #    @property
 #    def zdim(self):
@@ -112,6 +104,7 @@ class RatioEstimator:
 
     def train(
         self,
+        points,
         max_epochs: int = 100,
         batch_size: int = 8,
         lr_schedule: Sequence[float] = [1e-3, 1e-4, 1e-5],
@@ -129,9 +122,13 @@ class RatioEstimator:
             nworkers: number of Dataloader workers (0 for no dataloader parallelization)
             percent_validation: percentage to allocate to validation set
         """
+        dataset = Dataset(points)
+
+        if self.tail is None: self._init_tail(dataset)
+
         trainloop(
             self.head, self.tail,
-            self.dataset,
+            dataset,
             combinations=None,
             device=self.device,
             max_epochs=max_epochs,
@@ -168,7 +165,8 @@ class RatioEstimator:
     def lnL(
         self,
         obs: Array,
-        par: Array,
+        params: Array,
+        n_batch = 100,
         max_n_points: int = 1000,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve estimated marginal posterior.
@@ -182,23 +180,37 @@ class RatioEstimator:
             parameter array, posterior array
         """
 
-        obs = self.dataset.transform(obs=obs)['obs']
-        obs = {k: v.to(self.device) for k, v in obs.items()}
+        obs = dict_to_tensor(obs, device = self.device)
         f = self.head(obs)
-        z = self.dataset.transform(par=par)['par']
-        if len(z.shape) == 2:
-            lnL = self.tail(f, z.to(self.device))
-            lnL = lnL.detach().cpu().numpy()
+
+        npar = len(params[list(params)[0]])
+
+        if npar < n_batch:
+            params = dict_to_tensor(params, device = self.device)
+            f = f.unsqueeze(0).expand(npar, -1)
+            lnL = self.tail(f, params).detach().cpu().numpy()
         else:
-            N = len(z)
-            batch_size = 100
             lnL = []
-            for i in range(N // batch_size + 1):
-                zbatch = z[i * batch_size : (i + 1) * batch_size]
-                lnL.append(self.tail(f, zbatch.to(self.device)).detach().cpu().numpy())
+            for i in range(npar//n_batch + 1):
+                params_batch = dict_to_tensor(params, device = self.device, indices = slice(i*n_batch, (i+1)*n_batch))
+                n = len(params_batch[list(params_batch)[0]])
+                f_batch = f.unsqueeze(0).expand(n, -1)
+                tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
+                lnL.append(tmp)
             lnL = np.vstack(lnL)
 
-        return {k: lnL[..., i] for i, k in enumerate(self.dataset.transform.par_combinations)}
+        #if len(z.shape) == 2:
+        #    lnL = self.tail(f, z.to(self.device))
+        #    lnL = lnL.detach().cpu().numpy()
+        #else:
+        #    N = len(z)
+        #    batch_size = 100
+        #    lnL = []
+        #    for i in range(N // batch_size + 1):
+        #        lnL.append(self.tail(f, zbatch.to(self.device)).detach().cpu().numpy())
+        #    lnL = np.vstack(lnL)
+
+        return {k: lnL[..., i] for i, k in enumerate(self.param_list)}
 
 #    def posterior(
 #        self,
@@ -238,63 +250,34 @@ class RatioEstimator:
 #        return z, p
 
     @property
-    def net_state_dict(self):
-        return self.net.state_dict()
+    def _tail_state_dict(self):
+        return self.tail.state_dict()
 
     @property
-    def _save_dict(self):
+    def _head_state_dict(self):
+        return self.head.state_dict()
+
+    def state_dict(self):
         return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
 
-    def save(self, path: PathType):
-        complete = {}
-        complete.update(self.dataset._save_dict)
-        complete.update(self._save_dict)
-
-        path = Path(path)
-        #with path.open("wb") as f:
-        #    pickle.dump(complete, f)
-        return None
-
     @classmethod
-    def load(
-        cls,
-        cache: "swyft.cache.Cache",
-        path: PathType,
-        head: nn.Module = None,
-        noisehook: Callable = None,
-        device: Device = None,
-    ):
-        """Load pickled ratio estimator.
-
-        Args:
-            cache: cache object on which the estimator was trained
-            path: path to pickled ratio estimator
-            head: head network utilized in pickled ratio estimator
-            noisehook: maps from (x, z) to x with noise
-            device
-        """
-        path = Path(path)
-        #with path.open("rb") as f:
-        #    complete = pickle.load(f)
-
-        point_attrs = {attr: complete[attr] for attr in Points._save_attrs}
-        points = Points._load(cache, point_attrs, noisehook)
-
-        re_attrs = {attr: complete[attr] for attr in RatioEstimator._save_attrs}
-        instance = cls(points, re_attrs["combinations"], head, device)
-        instance.net.load_state_dict(
-            re_attrs["net_state_dict"],
-        )
-        instance.ratio_cache = re_attrs["ratio_cache"]
-        return instance
-
+    def from_state_dict(cls, state_dict, 
+            head: Optional[nn.Module] = DefaultHead, tail: Optional[nn.Module] = DefaultTail,
+            device: Device = "cpu"):
+        data = state_dict
+        re = cls(data['param_list'], head, tail, device = device)
+        re.head.load_state_dict(data["_head_state_dict"])
+        re.tail = re._uninitialized_tail(data["n_features"], data["param_list"]).to(device)
+        re.tail.load_state_dict(data["_tail_state_dict"])
+        return re
+        
 
 class Points:
     """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
     Points implements this via a list of indices corresponding to data contained in a cache which is provided at initialization.
     """
 
-    _save_attrs = ["intensity", "indices"]
+    _save_attrs = ["indices"]
 
     def __init__(self, cache: "swyft.cache.Cache", indices, noisehook=None):
         """Create a points dataset
@@ -311,7 +294,6 @@ class Points:
             )
 
         self.cache = cache
-        #self.intensity = intensity
         self.noisehook = noisehook
         self.indices = np.array(indices)
 
@@ -368,38 +350,28 @@ class Points:
 #            self._check_fidelity_to_cache(self._indices)
 #        return self._indices
 
-    def _check_fidelity_to_cache(self, indices):
-        first = indices[0]
-        assert self.zdim == len(
-            self.cache.z[first]
-        ), "Item in cache did not agree with zdim."
-        assert (
-            self.xshape == self.cache.x[first].shape
-        ), "Item in cache did not agree with xshape."
-        return None
+#    def _check_fidelity_to_cache(self, indices):
+#        first = indices[0]
+#        assert self.zdim == len(
+#            self.cache.z[first]
+#        ), "Item in cache did not agree with zdim."
+#        assert (
+#            self.xshape == self.cache.x[first].shape
+#        ), "Item in cache did not agree with xshape."
+#        return None
 
-    @property
-    def _save_dict(self):
-        return {attr: getattr(self, attr) for attr in Points._save_attrs}
+#    def state_dict(self):
+#        return {attr: getattr(self, attr) for attr in Points._save_attrs}
 
-    def save(self, path: PathType):
-        """Saves indices and intensity in a pickle."""
-        path = Path(path)
-        #with path.open("wb") as f:
-        #    pickle.dump(self._save_dict, f)
-        return None
-
-    @classmethod
-    def _load(cls, cache, attrs: dict, noisehook):
-        instance = cls(cache, attrs["intensity"], noisehook=noisehook)
-        instance._indices = attrs["indices"]
-        instance._check_fidelity_to_cache(attrs["indices"])
-        return instance
-
-    @classmethod
-    def load(cls, cache: "swyft.cache.Cache", path: PathType, noisehook=None):
-        """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
-        path = Path(path)
-        #with path.open("rb") as f:
-        #    attrs = pickle.load(f)
-        return cls._load(cache, attrs, noisehook)
+#    @classmethod
+#    def _load(cls, cache, attrs: dict, noisehook):
+#        instance = cls(cache, attrs["intensity"], noisehook=noisehook)
+#        instance._indices = attrs["indices"]
+#        instance._check_fidelity_to_cache(attrs["indices"])
+#        return instance
+#
+#    @classmethod
+#    def load(cls, cache: "swyft.cache.Cache", path: PathType, noisehook=None):
+#        """Loads saved indices and intensity from a pickle. User provides cache and noisehook."""
+#        path = Path(path)
+#        return cls._load(cache, attrs, noisehook)
