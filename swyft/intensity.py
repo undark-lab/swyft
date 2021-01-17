@@ -249,7 +249,7 @@ class Prior:
         masklist = {}
         lnL = re.lnL(obs, pars)
         for k, v in self.to_cube(pars).items():
-            mask = lnL[k].max() - lnL[k] < -th
+            mask = lnL[(k,)].max() - lnL[(k,)] < -th
             ind_points = v[mask].reshape(-1,1)
             masklist[k] = BallMask(ind_points)
         mask = ComboMask(masklist)

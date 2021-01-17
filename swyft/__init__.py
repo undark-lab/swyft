@@ -7,8 +7,10 @@ from .network import OnlineNormalizationLayer, DefaultHead, DefaultTail
 #from .plot import cont2d, plot1d, corner
 #from .train import get_statistics
 #from .utils import set_device, get_2d_combinations, cred1d
+from .utils import Module
 
 __all__ = [
+    "Module",
     "Normalize",
     "Transform",
 #    "Dataset",

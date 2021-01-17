@@ -4,8 +4,32 @@ import math
 import torch
 import torch.nn as nn
 
+from .utils import Module
+
 def _get_z_shape(param_list):
     return (len(param_list), max([len(c) for c in param_list]))
+
+#class Network(swyft.Module):
+#    def __init__(self, tag, config):
+#        pass
+#
+#    def forward():
+#        pass
+#
+#Network.from_state_dict(state_dict, custom_cls = None)
+#
+#class Network(nn.Module):
+#    def __init__(self, tag, config):
+#
+#        pass
+#
+#    def state_dict():
+#        pass
+#
+#    @classmethod
+#    def from_state_dict(cls, state_dict):
+#        pass
+
 
 # TODO: Remove redundant combine functions
 def _combine(params, param_list):
@@ -113,7 +137,7 @@ class LinearWithChannel(nn.Module):
         return result
 
 
-class DefaultTail(nn.Module):
+class DefaultTail(Module):
     def __init__(self, n_features, param_list, n_short_features = 3, p=0.0, n_hidden=256, param_transform = None):
         super().__init__()
         self.param_list = param_list
@@ -169,7 +193,7 @@ class DefaultTail(nn.Module):
         return x
 
 
-class DefaultHead(nn.Module):
+class DefaultHead(Module):
     def __init__(self, obs_transform = None):
         super().__init__()
 

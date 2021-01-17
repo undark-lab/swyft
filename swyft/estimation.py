@@ -165,7 +165,7 @@ class Points:
 
     _save_attrs = ["indices"]
 
-    def __init__(self, cache: "swyft.cache.Cache", indices, noisehook=None):
+    def __init__(self, indices, cache: "swyft.cache.Cache", noisehook=None):
         """Create a points dataset
 
         Args:
