@@ -138,9 +138,11 @@ class LinearWithChannel(nn.Module):
 
 
 class DefaultTail(Module):
-    def __init__(self, n_features, param_list, n_tail_features = 3, p=0.0, n_hidden=256, param_transform = None):
+    def __init__(self, n_features, param_list, n_tail_features = 3, p=0.0,
+            n_hidden=256, online_norm = True, param_transform = None):
         super().__init__(n_features, param_list,
                 n_tail_features=n_tail_features, p=p, n_hidden=n_hidden,
+                online_norm=online_norm,
                 param_transform=param_transform)
         self.param_list = param_list
 
@@ -161,6 +163,11 @@ class DefaultTail(Module):
         self.af = torch.relu
 
         self.param_transform = param_transform
+
+        if online_norm:
+            self.onl_z = OnlineNormalizationLayer(torch.Size([n_channels, pdim]))
+        else:
+            self.onl_z = lambda z: z
 
     def forward(self, f, params):
         """Forward pass tail network.  Can handle one batch dimension.
@@ -186,6 +193,8 @@ class DefaultTail(Module):
 
         # Channeled density estimator
         z = _combine(params, self.param_list)
+        z = self.onl_z(z)
+
         x = torch.cat([f, z], -1)
         x = self.af(self.fc1(x))
         x = self.drop(x)
@@ -196,11 +205,18 @@ class DefaultTail(Module):
 
 
 class DefaultHead(Module):
-    def __init__(self, obs_transform = None):
-        super().__init__(obs_transform=obs_transform)
-
+    def __init__(self, obs_shapes, online_norm = True, obs_transform = None):
+        super().__init__(obs_shapes=obs_shapes, obs_transform=obs_transform,
+                online_norm=online_norm)
         self.obs_transform = obs_transform
-    
+
+        self.n_features = sum([v[0] for k, v in obs_shapes.items()])
+
+        if online_norm:
+            self.onl_f = OnlineNormalizationLayer(torch.Size([self.n_features]))
+        else:
+            self.onl_f = lambda f: f
+
     def forward(self, obs):
         """Forward pass default head network. Concatenate.
 
@@ -216,6 +232,7 @@ class DefaultHead(Module):
         for key, value in sorted(obs.items()):
             f.append(value)
         f = torch.cat(f, dim = -1)
+        f = self.onl_f(f)
         return f
 
 

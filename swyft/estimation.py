@@ -8,7 +8,7 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
-from .utils import Module
+from .utils import Module, get_obs_shapes
 
 from .train import trainloop
 from .cache import Dataset, Normalize
@@ -62,9 +62,9 @@ class RatioEstimator:
         self.n_features = None
 
     def _init_networks(self, dataset):
-        self.head = self._uninitialized_head[0](**self._uninitialized_head[1]).to(self.device)
-        ref_obs = dict_to_device(dataset[0]['obs'], self.device)
-        self.n_features = len(self.head(ref_obs))
+        obs_shapes = get_obs_shapes(dataset[0]['obs'])
+        self.head = self._uninitialized_head[0](obs_shapes, **self._uninitialized_head[1]).to(self.device)
+        self.n_features = self.head.n_features
         self.tail = self._uninitialized_tail[0](self.n_features, self.param_list, **self._uninitialized_tail[1]).to(self.device)
         print("n_features =", self.n_features)
 
@@ -91,6 +91,9 @@ class RatioEstimator:
         dataset = Dataset(points)
 
         if self.tail is None: self._init_networks(dataset)
+
+        self.head.train()
+        self.tail.train()
 
         trainloop(
             self.head, self.tail,
@@ -123,6 +126,9 @@ class RatioEstimator:
         Returns:
             parameter array, posterior array
         """
+
+        self.head.eval()
+        self.tail.eval()
 
         obs = dict_to_tensor(obs, device = self.device)
         f = self.head(obs)

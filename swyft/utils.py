@@ -21,6 +21,9 @@ from .types import (
     PathType,
 )
 
+def get_obs_shapes(obs):
+    return {k: v.shape for k, v in obs.items()}
+
 def dict_to_device(d, device, non_blocking = False):
     return {k: v.to(device, non_blocking = non_blocking) for k, v in d.items()}
 

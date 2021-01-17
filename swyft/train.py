@@ -106,6 +106,8 @@ def train(
         accumulated_loss = 0
         training_context = suppress() if train else torch.no_grad()
         with training_context:
+            head.train()
+            tail.train()
             for batch in loader:
                 optimizer.zero_grad()
 
