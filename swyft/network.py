@@ -138,8 +138,10 @@ class LinearWithChannel(nn.Module):
 
 
 class DefaultTail(Module):
-    def __init__(self, n_features, param_list, n_short_features = 3, p=0.0, n_hidden=256, param_transform = None):
-        super().__init__()
+    def __init__(self, n_features, param_list, n_tail_features = 3, p=0.0, n_hidden=256, param_transform = None):
+        super().__init__(n_features, param_list,
+                n_tail_features=n_tail_features, p=p, n_hidden=n_hidden,
+                param_transform=param_transform)
         self.param_list = param_list
 
         n_channels, pdim = _get_z_shape(param_list)
@@ -148,10 +150,10 @@ class DefaultTail(Module):
         # Feature compressor
         self.fcA = LinearWithChannel(n_features, n_hidden, n_channels)
         self.fcB = LinearWithChannel(n_hidden, n_hidden, n_channels)
-        self.fcC = LinearWithChannel(n_hidden, n_short_features, n_channels)
+        self.fcC = LinearWithChannel(n_hidden, n_tail_features, n_channels)
 
         # Density estimator
-        self.fc1 = LinearWithChannel(pdim + n_short_features, n_hidden, n_channels)
+        self.fc1 = LinearWithChannel(pdim + n_tail_features, n_hidden, n_channels)
         self.fc2 = LinearWithChannel(n_hidden, n_hidden, n_channels)
         self.fc3 = LinearWithChannel(n_hidden, 1, n_channels)
 
@@ -195,7 +197,7 @@ class DefaultTail(Module):
 
 class DefaultHead(Module):
     def __init__(self, obs_transform = None):
-        super().__init__()
+        super().__init__(obs_transform=obs_transform)
 
         self.obs_transform = obs_transform
     

@@ -8,6 +8,8 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
+from .utils import Module
+
 from .train import trainloop
 from .cache import Dataset, Normalize
 from .network import DefaultTail, DefaultHead
@@ -26,13 +28,17 @@ from .types import (
 from .utils import array_to_tensor, tobytes, process_combinations, dict_to_device, dict_to_tensor
 
 class RatioEstimator:
-    _save_attrs = ["param_list", "_head_state_dict", "_tail_state_dict", "n_features"]
+    _save_attrs = ["param_list",
+            "_head_swyft_state_dict", "_tail_swyft_state_dict",
+            "n_features"]
 
     def __init__(
         self,
         param_list,
         head: Optional[nn.Module] = DefaultHead,
         tail: Optional[nn.Module] = DefaultTail,
+        head_args = {},
+        tail_args = {},
         device: Device = "cpu",
     ):
         """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
@@ -47,16 +53,20 @@ class RatioEstimator:
         """
         self.param_list = param_list
         self.device = device
-        self.head = head().to(device)
-        self.tail = None  # lazy initialization of tail net
-        self._uninitialized_tail = tail
+        self._uninitialized_head = [head, head_args]
+        self._uninitialized_tail = [tail, tail_args]
 
-    def _init_tail(self, dataset):
+        # lazy instanciation, since features are inferred from head network output
+        self.head = None
+        self.tail = None
+        self.n_features = None
+
+    def _init_networks(self, dataset):
+        self.head = self._uninitialized_head[0](**self._uninitialized_head[1]).to(self.device)
         ref_obs = dict_to_device(dataset[0]['obs'], self.device)
-        n_features = len(self.head(ref_obs))
-        self.n_features = n_features
-        self.tail = self._uninitialized_tail(n_features, self.param_list).to(self.device)
-        print("n_features =", n_features)
+        self.n_features = len(self.head(ref_obs))
+        self.tail = self._uninitialized_tail[0](self.n_features, self.param_list, **self._uninitialized_tail[1]).to(self.device)
+        print("n_features =", self.n_features)
 
     def train(
         self,
@@ -80,7 +90,7 @@ class RatioEstimator:
         """
         dataset = Dataset(points)
 
-        if self.tail is None: self._init_tail(dataset)
+        if self.tail is None: self._init_networks(dataset)
 
         trainloop(
             self.head, self.tail,
@@ -136,27 +146,23 @@ class RatioEstimator:
         return {k: lnL[..., i] for i, k in enumerate(self.param_list)}
 
     @property
-    def _tail_state_dict(self):
-        return self.tail.state_dict()
+    def _tail_swyft_state_dict(self):
+        return self.tail.swyft_state_dict()
 
     @property
-    def _head_state_dict(self):
-        return self.head.state_dict()
+    def _head_swyft_state_dict(self):
+        return self.head.swyft_state_dict()
 
     def state_dict(self):
         return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
 
     @classmethod
-    def from_state_dict(cls, state_dict, 
-            head: Optional[nn.Module] = DefaultHead, tail: Optional[nn.Module] = DefaultTail,
-            device: Device = "cpu"):
-        data = state_dict
-        re = cls(data['param_list'], head, tail, device = device)
-        re.head.load_state_dict(data["_head_state_dict"])
-        re.tail = re._uninitialized_tail(data["n_features"], data["param_list"]).to(device)
-        re.tail.load_state_dict(data["_tail_state_dict"])
+    def from_state_dict(cls, state_dict, device: Device = "cpu"):
+        re = cls(state_dict['param_list'], head = None, tail = None, device = device)
+        re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(device)
+        re.tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"]).to(device)
         return re
-        
+
 
 class Points:
     """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Cache.
