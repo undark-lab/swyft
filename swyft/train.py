@@ -106,8 +106,6 @@ def train(
         accumulated_loss = 0
         training_context = suppress() if train else torch.no_grad()
         with training_context:
-            head.train()
-            tail.train()
             for batch in loader:
                 optimizer.zero_grad()
 
@@ -136,12 +134,16 @@ def train(
     while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
         # print("Epoch:", epoch, end = "\r")
         #network.train()
+        head.train()
+        tail.train()
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
 
         #network.eval()
+        head.eval()
+        tail.eval()
         validation_loss = do_epoch(validation_loader, False)
-        print("Validation loss:", validation_loss)
+        print("Validation loss:", validation_loss / n_validation_batches)
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
