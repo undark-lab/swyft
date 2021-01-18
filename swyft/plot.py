@@ -119,6 +119,7 @@ def corner(
     figsize=(10,10),
     color='k',
     labels=None,
+    truth=None,
 ) -> None:
     K = len(params)
     fig, axes = plt.subplots(K, K, figsize=figsize)
@@ -163,10 +164,13 @@ def corner(
             # 2-dim plots
             if j < i:
                 plot_posterior(post, [params[j], params[i]], ax=ax, color=color)
+                if truth is not None:
+                    ax.axvline(truth[params[j]], color='r')
+                    ax.axhline(truth[params[i]], color='r')
             if j == i:
                 plot_posterior(post, params[i], ax=ax, color=color)
-
-
+                if truth is not None:
+                    ax.axvline(truth[params[i]], ls = ':', color='r')
 
 
 def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
@@ -178,13 +182,18 @@ def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
     levels = np.array(x[idx])
     return levels
 
-def contour1d(z, v, levels, ax=plt, linestyles = None, colors = None, **kwargs):
-    if not isinstance(colors, list):
-        colors = [colors]*len(levels)
-    for i, l in enumerate(levels):
-        zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
-        for c in z[zero_crossings]:
-            ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
+def contour1d(z, v, levels, ax=plt, linestyles = None, color = None, **kwargs):
+    y0 = -0.05*v.max()
+    y1 = 1.1*v.max()
+    ax.fill_between(z, y0, y1, where = v > levels[0], color = color, alpha = 0.1)
+    ax.fill_between(z, y0, y1, where = v > levels[1], color = color, alpha = 0.1)
+    ax.fill_between(z, y0, y1, where = v > levels[2], color = color, alpha = 0.1)
+    #if not isinstance(colors, list):
+    #    colors = [colors]*len(levels)
+    #for i, l in enumerate(levels):
+    #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
+    #    for c in z[zero_crossings]:
+    #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
 
 def plot_posterior(post, params, weights_key = None, ax = plt, bins = 100, color='k', **kwargs):
     if isinstance(params, str):
@@ -199,12 +208,14 @@ def plot_posterior(post, params, weights_key = None, ax = plt, bins = 100, color
 
     if len(params)==1:
         x = post['params'][params[0]]
-        v, e, _ = ax.hist(x, weights = w, bins = bins, color = color, alpha = 0.2)
-        #v, e = ax.histogram(x, weights = w, bins = bins, density = True)
+        #v, e, _ = ax.hist(x, weights = w, bins = bins, color = color, alpha = 0.2)
+        v, e = np.histogram(x, weights = w, bins = bins, density = True)
         zm = (e[1:]+e[:-1])/2
-        #ax.plot(zm, v, **kwargs)
         levels = sorted(get_contour_levels(v))
-        contour1d(zm, v, levels, ax=ax, linestyles = [':', '--', '-'], colors=color)
+        contour1d(zm, v, levels, ax=ax, color=color)
+        ax.plot(zm, v, color=color, **kwargs)
+        ax.set_xlim([x.min(), x.max()])
+        ax.set_ylim([-v.max()*0.05, v.max()*1.1])
     elif len(params) == 2:
         x = post['params'][params[0]]
         y = post['params'][params[1]]
@@ -212,6 +223,8 @@ def plot_posterior(post, params, weights_key = None, ax = plt, bins = 100, color
         levels = sorted(get_contour_levels(counts))
         ax.contour(counts.T,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],
                    levels = levels, linestyles = [':', '--', '-'], colors=color)
+        ax.set_xlim([x.min(), x.max()])
+        ax.set_ylim([y.min(), y.max()])
 
 if __name__ == "__main__":
     pass
