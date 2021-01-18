@@ -6,24 +6,20 @@ from scipy.interpolate import griddata
 from .types import Array, Tuple, Sequence
 
 
-def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
-    x = np.sort(x)[::-1]  # Sort backwards
-    total_mass = x.sum()
-    enclosed_mass = np.cumsum(x)
-    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
-    levels = np.array(x[idx])
-    return levels
+#def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
+#    x = np.sort(x)[::-1]  # Sort backwards
+#    total_mass = x.sum()
+#    enclosed_mass = np.cumsum(x)
+#    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
+#    levels = np.array(x[idx])
+#    return levels
 
 
 def cont2d(
     ax,
-    re: "swyft.estimation.RatioEstimator",
-    x0: Array,
-    z0: Array,
-    i: int,
-    j: int,
+    labels,
+    post,
     cmap: str = "gray_r",
-    max_n_points: int = 1000,
 ):
     """Create a 2d contour plot.
 
@@ -37,21 +33,24 @@ def cont2d(
         cmap: color map
         max_n_points: number of points to train on
     """
-    z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
-    levels = get_contour_levels(p)
+#    z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
+#    levels = get_contour_levels(p)
 
-    if z0 is not None:
-        ax.axvline(z0[i], color="r", ls=":")
-        ax.axhline(z0[j], color="r", ls=":")
+#    if z0 is not None:
+#        ax.axvline(z0[i], color="r", ls=":")
+#        ax.axhline(z0[j], color="r", ls=":")
 
-    N = 100 * 1j
-    extent = [z[:, 0].min(), z[:, 0].max(), z[:, 1].min(), z[:, 1].max()]
-    xs, ys = np.mgrid[
-        z[:, 0].min() : z[:, 0].max() : N, z[:, 1].min() : z[:, 1].max() : N
-    ]
-    resampled = griddata(z, p, (xs, ys))
-    ax.imshow(resampled.T, extent=extent, origin="lower", cmap=cmap, aspect="auto")
-    ax.tricontour(z[:, 0], z[:, 1], -p, levels=-levels, colors="k", linestyles=["-"])
+#    N = 100 * 1j
+#    extent = [z[:, 0].min(), z[:, 0].max(), z[:, 1].min(), z[:, 1].max()]
+#    xs, ys = np.mgrid[
+#        z[:, 0].min() : z[:, 0].max() : N, z[:, 1].min() : z[:, 1].max() : N
+#    ]
+#    resampled = griddata(z, p, (xs, ys))
+#    ax.imshow(resampled.T, extent=extent, origin="lower", cmap=cmap, aspect="auto")
+#    ax.tricontour(z[:, 0], z[:, 1], -p, levels=-levels, colors="k", linestyles=["-"])
+    w = post[labels]['weight']
+    w = post[labels]['weight']
+    plt.scatter()
 
 
 def hist1d(ax, re, x0, z0, i, max_n_points=1000):
@@ -59,7 +58,6 @@ def hist1d(ax, re, x0, z0, i, max_n_points=1000):
         ax.axvline(z0[i], color="r", ls=":")
     z, p = re.posterior(x0, i, max_n_points=max_n_points)
     ax.plot(z, p, "k")
-
 
 def plot1d(
     re1d: "swyft.estimation.RatioEstimator",
@@ -116,22 +114,14 @@ def plot1d(
 
 
 def corner(
-    re1d: "swyft.estimation.RatioEstimator",
-    re2d: "swyft.estimation.RatioEstimator",
-    x0: Array,
-    dim: int = 10,
-    params: Sequence[str] = None,
-    labels: Sequence[str] = None,
-    z0: Array = None,
-    cmap: str = "Greys",
-    max_n_points: int = 1000,
+    post,
+    params,
+    figsize=(10,10),
+    color='k',
+    labels=None,
 ) -> None:
-    # TODO: Rewrite
-    if params is None:
-        params = range(re1d.zdim)
-
     K = len(params)
-    fig, axes = plt.subplots(K, K, figsize=(dim, dim))
+    fig, axes = plt.subplots(K, K, figsize=figsize)
     lb = 0.125
     tr = 0.9
     whspace = 0.1
@@ -140,7 +130,7 @@ def corner(
     )
 
     if labels is None:
-        labels = ["z%i" % params[i] for i in range(K)]
+        labels = [params[i] for i in range(K)]
     for i in range(K):
         for j in range(K):
             ax = axes[i, j]
@@ -172,20 +162,56 @@ def corner(
 
             # 2-dim plots
             if j < i:
-                cont2d(
-                    ax,
-                    re2d,
-                    x0,
-                    z0,
-                    params[j],
-                    params[i],
-                    cmap=cmap,
-                    max_n_points=max_n_points,
-                )
-
+                plot_posterior(post, [params[j], params[i]], ax=ax, color=color)
             if j == i:
-                hist1d(ax, re1d, x0, z0, params[i], max_n_points=max_n_points)
+                plot_posterior(post, params[i], ax=ax, color=color)
 
+
+
+
+def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
+    x = x.flatten()
+    x = np.sort(x)[::-1]  # Sort backwards
+    total_mass = x.sum()
+    enclosed_mass = np.cumsum(x)
+    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
+    levels = np.array(x[idx])
+    return levels
+
+def contour1d(z, v, levels, ax=plt, linestyles = None, colors = None, **kwargs):
+    if not isinstance(colors, list):
+        colors = [colors]*len(levels)
+    for i, l in enumerate(levels):
+        zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
+        for c in z[zero_crossings]:
+            ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
+
+def plot_posterior(post, params, weights_key = None, ax = plt, bins = 100, color='k', **kwargs):
+    if isinstance(params, str):
+        params = (params,)
+        
+    if weights_key is None:
+        weights_key = tuple(sorted(params))
+    try:
+        w = post['weights'][tuple(weights_key)]
+    except KeyError:
+        w = None
+
+    if len(params)==1:
+        x = post['params'][params[0]]
+        v, e, _ = ax.hist(x, weights = w, bins = bins, color = color, alpha = 0.2)
+        #v, e = ax.histogram(x, weights = w, bins = bins, density = True)
+        zm = (e[1:]+e[:-1])/2
+        #ax.plot(zm, v, **kwargs)
+        levels = sorted(get_contour_levels(v))
+        contour1d(zm, v, levels, ax=ax, linestyles = [':', '--', '-'], colors=color)
+    elif len(params) == 2:
+        x = post['params'][params[0]]
+        y = post['params'][params[1]]
+        counts,xbins,ybins,_ = ax.hist2d(x, y, weights = w, bins = bins, cmap = 'gray_r')
+        levels = sorted(get_contour_levels(counts))
+        ax.contour(counts.T,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],
+                   levels = levels, linestyles = [':', '--', '-'], colors=color)
 
 if __name__ == "__main__":
     pass

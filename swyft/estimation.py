@@ -1,6 +1,7 @@
 # pylint: disable=no-member, not-callable
 from warnings import warn
 from copy import deepcopy
+from scipy.special import xlogy
 
 import numpy as np
 from scipy.integrate import trapz
@@ -28,9 +29,7 @@ from .types import (
 from .utils import array_to_tensor, tobytes, process_combinations, dict_to_device, dict_to_tensor
 
 class RatioEstimator:
-    _save_attrs = ["param_list",
-            "_head_swyft_state_dict", "_tail_swyft_state_dict",
-            "n_features"]
+    _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
 
     def __init__(
         self,
@@ -51,29 +50,42 @@ class RatioEstimator:
             device: default is cpu
             statistics: x_mean, x_std, z_mean, z_std
         """
-        self.param_list = param_list
+        self.param_list = self._format_param_list(param_list)
         self.device = device
-        self._uninitialized_head = [head, head_args]
-        self._uninitialized_tail = [tail, tail_args]
 
-        # lazy instanciation, since features are inferred from head network output
-        self.head = None
-        self.tail = None
-        self.n_features = None
+        if type(head) == type:
+            self._uninitialized_head = [head, head_args]
+            self.head = None
+        else:
+            self.head = head
+        if type(tail) == type:
+            self._uninitialized_tail = [tail, tail_args]
+            self.tail = None
+        else:
+            self.tail = tail
+
+    def _format_param_list(self, param_list):
+        out = []
+        for v in param_list:
+            if not isinstance(v, tuple):
+                v = (v,)
+            else:
+                v = tuple(sorted(v))
+            out.append(v)
+        return out
 
     def _init_networks(self, dataset):
         obs_shapes = get_obs_shapes(dataset[0]['obs'])
         self.head = self._uninitialized_head[0](obs_shapes, **self._uninitialized_head[1]).to(self.device)
-        self.n_features = self.head.n_features
-        self.tail = self._uninitialized_tail[0](self.n_features, self.param_list, **self._uninitialized_tail[1]).to(self.device)
-        print("n_features =", self.n_features)
+        self.tail = self._uninitialized_tail[0](self.head.n_features, self.param_list, **self._uninitialized_tail[1]).to(self.device)
+        print("n_features =", self.head.n_features)
 
     def train(
         self,
         points,
-        max_epochs: int = 100,
-        batch_size: int = 8,
-        lr_schedule: Sequence[float] = [1e-3, 1e-4, 1e-5],
+        max_epochs: int = 10,
+        batch_size: int = 4,
+        lr_schedule: Sequence[float] = [1e-3, 1e-4],
         early_stopping_patience: int = 1,
         nworkers: int = 0,
         percent_validation=0.1,
@@ -168,6 +180,43 @@ class RatioEstimator:
         re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(device)
         re.tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"]).to(device)
         return re
+
+    def posterior(self, obs0, prior, n_samples = 100000):
+        pars = prior.sample(n_samples)  # prior samples
+        lnL = self.lnL(obs0, pars)  # evaluate lnL for reference observation
+        weights = {}
+        for k, v in lnL.items():
+            weights[k] = np.exp(v)
+        return dict(params = pars, weights = weights)
+
+        #result = {}
+        #for tag in lnL.keys():
+        #    #assert len(tag) == 1, "Only works for 1-dim posteriors right now"
+        #    
+        #    # Get ratio and its integral
+        #    # r = p(z|x)/p_c(z) # posterior vs constrained prior ratio
+        #    r = np.exp(lnL[tag])
+        #    #r_int = sum(r)/len(r)  # approximate r integral over p_c(z)
+        #    
+        #    ## Generate histogram
+        #    z = np.stack([pars[t] for t in tag]).T
+        #    #values, z_edges = np.histogram(z, weights = r, bins = n_bins, density = True)
+        #    #dz = z_edges[1:] - z_edges[:-1]
+        #    #z_bar = (z_edges[1:] + z_edges[:-1])/2
+        #    
+        #    ## Estimate entropy
+        #    #entropy = sum(xlogy(dz*values, values))
+
+        #    #result[tag] = dict(entropy=entropy, r_int=r_int, z=z, weights=r)
+        #    result[tag] = dict(z=z, weights=r)
+        #
+        #if verbose:
+        #    for tag in result:
+        #        print("Posterior:", tag)
+        #        print("  Entropy  = %.3g"%result[tag]['entropy'])
+        #        print("  Integral = %.3g"%result[tag]['r_int'])
+        
+        return result
 
 
 class Points:

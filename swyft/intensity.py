@@ -208,18 +208,25 @@ class Prior:
             result[key] = np.array(value.sample(N))
         return result
 
-    def log_prob(self, values):
-        log_prob = []
+    def log_prob(self, values, unmasked = False):
+        log_prob_unmasked = {}
         for key, value in self.priors.items():
             x = torch.tensor(values[key])
-            log_prob.append(value.log_prob(x))
-        log_prob = sum(log_prob)
+            log_prob_unmasked[key] = value.log_prob(x)
+        log_prob_unmasked_sum = sum(log_prob_unmasked.values())
 
         if self.mask is not None:
             cube_values = self.to_cube(values)
             m = self.mask(cube_values)
-            log_prob = np.where(m, log_prob-np.log(self.mask.volume), -np.inf)
-        return log_prob
+            log_prob_sum = np.where(m,
+                    log_prob_unmasked_sum-np.log(self.mask.volume), -np.inf)
+        else:
+            log_prob_sum = log_prob_unmasked_sum
+
+        if unmasked:
+            return log_prob_unmasked
+        else:
+            return log_prob_sum
 
     def to_cube(self, X):
         out = {}

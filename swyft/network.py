@@ -138,8 +138,8 @@ class LinearWithChannel(nn.Module):
 
 
 class DefaultTail(Module):
-    def __init__(self, n_features, param_list, n_tail_features = 3, p=0.0,
-            n_hidden=256, online_norm = True, param_transform = None):
+    def __init__(self, n_features, param_list, n_tail_features = 3, p=0.1,
+            n_hidden=32, online_norm = True, param_transform = None):
         super().__init__(n_features, param_list,
                 n_tail_features=n_tail_features, p=p, n_hidden=n_hidden,
                 online_norm=online_norm,
