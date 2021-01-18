@@ -120,6 +120,7 @@ def corner(
     color='k',
     labels=None,
     truth=None,
+    bins = 100,
 ) -> None:
     K = len(params)
     fig, axes = plt.subplots(K, K, figsize=figsize)
@@ -163,12 +164,12 @@ def corner(
 
             # 2-dim plots
             if j < i:
-                plot_posterior(post, [params[j], params[i]], ax=ax, color=color)
+                plot_posterior(post, [params[j], params[i]], ax=ax, color=color, bins = bins)
                 if truth is not None:
                     ax.axvline(truth[params[j]], color='r')
                     ax.axhline(truth[params[i]], color='r')
             if j == i:
-                plot_posterior(post, params[i], ax=ax, color=color)
+                plot_posterior(post, params[i], ax=ax, color=color, bins = bins)
                 if truth is not None:
                     ax.axvline(truth[params[i]], ls = ':', color='r')
 
