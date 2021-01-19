@@ -61,14 +61,14 @@ def set_device(gpu: bool = False) -> torch.device:
     """Select device, defaults to cpu."""
     if gpu and torch.cuda.is_available():
         device = torch.device("cuda")
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        #torch.set_default_tensor_type("torch.cuda.FloatTensor")
     elif gpu and not torch.cuda.is_available():
         warn("Although the gpu flag was true, the gpu is not avaliable.")
         device = torch.device("cpu")
-        torch.set_default_tensor_type("torch.FloatTensor")
+        #torch.set_default_tensor_type("torch.FloatTensor")
     else:
         device = torch.device("cpu")
-        torch.set_default_tensor_type("torch.FloatTensor")
+        #torch.set_default_tensor_type("torch.FloatTensor")
     return device
 
 
