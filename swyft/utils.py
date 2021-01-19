@@ -240,5 +240,15 @@ class Module(nn.Module):
         return instance
 
 
+def corner_params(params):
+    out = []
+    for i in range(len(params)):
+        for j in range(i, len(params)):
+            if i == j:
+                out.append((params[i],))
+            else:
+                out.append((params[i], params[j]))
+    return out
+
 if __name__ == "__main__":
     pass

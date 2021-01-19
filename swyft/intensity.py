@@ -208,6 +208,12 @@ class Prior:
             result[key] = np.array(value.sample(N))
         return result
 
+    def volume(self):
+        if self.mask is None:
+            return 1.
+        else:
+            return self.mask.volume
+
     def log_prob(self, values, unmasked = False):
         log_prob_unmasked = {}
         for key, value in self.priors.items():

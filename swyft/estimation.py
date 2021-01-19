@@ -246,6 +246,9 @@ class Points:
     def __len__(self):
         return len(self.indices)
 
+    def params(self):
+        return self.cache.params
+
     def get_range(self, indices):
         N = len(indices)
         obs_comb = {k: np.empty((N,)+v.shape) for k, v in self[0]['obs'].items()}
