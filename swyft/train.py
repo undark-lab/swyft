@@ -170,7 +170,7 @@ def trainloop(
     max_epochs=50,
     early_stopping_patience=1,
     device="cpu",
-    lr_schedule=[1e-3, 1e-4, 1e-5],
+    lr_schedule=[1e-3, 3e-4, 1e-4],
     percent_validation=0.1,
 ):
     print("Start training")

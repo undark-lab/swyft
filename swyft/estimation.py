@@ -84,8 +84,8 @@ class RatioEstimator:
         self,
         points,
         max_epochs: int = 10,
-        batch_size: int = 4,
-        lr_schedule: Sequence[float] = [1e-3, 1e-4],
+        batch_size: int = 32,
+        lr_schedule: Sequence[float] = [1e-3, 3e-4, 1e-4],
         early_stopping_patience: int = 1,
         nworkers: int = 0,
         percent_validation=0.1,
@@ -172,51 +172,31 @@ class RatioEstimator:
         return self.head.swyft_state_dict()
 
     def state_dict(self):
+        """Return state dictionary."""
         return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
 
     @classmethod
     def from_state_dict(cls, state_dict, device: Device = "cpu"):
+        """Instantiate RatioEstimator from state dictionary."""
         re = cls(state_dict['param_list'], head = None, tail = None, device = device)
         re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(device)
         re.tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"]).to(device)
         return re
 
     def posterior(self, obs0, prior, n_samples = 100000):
+        """Resturn weighted posterior samples for given observation.
+        
+        Args:
+            obs0 (dict): Observation of interest.
+            prior (Prior): (Constrained) prior used to generate training data.
+            n_samples (int): Number of samples to return.
+        """
         pars = prior.sample(n_samples)  # prior samples
         lnL = self.lnL(obs0, pars)  # evaluate lnL for reference observation
         weights = {}
         for k, v in lnL.items():
             weights[k] = np.exp(v)
         return dict(params = pars, weights = weights)
-
-        #result = {}
-        #for tag in lnL.keys():
-        #    #assert len(tag) == 1, "Only works for 1-dim posteriors right now"
-        #    
-        #    # Get ratio and its integral
-        #    # r = p(z|x)/p_c(z) # posterior vs constrained prior ratio
-        #    r = np.exp(lnL[tag])
-        #    #r_int = sum(r)/len(r)  # approximate r integral over p_c(z)
-        #    
-        #    ## Generate histogram
-        #    z = np.stack([pars[t] for t in tag]).T
-        #    #values, z_edges = np.histogram(z, weights = r, bins = n_bins, density = True)
-        #    #dz = z_edges[1:] - z_edges[:-1]
-        #    #z_bar = (z_edges[1:] + z_edges[:-1])/2
-        #    
-        #    ## Estimate entropy
-        #    #entropy = sum(xlogy(dz*values, values))
-
-        #    #result[tag] = dict(entropy=entropy, r_int=r_int, z=z, weights=r)
-        #    result[tag] = dict(z=z, weights=r)
-        #
-        #if verbose:
-        #    for tag in result:
-        #        print("Posterior:", tag)
-        #        print("  Entropy  = %.3g"%result[tag]['entropy'])
-        #        print("  Integral = %.3g"%result[tag]['r_int'])
-        
-        return result
 
 
 class Points:

@@ -9,28 +9,6 @@ from .utils import Module
 def _get_z_shape(param_list):
     return (len(param_list), max([len(c) for c in param_list]))
 
-#class Network(swyft.Module):
-#    def __init__(self, tag, config):
-#        pass
-#
-#    def forward():
-#        pass
-#
-#Network.from_state_dict(state_dict, custom_cls = None)
-#
-#class Network(nn.Module):
-#    def __init__(self, tag, config):
-#
-#        pass
-#
-#    def state_dict():
-#        pass
-#
-#    @classmethod
-#    def from_state_dict(cls, state_dict):
-#        pass
-
-
 # TODO: Remove redundant combine functions
 def _combine(params, param_list):
     """Combine parameters according to parameter list. Supports one batch dimension."""
@@ -138,36 +116,57 @@ class LinearWithChannel(nn.Module):
 
 
 class DefaultTail(Module):
-    def __init__(self, n_features, param_list, n_tail_features = 3, p=0.1,
-            n_hidden=32, online_norm = True, param_transform = None):
+    def __init__(self, n_features, param_list, n_tail_features = 2, p=0.0,
+            hidden_layers=[256,256,256], online_norm = True, param_transform = None,
+            tail_features = False):
         super().__init__(n_features, param_list,
-                n_tail_features=n_tail_features, p=p, n_hidden=n_hidden,
+                n_tail_features=n_tail_features,
+                p=p,
+                hidden_layers=hidden_layers,
                 online_norm=online_norm,
-                param_transform=param_transform)
+                param_transform=param_transform,
+                tail_features=tail_features)
         self.param_list = param_list
 
         n_channels, pdim = _get_z_shape(param_list)
         self.n_channels = n_channels
+        self.tail_features = tail_features
 
         # Feature compressor
-        self.fcA = LinearWithChannel(n_features, n_hidden, n_channels)
-        self.fcB = LinearWithChannel(n_hidden, n_hidden, n_channels)
-        self.fcC = LinearWithChannel(n_hidden, n_tail_features, n_channels)
+        if self.tail_features:
+            n_hidden = 256
+            self.fcA = LinearWithChannel(n_features, n_hidden, n_channels)
+            self.fcB = LinearWithChannel(n_hidden, n_hidden, n_channels)
+            self.fcC = LinearWithChannel(n_hidden, n_tail_features, n_channels)
+        else:
+            n_tail_features = n_features
 
-        # Density estimator
-        self.fc1 = LinearWithChannel(pdim + n_tail_features, n_hidden, n_channels)
-        self.fc2 = LinearWithChannel(n_hidden, n_hidden, n_channels)
-        self.fc3 = LinearWithChannel(n_hidden, 1, n_channels)
-
-        self.drop = nn.Dropout(p=p)
-        self.af = torch.relu
-
+        # Pre-network parameter transformation hook
         self.param_transform = param_transform
 
+        # Online normalization of (transformed) parameters
         if online_norm:
             self.onl_z = OnlineNormalizationLayer(torch.Size([n_channels, pdim]))
         else:
             self.onl_z = lambda z: z
+
+        # Ratio estimator
+        if isinstance(p, float):
+            p = [p for i in range(len(hidden_layers))]
+        ratio_estimator_config = [
+            LinearWithChannel(pdim + n_tail_features, hidden_layers[0], n_channels),
+            nn.ReLU(),
+            nn.Dropout(p=p[0])]
+        for i in range(len(hidden_layers)-1):
+            ratio_estimator_config += [
+                    LinearWithChannel(hidden_layers[i], hidden_layers[i+1], n_channels),
+                    nn.ReLU(),
+                    nn.Dropout(p=p[i+1])]
+        ratio_estimator_config += [
+                LinearWithChannel(hidden_layers[-1], 1, n_channels)]
+        self.ratio_estimator = nn.Sequential(*ratio_estimator_config)
+
+        self.af = nn.ReLU()
 
     def forward(self, f, params):
         """Forward pass tail network.  Can handle one batch dimension.
@@ -185,22 +184,18 @@ class DefaultTail(Module):
 
         # Feature compressors independent per channel
         f = f.unsqueeze(1).repeat(1, self.n_channels, 1)  # (n_batch, n_channels, n_features)
-        f = self.af(self.fcA(f))
-        f = self.drop(f)
-        f = self.af(self.fcB(f))
-        f = self.drop(f)
-        f = self.fcC(f)
+        if self.tail_features:
+            f = self.af(self.fcA(f))
+            f = self.af(self.fcB(f))
+            f = self.fcC(f)
 
         # Channeled density estimator
         z = _combine(params, self.param_list)
         z = self.onl_z(z)
 
         x = torch.cat([f, z], -1)
-        x = self.af(self.fc1(x))
-        x = self.drop(x)
-        x = self.af(self.fc2(x))
-        x = self.drop(x)
-        x = self.fc3(x).squeeze(-1)
+        x = self.ratio_estimator(x)
+        x = x.squeeze(-1)
         return x
 
 
