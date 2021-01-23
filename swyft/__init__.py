@@ -18,9 +18,10 @@ __all__ = [
     "corner",
 ]
 
+
 class SWYFT:
     """Main SWYFT interface class."""
-    def __init__(self, model, noise, prior, cache, obs = None, device = 'cpu'):
+    def __init__(self, model, prior, noise = None, cache = None, obs = None, device = 'cpu'):
         """Initialize swyft.
 
         Args:
@@ -31,39 +32,45 @@ class SWYFT:
             obs (dict): Target observation (can be None for amortized inference).
             device (str): Device.
         """
+        # Specific
+        self._model = model
+        self._prior = prior
+        self._noise = noise
+        self._obs = obs
 
-        self.cache = cache
-        self.model = model
-        self.noise = noise
-        self.obs = obs
-        self.device = device
+        if cache is None:
+            cache = MemoryCache.from_simulator(model, prior, noise = noise)
+        self._cache = cache
+
+        self._device = device
         
-        self.priors = [prior]
-        self.ratios = []
-        self.meta = []
+        # Rounds
+        self._priors = [prior]
+        self._ratios = []
+        self._metadata = []
 
     def _round(self, N = 3000, train_args = {}, params_list  = None, head = DefaultHead, tail = DefaultTail,
              head_args = {}, tail_args = {}):
-        print("Round:", len(self.ratios)+1)
+        print("Round:", len(self._ratios)+1)
 
-        prior = self.priors[-1]  # Using last prior in the list
+        prior = self._priors[-1]  # Using last prior in the list
 
         # Generate simulations
-        self.cache.grow(prior, N)
-        self.cache.simulate(self.model)
+        self._cache.grow(prior, N)
+        self._cache.simulate(self._model)
 
         # And extract them
-        indices = self.cache.sample(prior, N)
-        points = Points(indices, self.cache, self.noise)
+        indices = self._cache.sample(prior, N)
+        points = Points(indices, self._cache, self._noise)
 
         # Training!
-        re = RatioEstimator(params_list, device=self.device, head = head, tail = tail, tail_args = tail_args, head_args = head_args)
+        re = RatioEstimator(params_list, device=self._device, head = head, tail = tail, tail_args = tail_args, head_args = head_args)
         re.train(points, **train_args)
 
         # Done!
-        new_prior = prior.get_masked(self.obs, re, th = -10)
-        self.priors.append(new_prior)
-        self.ratios.append(re)
+        new_prior = prior.get_masked(self._obs, re, th = -10)
+        self._priors.append(new_prior)
+        self._ratios.append(re)
         self.meta.append(dict(N=N))
         
     def infer1d(self, Ninit = 3000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}, f = 1.5, vr = 0.9, max_rounds = 10, Nmax = 30000):
@@ -81,7 +88,7 @@ class SWYFT:
             Nmax (int): Maximum size of training data per round.
         """
 
-        params_list = self.cache.params
+        params_list = self._cache.params
         assert vr < 1.
         assert f >= 1.
         N = Ninit
@@ -95,7 +102,7 @@ class SWYFT:
                        head_args = head_args,
                        tail_args = tail_args
                       )
-            volume_ratio = self.priors[-1].volume()/self.priors[-2].volume()
+            volume_ratio = self._priors[-1].volume()/self._priors[-2].volume()
             print("Volume shrinkage:", volume_ratio)
             if volume_ratio > vr:
                 break
@@ -110,11 +117,11 @@ class SWYFT:
             params (list of str): List of parameters for which inference is performed.
             ...
         """
-        params = self.cache.params if params is None else params
+        params = self._cache.params if params is None else params
         N = self.meta[-1]["N"] if N is None else N
         print("N =", N)
 
-        params_list = corner_params(self.cache.params)
+        params_list = corner_params(self._cache.params)
 
         self._round(N, 
                        params_list = params_list,
@@ -127,21 +134,33 @@ class SWYFT:
         
     def posteriors(self, n_samples = 100000, nround= -1):
         """Returns weighted posterior samples."""
-        re = self.ratios[nround]
-        prior = self.priors[nround]
-        post = re.posterior(self.obs, prior, n_samples = n_samples)
+        re = self._ratios[nround]
+        prior = self._priors[nround]
+        post = re.posterior(self._obs, prior, n_samples = n_samples)
         return post
 
     def __len__(self):
         """Return number of rounds."""
-        return len(self.ratios)
+        return len(self._ratios)
 
     def __getitem__(self, i):
         """Get details of specific round."""
-        return dict(prior=self.priors[i], ratio=self.ratios[i], meta=self.meta[i])
+        return dict(prior=self._priors[i], ratio=self._ratios[i], meta=self.meta[i])
 
     def pop(self):
         """Pop last round."""
-        self.ratios = self.ratios[:-1]
-        self.priors = self.priors[:-1]
-        self.priors = self.meta[:-1]
+        self._ratios = self._ratios[:-1]
+        self._priors = self._priors[:-1]
+        self._priors = self.meta[:-1]
+
+#    def state_dict(self):
+#        return dict(
+#                priors = [p.state_dict() for p in self._priors],
+#                ratios = [r.state_dict() for r in self._ratios],
+#                metadata = self._metadata
+#                obs = self._obs,
+#                )
+#
+#    @classmethod
+#    def from_state_dict(cls, state_dict, model, noise = None, cache = None, device = 'cpu'):
+#        SWYFT(model, prior, noise = noise, cache = cache, obs, device = device)

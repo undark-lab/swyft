@@ -183,15 +183,15 @@ class Prior1d:
 
 
 class Prior:
-    def __init__(self, priors_dict, mask = None):
-        self.priors_dict = priors_dict
+    def __init__(self, prior_conf, mask = None):
+        self.prior_conf = prior_conf
         self.mask = mask
 
         self._setup_priors()
 
     def _setup_priors(self):
         result = {}
-        for key, value in self.priors_dict.items():
+        for key, value in self.prior_conf.items():
             result[key] = Prior1d(value[0], *value[1:])
         self.priors = result
 
@@ -248,12 +248,12 @@ class Prior:
 
     def state_dict(self):
         mask_dict = None if self.mask is None else self.mask.state_dict()
-        return dict(priors_dict = self.priors_dict, mask = mask_dict)
+        return dict(prior_conf = self.prior_conf, mask = mask_dict)
 
     @classmethod
     def from_state_dict(cls, state_dict):
         mask = None if state_dict['mask'] is None else ComboMask.from_state_dict(state_dict['mask'])
-        return cls(state_dict['priors_dict'], mask = mask)
+        return cls(state_dict['prior_conf'], mask = mask)
 
     def get_masked(self, obs, re, N = 10000, th = -7):
         if re is None:
@@ -266,7 +266,7 @@ class Prior:
             ind_points = v[mask].reshape(-1,1)
             masklist[k] = BallMask(ind_points)
         mask = ComboMask(masklist)
-        return Prior(self.priors_dict, mask = mask)
+        return Prior(self.prior_conf, mask = mask)
 
 
 class Intensity:

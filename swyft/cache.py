@@ -369,6 +369,7 @@ class Cache(ABC):
             self._add_sim(i, x)
 
 
+
 class DirectoryCache(Cache):
     def __init__(self, params, obs_shapes: Shape, path: PathType):
         """Instantiate an iP3 cache stored in a directory.
@@ -431,6 +432,27 @@ class MemoryCache(Cache):
         zdim = cls._extract_zdim_from_zarr_group(group)
         return MemoryCache(zdim=zdim, xshape=xshape, store=memory_store)
 
+    @classmethod
+    def from_simulator(cls, model, prior, noise = None):
+        """Convenience function to instantiate new MemoryCache with correct obs_shapes.
+
+        Args:
+            model (function): Simulator model.
+            prior (Prior): Model prior.
+            noise (function): Optional noise (default None).
+
+        Note:
+            The simulator and noise model are run once in order to infer observable shapes from the output.
+        """
+        params = prior.sample(1)
+        params = {k: v[0] for k, v in params.items()}
+        obs = model(params)
+        if noise is not None:
+            obs = noise(obs, params)
+        obs_shapes = {k: v.shape for k, v in obs.items()}
+        params = prior.prior_conf.keys()
+
+        return MemoryCache(params, obs_shapes)
 
 if __name__ == "__main__":
     pass

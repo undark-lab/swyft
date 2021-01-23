@@ -250,5 +250,6 @@ def corner_params(params):
                 out.append((params[i], params[j]))
     return out
 
+
 if __name__ == "__main__":
     pass
