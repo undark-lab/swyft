@@ -189,6 +189,9 @@ class Prior:
 
         self._setup_priors()
 
+    def params(self):
+        return self.prior_conf.keys()
+
     def _setup_priors(self):
         result = {}
         for key, value in self.prior_conf.items():
