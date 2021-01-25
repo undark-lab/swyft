@@ -290,7 +290,7 @@ class Cache(ABC):
         # Add new entries to cache
         if sum(accepted) > 0:
             self._append_z(z_accepted)
-            print("Adding %i new samples. Run simulator!" % sum(accepted))
+            print("Adding %i new samples." % sum(accepted))
         else:
             print("No new simulator runs required.")
 
@@ -450,9 +450,8 @@ class MemoryCache(Cache):
         if noise is not None:
             obs = noise(obs, params)
         obs_shapes = {k: v.shape for k, v in obs.items()}
-        params = prior.prior_conf.keys()
 
-        return MemoryCache(params, obs_shapes)
+        return MemoryCache(list(prior.prior_conf.keys()), obs_shapes)
 
 if __name__ == "__main__":
     pass

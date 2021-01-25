@@ -222,8 +222,11 @@ def plot_posterior(post, params, weights_key = None, ax = plt, bins = 100, color
         y = post['params'][params[1]]
         counts,xbins,ybins,_ = ax.hist2d(x, y, weights = w, bins = bins, cmap = 'gray_r')
         levels = sorted(get_contour_levels(counts))
-        ax.contour(counts.T,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],
-                   levels = levels, linestyles = [':', '--', '-'], colors=color)
+        try: 
+            ax.contour(counts.T,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],
+                       levels = levels, linestyles = [':', '--', '-'], colors=color)
+        except ValueError:
+            print("WARNING: 2-dim contours not well-defined.")
         ax.set_xlim([x.min(), x.max()])
         ax.set_ylim([y.min(), y.max()])
 

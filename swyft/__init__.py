@@ -3,7 +3,7 @@ from .estimation import RatioEstimator, Points
 from .intensity import Prior
 from .network import OnlineNormalizationLayer, DefaultHead, DefaultTail
 from .plot import corner
-from .utils import Module, corner_params
+from .utils import Module, format_param_list
 
 __all__ = [
     "Prior",
@@ -19,7 +19,6 @@ __all__ = [
     "Posterior",
     "amortize",
 ]
-
 
 class Posterior:
     """Posterior container"""
@@ -41,7 +40,7 @@ class Posterior:
     def re(self):
         return self._re
 
-    def __call__(obs, n_samples = 100000):
+    def __call__(self, obs, n_samples = 100000):
         return self._re.posterior(obs, self._prior, n_samples = n_samples)
 
     def state_dict(self):
@@ -58,7 +57,7 @@ class Posterior:
         return self._prior.get_masked(obs, self._re, th = th)
 
 
-def amortize(model, prior, cache, params_list = None, noise = None, N = 3000,
+def _amortize(model, prior, cache, param_list = None, noise = None, N = 3000,
         train_args = {}, head = DefaultHead, tail = DefaultTail, head_args =
         {}, tail_args = {}, device = 'cpu'):
 
@@ -67,10 +66,10 @@ def amortize(model, prior, cache, params_list = None, noise = None, N = 3000,
     indices = cache.sample(prior, N)
     points = Points(indices, cache, noise)
 
-    if params_list is None:
-        params_list = prior.params()
+    if param_list is None:
+        param_list = prior.params()
 
-    re = RatioEstimator(params_list, device=device, head = head, tail = tail, tail_args = tail_args, head_args = head_args)
+    re = RatioEstimator(param_list, device=device, head = head, tail = tail, tail_args = tail_args, head_args = head_args)
     re.train(points, **train_args)
 
     return Posterior(re, prior)
@@ -78,7 +77,7 @@ def amortize(model, prior, cache, params_list = None, noise = None, N = 3000,
 
 class NestedRatios:
     """Main SWYFT interface class."""
-    def __init__(self, model, prior, obs, noise = None, cache = None, device = 'cpu', keep_history = False):
+    def __init__(self, model, prior, obs, noise = None, cache = None, device = 'cpu'):
         """Initialize swyft.
 
         Args:
@@ -107,14 +106,18 @@ class NestedRatios:
         return self._obs
 
     @property
-    def posterior(self):
+    def marginals(self):
+        if self._posterior is None:
+            print("NOTE: To generated marginals from NRE, call .run(...).")
         return self._posterior
 
     @property
     def prior(self):
         return self._prior
 
-    def run(self, Ninit = 3000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}, f = 1.5, vr = 0.9, max_rounds = 10, Nmax = 30000):
+    def run(self, Ninit = 3000, train_args={}, head=DefaultHead,
+            tail=DefaultTail, head_args={}, tail_args={}, f = 1.5, vr = 0.9,
+            max_rounds = 10, Nmax = 30000, keep_history = False, vmax = 0.5):
         """Perform 1-dim marginal focus.
 
         Args:
@@ -129,7 +132,8 @@ class NestedRatios:
             Nmax (int): Maximum size of training data per round.
         """
 
-        # TODO: Add optional params_list, and non 1d focus rounds
+        # TODO: Add optional param_list, and non 1d focus rounds
+        param_list = self._cache.params
 
         if self._posterior is not None:
             print("Nothing to do.")
@@ -143,29 +147,42 @@ class NestedRatios:
         N = Ninit
         for r in range(max_rounds):
             print("N =", N)
-            posterior = amortize(self._model, prior, self._cache, params_list, noise
+            posterior = _amortize(self._model, prior, self._cache, param_list, noise
                     = self._noise, head = head, tail = tail, head_args = head_args,
-                    tail_args = tail_args, train_args = train_args)
+                    tail_args = tail_args, train_args = train_args, N = N)
 
-            v_old = self._posterior.prior.volume()
-            v_new = posterior.prior.volume()
+            v_old = prior.volume()
+            prior = posterior.gen_constr_prior(self._obs)
+            v_new = prior.volume()
 
-            if self.keep_history:
+            if keep_history:
                 self._history.append(dict(
                     posterior=posterior))
 
             self._posterior = posterior
 
+            print("New prior volume:", v_new)
             print("Constrained prior volume decreased by factor", v_new/v_old)
 
-            if v_old/v_new > vr:
+            print("Done!", v_old, v_new, vmax, vr)
+            if (v_new/v_old > vr) and (v_new < vmax):
+                print("Done!", v_old, v_new, vmax, vr)
                 break  # Break loop if good enough
             else:
                 # Increase number of training data points systematically
-                N = min(int(N*(1+(f-1)*volume_ratio)), Nmax)
-                prior = self._posterior.constrained_prior(self._obs)
+                N = min(int(N*(1+(f-1)*(v_new/v_old))), Nmax)
 
-    def custom_posterior(self, N = None, params = None, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
+    def gen_1d_marginals(self, params = None, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
+        param_list = format_param_list(params, all_params = self._cache.params, mode = '1d')
+        print("Generating marginals for:", param_list)
+        return self.gen_custom_marginals(param_list, N = N, train_args=train_args, head=head, tail=tail, head_args=head_args, tail_args=tail_args)
+
+    def gen_2d_marginals(self, params = None, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
+        param_list = format_param_list(params, all_params = self._cache.params, mode = '2d')
+        print("Generating marginals for:", param_list)
+        return self.gen_custom_marginals(param_list, N = N, train_args=train_args, head=head, tail=tail, head_args=head_args, tail_args=tail_args)
+
+    def gen_custom_marginals(self, param_list, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
         """Perform one round of 2-dim posterior estimation.
         
         Args:
@@ -176,16 +193,17 @@ class NestedRatios:
             prior = self._prior
         else:
             prior = self._posterior.prior
+            print("Using volume:", prior.volume())
 
-        params = self._cache.params if params is None else params
-        params_list = corner_params(self._cache.params)
+        param_list = format_param_list(param_list, all_params = self._cache.params)
 
-        posterior = amortize(
+        posterior = _amortize(
                         model = self._model,
                         prior = prior,
-                        cache, = self._cache,
+                        noise = self._noise,
+                        cache = self._cache,
                         N = N,
-                        params_list = params_list,
+                        param_list = param_list,
                         head = head,
                         tail = tail,
                         head_args = head_args,

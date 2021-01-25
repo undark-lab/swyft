@@ -239,8 +239,7 @@ class Module(nn.Module):
         instance.load_state_dict(state_dict['torch_state_dict'])
         return instance
 
-
-def corner_params(params):
+def _corner_params(params):
     out = []
     for i in range(len(params)):
         for j in range(i, len(params)):
@@ -249,6 +248,31 @@ def corner_params(params):
             else:
                 out.append((params[i], params[j]))
     return out
+
+def format_param_list(params, all_params = None, mode = 'custom'):
+    # Use all parameters if params == None
+    if params is None and all_params is None:
+        raise ValueError("Specify parameters!")
+    if params is None:
+        params = all_params
+
+    if mode == 'custom' or mode == '1d':
+        param_list = params
+    elif mode == '2d':
+        param_list = _corner_params(params)
+    else:
+        raise KeyError("Invalid mode argument.")
+
+    # Enfore proper format: list of sorted tuples
+    result = []
+    for v in param_list:
+        if not isinstance(v, tuple):
+            v = (v,)
+        else:
+            v = tuple(sorted(v))
+        result.append(v)
+
+    return result
 
 
 if __name__ == "__main__":

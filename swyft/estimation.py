@@ -9,7 +9,7 @@ from scipy.integrate import trapz
 import torch
 import torch.nn as nn
 
-from .utils import Module, get_obs_shapes
+from .utils import Module, get_obs_shapes, format_param_list
 
 from .train import trainloop
 from .cache import Dataset, Normalize
@@ -50,7 +50,7 @@ class RatioEstimator:
             device: default is cpu
             statistics: x_mean, x_std, z_mean, z_std
         """
-        self.param_list = self._format_param_list(param_list)
+        self.param_list = format_param_list(param_list)
         self.device = device
 
         if type(head) == type:
@@ -63,16 +63,6 @@ class RatioEstimator:
             self.tail = None
         else:
             self.tail = tail
-
-    def _format_param_list(self, param_list):
-        out = []
-        for v in param_list:
-            if not isinstance(v, tuple):
-                v = (v,)
-            else:
-                v = tuple(sorted(v))
-            out.append(v)
-        return out
 
     def _init_networks(self, dataset):
         obs_shapes = get_obs_shapes(dataset[0]['obs'])

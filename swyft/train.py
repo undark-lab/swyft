@@ -143,7 +143,7 @@ def train(
         head.eval()
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
-        print("Validation loss:", validation_loss / n_validation_batches)
+        print("Validation loss: %.3f"%(validation_loss / n_validation_batches))
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
