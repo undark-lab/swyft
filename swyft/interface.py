@@ -4,6 +4,8 @@ from .network import DefaultHead, DefaultTail
 from .utils import format_param_list
 from .intensity import Prior
 
+import numpy as np
+
 class Marginals:
     """Marginal container"""
     def __init__(self, ratio, prior):
@@ -106,8 +108,8 @@ class NestedRatios:
         return self._prior
 
     def run(self, Ninit = 3000, train_args={}, head=DefaultHead,
-            tail=DefaultTail, head_args={}, tail_args={}, f = 2, vr = 0.9,
-            max_rounds = 10, Nmax = 100000, keep_history = False, vmax = 0.5):
+            tail=DefaultTail, head_args={}, tail_args={}, density_factor = 2., volume_conv_th = 0.1,
+            max_rounds = 10, Nmax = 100000, keep_history = False):
         """Perform 1-dim marginal focus fits.
 
         Args:
@@ -117,8 +119,8 @@ class NestedRatios:
             tail (swyft.Module instance or type): Tail network (optional).
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
-            f (float > 1): Increase training point density per round, default 2.
-            vr (float < 1): Stopping threshold for fractional volume decrease.
+            density_factor (float > 1): Increase of training point density per round.
+            volume_conv_th (float > 0.): Volume convergence threshold.
             max_rounds (int): Maximum number of rounds, default 10.
             Nmax (int): Maximum number of training points per round.
         """
@@ -130,10 +132,12 @@ class NestedRatios:
             print("Nothing to do.")
             return
 
-        assert vr < 1.
-        assert f > 1.
+        assert density_factor > 1.
+        assert volume_conv_th > 0.
 
         prior = self._prior
+
+        D = len(param_list)
 
         N = Ninit
         for r in range(max_rounds):
@@ -154,13 +158,14 @@ class NestedRatios:
             print("New prior volume:", v_new)
             print("Constrained prior volume decreased by factor", v_new/v_old)
 
-            print("Done!", v_old, v_new, vmax, vr)
-            if (v_new/v_old > vr) and (v_new < vmax):
-                print("Done!", v_old, v_new, vmax, vr)
+            if (np.log(v_old/v_new) < volume_conv_th):
                 break  # Break loop if good enough
             else:
                 # Increase number of training data points systematically
-                N = min(int(N*(1+(f-1)*(v_new/v_old))), Nmax)
+                density_old = N/v_old**(1/D)
+                density_new = density_factor * density_old
+                N = min(max(density_new*v_new**(1/D), N), Nmax)
+                #N = min(int(N*(1+(f-1)*(v_new/v_old))), Nmax)
 
     def gen_1d_marginals(self, params = None, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
         """Convenience function to generate 1d marginals."""
