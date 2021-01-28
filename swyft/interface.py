@@ -1,10 +1,13 @@
 from .cache import DirectoryCache, MemoryCache
 from .estimation import RatioEstimator, Points
 from .network import DefaultHead, DefaultTail
-from .utils import format_param_list
+from .utils import format_param_list, verbosity
 from .intensity import Prior
 
 import numpy as np
+
+class MissingModelError(Exception):
+    pass
 
 class Marginals:
     """Marginal container"""
@@ -90,8 +93,11 @@ class NestedRatios:
         self._device = device
 
         # Stored in state_dict()
-        self._prior = prior  # Initial prior
-        self._posterior = None  # Available after training
+        self._base_prior = prior  # Initial prior
+        self._posterior = None  # Posterior of a latest round
+        self._constr_prior = None  # Constrained prior based on self._posterior and self._obs
+        self._R = 0  # Round counter
+        self._N = None  # Training data points
 
     @property
     def obs(self):
@@ -100,16 +106,20 @@ class NestedRatios:
     @property
     def marginals(self):
         if self._posterior is None:
-            print("NOTE: To generated marginals from NRE, call .run(...).")
+            if verbosity() >= 1:
+                print("NOTE: To generated marginals from NRE, call .run(...).")
         return self._posterior
 
     @property
     def prior(self):
         return self._prior
 
+    def cont(self):
+        pass
+
     def run(self, Ninit = 3000, train_args={}, head=DefaultHead,
             tail=DefaultTail, head_args={}, tail_args={}, density_factor = 2., volume_conv_th = 0.1,
-            max_rounds = 10, Nmax = 100000, keep_history = False):
+            max_rounds = 10, Nmax = 100000, keep_history = False, raise_missing_model_error = False):
         """Perform 1-dim marginal focus fits.
 
         Args:
@@ -121,62 +131,74 @@ class NestedRatios:
             tail_args (dict): Keyword arguments for tail network instantiation.
             density_factor (float > 1): Increase of training point density per round.
             volume_conv_th (float > 0.): Volume convergence threshold.
-            max_rounds (int): Maximum number of rounds, default 10.
+            max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
             Nmax (int): Maximum number of training points per round.
         """
 
         # TODO: Add optional param_list, and non 1d focus rounds
         param_list = self._cache.params
-
-        if self._posterior is not None:
-            print("Nothing to do.")
-            return
+        D = len(param_list)
 
         assert density_factor > 1.
         assert volume_conv_th > 0.
 
-        prior = self._prior
+        for R in range(max_rounds):
+            if verbosity() >=0 :
+                print("NRE ROUND %i"%self._R)
+            if self._R == 0:  # First round
+                self._constr_prior = self._base_prior
+                N = Ninit
+            else:  # Later rounds
+                if self._constr_prior is None:
+                    self._constr_prior = self._posterior.gen_constr_prior(self._obs)  # Stochastic!
+                v_old = self._posterior.prior.volume()
+                v_new = self._constr_prior.volume()
+                if np.log(v_old/v_new) < volume_conv_th:
+                    if verbosity() >=0 :
+                        print("--> Posterior volume is converged. <--")
+                    break  # break while loop
+                # Increase number of training data points systematically
+                density_old = self._N/v_old**(1/D)
+                density_new = density_factor * density_old
+                N = min(max(density_new*v_new**(1/D), self._N), Nmax)
+                if verbosity() >= 2:
+                    print("  new (old) prior volume = %.4g (%.4g)"%(v_new, v_old))
 
-        D = len(param_list)
+            if verbosity() >= 1:
+                print("  number of training samples is N =", N)
 
-        N = Ninit
-        for r in range(max_rounds):
-            print("N =", N)
-            posterior = self._amortize(prior, param_list, head = head, tail = tail, head_args = head_args,
-                    tail_args = tail_args, train_args = train_args, N = N)
-
-            v_old = prior.volume()
-            prior = posterior.gen_constr_prior(self._obs)
-            v_new = prior.volume()
+            try:
+                posterior = self._amortize(self._constr_prior, param_list, head = head, tail = tail, head_args = head_args,
+                        tail_args = tail_args, train_args = train_args, N = N)
+            except MissingModelError:
+                if verbosity() >= 1:
+                    print("! Run `.simulate(model)` on cache object or specify model. !")
+                break
 
             if keep_history:
-                self._history.append(dict(
-                    posterior=posterior))
+                self._history.append(dict(posterior=posterior, N=N))
 
+            # Update object state
             self._posterior = posterior
+            self._constr_prior = None  # Reset
+            self._N = N
+            self._R += 1
 
-            print("New prior volume:", v_new)
-            print("Constrained prior volume decreased by factor", v_new/v_old)
-
-            if (np.log(v_old/v_new) < volume_conv_th):
-                break  # Break loop if good enough
-            else:
-                # Increase number of training data points systematically
-                density_old = N/v_old**(1/D)
-                density_new = density_factor * density_old
-                N = min(max(density_new*v_new**(1/D), N), Nmax)
-                #N = min(int(N*(1+(f-1)*(v_new/v_old))), Nmax)
+    def requires_sim(self):
+        return self._cache.requires_sim()
 
     def gen_1d_marginals(self, params = None, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
         """Convenience function to generate 1d marginals."""
         param_list = format_param_list(params, all_params = self._cache.params, mode = '1d')
-        print("Generating marginals for:", param_list)
+        if verbosity() >= 1:
+            print("Generating marginals for:", param_list)
         return self.gen_custom_marginals(param_list, N = N, train_args=train_args, head=head, tail=tail, head_args=head_args, tail_args=tail_args)
 
     def gen_2d_marginals(self, params = None, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
         """Convenience function to generate 2d marginals."""
         param_list = format_param_list(params, all_params = self._cache.params, mode = '2d')
-        print("Generating marginals for:", param_list)
+        if verbosity() >= 1:
+            print("Generating marginals for:", param_list)
         return self.gen_custom_marginals(param_list, N = N, train_args=train_args, head=head, tail=tail, head_args=head_args, tail_args=tail_args)
 
     def gen_custom_marginals(self, param_list, N = 1000, train_args={}, head=DefaultHead, tail=DefaultTail, head_args={}, tail_args={}):
@@ -195,7 +217,8 @@ class NestedRatios:
             prior = self._prior
         else:
             prior = self._posterior.prior
-            print("Using volume:", prior.volume())
+            if verbosity() >= 1:
+                print("Using volume:", prior.volume())
 
         param_list = format_param_list(param_list, all_params = self._cache.params)
 
@@ -239,7 +262,11 @@ class NestedRatios:
             {}, tail_args = {}):
 
         self._cache.grow(prior, N)
-        self._cache.simulate(self._model)
+        if self._cache.requires_sim():
+            if self._model is not None:
+                self._cache.simulate(self._model)
+            else:
+                raise MissingModelError("Model not defined.")
         indices = self._cache.sample(prior, N)
         points = Points(indices, self._cache, self._noise)
 

@@ -5,6 +5,8 @@ from scipy.interpolate import griddata
 
 from .types import Array, Tuple, Sequence
 
+from .utils import verbosity
+
 
 #def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
 #    x = np.sort(x)[::-1]  # Sort backwards

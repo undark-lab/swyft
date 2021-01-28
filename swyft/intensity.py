@@ -5,6 +5,8 @@ from sklearn.neighbors import BallTree
 
 from .types import Shape, Union, Sequence, PathType, Array, Device, Optional
 
+from .utils import verbosity
+
 
 class BallMask:
     def __init__(self, points, scale = 1.0):

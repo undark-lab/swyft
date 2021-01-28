@@ -9,7 +9,7 @@ import numcodecs
 from tqdm import tqdm
 from scipy.interpolate import interp1d
 
-from .utils import is_empty
+from .utils import is_empty, verbosity
 from .types import Shape, Union, PathType, Callable, Array
 from .intensity import Intensity
 
@@ -148,10 +148,12 @@ class Cache(ABC):
         self.intensities = []
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
-            print("Loading existing cache.")
+            if verbosity() >= 1:
+                print("Loading existing cache.")
             self._update()
         elif len(self.root.keys()) == 0:
-            print("Creating new cache.")
+            if verbosity() >= 1:
+                print("Creating new cache.")
             self._setup_new_cache(params, obs_shapes, self.root)
         else:
             raise KeyError(
@@ -290,9 +292,10 @@ class Cache(ABC):
         # Add new entries to cache
         if sum(accepted) > 0:
             self._append_z(z_accepted)
-            print("Adding %i new samples." % sum(accepted))
+            if verbosity() >= 1:
+                print("  adding %i new samples to simulator cache." % sum(accepted))
         else:
-            print("No new simulator runs required.")
+            pass
 
         # save new intensity function. We collect them all to find their maximum.
         # NOTE: We only do this when new samples are added. This is not
@@ -361,7 +364,8 @@ class Cache(ABC):
 
         idx = self._require_sim_idx()
         if len(idx) == 0:
-            print("No simulations required.")
+            if verbosity() >= 2:
+                print("No simulations required.")
             return
         for i in tqdm(idx, desc="Simulate"):
             z = {k: v[i] for k, v in self.z.items()}

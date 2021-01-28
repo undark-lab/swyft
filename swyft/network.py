@@ -4,7 +4,7 @@ import math
 import torch
 import torch.nn as nn
 
-from .utils import Module
+from .utils import Module, verbosity
 
 def _get_z_shape(param_list):
     return (len(param_list), max([len(c) for c in param_list]))

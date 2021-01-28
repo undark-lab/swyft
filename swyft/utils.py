@@ -9,6 +9,15 @@ import numpy as np
 import torch
 import scipy
 
+_VERBOSE = 1
+
+def set_verbosity(v):
+    global _VERBOSE
+    _VERBOSE = v
+
+def verbosity():
+    global _VERBOSE
+    return _VERBOSE
 
 from .types import (
     Optional,
