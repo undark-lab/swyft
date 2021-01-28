@@ -8,48 +8,84 @@ As a quick example, the following code defines a simple "simulator" and noise mo
 :: 
     import numpy as np
     import pylab as plt
-    import torch
     import swyft
-    np.random.seed(25)
-    torch.manual_seed(25)
+    import torch
+    from scipy import stats
     
-    DEVICE = 'cuda:0' #your gpu, or 'cpu' if a gpu is not available
-    MAX_EPOCHS = 100 #maximum number of epochs per training round
-    EXPECTED_N = 10000 #the average number of samples for the algorithm to see per training round
+    DEVICE = 'cuda' #your gpu, or 'cpu' if a gpu is not available
     
     #a simple simulator
-    def simulator(z):
-        return np.array([z[0],2*(z[1]-z[0])])
+    def model(params):
+        a = params['a']
+        b = params['b']
+        x=np.array([a,2*(b-a)])
+        return dict(mu=x)
+    
     #a simple noise model
-    def noise(x, z = None, noise=0.01):
+    def noise(obs, params, noise = 0.01):
+        x = obs['mu']
         n = np.random.randn(*x.shape)*noise
-        return x + n
+        return dict(x=x + n)
+
     #choose the "true" parameters for an inference problem
-    z0 = np.array([0.55,0.45])
-    zdim = len(z0)
-    x0 = simulator(z0)  # Using Asimov data
+    par0 = dict(a=0.55, b=0.45)
+    obs0 = model(par0) # using Asimov data  
+    
+    #give priors for model parameters
+    prior = swyft.Prior({"a": ["uniform", 0., 1.], "b": ["uniform",  0., 1.]})
     
     #a simple inference
-    points, re = swyft.run(x0, simulator, zdim = 2, noise = noise, device = DEVICE, n_train = 10000,n_rounds=4)
+    s = swyft.NestedRatios(model, prior, noise = noise, obs = obs0, device = DEVICE)
+    #train!
+    s.run(Ninit = 500)
   
-The resulting 1-dimensional posteriors can be plotted:
+The last line, which trains networks that estimate the 1-dimensional marginal posteriors, will output something like:
 ::
-    swyft.plot1d(re, x0 = x0, z0 = z0, cmap = 'Greys')
-    
-.. image:: images/quickstart-1d.png
-   :width: 600
+    Simulate:  14%|█▎        | 67/495 [00:00<00:00, 667.16it/s]
 
-The 2-dimensional posterior can be easily trained:
-::
-    re2 = swyft.RatioEstimator(x0, points, combinations = [[0, 1]], device=DEVICE)
-    re2.train(max_epochs=MAX_EPOCHS, batch_size=32, lr_schedule=[1e-3, 3e-4, 1e-4])
+    NRE ROUND 0
 
-Allowing one to generate a classic triangle plot:
+    Simulate: 100%|██████████| 495/495 [00:00<00:00, 644.85it/s]
+
+    NRE ROUND 1
+
+    Simulate: 100%|██████████| 517/517 [00:00<00:00, 643.51it/s]
+
+    NRE ROUND 2
+
+    Simulate: 100%|██████████| 498/498 [00:00<00:00, 713.97it/s]
+
+    NRE ROUND 3
+
+    Simulate: 100%|██████████| 820/820 [00:01<00:00, 647.67it/s]
+
+    NRE ROUND 4
+
+    Simulate: 100%|██████████| 1598/1598 [00:02<00:00, 653.44it/s]
+
+    NRE ROUND 5
+
+    Simulate: 100%|██████████| 2745/2745 [00:04<00:00, 672.84it/s]
+
+    NRE ROUND 6
+
+    Simulate: 100%|██████████| 5027/5027 [00:07<00:00, 704.09it/s]
+
+    NRE ROUND 7
+    --> Posterior volume is converged. <--
+
+
+The resulting marginal posteriors can be plotted:
 ::
-    swyft.corner(re, re2, x0 = x0, z0 = z0, cmap = 'Greys', dim = 10)
+    #train 2d marginals
+    post = s.gen_2d_marginals(N = 15000)
+    #generate samples at which to evaluate posteriors
+    samples = post(obs0, 1000000);
+    #plot estimated posteriors
+    swyft.corner(samples, ["a", "b"], color='k', figsize = (15,15), truth=par0)
     
 .. image:: images/quickstart-2d.png
-   :width: 1000
+   :width: 600
 
 For details on tweaking *swyft*, see the tutorial as a notebook on github_ or colab_.
 
