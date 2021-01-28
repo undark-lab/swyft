@@ -88,7 +88,7 @@ class NestedRatios:
         self._noise = noise
         self._obs = obs
         if cache is None:
-            cache = MemoryCache.from_simulator(model, prior, noise = noise)
+            cache = MemoryCache.from_simulator(model, prior)
         self._cache = cache
         self._device = device
 
