@@ -26,7 +26,7 @@ from .types import (
     Dict,
     Optional,
 )
-from .utils import array_to_tensor, tobytes, process_combinations, dict_to_device, dict_to_tensor
+from .utils import array_to_tensor, tobytes, process_combinations, dict_to_device, dict_to_tensor, dict_to_tensor_unsqueeze
 
 class RatioEstimator:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
@@ -131,7 +131,8 @@ class RatioEstimator:
         self.head.eval()
         self.tail.eval()
 
-        obs = dict_to_tensor(obs, device = self.device)
+        #obs = dict_to_tensor(obs, device = self.device)
+        obs = dict_to_tensor_unsqueeze(obs, device = self.device)
         f = self.head(obs)
 
         npar = len(params[list(params)[0]])
@@ -145,7 +146,8 @@ class RatioEstimator:
             for i in range(npar//n_batch + 1):
                 params_batch = dict_to_tensor(params, device = self.device, indices = slice(i*n_batch, (i+1)*n_batch))
                 n = len(params_batch[list(params_batch)[0]])
-                f_batch = f.unsqueeze(0).expand(n, -1)
+                #f_batch = f.unsqueeze(0).expand(n, -1)
+                f_batch = f.expand(n, -1)
                 tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
                 lnL.append(tmp)
             lnL = np.vstack(lnL)

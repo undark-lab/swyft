@@ -38,6 +38,9 @@ def dict_to_device(d, device, non_blocking = False):
 
 def dict_to_tensor(d, device = 'cpu', non_blocking = False, indices = slice(0, None)):
     return {k: torch.tensor(v[indices]).float().to(device, non_blocking = non_blocking) for k, v in d.items()}
+    
+def dict_to_tensor_unsqueeze(d, device = 'cpu', non_blocking = False, indices = slice(0, None)):
+    return {k: torch.tensor(v[indices]).float().unsqueeze(0).to(device, non_blocking = non_blocking) for k, v in d.items()}
 
 def get_2d_combinations(indices: List[int]):
     """Given a list of indices, calculate the lower triangular part of the cartesian product.

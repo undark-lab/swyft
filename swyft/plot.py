@@ -62,40 +62,23 @@ def hist1d(ax, re, x0, z0, i, max_n_points=1000):
     ax.plot(z, p, "k")
 
 def plot1d(
-    re1d: "swyft.estimation.RatioEstimator",
-    x0: Array,
-    dims: Tuple[int, int] = (15, 5),
-    ncol: int = None,
-    params: Sequence[str] = None,
-    labels: Sequence[str] = None,
-    z0: Array = None,
-    cmap: str = "Greys",
-    max_n_points: int = 1000,
-):
-    """Create a one dimensional plot.
-
-    Args:
-        re1d:
-        x0:
-        dims: dimension of output plot
-        ncol: =None
-        params: =None
-        labels: =None,
-        z0: =None,
-        cmap: color map
-        max_n_points: number of points to train on
-    """
-    # TODO: Rewrite
-    if params is None:
-        params = range(re1d.zdim)
-
+    post,
+    params,
+    figsize=(15,5),
+    color='k',
+    labels=None,
+    ncol = None,
+    truth=None,
+    bins = 100,
+    label_args = {}
+) -> None:
+    
     if ncol is None:
-        ncol = re1d.zdim
-
+        ncol=len(params)
     K = len(params)
     nrow = (K - 1) // ncol + 1
 
-    fig, axes = plt.subplots(nrow, ncol, figsize=dims)
+    fig, axes = plt.subplots(nrow, ncol, figsize=figsize)
     lb = 0.125
     tr = 0.9
     whspace = 0.15
@@ -104,15 +87,18 @@ def plot1d(
     )
 
     if labels is None:
-        labels = ["z%i" % params[i] for i in range(K)]
+        labels = [params[i] for i in range(K)]
+    
     for k in range(K):
         if nrow == 1:
             ax = axes[k]
         else:
             i, j = k % ncol, k // ncol
-            ax = axes[j, i]
-        hist1d(ax, re1d, x0, z0, params[k], max_n_points=max_n_points)
-        ax.set_xlabel(labels[k])
+            ax = axes[k]
+        plot_posterior(post, params[k], ax=ax, color=color, bins = bins)
+        ax.set_xlabel(labels[k], **label_args)
+        if truth is not None:
+            ax.axvline(truth[params[k]], ls = ':', color='r')
 
 
 def corner(
@@ -121,6 +107,7 @@ def corner(
     figsize=(10,10),
     color='k',
     labels=None,
+    label_args = {},
     truth=None,
     bins = 100,
 ) -> None:
@@ -155,9 +142,9 @@ def corner(
                 ax.set_xticklabels([])
                 # ax.set_xticks([])
             if i == K - 1:
-                ax.set_xlabel(labels[j])
+                ax.set_xlabel(labels[j],**label_args)
             if j == 0 and i > 0:
-                ax.set_ylabel(labels[i])
+                ax.set_ylabel(labels[i],**label_args)
 
             # Set limits
             # ax.set_xlim(x_lims[j])
