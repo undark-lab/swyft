@@ -6,8 +6,10 @@ import torch.nn as nn
 
 from .utils import Module, verbosity
 
+
 def _get_z_shape(param_list):
     return (len(param_list), max([len(c) for c in param_list]))
+
 
 # TODO: Remove redundant combine functions
 def _combine(params, param_list):
@@ -19,15 +21,15 @@ def _combine(params, param_list):
         z = torch.zeros(z_shape).to(device)
         for i, c in enumerate(param_list):
             pars = torch.stack([params[k] for k in c]).T
-            z[i,:pars.shape[0]] = pars
+            z[i, : pars.shape[0]] = pars
     else:  # Batching
         n = shape[0]
-        z = torch.zeros((n,)+z_shape).to(device)
+        z = torch.zeros((n,) + z_shape).to(device)
         for i, c in enumerate(param_list):
             pars = torch.stack([params[k] for k in c]).T
-            z[:,i,:pars.shape[1]] = pars
-    return z 
-    
+            z[:, i, : pars.shape[1]] = pars
+    return z
+
 
 class OnlineNormalizationLayer(nn.Module):
     def __init__(self, shape, stable: bool = False, epsilon: float = 1e-10):
@@ -116,16 +118,27 @@ class LinearWithChannel(nn.Module):
 
 
 class DefaultTail(Module):
-    def __init__(self, n_features, param_list, n_tail_features = 2, p=0.0,
-            hidden_layers=[256,256,256], online_norm = True, param_transform = None,
-            tail_features = False):
-        super().__init__(n_features, param_list,
-                n_tail_features=n_tail_features,
-                p=p,
-                hidden_layers=hidden_layers,
-                online_norm=online_norm,
-                param_transform=param_transform,
-                tail_features=tail_features)
+    def __init__(
+        self,
+        n_features,
+        param_list,
+        n_tail_features=2,
+        p=0.0,
+        hidden_layers=[256, 256, 256],
+        online_norm=True,
+        param_transform=None,
+        tail_features=False,
+    ):
+        super().__init__(
+            n_features,
+            param_list,
+            n_tail_features=n_tail_features,
+            p=p,
+            hidden_layers=hidden_layers,
+            online_norm=online_norm,
+            param_transform=param_transform,
+            tail_features=tail_features,
+        )
         self.param_list = param_list
 
         n_channels, pdim = _get_z_shape(param_list)
@@ -156,14 +169,15 @@ class DefaultTail(Module):
         ratio_estimator_config = [
             LinearWithChannel(pdim + n_tail_features, hidden_layers[0], n_channels),
             nn.ReLU(),
-            nn.Dropout(p=p[0])]
-        for i in range(len(hidden_layers)-1):
+            nn.Dropout(p=p[0]),
+        ]
+        for i in range(len(hidden_layers) - 1):
             ratio_estimator_config += [
-                    LinearWithChannel(hidden_layers[i], hidden_layers[i+1], n_channels),
-                    nn.ReLU(),
-                    nn.Dropout(p=p[i+1])]
-        ratio_estimator_config += [
-                LinearWithChannel(hidden_layers[-1], 1, n_channels)]
+                LinearWithChannel(hidden_layers[i], hidden_layers[i + 1], n_channels),
+                nn.ReLU(),
+                nn.Dropout(p=p[i + 1]),
+            ]
+        ratio_estimator_config += [LinearWithChannel(hidden_layers[-1], 1, n_channels)]
         self.ratio_estimator = nn.Sequential(*ratio_estimator_config)
 
         self.af = nn.ReLU()
@@ -183,7 +197,9 @@ class DefaultTail(Module):
             params = self.param_transform(params)
 
         # Feature compressors independent per channel
-        f = f.unsqueeze(1).repeat(1, self.n_channels, 1)  # (n_batch, n_channels, n_features)
+        f = f.unsqueeze(1).repeat(
+            1, self.n_channels, 1
+        )  # (n_batch, n_channels, n_features)
         if self.tail_features:
             f = self.af(self.fcA(f))
             f = self.af(self.fcB(f))
@@ -200,9 +216,10 @@ class DefaultTail(Module):
 
 
 class DefaultHead(Module):
-    def __init__(self, obs_shapes, online_norm = True, obs_transform = None):
-        super().__init__(obs_shapes=obs_shapes, obs_transform=obs_transform,
-                online_norm=online_norm)
+    def __init__(self, obs_shapes, online_norm=True, obs_transform=None):
+        super().__init__(
+            obs_shapes=obs_shapes, obs_transform=obs_transform, online_norm=online_norm
+        )
         self.obs_transform = obs_transform
 
         self.n_features = sum([v[0] for k, v in obs_shapes.items()])
@@ -226,7 +243,7 @@ class DefaultHead(Module):
         f = []
         for key, value in sorted(obs.items()):
             f.append(value)
-        f = torch.cat(f, dim = -1)
+        f = torch.cat(f, dim=-1)
         f = self.onl_f(f)
         return f
 

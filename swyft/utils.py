@@ -11,13 +11,16 @@ import scipy
 
 _VERBOSE = 1
 
+
 def set_verbosity(v):
     global _VERBOSE
     _VERBOSE = v
 
+
 def verbosity():
     global _VERBOSE
     return _VERBOSE
+
 
 from .types import (
     Optional,
@@ -30,17 +33,33 @@ from .types import (
     PathType,
 )
 
+
 def get_obs_shapes(obs):
     return {k: v.shape for k, v in obs.items()}
 
-def dict_to_device(d, device, non_blocking = False):
-    return {k: v.to(device, non_blocking = non_blocking) for k, v in d.items()}
 
-def dict_to_tensor(d, device = 'cpu', non_blocking = False, indices = slice(0, None)):
-    return {k: torch.tensor(v[indices]).float().to(device, non_blocking = non_blocking) for k, v in d.items()}
-    
-def dict_to_tensor_unsqueeze(d, device = 'cpu', non_blocking = False, indices = slice(0, None)):
-    return {k: torch.tensor(v[indices]).float().unsqueeze(0).to(device, non_blocking = non_blocking) for k, v in d.items()}
+def dict_to_device(d, device, non_blocking=False):
+    return {k: v.to(device, non_blocking=non_blocking) for k, v in d.items()}
+
+
+def dict_to_tensor(d, device="cpu", non_blocking=False, indices=slice(0, None)):
+    return {
+        k: torch.tensor(v[indices]).float().to(device, non_blocking=non_blocking)
+        for k, v in d.items()
+    }
+
+
+def dict_to_tensor_unsqueeze(
+    d, device="cpu", non_blocking=False, indices=slice(0, None)
+):
+    return {
+        k: torch.tensor(v[indices])
+        .float()
+        .unsqueeze(0)
+        .to(device, non_blocking=non_blocking)
+        for k, v in d.items()
+    }
+
 
 def get_2d_combinations(indices: List[int]):
     """Given a list of indices, calculate the lower triangular part of the cartesian product.
@@ -73,14 +92,14 @@ def set_device(gpu: bool = False) -> torch.device:
     """Select device, defaults to cpu."""
     if gpu and torch.cuda.is_available():
         device = torch.device("cuda")
-        #torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        # torch.set_default_tensor_type("torch.cuda.FloatTensor")
     elif gpu and not torch.cuda.is_available():
         warn("Although the gpu flag was true, the gpu is not avaliable.")
         device = torch.device("cpu")
-        #torch.set_default_tensor_type("torch.FloatTensor")
+        # torch.set_default_tensor_type("torch.FloatTensor")
     else:
         device = torch.device("cpu")
-        #torch.set_default_tensor_type("torch.FloatTensor")
+        # torch.set_default_tensor_type("torch.FloatTensor")
     return device
 
 
@@ -216,40 +235,46 @@ def cred1d(re, x0: Array):
 
 class Module(nn.Module):
     """Thin wrapper around pytorch modules that enables automatic reloading of network classes with correct arguments."""
+
     registry = {}
-    
+
     def __init__(self, *args, **kwargs):
         """Store arguments of subclass instantiation."""
         self._swyft_args = [args, kwargs]
         super().__init__()
-    
+
     def __init_subclass__(cls, **kwargs):
         """Register subclasses."""
         super().__init_subclass__(**kwargs)
         cls.registry[cls.__name__] = cls
         cls._swyft_tag = cls.__name__
-        
+
     @property
     def swyft_args(self):
         return self._swyft_args
-       
+
     @property
     def swyft_tag(self):
         """Return subclass tag."""
         # TODO: Confirm this is stable. Alternative is to as users to provide tags.
         return self._swyft_tag
-    
+
     def swyft_state_dict(self):
         torch_state_dict = self.state_dict()
-        return dict(torch_state_dict=torch_state_dict, swyft_args = self.swyft_args, swyft_tag = self.swyft_tag)
-    
+        return dict(
+            torch_state_dict=torch_state_dict,
+            swyft_args=self.swyft_args,
+            swyft_tag=self.swyft_tag,
+        )
+
     @classmethod
     def from_swyft_state_dict(cls, state_dict):
-        subcls = cls.registry[state_dict['swyft_tag']]
-        args, kwargs = state_dict['swyft_args']
+        subcls = cls.registry[state_dict["swyft_tag"]]
+        args, kwargs = state_dict["swyft_args"]
         instance = subcls(*args, **kwargs)
-        instance.load_state_dict(state_dict['torch_state_dict'])
+        instance.load_state_dict(state_dict["torch_state_dict"])
         return instance
+
 
 def _corner_params(params):
     out = []
@@ -261,16 +286,17 @@ def _corner_params(params):
                 out.append((params[i], params[j]))
     return out
 
-def format_param_list(params, all_params = None, mode = 'custom'):
+
+def format_param_list(params, all_params=None, mode="custom"):
     # Use all parameters if params == None
     if params is None and all_params is None:
         raise ValueError("Specify parameters!")
     if params is None:
         params = all_params
 
-    if mode == 'custom' or mode == '1d':
+    if mode == "custom" or mode == "1d":
         param_list = params
-    elif mode == '2d':
+    elif mode == "2d":
         param_list = _corner_params(params)
     else:
         raise KeyError("Invalid mode argument.")

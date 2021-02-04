@@ -75,7 +75,7 @@ The last line, which trains networks that estimate the 1-dimensional marginal po
     --> Posterior volume is converged. <--
 
 
-The resulting marginal posteriors can be plotted:
+This "zooms in" to the relevant region of parameter space. The resulting marginal posteriors can be plotted:
 ::
     #train 2d marginals
     post = s.gen_2d_marginals(N = 15000)

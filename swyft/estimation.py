@@ -26,7 +26,15 @@ from .types import (
     Dict,
     Optional,
 )
-from .utils import array_to_tensor, tobytes, process_combinations, dict_to_device, dict_to_tensor, dict_to_tensor_unsqueeze
+from .utils import (
+    array_to_tensor,
+    tobytes,
+    process_combinations,
+    dict_to_device,
+    dict_to_tensor,
+    dict_to_tensor_unsqueeze,
+)
+
 
 class RatioEstimator:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
@@ -36,8 +44,8 @@ class RatioEstimator:
         param_list,
         head: Optional[nn.Module] = DefaultHead,
         tail: Optional[nn.Module] = DefaultTail,
-        head_args = {},
-        tail_args = {},
+        head_args={},
+        tail_args={},
         device: Device = "cpu",
     ):
         """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
@@ -65,9 +73,13 @@ class RatioEstimator:
             self.tail = tail
 
     def _init_networks(self, dataset):
-        obs_shapes = get_obs_shapes(dataset[0]['obs'])
-        self.head = self._uninitialized_head[0](obs_shapes, **self._uninitialized_head[1]).to(self.device)
-        self.tail = self._uninitialized_tail[0](self.head.n_features, self.param_list, **self._uninitialized_tail[1]).to(self.device)
+        obs_shapes = get_obs_shapes(dataset[0]["obs"])
+        self.head = self._uninitialized_head[0](
+            obs_shapes, **self._uninitialized_head[1]
+        ).to(self.device)
+        self.tail = self._uninitialized_tail[0](
+            self.head.n_features, self.param_list, **self._uninitialized_tail[1]
+        ).to(self.device)
 
     def train(
         self,
@@ -91,13 +103,15 @@ class RatioEstimator:
         """
         dataset = Dataset(points)
 
-        if self.tail is None: self._init_networks(dataset)
+        if self.tail is None:
+            self._init_networks(dataset)
 
         self.head.train()
         self.tail.train()
 
         trainloop(
-            self.head, self.tail,
+            self.head,
+            self.tail,
             dataset,
             combinations=None,
             device=self.device,
@@ -114,7 +128,7 @@ class RatioEstimator:
         self,
         obs: Array,
         params: Array,
-        n_batch = 100,
+        n_batch=100,
         max_n_points: int = 1000,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve estimated marginal posterior.
@@ -131,22 +145,26 @@ class RatioEstimator:
         self.head.eval()
         self.tail.eval()
 
-        #obs = dict_to_tensor(obs, device = self.device)
-        obs = dict_to_tensor_unsqueeze(obs, device = self.device)
+        # obs = dict_to_tensor(obs, device = self.device)
+        obs = dict_to_tensor_unsqueeze(obs, device=self.device)
         f = self.head(obs)
 
         npar = len(params[list(params)[0]])
 
         if npar < n_batch:
-            params = dict_to_tensor(params, device = self.device)
+            params = dict_to_tensor(params, device=self.device)
             f = f.unsqueeze(0).expand(npar, -1)
             lnL = self.tail(f, params).detach().cpu().numpy()
         else:
             lnL = []
-            for i in range(npar//n_batch + 1):
-                params_batch = dict_to_tensor(params, device = self.device, indices = slice(i*n_batch, (i+1)*n_batch))
+            for i in range(npar // n_batch + 1):
+                params_batch = dict_to_tensor(
+                    params,
+                    device=self.device,
+                    indices=slice(i * n_batch, (i + 1) * n_batch),
+                )
                 n = len(params_batch[list(params_batch)[0]])
-                #f_batch = f.unsqueeze(0).expand(n, -1)
+                # f_batch = f.unsqueeze(0).expand(n, -1)
                 f_batch = f.expand(n, -1)
                 tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
                 lnL.append(tmp)
@@ -169,14 +187,18 @@ class RatioEstimator:
     @classmethod
     def from_state_dict(cls, state_dict, device: Device = "cpu"):
         """Instantiate RatioEstimator from state dictionary."""
-        re = cls(state_dict['param_list'], head = None, tail = None, device = device)
-        re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(device)
-        re.tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"]).to(device)
+        re = cls(state_dict["param_list"], head=None, tail=None, device=device)
+        re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(
+            device
+        )
+        re.tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"]).to(
+            device
+        )
         return re
 
-    def posterior(self, obs0, prior, n_samples = 100000):
+    def posterior(self, obs0, prior, n_samples=100000):
         """Resturn weighted posterior samples for given observation.
-        
+
         Args:
             obs0 (dict): Observation of interest.
             prior (Prior): (Constrained) prior used to generate training data.
@@ -187,7 +209,7 @@ class RatioEstimator:
         weights = {}
         for k, v in lnL.items():
             weights[k] = np.exp(v)
-        return dict(params = pars, weights = weights)
+        return dict(params=pars, weights=weights)
 
 
 class Points:
@@ -222,14 +244,14 @@ class Points:
 
     def get_range(self, indices):
         N = len(indices)
-        obs_comb = {k: np.empty((N,)+v.shape) for k, v in self[0]['obs'].items()}
-        par_comb = {k: np.empty((N,)+v.shape) for k, v in self[0]['par'].items()}
-        
+        obs_comb = {k: np.empty((N,) + v.shape) for k, v in self[0]["obs"].items()}
+        par_comb = {k: np.empty((N,) + v.shape) for k, v in self[0]["par"].items()}
+
         for i in indices:
             p = self[i]
-            for k,v in p['obs'].items():
+            for k, v in p["obs"].items():
                 obs_comb[k][i] = v
-            for k,v in p['par'].items():
+            for k, v in p["par"].items():
                 par_comb[k][i] = v
 
         return dict(obs=obs_comb, par=par_comb)

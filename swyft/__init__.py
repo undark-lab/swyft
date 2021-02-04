@@ -20,5 +20,5 @@ __all__ = [
     "corner",
     "Posterior",
     "NestedRatios",
-    "Marginals"
+    "Marginals",
 ]

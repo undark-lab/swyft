@@ -11,17 +11,18 @@ from .types import Sequence, Combinations, Dict, Union, Array
 
 def double_features(f):
     """Double feature vector as (A, B, C, D) --> (A, A, B, B, C, C, D, D)
-    
+
     Args:
         f (tensor): Feature vectors (n_batch, n_features)
     Returns:
         f (tensor): Feature vectors (2*n_btach. n_features)
     """
-    return torch.repeat_interleave(f, 2, dim = 0)
+    return torch.repeat_interleave(f, 2, dim=0)
+
 
 def double_params(params):
     """Double parameters as (A, B, C, D) --> (A, B, A, B, C, D, C, D) etc
-    
+
     Args:
         params (dict): Dictionary of parameters with shape (n_batch).
     Returns:
@@ -32,18 +33,19 @@ def double_params(params):
         out[k] = torch.repeat_interleave(v.view(-1, 2), 2, dim=0).flatten()
     return out
 
+
 def loss_fn(head, tail, obs, params):
     # Get features
     f = head(obs)
     n_batch = f.shape[0]
 
-    assert n_batch%2 == 0, "Loss function can only handle even-numbered batch sizes."
-    
+    assert n_batch % 2 == 0, "Loss function can only handle even-numbered batch sizes."
+
     # Repeat interleave
     f_doubled = double_features(f)
     params_doubled = double_params(params)
 
-    # Get 
+    # Get
     lnL = tail(f_doubled, params_doubled)
     lnL = lnL.view(-1, 4, lnL.shape[-1])
 
@@ -51,9 +53,10 @@ def loss_fn(head, tail, obs, params):
     loss += -torch.nn.functional.logsigmoid(-lnL[:, 1])
     loss += -torch.nn.functional.logsigmoid(-lnL[:, 2])
     loss += -torch.nn.functional.logsigmoid(lnL[:, 3])
-    loss = loss.sum(axis=0)/n_batch
-    
+    loss = loss.sum(axis=0) / n_batch
+
     return loss
+
 
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
     assert np.isclose(sum(percents), 1.0), f"{percents} does not sum to 1."
@@ -71,14 +74,15 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
 # We have the posterior exactly because our proir is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def train(
-    head, tail,
+    head,
+    tail,
     train_loader,
     validation_loader,
     early_stopping_patience,
     max_epochs=None,
     lr=1e-3,
     combinations=None,
-    device='cpu',
+    device="cpu",
     non_blocking=True,
 ):
     """Network training loop.
@@ -109,8 +113,12 @@ def train(
             for batch in loader:
                 optimizer.zero_grad()
 
-                obs = dict_to_device(batch['obs'], device = device, non_blocking = non_blocking)
-                params = dict_to_device(batch['par'], device = device, non_blocking = non_blocking)
+                obs = dict_to_device(
+                    batch["obs"], device=device, non_blocking=non_blocking
+                )
+                params = dict_to_device(
+                    batch["par"], device=device, non_blocking=non_blocking
+                )
                 loss = loss_fn(head, tail, obs, params)
                 loss = sum(loss)
 
@@ -137,12 +145,12 @@ def train(
         train_loss = do_epoch(train_loader, True)
         train_losses.append(train_loss / n_train_batches)
 
-        #network.eval()
+        # network.eval()
         head.eval()
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
-        if verbosity() >=2 :
-            print("  val loss = %.4g"%(validation_loss / n_validation_batches))
+        if verbosity() >= 2:
+            print("  val loss = %.4g" % (validation_loss / n_validation_batches))
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
@@ -159,7 +167,8 @@ def train(
 
 
 def trainloop(
-    head, tail,
+    head,
+    tail,
     dataset,
     combinations=None,
     batch_size=32,
@@ -196,9 +205,10 @@ def trainloop(
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
         if verbosity() >= 2:
-            print("  lr = %.4g"%lr)
+            print("  lr = %.4g" % lr)
         tl, vl, sd_head, sd_tail = train(
-            head, tail,
+            head,
+            tail,
             train_loader,
             valid_loader,
             early_stopping_patience=early_stopping_patience,
@@ -215,11 +225,11 @@ def trainloop(
         tail.load_state_dict(sd_tail)
 
 
-#def get_statistics(
+# def get_statistics(
 #    points: Union["swyft.estimation.Points", Sequence[Dict[str, Array]]],
 #    combinations: Combinations = None,
 #    n_samples: int = 300,
-#):
+# ):
 #    """Calculate the mean and std of both x and z.
 #
 #    Args:

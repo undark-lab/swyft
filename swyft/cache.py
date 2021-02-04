@@ -21,16 +21,16 @@ class LowIntensityError(Exception):
 class NormalizeStd:
     def __init__(self, values):
         self.mean = {}
-        self.std= {}
-        
+        self.std = {}
+
         for k, v in values.items():
             self.mean[k] = v.mean(axis=0)
             self.std[k] = v.std(axis=0).mean()
-        
+
     def __call__(self, values):
         out = {}
         for k, v in values.items():
-            out[k] = (v - self.mean[k])/self.std[k]
+            out[k] = (v - self.mean[k]) / self.std[k]
         return out
 
 
@@ -38,63 +38,68 @@ class NormalizeScale:
     def __init__(self, values):
         self.median = {}
         self.perc = {}
-        
+
         for k, v in values.items():
-            median = np.percentile(v, 50, axis = 0)
-            perc = np.percentile(v-median, np.linspace(0, 100, 101))
+            median = np.percentile(v, 50, axis=0)
+            perc = np.percentile(v - median, np.linspace(0, 100, 101))
             self.median[k] = median
             self.perc[k] = perc
-        
+
     def __call__(self, values):
         out = {}
         for k, v in values.items():
-            v = v - self.median[k] 
-            v = interp1d(self.perc[k], np.linspace(-1, 1, 101), fill_value = "extrapolate")(v)
+            v = v - self.median[k]
+            v = interp1d(
+                self.perc[k], np.linspace(-1, 1, 101), fill_value="extrapolate"
+            )(v)
             out[k] = v
         return out
+
 
 Normalize = NormalizeStd
 
 
 class Transform:
-    def __init__(self, par_combinations, param_transform = None, obs_transform = None):
+    def __init__(self, par_combinations, param_transform=None, obs_transform=None):
         self.obs_transform = (lambda x: x) if obs_transform is None else obs_transform
-        self.param_transform = (lambda z: z) if param_transform is None else param_transform
+        self.param_transform = (
+            (lambda z: z) if param_transform is None else param_transform
+        )
         self.par_combinations = par_combinations
         self.par_comb_shape = self._get_par_comb_shape(par_combinations)
-        
+
     def _get_par_comb_shape(self, par_combinations):
         n = len(par_combinations)
         m = max([len(c) for c in par_combinations])
         return (n, m)
-    
+
     def _combine(self, par):
         shape = par[list(par)[0]].shape
         if len(shape) == 0:
             out = torch.zeros(self.par_comb_shape)
             for i, c in enumerate(self.par_combinations):
                 pars = torch.stack([par[k] for k in c]).T
-                out[i,:pars.shape[0]] = pars
+                out[i, : pars.shape[0]] = pars
         else:
             n = shape[0]
-            out = torch.zeros((n,)+self.par_comb_shape)
+            out = torch.zeros((n,) + self.par_comb_shape)
             for i, c in enumerate(self.par_combinations):
                 pars = torch.stack([par[k] for k in c]).T
-                out[:,i,:pars.shape[1]] = pars
+                out[:, i, : pars.shape[1]] = pars
         return out
-    
+
     def _tensorfy(self, x):
         return {k: torch.tensor(v).float() for k, v in x.items()}
-    
-    def __call__(self, obs = None, par = None):
+
+    def __call__(self, obs=None, par=None):
         out = {}
         if obs is not None:
             tmp = self.obs_transform(obs)
-            out['obs'] = self._tensorfy(tmp)
+            out["obs"] = self._tensorfy(tmp)
         if par is not None:
             tmp = self.param_transform(par)
             z = self._tensorfy(tmp)
-            out['par'] = self._combine(z)
+            out["par"] = self._combine(z)
         return out
 
 
@@ -104,16 +109,13 @@ class Dataset(torch.utils.data.Dataset):
 
     def _tensorfy(self, x):
         return {k: torch.tensor(v).float() for k, v in x.items()}
-    
+
     def __len__(self):
         return len(self.points)
-    
+
     def __getitem__(self, i):
         p = self.points[i]
-        return dict(
-                obs=self._tensorfy(p['obs']),
-                par=self._tensorfy(p['par'])
-                )
+        return dict(obs=self._tensorfy(p["obs"]), par=self._tensorfy(p["par"]))
 
 
 class Cache(ABC):
@@ -138,12 +140,12 @@ class Cache(ABC):
         """Initialize Cache content dimensions.
 
         Args:
-            params (list of strings): List of paramater names 
+            params (list of strings): List of paramater names
             obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
         """
         self.store = store
-        self.params = params 
+        self.params = params
         self.root = zarr.group(store=self.store)
         self.intensities = []
 
@@ -160,12 +162,12 @@ class Cache(ABC):
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
-        #assert (
+        # assert (
         #    zdim == self.zdim
-        #), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
-        #assert (
+        # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
+        # assert (
         #    xshape == self.xshape
-        #), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
+        # ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
 
     def _setup_new_cache(self, params, obs_shapes, root):
         # Add parameter names to store
@@ -211,7 +213,9 @@ class Cache(ABC):
         self.z = self.root["samples/par"]
         self.m = self.root["metadata/requires_simulation"]
         self.u = self.root["metadata/intensity"]
-        self.intensities = [Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))]
+        self.intensities = [
+            Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))
+        ]
 
     def __len__(self):
         """Returns number of samples in the cache."""
@@ -266,7 +270,9 @@ class Cache(ABC):
             d = len(z[list(z)[0]])
             return np.zeros(d)
         else:
-            return np.array([self.intensities[i](z) for i in range(len(self.intensities))]).max(axis=0)
+            return np.array(
+                [self.intensities[i](z) for i in range(len(self.intensities))]
+            ).max(axis=0)
 
     def grow(self, prior: "swyft.intensity.Intensity", N):
         """Given an intensity function, add parameter samples to the cache.
@@ -315,7 +321,7 @@ class Cache(ABC):
 
         self._update()
 
-        #self.grow(prior, N)
+        # self.grow(prior, N)
 
         accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
@@ -326,10 +332,10 @@ class Cache(ABC):
             accept_prob = I_target[i] / I_ds[i]
             if accept_prob > 1.0:
                 raise LowIntensityError(
-                f"{accept_prob} > 1, but we expected the ratio of target intensity function to the cache <= 1. "
-                "There may not be enough samples in the cache "
-                "or a constrained intensity function was not accounted for."
-            )
+                    f"{accept_prob} > 1, but we expected the ratio of target intensity function to the cache <= 1. "
+                    "There may not be enough samples in the cache "
+                    "or a constrained intensity function was not accounted for."
+                )
             w = np.random.rand()
             if accept_prob > w:
                 accepted.append(i)
@@ -371,7 +377,6 @@ class Cache(ABC):
             z = {k: v[i] for k, v in self.z.items()}
             x = simulator(z)
             self._add_sim(i, x)
-
 
 
 class DirectoryCache(Cache):
@@ -453,6 +458,7 @@ class MemoryCache(Cache):
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
         return MemoryCache(list(prior.prior_conf.keys()), obs_shapes)
+
 
 if __name__ == "__main__":
     pass
