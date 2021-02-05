@@ -1,6 +1,8 @@
 # pylint: disable=no-member, not-callable
 from abc import ABC, abstractmethod
 from pathlib import Path
+from collections import namedtuple
+from warnings import warn
 
 import numpy as np
 import zarr
@@ -11,16 +13,33 @@ from .utils import is_empty
 from .types import Shape, Union, Sequence, PathType, Callable, Array
 
 
+Filesystem = namedtuple(
+    "Filesystem", 
+    [
+        "metadata",
+        "intensity",
+        "samples",
+        "x",
+        "z",
+        "requires_simulation",
+        "failed_simulation",
+        "which_intensity",
+    ],
+)
+
+
 class Cache(ABC):
     """Abstract base class for various caches."""
 
-    _filesystem = (
+    _filesystem = Filesystem(
         "metadata",
         "metadata/intensity",
-        "metadata/requires_simulation",
         "samples",
         "samples/x",
         "samples/z",
+        "samples/requires_simulation",
+        "samples/failed_simulation",
+        "samples/which_intensity",
     )
 
     @abstractmethod
@@ -48,25 +67,37 @@ class Cache(ABC):
         elif len(self.root.keys()) == 0:
             print("Creating new cache.")
             self.x = self.root.zeros(
-                self._filesystem[4],  # samples/x
+                self._filesystem.x,
                 shape=(0, *xshape),
                 chunks=(1, *xshape),
                 dtype="f4",
             )
             self.z = self.root.zeros(
-                self._filesystem[5],  # samples/z
+                self._filesystem.z,
                 shape=(0, zdim),
                 chunks=(10000, zdim),
                 dtype="f4",
             )
             self.m = self.root.zeros(
-                self._filesystem[2],  # metadata/requires_simulation
+                self._filesystem.requires_simulation,
                 shape=(0, 1),
                 chunks=(10000, 1),
                 dtype="bool",
             )
+            self.f = self.root.zeros(
+                self._filesystem.failed_simulation,
+                shape=(0, 1),
+                chunks=(10000, 1),
+                dtype="bool",
+            )
+            self.wu = self.root.zeros(
+                self._filesystem.which_intensity,
+                shape=(0, 1),
+                chunks=(10000, 1),
+                dtype="i4",
+            )
             self.u = self.root.create(
-                self._filesystem[1],  # metadata/intensity
+                self._filesystem.intensity,
                 shape=(0,),
                 dtype=object,
                 object_codec=numcodecs.Pickle(),
@@ -85,11 +116,11 @@ class Cache(ABC):
 
     @staticmethod
     def _extract_xshape_from_zarr_group(group):
-        return group["samples/x"].shape[1:]
+        return group[Cache._filesystem.x].shape[1:]
 
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
-        return group["samples/z"].shape[1]
+        return group[Cache._filesystem.z].shape[1]
 
     @property
     def xshape(self) -> Shape:
@@ -107,10 +138,12 @@ class Cache(ABC):
 
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
-        self.x = self.root["samples/x"]
-        self.z = self.root["samples/z"]
-        self.m = self.root["metadata/requires_simulation"]
-        self.u = self.root["metadata/intensity"]
+        self.x = self.root[self._filesystem.x]
+        self.z = self.root[self._filesystem.z]
+        self.m = self.root[self._filesystem.requires_simulation]
+        self.f = self.root[self._filesystem.failed_simulation]
+        self.u = self.root[self._filesystem.intensity]
+        self.wu = self.root[self._filesystem.which_intensity]
 
     def __len__(self):
         """Returns number of samples in the cache."""
@@ -120,6 +153,11 @@ class Cache(ABC):
     def __getitem__(self, i):
         self._update()
         return self.x[i], self.z[i]
+
+    @property
+    def intensity_len(self):
+        self._update()
+        return len(self.u)
 
     def _append_z(self, z):
         """Append z to cache content and new slots for x."""
@@ -136,6 +174,13 @@ class Cache(ABC):
         # Register as missing
         m = np.ones((len(z), 1), dtype="bool")
         self.m.append(m)
+
+        # Simulations have not failed, yet.
+        self.f.append(~m)
+
+        # Which intensity was a parameter drawn with
+        wu = self.intensity_len * m
+        self.wu.append(wu)
 
     def intensity(self, z: Array) -> np.ndarray:
         """Evaluate the cache's intensity function.
@@ -223,14 +268,32 @@ class Cache(ABC):
     def _add_sim(self, i, x):
         self.x[i] = x
         self.m[i] = False
+        self.f[i] = False
 
-    def simulate(self, simulator: Callable):
+    def _failed_sim(self, i):
+        self.f[i] = True
+
+    def _simulator_succeeded(self, x: Array, fail_on_non_finite: bool) -> bool:
+        """Is the simulation a success?"""
+        if x is None:
+            return False
+        elif fail_on_non_finite and np.all(np.isfinite(x)):
+            return False
+        else:
+            return True
+
+    def simulate(self, simulator: Callable, fail_on_non_finite: bool = True) -> bool:
         """Run simulator sequentially on parameter cache with missing corresponding simulations.
 
         Args:
             simulator: simulates an observation given a parameter input
+            fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
+        
+        Returns:
+            success: True if all simulations succeeded
         """
         self._update()
+        success = True
 
         idx = self._require_sim_idx()
         if len(idx) == 0:
@@ -239,7 +302,17 @@ class Cache(ABC):
         for i in tqdm(idx, desc="Simulate"):
             z = self.z[i]
             x = simulator(z)
-            self._add_sim(i, x)
+            if self._simulator_succeeded(x, fail_on_non_finite):
+                self._add_sim(i, x)
+            else:
+                success = False
+                self._failed_sim(i)
+        
+        if not success:
+            warn("Some simulations failed. They have been marked.")
+        return success
+        # TODO functionality to deal with this problem.
+
 
 
 class DirectoryCache(Cache):
