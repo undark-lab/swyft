@@ -173,7 +173,7 @@ class NestedRatios:
                     )  # Stochastic!
                 v_old = self._posterior.prior.volume()
                 v_new = self._constr_prior.volume()
-                if np.log(v_old / v_new) < volume_conv_th:
+                if np.log(v_old) - np.log(v_new) < volume_conv_th:
                     if verbosity() >= 0:
                         print("--> Posterior volume is converged. <--")
                     break  # break while loop
