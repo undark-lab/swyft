@@ -472,7 +472,7 @@ class Cache(ABC):
         if self.any_failed:
             warn("Some simulations failed. They have been marked.")
         return success  # TODO functionality to deal failed simulations automatically
-    
+
     # TODO add a function to fix failed simulations.
 
 
