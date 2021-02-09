@@ -311,7 +311,18 @@ def format_param_list(params, all_params=None, mode="custom"):
     return result
 
 
-def allfinite(x: Array):
+def all_finite(x):
+    if isinstance(x, dict):
+        return all(_all_finite(v) for v in x.values())
+    elif isinstance(x, (torch.Tensor, np.ndarray)):
+        return _all_finite(x)
+    elif isinstance(x, list):
+        return all(_all_finite(v) for v in x)
+    else:
+        raise NotImplementedError("That type is not yet implemented.")
+
+
+def _all_finite(x: Array):
     if isinstance(x, torch.Tensor):
         return torch.all(torch.isfinite(x))
     else:

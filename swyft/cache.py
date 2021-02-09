@@ -1,6 +1,7 @@
 # pylint: disable=no-member, not-callable
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from copy import deepcopy
 from pathlib import Path
 from warnings import warn
 
@@ -13,7 +14,7 @@ from tqdm import tqdm
 
 from .intensity import Intensity
 from .types import Array, Callable, Dict, PathType, Shape, Union
-from .utils import allfinite, is_empty, verbosity
+from .utils import all_finite, is_empty, verbosity
 
 
 class LowIntensityError(Exception):
@@ -193,7 +194,7 @@ class Cache(ABC):
         z = root.create_group(self._filesystem.par)
         for name in params:
             z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
-            # FIX: Too mall chunks lead to problems with appending
+            # FIX: Too small chunks lead to problems with appending
 
         # Adding observational shapes to store
         x = root.create_group(self._filesystem.obs)
@@ -218,10 +219,7 @@ class Cache(ABC):
 
         # Which intensity flag
         wu = self.root.zeros(
-            self._filesystem.which_intensity,
-            shape=(0, 1),
-            chunks=(100000, 1),
-            dtype="i4",
+            self._filesystem.which_intensity, shape=(0,), chunks=(100000,), dtype="i4",
         )
 
         # Intensity object
@@ -265,6 +263,9 @@ class Cache(ABC):
     @property
     def intensity_len(self):
         self._update()
+        assert len(self.u) == len(
+            self.intensities
+        ), "The intensity pickles should be the same length as the state dicts."
         return len(self.u)
 
     def __getitem__(self, i):
@@ -305,7 +306,7 @@ class Cache(ABC):
         self.f.append(~m)
 
         # Which intensity was a parameter drawn with
-        wu = self.intensity_len * m
+        wu = self.intensity_len * np.ones(n, dtype="int")
         self.wu.append(wu)
 
     def intensity(self, z: Array) -> np.ndarray:
@@ -428,38 +429,49 @@ class Cache(ABC):
     def _failed_sim(self, i):
         self.f[i] = True
 
-    def did_simulator_succeed(
-        self, x: Dict[str, Array], fail_on_non_finite: bool
-    ) -> bool:
+    def _replace(self, i, z, x):
+        for key, value in z.items():
+            self.z[key][i] = value
+        for k, v in x.items():
+            self.x[k][i] = v
+        self.m[i] = False
+        self.f[i] = False
+
+    @staticmethod
+    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
         """Is the simulation a success?"""
 
         assert isinstance(x, dict), "Simulators must return a dictionary."
 
         dict_anynone = lambda d: any(v is None for v in d.values())
-        dict_allfinite = lambda d: all(allfinite(v) for v in d.values())
 
         if dict_anynone(x):
             return False
-        elif fail_on_non_finite and not dict_allfinite(x):
+        elif fail_on_non_finite and not all_finite(x):
             return False
         else:
             return True
 
-    def simulate(self, simulator: Callable, fail_on_non_finite: bool = True) -> bool:
+    def simulate(
+        self,
+        simulator: Callable,
+        fail_on_non_finite: bool = True,
+        max_attempts: int = 1000,
+    ) -> None:
         """Run simulator sequentially on parameter cache with missing corresponding simulations.
 
         Args:
             simulator: simulates an observation given a parameter input
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
+            max_attempts: maximum number of resample attempts before giving up.
         """
         self._update()
-        success = True
 
         idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
             if verbosity() >= 2:
                 print("No simulations required.")
-            return
+            return True
         for i in tqdm(idx, desc="Simulate"):
             z = {k: v[i] for k, v in self.z.items()}
             x = simulator(z)
@@ -470,10 +482,40 @@ class Cache(ABC):
                 self._failed_sim(i)
 
         if self.any_failed:
-            warn("Some simulations failed. They have been marked.")
-        return success  # TODO functionality to deal failed simulations automatically
+            self.resample_failed_simulations(
+                simulator, fail_on_non_finite, max_attempts
+            )
+            # TODO add test which ensures that volume does not change upon more samples.
 
-    # TODO add a function to fix failed simulations.
+        if self.any_failed:
+            warn(
+                f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
+            )
+
+    def resample_failed_simulations(
+        self, simulator: Callable, fail_on_non_finite: bool, max_attempts: int
+    ) -> None:
+        self._update
+        if self.any_failed:
+            idx = self._get_idx_failing_sim()
+            for i in tqdm(idx, desc="Fix failed sims"):
+                iters = 0
+                success = False
+                which_intensity = self.wu[i]
+                prior = self.intensities[which_intensity].prior
+                while not success and iters < max_attempts:
+                    param = prior.sample(1)
+                    z = {k: v[0] for k, v in param.items()}
+                    x = simulator(z)
+                    success = self.did_simulator_succeed(x, fail_on_non_finite)
+                    iters += 1
+                if success:
+                    self._replace(i, z, x)
+            return None
+        else:
+            if verbosity() >= 2:
+                print("No failed simulations.")
+            return None
 
 
 class DirectoryCache(Cache):

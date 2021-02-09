@@ -4,7 +4,7 @@ from .cache import DirectoryCache, MemoryCache
 from .estimation import Points, RatioEstimator
 from .intensity import Prior
 from .network import DefaultHead, DefaultTail
-from .utils import format_param_list, verbosity
+from .utils import all_finite, format_param_list, verbosity
 
 
 class MissingModelError(Exception):
@@ -82,7 +82,7 @@ class NestedRatios:
         Args:
             model (function): Simulator function.
             prior (Prior): Prior model.
-            obs (dict): Target observation (can be None for amortized inference).
+            obs (dict): Target observation
             noise (function): Noise model, optional.
             cache (Cache): Storage for simulator results.  If none, create MemoryCache.
             device (str): Device.
@@ -90,7 +90,10 @@ class NestedRatios:
         # Not stored
         self._model = model
         self._noise = noise
-        self._obs = obs
+        if all_finite(obs):
+            self._obs = obs
+        else:
+            raise ValueError("obs must be finite.")
         if cache is None:
             cache = MemoryCache.from_simulator(model, prior)
         self._cache = cache
