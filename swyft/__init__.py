@@ -18,7 +18,6 @@ __all__ = [
     "RatioEstimator",
     "Points",
     "corner",
-    "Posterior",
     "NestedRatios",
     "Marginals",
 ]

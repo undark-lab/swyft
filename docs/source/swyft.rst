@@ -20,18 +20,19 @@ swyft.estimation module
    :undoc-members:
    :show-inheritance:
 
-swyft.eval module
------------------
-
-.. automodule:: swyft.eval
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 swyft.intensity module
 ----------------------
 
 .. automodule:: swyft.intensity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   
+swyft.interface module
+----------------------
+
+.. automodule:: swyft.interface
    :members:
    :undoc-members:
    :show-inheritance:

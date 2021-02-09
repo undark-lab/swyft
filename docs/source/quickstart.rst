@@ -89,5 +89,5 @@ This "zooms in" to the relevant region of parameter space. The resulting margina
 
 For details on tweaking *swyft*, see the tutorial as a notebook on github_ or colab_.
 
-.. _github: https://github.com/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb
+.. _github: https://github.com/undark-lab/swyft/blob/master/notebooks/Tutorial.ipynb
 .. _colab: https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Tutorial.ipynb
