@@ -52,3 +52,9 @@ Citing
 If you use *swyft* in scientific publications, please cite:
 
 *Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time*, Benjamin Kurt Miller, Alex Cole, Gilles Louppe, Christoph Weniger, https://arxiv.org/abs/2011.13951
+
+API
+====
+.. automodule:: swyft
+  :members:
+  :undoc-members:
