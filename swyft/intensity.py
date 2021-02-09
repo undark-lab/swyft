@@ -1,10 +1,9 @@
 # pylint: disable=no-member, not-callable, undefined-variable
-import torch
 import numpy as np
+import torch
 from sklearn.neighbors import BallTree
 
-from .types import Shape, Union, Sequence, PathType, Array, Device, Optional
-
+from .types import Array, Device, Optional, PathType, Sequence, Shape, Union
 from .utils import verbosity
 
 

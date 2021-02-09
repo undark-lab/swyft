@@ -1,5 +1,8 @@
 # pylint: disable=no-member
+from collections.abc import Collection
+from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -11,10 +14,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    TYPE_CHECKING,
 )
-from pathlib import Path
-from collections.abc import Collection
 
 import numpy as np
 import torch

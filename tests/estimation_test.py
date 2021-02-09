@@ -1,16 +1,15 @@
-import pytest
-
-from functools import partial
-from itertools import product
 import tempfile
 from copy import deepcopy
+from functools import partial
+from itertools import product
 
+import numpy as np
+import pytest
 import torch
 import torch.nn as nn
-import numpy as np
 
-from swyft.estimation import Points, RatioEstimator
 from swyft.cache import MemoryCache
+from swyft.estimation import Points, RatioEstimator
 from swyft.intensity import get_unit_intensity
 
 

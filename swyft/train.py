@@ -1,12 +1,12 @@
 # pylint: disable=no-member, not-callable
-from copy import deepcopy
 from contextlib import suppress
+from copy import deepcopy
 
 import numpy as np
 import torch
 
-from .utils import combine_z, dict_to_tensor, dict_to_device, verbosity
-from .types import Sequence, Combinations, Dict, Union, Array
+from .types import Array, Combinations, Dict, Sequence, Union
+from .utils import combine_z, dict_to_device, dict_to_tensor, verbosity
 
 
 def double_features(f):

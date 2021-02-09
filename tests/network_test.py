@@ -2,8 +2,8 @@
 from itertools import product
 
 import pytest
-
 import torch
+
 from swyft.network import OnlineNormalizationLayer
 
 
@@ -13,11 +13,7 @@ class TestNormalizationLayer:
         (1,),
         (5,),
         (10, 5, 2, 1),
-        (
-            1,
-            1,
-            1,
-        ),
+        (1, 1, 1,),
     ]
     means = [2, 139]
     stds = [1, 80]

@@ -1,10 +1,10 @@
 from .cache import DirectoryCache, MemoryCache
-from .estimation import RatioEstimator, Points
+from .estimation import Points, RatioEstimator
 from .intensity import Prior
-from .network import OnlineNormalizationLayer, DefaultHead, DefaultTail
+from .interface import Marginals, NestedRatios
+from .network import DefaultHead, DefaultTail, OnlineNormalizationLayer
 from .plot import corner, plot1d
 from .utils import Module, format_param_list, set_verbosity
-from .interface import NestedRatios, Marginals
 
 __all__ = [
     "set_verbosity",
