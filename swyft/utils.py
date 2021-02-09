@@ -1,13 +1,11 @@
 # pylint: disable=no-member, not-callable
-from warnings import warn
 from pathlib import Path
-
-import torch
-from torch import nn
+from warnings import warn
 
 import numpy as np
-import torch
 import scipy
+import torch
+from torch import nn
 
 _VERBOSE = 1
 
@@ -23,14 +21,14 @@ def verbosity():
 
 
 from .types import (
-    Optional,
-    Device,
-    Tensor,
     Array,
-    List,
-    Sequence,
     Combinations,
+    Device,
+    List,
+    Optional,
     PathType,
+    Sequence,
+    Tensor,
 )
 
 
@@ -311,6 +309,13 @@ def format_param_list(params, all_params=None, mode="custom"):
         result.append(v)
 
     return result
+
+
+def allfinite(x: Array):
+    if isinstance(x, torch.Tensor):
+        return torch.all(torch.isfinite(x))
+    else:
+        return np.all(np.isfinite(x))
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
+import numpy as np
+
 from .cache import DirectoryCache, MemoryCache
-from .estimation import RatioEstimator, Points
+from .estimation import Points, RatioEstimator
+from .intensity import Prior
 from .network import DefaultHead, DefaultTail
 from .utils import format_param_list, verbosity
-from .intensity import Prior
-
-import numpy as np
 
 
 class MissingModelError(Exception):
@@ -307,10 +307,12 @@ class NestedRatios:
         )
         return posterior
 
+    @property
     def cache(self):
         """Return cache."""
         return self._cache
 
+    @property
     def state_dict(self):
         """Return state dict."""
         return dict(
