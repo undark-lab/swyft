@@ -224,7 +224,7 @@ class Points:
             intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
             noisehook (function): (optional) maps from (x, z) to x with noise
         """
-        if cache.requires_sim():
+        if cache.requires_sim:
             raise RuntimeError(
                 "The cache has parameters without a corresponding observation. Try running the simulator."
             )

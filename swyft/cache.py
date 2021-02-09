@@ -246,6 +246,9 @@ class Cache(ABC):
         self.z = self.root[self._filesystem.par]
         self.m = self.root[self._filesystem.requires_simulation]
         self.f = self.root[self._filesystem.failed_simulation]
+        assert len(self.f) == len(
+            self.m
+        ), "Metadata noting which indices require simulation and which have failed have desynced."
         self.u = self.root[self._filesystem.intensity]
         self.wu = self.root[self._filesystem.which_intensity]
         self.intensities = [
@@ -388,7 +391,7 @@ class Cache(ABC):
                 accepted.append(i)
         return accepted
 
-    def _require_sim_idx(self):
+    def _get_idx_requiring_sim(self):
         indices = []
         m = self.m[:]
         for i in range(len(self)):
@@ -396,11 +399,25 @@ class Cache(ABC):
                 indices.append(i)
         return indices
 
+    @property
     def requires_sim(self) -> bool:
         """Check whether there are parameters which require a matching simulation."""
         self._update()
+        return len(self._get_idx_requiring_sim()) > 0
 
-        return len(self._require_sim_idx()) > 0
+    def _get_idx_failing_sim(self):
+        indices = []
+        f = self.f[:]
+        for i, f in enumerate(f):
+            if f:
+                indices.append(i)
+        return indices
+
+    @property
+    def any_failed(self) -> bool:
+        """Check whether there are parameters which currently lead to a failed simulation."""
+        self._update()
+        return len(self._get_idx_failing_sim()) > 0
 
     def _add_sim(self, i, x):
         for k, v in x.items():
@@ -438,7 +455,7 @@ class Cache(ABC):
         self._update()
         success = True
 
-        idx = self._require_sim_idx()
+        idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
             if verbosity() >= 2:
                 print("No simulations required.")
@@ -452,9 +469,11 @@ class Cache(ABC):
             else:
                 self._failed_sim(i)
 
-        if not success:
+        if self.any_failed:
             warn("Some simulations failed. They have been marked.")
         return success  # TODO functionality to deal failed simulations automatically
+    
+    # TODO add a function to fix failed simulations.
 
 
 class DirectoryCache(Cache):

@@ -214,8 +214,9 @@ class NestedRatios:
             self._N = N
             self._R += 1
 
+    @property
     def requires_sim(self):
-        return self._cache.requires_sim()
+        return self._cache.requires_sim
 
     def gen_1d_marginals(
         self,
@@ -345,7 +346,7 @@ class NestedRatios:
     ):
 
         self._cache.grow(prior, N)
-        if self._cache.requires_sim():
+        if self._cache.requires_sim:
             if self._model is not None:
                 self._cache.simulate(self._model)
             else:
