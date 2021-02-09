@@ -596,7 +596,7 @@ class MemoryCache(Cache):
         obs = model(params)
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
-        return MemoryCache(list(prior.prior_conf.keys()), obs_shapes)
+        return MemoryCache(list(prior.prior_config.keys()), obs_shapes)
 
 
 if __name__ == "__main__":

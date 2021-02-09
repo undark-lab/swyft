@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from sklearn.neighbors import BallTree
 
-from .types import Array, Device, Optional, PathType, Sequence, Shape, Union
+from .types import Array, Device, Optional, PathType, Sequence, Shape, Union, PriorConfig
 from .utils import verbosity
 
 
@@ -157,8 +157,8 @@ class Prior1d:
         self.tag = tag
         self.args = args
         if tag == "normal":
-            log, scale = args[0], args[1]
-            self.prior = torch.distributions.Normal(log, scale)
+            loc, scale = args[0], args[1]
+            self.prior = torch.distributions.Normal(loc, scale)
         elif tag == "uniform":
             x0, x1 = args[0], args[1]
             self.prior = torch.distributions.Uniform(x0, x1)
@@ -186,18 +186,18 @@ class Prior1d:
 
 
 class Prior:
-    def __init__(self, prior_conf, mask=None):
-        self.prior_conf = prior_conf
+    def __init__(self, prior_config: PriorConfig, mask=None):
+        self.prior_config = prior_config
         self.mask = mask
 
         self._setup_priors()
 
     def params(self):
-        return self.prior_conf.keys()
+        return self.prior_config.keys()
 
     def _setup_priors(self):
         result = {}
-        for key, value in self.prior_conf.items():
+        for key, value in self.prior_config.items():
             result[key] = Prior1d(value[0], *value[1:])
         self.priors = result
 
@@ -255,7 +255,7 @@ class Prior:
 
     def state_dict(self):
         mask_dict = None if self.mask is None else self.mask.state_dict()
-        return dict(prior_conf=self.prior_conf, mask=mask_dict)
+        return dict(prior_config=self.prior_config, mask=mask_dict)
 
     @classmethod
     def from_state_dict(cls, state_dict):
@@ -264,7 +264,7 @@ class Prior:
             if state_dict["mask"] is None
             else ComboMask.from_state_dict(state_dict["mask"])
         )
-        return cls(state_dict["prior_conf"], mask=mask)
+        return cls(state_dict["prior_config"], mask=mask)
 
     def get_masked(self, obs, re, N=10000, th=-7):
         if re is None:
@@ -277,7 +277,7 @@ class Prior:
             ind_points = v[mask].reshape(-1, 1)
             masklist[k] = BallMask(ind_points)
         mask = ComboMask(masklist)
-        return Prior(self.prior_conf, mask=mask)
+        return Prior(self.prior_config, mask=mask)
 
 
 class Intensity:

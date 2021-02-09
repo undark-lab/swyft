@@ -32,3 +32,5 @@ Combinations = Union[int, Sequence[int], Sequence[Sequence[int]]]
 Shape = Union[torch.Size, Tuple[int, ...]]
 DictInt = Union[int, Dict[str, int]]
 DictShape = Union[Shape, Dict[str, Shape]]
+
+PriorConfig = Dict[str, Tuple[str, float, float]]
