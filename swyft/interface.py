@@ -26,10 +26,12 @@ class Marginals:
 
     @property
     def prior(self):
+        """(Constrained) prior of the marginal."""
         return self._prior
 
     @property
     def ratio(self):
+        """Ratio estimator for marginals."""
         return self._re
 
     def __call__(self, obs, n_samples=100000):
@@ -60,7 +62,7 @@ class Marginals:
         )
 
     def gen_constr_prior(self, obs, th=-10):
-        """Generate constrained prior based on ratio estimator.
+        """Generate new constrained prior based on ratio estimator and target observation.
 
         Args:
             obs (dict): Observation.
@@ -127,9 +129,6 @@ class NestedRatios:
         """Original (unconstrained) prior."""
         return self._prior
 
-    def cont(self):
-        pass
-
     def run(
         self,
         Ninit: int = 3000,
@@ -142,7 +141,6 @@ class NestedRatios:
         volume_conv_th: float = 0.1,
         max_rounds: int = 10,
         Nmax: int = 100000,
-        keep_history: bool = False,
     ):
         """Perform 1-dim marginal focus fits.
 
@@ -157,7 +155,6 @@ class NestedRatios:
             volume_conv_th (float > 0.): Volume convergence threshold.
             max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
             Nmax (int): Maximum number of training points per round.
-            keep_history (bool): append the posterior and number of samples to a list every round
         """
 
         # TODO: Add optional param_list, and non 1d focus rounds
@@ -212,12 +209,8 @@ class NestedRatios:
                     )
                 break
 
-            if keep_history:
-                self._history.append(dict(posterior=posterior, N=N))
-
             # Update object state
-            self._posterior = posterior
-            self._constr_prior = None  # Reset
+            self._posterior, self._constr_prior  = posterior, None
             self._N = N
             self._R += 1
 
@@ -328,12 +321,14 @@ class NestedRatios:
             base_prior=self._base_prior.state_dict(),
             posterior=self._posterior.state_dict(),
             obs=self._obs,
+            constr_prior=self._constr_prior,
         )
 
     @classmethod
     def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
         """Instantiate NestedRatios from saved `state_dict`."""
         base_prior = Prior.from_state_dict(state_dict["base_prior"])
+        constr_prior = Prior.from_state_dict(state_dict["constr_prior"])
         posterior = Marginals.from_state_dict(state_dict["posterior"])
         obs = state_dict["obs"]
 
@@ -341,6 +336,7 @@ class NestedRatios:
             model, base_prior, obs, noise=noise, cache=cache, device=device
         )
         nr._posterior = posterior
+        nr._constr_prior = constr_prior
         return nr
 
     def _amortize(
