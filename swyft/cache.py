@@ -592,11 +592,11 @@ class MemoryCache(Cache):
             The simulator model is run once in order to infer observable shapes from the output.
         """
         params = prior.sample(1)
-        params = {k: v[0] for k, v in params.items()}
+        params = {k: v.item() for k, v in params.items()}
         obs = model(params)
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
-        return MemoryCache(list(prior.prior_conf.keys()), obs_shapes)
+        return MemoryCache(list(prior.prior_config.keys()), obs_shapes)
 
 
 if __name__ == "__main__":
