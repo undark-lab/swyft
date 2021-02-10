@@ -97,6 +97,7 @@ class NestedRatios:
         self._device = device
 
         # Stored in state_dict()
+        self._converged = False
         self._base_prior = prior  # Initial prior
         self._posterior = None  # Posterior of a latest round
         self._constr_prior = (
@@ -104,6 +105,9 @@ class NestedRatios:
         )
         self._R = 0  # Round counter
         self._N = None  # Training data points
+
+    def converged(self):
+        return self._converged
 
     @property
     def obs(self):
@@ -176,6 +180,7 @@ class NestedRatios:
                 if np.log(v_old) - np.log(v_new) < volume_conv_th:
                     if verbosity() >= 0:
                         print("--> Posterior volume is converged. <--")
+                    self._converged = True
                     break  # break while loop
                 # Increase number of training data points systematically
                 density_old = self._N / v_old ** (1 / D)
@@ -213,6 +218,10 @@ class NestedRatios:
             self._constr_prior = None  # Reset
             self._N = N
             self._R += 1
+
+        self._converged = True
+        if verbosity() >= 0:
+            print("--> Reached maximum number of rounds. <--")
 
     def requires_sim(self):
         return self._cache.requires_sim()
