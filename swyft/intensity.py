@@ -3,7 +3,16 @@ import numpy as np
 import torch
 from sklearn.neighbors import BallTree
 
-from .types import Array, Device, Optional, PathType, Sequence, Shape, Union, PriorConfig
+from .types import (
+    Array,
+    Device,
+    Optional,
+    PathType,
+    PriorConfig,
+    Sequence,
+    Shape,
+    Union,
+)
 from .utils import verbosity
 
 
@@ -162,6 +171,9 @@ class Prior1d:
         elif tag == "uniform":
             x0, x1 = args[0], args[1]
             self.prior = torch.distributions.Uniform(x0, x1)
+        elif tag == "lognormal":
+            loc, scale = args[0], args[1]
+            self.prior = torch.distributions.LogNormal(loc, scale)
         else:
             raise KeyError("Tag unknown")
 

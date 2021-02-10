@@ -62,24 +62,26 @@ class RatioEstimator:
         self.param_list = format_param_list(param_list)
         self.device = device
 
-        if type(head) == type:
-            self._uninitialized_head = [head, head_args]
+        if isinstance(head, type):
+            self._uninitialized_head = head
+            self._uninitialized_head_args = head_args
             self.head = None
         else:
             self.head = head
-        if type(tail) == type:
-            self._uninitialized_tail = [tail, tail_args]
+        if isinstance(head, type):
+            self._uninitialized_tail = tail
+            self._uninitialized_tail_args = tail_args
             self.tail = None
         else:
             self.tail = tail
 
     def _init_networks(self, dataset):
         obs_shapes = get_obs_shapes(dataset[0]["obs"])
-        self.head = self._uninitialized_head[0](
-            obs_shapes, **self._uninitialized_head[1]
+        self.head = self._uninitialized_head(
+            obs_shapes, **self._uninitialized_head_args
         ).to(self.device)
-        self.tail = self._uninitialized_tail[0](
-            self.head.n_features, self.param_list, **self._uninitialized_tail[1]
+        self.tail = self._uninitialized_tail(
+            self.head.n_features, self.param_list, **self._uninitialized_tail_args
         ).to(self.device)
 
     def train(

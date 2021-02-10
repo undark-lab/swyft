@@ -107,10 +107,7 @@ class NestedRatios:
         )
         self._R = 0  # Round counter
         self._N = None  # Training data points
-
-    @property
-    def obs(self):
-        return self._obs
+        self._history = []
 
     @property
     def marginals(self):
@@ -119,27 +116,22 @@ class NestedRatios:
                 print("NOTE: To generated marginals from NRE, call .run(...).")
         return self._posterior
 
-    @property
-    def prior(self):
-        return self._prior
-
     def cont(self):
         pass
 
     def run(
         self,
-        Ninit=3000,
-        train_args={},
+        Ninit: int = 3000,
+        train_args: dict = {},
         head=DefaultHead,
         tail=DefaultTail,
-        head_args={},
-        tail_args={},
-        density_factor=2.0,
-        volume_conv_th=0.1,
-        max_rounds=10,
-        Nmax=100000,
-        keep_history=False,
-        raise_missing_model_error=False,
+        head_args: dict = {},
+        tail_args: dict = {},
+        density_factor: float = 2.0,
+        volume_conv_th: float = 0.1,
+        max_rounds: int = 10,
+        Nmax: int = 100000,
+        keep_history: bool = False,
     ):
         """Perform 1-dim marginal focus fits.
 
@@ -154,6 +146,7 @@ class NestedRatios:
             volume_conv_th (float > 0.): Volume convergence threshold.
             max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
             Nmax (int): Maximum number of training points per round.
+            keep_history (bool): append the posterior and number of samples to a list every round
         """
 
         # TODO: Add optional param_list, and non 1d focus rounds
@@ -163,7 +156,7 @@ class NestedRatios:
         assert density_factor > 1.0
         assert volume_conv_th > 0.0
 
-        for R in range(max_rounds):
+        for _ in range(max_rounds):
             if verbosity() >= 0:
                 print("NRE ROUND %i" % self._R)
             if self._R == 0:  # First round
@@ -291,7 +284,7 @@ class NestedRatios:
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
         if self._posterior is None:
-            prior = self._prior
+            prior = self._base_prior
         else:
             prior = self._posterior.prior
             if verbosity() >= 1:
@@ -320,7 +313,7 @@ class NestedRatios:
     def state_dict(self):
         """Return state dict."""
         return dict(
-            prior=self._prior.state_dict(),
+            base_prior=self._base_prior.state_dict(),
             posterior=self._posterior.state_dict(),
             obs=self._obs,
         )
@@ -328,24 +321,18 @@ class NestedRatios:
     @classmethod
     def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
         """Instantiate from state dict."""
-        prior = Prior.from_state_dict(state_dict["prior"])
+        base_prior = Prior.from_state_dict(state_dict["base_prior"])
         posterior = Marginals.from_state_dict(state_dict["posterior"])
         obs = state_dict["obs"]
 
-        nr = NestedRatios(model, prior, obs, noise=noise, cache=cache, device=device)
+        nr = NestedRatios(
+            model, base_prior, obs, noise=noise, cache=cache, device=device
+        )
         nr._posterior = posterior
         return nr
 
     def _amortize(
-        self,
-        prior,
-        param_list=None,
-        N=3000,
-        train_args={},
-        head=DefaultHead,
-        tail=DefaultTail,
-        head_args={},
-        tail_args={},
+        self, prior, param_list, N, train_args, head, tail, head_args, tail_args,
     ):
 
         self._cache.grow(prior, N)
