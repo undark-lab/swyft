@@ -1,11 +1,10 @@
-import pytest
-
 import numpy as np
+import pytest
 
 from swyft.estimation import RatioEstimator
 from swyft.eval import eval_net, get_ratios
 
-from .estimation_test import sim_repeat_noise, setup_points, Head
+from .estimation_test import Head, setup_points, sim_repeat_noise
 
 
 class TestEvaluation:

@@ -1,17 +1,20 @@
 # pylint: disable=no-member, not-callable
 from abc import ABC, abstractmethod
+from collections import namedtuple
+from copy import deepcopy
 from pathlib import Path
+from warnings import warn
 
-import torch
-import numpy as np
-import zarr
 import numcodecs
-from tqdm import tqdm
+import numpy as np
+import torch
+import zarr
 from scipy.interpolate import interp1d
+from tqdm import tqdm
 
-from .utils import is_empty, verbosity
-from .types import Shape, Union, PathType, Callable, Array
 from .intensity import Intensity
+from .types import Array, Callable, Dict, PathType, Shape, Union
+from .utils import all_finite, is_empty, verbosity
 
 
 class LowIntensityError(Exception):
@@ -118,16 +121,33 @@ class Dataset(torch.utils.data.Dataset):
         return dict(obs=self._tensorfy(p["obs"]), par=self._tensorfy(p["par"]))
 
 
+Filesystem = namedtuple(
+    "Filesystem",
+    [
+        "metadata",
+        "intensity",
+        "samples",
+        "obs",
+        "par",
+        "requires_simulation",
+        "failed_simulation",
+        "which_intensity",
+    ],
+)
+
+
 class Cache(ABC):
     """Abstract base class for various caches."""
 
-    _filesystem = (
+    _filesystem = Filesystem(
         "metadata",
         "metadata/intensity",
-        "metadata/requires_simulation",
         "samples",
         "samples/obs",
         "samples/par",
+        "samples/requires_simulation",
+        "samples/failed_simulation",
+        "samples/which_intensity",
     )
 
     @abstractmethod
@@ -169,50 +189,66 @@ class Cache(ABC):
         #    xshape == self.xshape
         # ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
 
-    def _setup_new_cache(self, params, obs_shapes, root):
+    def _setup_new_cache(self, params, obs_shapes, root) -> None:
         # Add parameter names to store
-        z = root.create_group(self._filesystem[5])
+        z = root.create_group(self._filesystem.par)
         for name in params:
             z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
-            # FIX: Too mall chunks lead to problems with appending
+            # FIX: Too small chunks lead to problems with appending
 
         # Adding observational shapes to store
-        x = root.create_group(self._filesystem[4])
+        x = root.create_group(self._filesystem.obs)
         for name, shape in obs_shapes.items():
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
 
         # Requires simulation flag
         m = root.zeros(
-            self._filesystem[2],  # metadata/requires_simulation
+            self._filesystem.requires_simulation,
             shape=(0, 1),
             chunks=(100000, 1),
             dtype="bool",
         )
 
+        # Failed simulation flag
+        f = root.zeros(
+            self._filesystem.failed_simulation,
+            shape=(0, 1),
+            chunks=(100000, 1),
+            dtype="bool",
+        )
+
+        # Which intensity flag
+        wu = self.root.zeros(
+            self._filesystem.which_intensity, shape=(0,), chunks=(100000,), dtype="i4",
+        )
+
         # Intensity object
         u = root.create(
-            self._filesystem[1],  # metadata/intensity
+            self._filesystem.intensity,
             shape=(0,),
             dtype=object,
             object_codec=numcodecs.Pickle(),
         )
 
-        return dict(u=u, m=m, x=x, z=z)
-
     @staticmethod
     def _extract_xshape_from_zarr_group(group):
-        return group["samples/x"].shape[1:]
+        return group[Cache._filesystem.obs].shape[1:]
 
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
-        return group["samples/z"].shape[1]
+        return group[Cache._filesystem.par].shape[1]
 
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
-        self.x = self.root["samples/obs"]
-        self.z = self.root["samples/par"]
-        self.m = self.root["metadata/requires_simulation"]
-        self.u = self.root["metadata/intensity"]
+        self.x = self.root[self._filesystem.obs]
+        self.z = self.root[self._filesystem.par]
+        self.m = self.root[self._filesystem.requires_simulation]
+        self.f = self.root[self._filesystem.failed_simulation]
+        assert len(self.f) == len(
+            self.m
+        ), "Metadata noting which indices require simulation and which have failed have desynced."
+        self.u = self.root[self._filesystem.intensity]
+        self.wu = self.root[self._filesystem.which_intensity]
         self.intensities = [
             Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))
         ]
@@ -223,6 +259,14 @@ class Cache(ABC):
         # Return len of first entry
         params = list(self.z)
         return len(self.z[params[0]])
+
+    @property
+    def intensity_len(self):
+        self._update()
+        assert len(self.u) == len(
+            self.intensities
+        ), "The intensity pickles should be the same length as the state dicts."
+        return len(self.u)
 
     def __getitem__(self, i):
         self._update()
@@ -257,6 +301,13 @@ class Cache(ABC):
         # Register as missing
         m = np.ones((n, 1), dtype="bool")
         self.m.append(m)
+
+        # Simulations have not failed, yet.
+        self.f.append(~m)
+
+        # Which intensity was a parameter drawn with
+        wu = self.intensity_len * np.ones(n, dtype="int")
+        self.wu.append(wu)
 
     def intensity(self, z: Array) -> np.ndarray:
         """Evaluate the cache's intensity function.
@@ -341,7 +392,7 @@ class Cache(ABC):
                 accepted.append(i)
         return accepted
 
-    def _require_sim_idx(self):
+    def _get_idx_requiring_sim(self):
         indices = []
         m = self.m[:]
         for i in range(len(self)):
@@ -349,34 +400,122 @@ class Cache(ABC):
                 indices.append(i)
         return indices
 
+    @property
     def requires_sim(self) -> bool:
         """Check whether there are parameters which require a matching simulation."""
         self._update()
+        return len(self._get_idx_requiring_sim()) > 0
 
-        return len(self._require_sim_idx()) > 0
+    def _get_idx_failing_sim(self):
+        indices = []
+        f = self.f[:]
+        for i, f in enumerate(f):
+            if f:
+                indices.append(i)
+        return indices
+
+    @property
+    def any_failed(self) -> bool:
+        """Check whether there are parameters which currently lead to a failed simulation."""
+        self._update()
+        return len(self._get_idx_failing_sim()) > 0
 
     def _add_sim(self, i, x):
         for k, v in x.items():
             self.x[k][i] = v
         self.m[i] = False
+        self.f[i] = False
 
-    def simulate(self, simulator: Callable):
+    def _failed_sim(self, i):
+        self.f[i] = True
+
+    def _replace(self, i, z, x):
+        for key, value in z.items():
+            self.z[key][i] = value
+        for k, v in x.items():
+            self.x[k][i] = v
+        self.m[i] = False
+        self.f[i] = False
+
+    @staticmethod
+    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
+        """Is the simulation a success?"""
+
+        assert isinstance(x, dict), "Simulators must return a dictionary."
+
+        dict_anynone = lambda d: any(v is None for v in d.values())
+
+        if dict_anynone(x):
+            return False
+        elif fail_on_non_finite and not all_finite(x):
+            return False
+        else:
+            return True
+
+    def simulate(
+        self,
+        simulator: Callable,
+        fail_on_non_finite: bool = True,
+        max_attempts: int = 1000,
+    ) -> None:
         """Run simulator sequentially on parameter cache with missing corresponding simulations.
 
         Args:
             simulator: simulates an observation given a parameter input
+            fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
+            max_attempts: maximum number of resample attempts before giving up.
         """
         self._update()
 
-        idx = self._require_sim_idx()
+        idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
             if verbosity() >= 2:
                 print("No simulations required.")
-            return
+            return True
         for i in tqdm(idx, desc="Simulate"):
             z = {k: v[i] for k, v in self.z.items()}
             x = simulator(z)
-            self._add_sim(i, x)
+            success = self.did_simulator_succeed(x, fail_on_non_finite)
+            if success:
+                self._add_sim(i, x)
+            else:
+                self._failed_sim(i)
+
+        if self.any_failed:
+            self.resample_failed_simulations(
+                simulator, fail_on_non_finite, max_attempts
+            )
+            # TODO add test which ensures that volume does not change upon more samples.
+
+        if self.any_failed:
+            warn(
+                f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
+            )
+
+    def resample_failed_simulations(
+        self, simulator: Callable, fail_on_non_finite: bool, max_attempts: int
+    ) -> None:
+        self._update
+        if self.any_failed:
+            idx = self._get_idx_failing_sim()
+            for i in tqdm(idx, desc="Fix failed sims"):
+                iters = 0
+                success = False
+                which_intensity = self.wu[i]
+                prior = self.intensities[which_intensity].prior
+                while not success and iters < max_attempts:
+                    param = prior.sample(1)
+                    z = {k: v[0] for k, v in param.items()}
+                    x = simulator(z)
+                    success = self.did_simulator_succeed(x, fail_on_non_finite)
+                    iters += 1
+                if success:
+                    self._replace(i, z, x)
+            return None
+        else:
+            if verbosity() >= 2:
+                print("No failed simulations.")
+            return None
 
 
 class DirectoryCache(Cache):
@@ -453,11 +592,11 @@ class MemoryCache(Cache):
             The simulator model is run once in order to infer observable shapes from the output.
         """
         params = prior.sample(1)
-        params = {k: v[0] for k, v in params.items()}
+        params = {k: v.item() for k, v in params.items()}
         obs = model(params)
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
-        return MemoryCache(list(prior.prior_conf.keys()), obs_shapes)
+        return MemoryCache(list(prior.prior_config.keys()), obs_shapes)
 
 
 if __name__ == "__main__":

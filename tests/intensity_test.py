@@ -1,16 +1,17 @@
 # pylint: disable=no-member
-import pytest
-from itertools import product
 import tempfile
+from itertools import product
 
-import torch
 import numpy as np
+import pytest
+import torch
+
 from swyft.intensity import (
-    construct_intervals,
-    get_factor_mask_from_intervals,
-    Mask1d,
     FactorMask,
     Intensity,
+    Mask1d,
+    construct_intervals,
+    get_factor_mask_from_intervals,
 )
 
 

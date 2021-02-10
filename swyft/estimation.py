@@ -1,38 +1,39 @@
 # pylint: disable=no-member, not-callable
-from warnings import warn
 from copy import deepcopy
-from scipy.special import xlogy
+from warnings import warn
 
 import numpy as np
-from scipy.integrate import trapz
-
 import torch
 import torch.nn as nn
+from scipy.integrate import trapz
+from scipy.special import xlogy
 
-from .utils import Module, get_obs_shapes, format_param_list, verbosity
-
-from .train import trainloop
 from .cache import Dataset, Normalize
-from .network import DefaultTail, DefaultHead
+from .network import DefaultHead, DefaultTail
+from .train import trainloop
 from .types import (
-    Sequence,
-    Tuple,
-    Device,
-    Combinations,
-    Callable,
     Array,
-    Union,
-    PathType,
+    Callable,
+    Combinations,
+    Device,
     Dict,
     Optional,
+    PathType,
+    Sequence,
+    Tuple,
+    Union,
 )
 from .utils import (
+    Module,
     array_to_tensor,
-    tobytes,
-    process_combinations,
     dict_to_device,
     dict_to_tensor,
     dict_to_tensor_unsqueeze,
+    format_param_list,
+    get_obs_shapes,
+    process_combinations,
+    tobytes,
+    verbosity,
 )
 
 
@@ -61,24 +62,26 @@ class RatioEstimator:
         self.param_list = format_param_list(param_list)
         self.device = device
 
-        if type(head) == type:
-            self._uninitialized_head = [head, head_args]
+        if isinstance(head, type):
+            self._uninitialized_head = head
+            self._uninitialized_head_args = head_args
             self.head = None
         else:
             self.head = head
-        if type(tail) == type:
-            self._uninitialized_tail = [tail, tail_args]
+        if isinstance(head, type):
+            self._uninitialized_tail = tail
+            self._uninitialized_tail_args = tail_args
             self.tail = None
         else:
             self.tail = tail
 
     def _init_networks(self, dataset):
         obs_shapes = get_obs_shapes(dataset[0]["obs"])
-        self.head = self._uninitialized_head[0](
-            obs_shapes, **self._uninitialized_head[1]
+        self.head = self._uninitialized_head(
+            obs_shapes, **self._uninitialized_head_args
         ).to(self.device)
-        self.tail = self._uninitialized_tail[0](
-            self.head.n_features, self.param_list, **self._uninitialized_tail[1]
+        self.tail = self._uninitialized_tail(
+            self.head.n_features, self.param_list, **self._uninitialized_tail_args
         ).to(self.device)
 
     def train(
@@ -125,11 +128,7 @@ class RatioEstimator:
         return None
 
     def lnL(
-        self,
-        obs: Array,
-        params: Array,
-        n_batch=100,
-        max_n_points: int = 1000,
+        self, obs: Array, params: Array, n_batch=100, max_n_points: int = 1000,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve estimated marginal posterior.
 
@@ -227,7 +226,11 @@ class Points:
             intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
             noisehook (function): (optional) maps from (x, z) to x with noise
         """
-        if cache.requires_sim():
+        if cache.any_failed:
+            raise RuntimeError(
+                "The cache has parameters which failed to return a simulation. Try resampling them."
+            )
+        elif cache.requires_sim:
             raise RuntimeError(
                 "The cache has parameters without a corresponding observation. Try running the simulator."
             )

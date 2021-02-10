@@ -1,11 +1,11 @@
+import glob
+import tempfile
 from itertools import product
 
 import pytest
-import glob
-import tempfile
-
 import torch
-from swyft.cache import Cache, MemoryCache, DirectoryCache
+
+from swyft.cache import Cache, DirectoryCache, MemoryCache
 
 
 class TestCacheIO:

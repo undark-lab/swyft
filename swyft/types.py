@@ -1,5 +1,8 @@
 # pylint: disable=no-member
+from collections.abc import Collection
+from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -11,10 +14,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    TYPE_CHECKING,
 )
-from pathlib import Path
-from collections.abc import Collection
 
 import numpy as np
 import torch
@@ -32,3 +32,5 @@ Combinations = Union[int, Sequence[int], Sequence[Sequence[int]]]
 Shape = Union[torch.Size, Tuple[int, ...]]
 DictInt = Union[int, Dict[str, int]]
 DictShape = Union[Shape, Dict[str, Shape]]
+
+PriorConfig = Dict[str, Tuple[str, float, float]]
