@@ -110,10 +110,12 @@ class NestedRatios:
 
     @property
     def obs(self):
+        """The target observation."""
         return self._obs
 
     @property
     def marginals(self):
+        """Marginals from the last round."""
         if self._posterior is None:
             if verbosity() >= 1:
                 print("NOTE: To generated marginals from NRE, call .run(...).")
@@ -121,6 +123,7 @@ class NestedRatios:
 
     @property
     def prior(self):
+        """Original (unconstrained) prior."""
         return self._prior
 
     def cont(self):
@@ -219,6 +222,7 @@ class NestedRatios:
 
     @property
     def requires_sim(self):
+        """Does cache require simulation runs?"""
         return self._cache.requires_sim
 
     def gen_1d_marginals(
@@ -279,7 +283,7 @@ class NestedRatios:
         head_args={},
         tail_args={},
     ):
-        """Perform custom 2-dim posterior estimation.
+        """Perform custom marginal estimation, based on the most recent constrained prior.
 
         Args:
             param_list (list of tuples of strings): List of parameters for which inference is performed.
@@ -313,12 +317,12 @@ class NestedRatios:
 
     @property
     def cache(self):
-        """Return cache."""
+        """Return simulation cache."""
         return self._cache
 
     @property
     def state_dict(self):
-        """Return state dict."""
+        """Return `state_dict`."""
         return dict(
             prior=self._prior.state_dict(),
             posterior=self._posterior.state_dict(),
@@ -327,7 +331,7 @@ class NestedRatios:
 
     @classmethod
     def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
-        """Instantiate from state dict."""
+        """Instantiate NestedRatios from saved `state_dict`."""
         prior = Prior.from_state_dict(state_dict["prior"])
         posterior = Marginals.from_state_dict(state_dict["posterior"])
         obs = state_dict["obs"]
@@ -347,7 +351,7 @@ class NestedRatios:
         head_args={},
         tail_args={},
     ):
-
+        """Perform amortized inference on constrained priors."""
         self._cache.grow(prior, N)
         if self._cache.requires_sim:
             if self._model is not None:
