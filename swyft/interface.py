@@ -5,6 +5,7 @@ from .estimation import Points, RatioEstimator
 from .intensity import Prior
 from .network import DefaultHead, DefaultTail
 from .utils import all_finite, format_param_list, verbosity
+from .types import Dict
 
 
 class MissingModelError(Exception):
@@ -71,6 +72,49 @@ class Marginals:
             Prior: Constrained prior.
         """
         return self._prior.get_masked(obs, self._re, th=th)
+    
+    def sample_posterior(self, obs: dict, n_samples: int, excess_factor: int = 10, maxiter: int = 10) -> Dict[str, np.ndarray]:
+        """Samples from each marginal using rejection sampling.
+
+        Args:
+            obs (dict): target observation
+            n_samples (int): number of samples in each marginal to output
+            excess_factor (int, optional): n_samples_to_reject = excess_factor * n_samples . Defaults to 100.
+            maxiter (int, optional): maximum loop attempts to draw n_samples. Defaults to 10.
+
+        Returns:
+            Dict[str, np.ndarray]: keys are marginal tuples, values are samples
+        
+        Reference:
+            Section 23.3.3
+            Machine Learning: A Probabilistic Perspective
+            Kevin P. Murphy
+        """
+        draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
+        maximum_log_likelihood_estimates = {k: np.log(np.max(v)) for k, v in draw['weights'].items()}
+        collector = {k: [] for k in draw['weights'].keys()}
+        
+        counter = 0
+        while counter < maxiter:
+            log_prob_to_keep = {k: np.log(v) - maximum_log_likelihood_estimates[k] for k, v in draw['weights'].items()}
+            to_keep = {
+                k: np.less_equal(
+                    np.log(np.random.rand(excess_factor * n_samples)),
+                    v
+                ) for k, v in log_prob_to_keep.items()
+            }
+            for param_names, params in collector.items():
+                params.append(
+                    np.stack([draw['params'][name][to_keep[param_names]] for name in param_names], axis=-1)
+                )
+            
+            out = {params: np.concatenate(samples)[:n_samples] for params, samples in collector.items()}
+            if all(len(v) == n_samples for v in out.values()):
+                break
+            else:
+                draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
+            counter += 1
+        return out  # TODO only sample what's missing? Speed up sampling this way. Report if it fails to converge.
 
 
 class NestedRatios:
