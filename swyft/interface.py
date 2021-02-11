@@ -6,8 +6,8 @@ from .cache import DirectoryCache, MemoryCache
 from .estimation import Points, RatioEstimator
 from .intensity import Prior
 from .network import DefaultHead, DefaultTail
-from .utils import all_finite, format_param_list, verbosity
 from .types import Dict
+from .utils import all_finite, format_param_list, verbosity
 
 
 class MissingModelError(Exception):
@@ -74,8 +74,10 @@ class Marginals:
             Prior: Constrained prior.
         """
         return self._prior.get_masked(obs, self._re, th=th)
-    
-    def sample_posterior(self, obs: dict, n_samples: int, excess_factor: int = 10, maxiter: int = 10) -> Dict[str, np.ndarray]:
+
+    def sample_posterior(
+        self, obs: dict, n_samples: int, excess_factor: int = 10, maxiter: int = 10
+    ) -> Dict[str, np.ndarray]:
         """Samples from each marginal using rejection sampling.
 
         Args:
@@ -93,11 +95,13 @@ class Marginals:
             Kevin P. Murphy
         """
         draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
-        maximum_log_likelihood_estimates = {k: np.log(np.max(v)) for k, v in draw['weights'].items()}
-        remaining_param_tuples = set(draw['weights'].keys())
+        maximum_log_likelihood_estimates = {
+            k: np.log(np.max(v)) for k, v in draw["weights"].items()
+        }
+        remaining_param_tuples = set(draw["weights"].keys())
         collector = {k: [] for k in remaining_param_tuples}
         out = {}
-        
+
         # Do the rejection sampling.
         # When a particular key hits the necessary samples, stop calculating on it to reduce cost.
         # Send that key to out.
@@ -105,37 +109,46 @@ class Marginals:
         while counter < maxiter:
             # Calculate chance to keep a sample
             log_prob_to_keep = {
-                pt: np.log(draw['weights'][pt]) - maximum_log_likelihood_estimates[pt] for pt in remaining_param_tuples
+                pt: np.log(draw["weights"][pt]) - maximum_log_likelihood_estimates[pt]
+                for pt in remaining_param_tuples
             }
-            
+
             # Draw and determine if samples are kept
             to_keep = {
-                pt: np.less_equal(
-                    np.log(np.random.rand(excess_factor * n_samples)),
-                    v
-                ) for pt, v in log_prob_to_keep.items()
+                pt: np.less_equal(np.log(np.random.rand(excess_factor * n_samples)), v)
+                for pt, v in log_prob_to_keep.items()
             }
 
             # Collect samples for every tuple of parameters, if there are enough, add them to out.
             for param_tuple in remaining_param_tuples:
                 collector[param_tuple].append(
-                    np.stack([draw['params'][name][to_keep[param_tuple]] for name in param_tuple], axis=-1)
+                    np.stack(
+                        [
+                            draw["params"][name][to_keep[param_tuple]]
+                            for name in param_tuple
+                        ],
+                        axis=-1,
+                    )
                 )
                 concatenated = np.concatenate(collector[param_tuple])[:n_samples]
                 if len(concatenated) == n_samples:
                     out[param_tuple] = concatenated
-            
+
             # Remove the param_tuples which we already have in out, thus not to calculate for them anymore.
             for param_tuple in out.keys():
                 if param_tuple in remaining_param_tuples:
                     remaining_param_tuples.remove(param_tuple)
-            
+
             if len(remaining_param_tuples) > 0:
-                draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
+                draw = self._re.posterior(
+                    obs, self._prior, n_samples=excess_factor * n_samples
+                )
             else:
                 return out
             counter += 1
-        warn(f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}.")
+        warn(
+            f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}."
+        )
         return out
 
 
@@ -166,7 +179,7 @@ class NestedRatios:
         self._device = device
 
         # Stored in state_dict()
-        #self._converged = False
+        # self._converged = False
         self._base_prior = prior  # Initial prior
         self._posterior = None  # Posterior of a latest round
         self._constr_prior = (
@@ -176,7 +189,7 @@ class NestedRatios:
         self._N = None  # Training data points
         self._history = []
 
-    #def converged(self):
+    # def converged(self):
     #    return self._converged
 
     @property
@@ -246,7 +259,7 @@ class NestedRatios:
                 if np.log(v_old) - np.log(v_new) < volume_conv_th:
                     if verbosity() >= 0:
                         print("--> Posterior volume is converged. <--")
-                    #self._converged = True
+                    # self._converged = True
                     break  # break while loop
                 # Increase number of training data points systematically
                 density_old = self._N / v_old ** (1 / D)
@@ -285,8 +298,8 @@ class NestedRatios:
             self._N = N
             self._R += 1
 
-        #self._converged = True
-        #if verbosity() >= 0:
+        # self._converged = True
+        # if verbosity() >= 0:
         #    print("--> Reached maximum number of rounds. <--")
 
     # NOTE: By convention properties are only quantites that we save in state_dict
