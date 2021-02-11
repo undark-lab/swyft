@@ -1,3 +1,5 @@
+from warnings import warn
+
 import numpy as np
 
 from .cache import DirectoryCache, MemoryCache
@@ -92,29 +94,49 @@ class Marginals:
         """
         draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
         maximum_log_likelihood_estimates = {k: np.log(np.max(v)) for k, v in draw['weights'].items()}
-        collector = {k: [] for k in draw['weights'].keys()}
+        remaining_param_tuples = set(draw['weights'].keys())
+        collector = {k: [] for k in remaining_param_tuples}
+        out = {}
         
+        # Do the rejection sampling.
+        # When a particular key hits the necessary samples, stop calculating on it to reduce cost.
+        # Send that key to out.
         counter = 0
         while counter < maxiter:
-            log_prob_to_keep = {k: np.log(v) - maximum_log_likelihood_estimates[k] for k, v in draw['weights'].items()}
+            # Calculate chance to keep a sample
+            log_prob_to_keep = {
+                pt: np.log(draw['weights'][pt]) - maximum_log_likelihood_estimates[pt] for pt in remaining_param_tuples
+            }
+            
+            # Draw and determine if samples are kept
             to_keep = {
-                k: np.less_equal(
+                pt: np.less_equal(
                     np.log(np.random.rand(excess_factor * n_samples)),
                     v
-                ) for k, v in log_prob_to_keep.items()
+                ) for pt, v in log_prob_to_keep.items()
             }
-            for param_names, params in collector.items():
-                params.append(
-                    np.stack([draw['params'][name][to_keep[param_names]] for name in param_names], axis=-1)
+
+            # Collect samples for every tuple of parameters, if there are enough, add them to out.
+            for param_tuple in remaining_param_tuples:
+                collector[param_tuple].append(
+                    np.stack([draw['params'][name][to_keep[param_tuple]] for name in param_tuple], axis=-1)
                 )
+                concatenated = np.concatenate(collector[param_tuple])[:n_samples]
+                if len(concatenated) == n_samples:
+                    out[param_tuple] = concatenated
             
-            out = {params: np.concatenate(samples)[:n_samples] for params, samples in collector.items()}
-            if all(len(v) == n_samples for v in out.values()):
-                break
-            else:
+            # Remove the param_tuples which we already have in out, thus not to calculate for them anymore.
+            for param_tuple in out.keys():
+                if param_tuple in remaining_param_tuples:
+                    remaining_param_tuples.remove(param_tuple)
+            
+            if len(remaining_param_tuples) > 0:
                 draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
+            else:
+                return out
             counter += 1
-        return out  # TODO only sample what's missing? Speed up sampling this way. Report if it fails to converge.
+        warn(f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}.")
+        return out
 
 
 class NestedRatios:
