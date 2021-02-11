@@ -80,7 +80,9 @@ class Marginals:
 class NestedRatios:
     """Main SWYFT interface class."""
 
-    def __init__(self, model, prior, obs, noise=None, cache=None, device="cpu"):
+    def __init__(self, model, prior, obs, noise=None, cache=None, device="cpu",
+            Ninit = 3000, Nmax = 100000, density_factor = 2., volume_conv_th =
+            0.1):
         """Initialize swyft.
 
         Args:
@@ -89,21 +91,30 @@ class NestedRatios:
             obs (dict): Target observation
             noise (function): Noise model, optional.
             cache (Cache): Storage for simulator results.  If none, create MemoryCache.
+            Ninit (int): Initial number of training points.
+            Nmax (int): Maximum number of training points per round.
+            density_factor (float > 1): Increase of training point density per round.
+            volume_conv_th (float > 0.): Volume convergence threshold.
             device (str): Device.
         """
+        assert density_factor > 1.0
+        assert volume_conv_th > 0.0
+        if not all_finite(obs):
+            raise ValueError("obs must be finite.")
+
+        if cache is None:
+            cache = MemoryCache.from_simulator(model, prior)
+        
         # Not stored
         self._model = model
         self._noise = noise
-        if all_finite(obs):
-            self._obs = obs
-        else:
-            raise ValueError("obs must be finite.")
-        if cache is None:
-            cache = MemoryCache.from_simulator(model, prior)
+        self._obs = obs
         self._cache = cache
         self._device = device
 
         # Stored in state_dict()
+        self._config = dict(Ninit=Ninit, Nmax=Nmax,
+                density_factor=density_factor, volume_conv_th=volume_conv_th)
         self._converged = False
         self._base_prior = prior  # Initial prior
         self._history = []
@@ -140,26 +151,17 @@ class NestedRatios:
 
     def run(
         self,
-        Ninit: int = 3000,
         train_args: dict = {},
         head=DefaultHead,
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        density_factor: float = 2.0,
-        volume_conv_th: float = 0.1,
         max_rounds: int = 10,
-        Nmax: int = 100000,
         keep_history = False,
     ):
         """Perform 1-dim marginal focus fits.
 
         Args:
-            Ninit (int): Initial number of training points.
-            Nmax (int): Maximum number of training points per round.
-            density_factor (float > 1): Increase of training point density per round.
-            volume_conv_th (float > 0.): Volume convergence threshold.
-
             train_args (dict): Training keyword arguments.
             head (swyft.Module instance or type): Head network (optional).
             tail (swyft.Module instance or type): Tail network (optional).
@@ -171,46 +173,42 @@ class NestedRatios:
         param_list = self._cache.params
         D = len(param_list)
 
-        assert density_factor > 1.0
-        assert volume_conv_th > 0.0
-        
         r = 0
 
         while (not self.converged()) and (r < max_rounds):
             logging.info("NRE round: R = %i"%(self.R()+1))
 
-            if self.R() == 0:  # First round
-                prior_R = self._base_prior
-                N_R = Ninit
-            else:  # Subsequent rounds
-                prior_R = self._history[-1]['constr_prior']
+            ##################################################
+            # Step 1 - get prior and number of training points
+            ##################################################
+            prior_R, N_R = self._get_prior_R()
 
-                # Derive new number of training points
-                prior_Rm1 = self._history[-1]['marginals'].prior
-                v_R = prior_R.volume()
-                v_Rm1 = prior_Rm1.volume()
-                N_Rm1 = self._history[-1]['N']
-                density_Rm1 = N_Rm1 / v_Rm1 ** (1 / D)
-                density_R = density_factor * density_Rm1
-                N_R = min(max(density_R * v_R ** (1 / D), N_Rm1), Nmax)
+            ####################################
+            # Step 2 - Update cache and simulate
+            ####################################
+            self._cache.grow(prior_R, N_R)
+            if self.requires_sim():
+                logging.info("Additional simulations are required after growing the cache.")
+                if self._model is not None:
+                    self._cache.simulate(self._model)
+                else:
+                    logging.warning("No model specified. Run simulator directly on cache.")
+                    return
 
-            logging.info("Number of training samples is N_R = %i"%N_R)
-
-            try:
-                marginals_R = self._amortize(
-                    prior_R,
-                    param_list,
-                    head=head,
-                    tail=tail,
-                    head_args=head_args,
-                    tail_args=tail_args,
-                    train_args=train_args,
-                    N=N_R,
-                )
-                constr_prior_R = marginals_R.gen_constr_prior(self._obs)
-            except MissingModelError:
-                logging.info("Missing simulations. Run `cache.simulate(model)`, then re-start `NestedRatios.run`.")
-                return
+            ################
+            # Step 3 - Infer
+            ################
+            marginals_R = self._train(
+                prior_R,
+                param_list,
+                head=head,
+                tail=tail,
+                head_args=head_args,
+                tail_args=tail_args,
+                train_args=train_args,
+                N=N_R,
+            )
+            constr_prior_R = marginals_R.gen_constr_prior(self._obs)
 
             # Update object history
             self._history.append(dict(
@@ -229,7 +227,7 @@ class NestedRatios:
             logging.debug("constr_prior_R : prior_R volume = %.4g : %.4g"%(
                 constr_prior_R.volume(), prior_R.volume()
                 ))
-            if np.log(prior_R.volume()) - np.log(constr_prior_R.volume()) < volume_conv_th:
+            if np.log(prior_R.volume()) - np.log(constr_prior_R.volume()) < self._config['volume_conv_th']:
                 logging.info("Volume converged.")
                 self._converged = True
 
@@ -313,7 +311,7 @@ class NestedRatios:
 
         param_list = format_param_list(param_list, all_params=self._cache.params)
 
-        marginals = self._amortize(
+        marginals = self._train(
             prior=prior,
             N=N,
             param_list=param_list,
@@ -355,16 +353,38 @@ class NestedRatios:
 #        nr._constr_prior = constr_prior
 #        return nr
 
-    def _amortize(
+    
+    def _get_prior_R(self):
+        # Method does not change internal states
+
+        param_list = self._cache.params
+        D = len(param_list)
+        if self.R() == 0:  # First round
+            prior_R = self._base_prior
+            N_R = self._config["Ninit"]
+        else:  # Subsequent rounds
+            prior_R = self._history[-1]['constr_prior']
+
+            # Derive new number of training points
+            prior_Rm1 = self._history[-1]['marginals'].prior
+            v_R = prior_R.volume()
+            v_Rm1 = prior_Rm1.volume()
+            N_Rm1 = self._history[-1]['N']
+            density_Rm1 = N_Rm1 / v_Rm1 ** (1 / D)
+            density_R = self._config["density_factor"] * density_Rm1
+            N_R = min(max(density_R * v_R ** (1 / D), N_Rm1), self._config["Nmax"])
+
+        logging.info("Number of training samples is N_R = %i"%N_R)
+        return prior_R, N_R
+
+    def _train(
         self, prior, param_list, N, train_args, head, tail, head_args, tail_args,
     ):
         """Perform amortized inference on constrained priors."""
-        self._cache.grow(prior, N)
         if self._cache.requires_sim:
-            if self._model is not None:
-                self._cache.simulate(self._model)
-            else:
-                raise MissingModelError("Model not defined.")
+            raise MissingModelError("Model not defined.")
+
+        logging.info("Starting neural network training.")
         indices = self._cache.sample(prior, N)
         points = Points(indices, self._cache, self._noise)
 
