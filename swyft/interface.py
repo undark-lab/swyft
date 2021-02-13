@@ -80,7 +80,7 @@ class Marginals:
         return self._prior.get_masked(obs, self._re, th=th)
 
     def sample_posterior(
-        self, obs: dict, n_samples: int, excess_factor: int = 10, maxiter: int = 10
+        self, obs: dict, n_samples: int, excess_factor: int = 10, maxiter: int = 100
     ) -> Dict[str, np.ndarray]:
         """Samples from each marginal using rejection sampling.
 
