@@ -75,6 +75,8 @@ class RatioEstimator:
         else:
             self.tail = tail
 
+        self._train_diagnostics = []
+
     def _init_networks(self, dataset):
         obs_shapes = get_obs_shapes(dataset[0]["obs"])
         self.head = self._uninitialized_head(
@@ -112,7 +114,7 @@ class RatioEstimator:
         self.head.train()
         self.tail.train()
 
-        trainloop(
+        diagnostics = trainloop(
             self.head,
             self.tail,
             dataset,
@@ -125,7 +127,7 @@ class RatioEstimator:
             nworkers=nworkers,
             percent_validation=percent_validation,
         )
-        return None
+        self._train_diagnostics.append(diagnostics)
 
     def lnL(
         self, obs: Array, params: Array, n_batch=100, max_n_points: int = 1000,

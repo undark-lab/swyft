@@ -1,6 +1,7 @@
 # pylint: disable=no-member, not-callable
 from contextlib import suppress
 from copy import deepcopy
+import logging
 
 import numpy as np
 import torch
@@ -119,8 +120,8 @@ def train(
                 params = dict_to_device(
                     batch["par"], device=device, non_blocking=non_blocking
                 )
-                loss = loss_fn(head, tail, obs, params)
-                loss = sum(loss)
+                losses = loss_fn(head, tail, obs, params)
+                loss = sum(losses)
 
                 if train:
                     loss.backward()
@@ -149,8 +150,7 @@ def train(
         head.eval()
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
-        if verbosity() >= 2:
-            print("  val loss = %.4g" % (validation_loss / n_validation_batches))
+        logging.debug("validation loss = %.4g" % (validation_loss / n_validation_batches))
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
@@ -179,6 +179,7 @@ def trainloop(
     lr_schedule=[1e-3, 3e-4, 1e-4],
     percent_validation=0.1,
 ):
+    logging.debug("Entering trainloop")
     percent_train = 1.0 - percent_validation
     ntrain, nvalid = split_length_by_percentage(
         len(dataset), (percent_train, percent_validation)
@@ -204,8 +205,7 @@ def trainloop(
     # Train!
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
-        if verbosity() >= 2:
-            print("  lr = %.4g" % lr)
+        logging.debug("lr: %.3g"%lr)
         tl, vl, sd_head, sd_tail = train(
             head,
             tail,
@@ -219,10 +219,14 @@ def trainloop(
         )
         vl_minimum = min(vl)
         vl_min_idx = vl.index(vl_minimum)
-        train_loss.append(tl[: vl_min_idx + 1])
-        valid_loss.append(vl[: vl_min_idx + 1])
+        train_loss += tl[: vl_min_idx + 1]
+        valid_loss += vl[: vl_min_idx + 1]
         head.load_state_dict(sd_head)
         tail.load_state_dict(sd_tail)
+    logging.debug("Train losses: "+str(train_loss))
+    logging.debug("Valid losses: "+str(valid_loss))
+    logging.debug("Finished trainloop.")
+    return dict(train_loss = train_loss, valid_loss = valid_loss)
 
 
 # def get_statistics(
