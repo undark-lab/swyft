@@ -288,6 +288,17 @@ def _corner_params(params):
     return out
 
 
+def sort_param_list(param_list: Sequence):
+    result = []
+    for v in param_list:
+        if not isinstance(v, tuple):
+            v = (v,)
+        else:
+            v = tuple(sorted(v))
+        result.append(v)
+    return result
+
+
 def format_param_list(params, all_params=None, mode="custom"):
     # Use all parameters if params == None
     if params is None and all_params is None:
@@ -302,16 +313,7 @@ def format_param_list(params, all_params=None, mode="custom"):
     else:
         raise KeyError("Invalid mode argument.")
 
-    # Enfore proper format: list of sorted tuples
-    result = []
-    for v in param_list:
-        if not isinstance(v, tuple):
-            v = (v,)
-        else:
-            v = tuple(sorted(v))
-        result.append(v)
-
-    return result
+    return sort_param_list(param_list)
 
 
 def all_finite(x):
