@@ -9,7 +9,7 @@ from .estimation import Points, RatioEstimator
 from .intensity import Prior
 from .network import DefaultHead, DefaultTail
 from .types import Dict
-from .utils import all_finite, format_param_list, verbosity
+from .utils import all_finite, format_param_list
 
 
 class MissingModelError(Exception):
@@ -219,9 +219,8 @@ class NestedRatios:
     def marginals(self):
         """Marginals from the last round."""
         if self._history is []:
-            if verbosity() >= 1:
-                logging.warning("To generated marginals from NRE, call .run(...).")
-        return self._history['marginals']
+            logging.warning("To generated marginals from NRE, call .run(...).")
+        return self._history[-1]['marginals']
 
     @property
     def prior(self):
@@ -390,6 +389,21 @@ class NestedRatios:
 
         param_list = format_param_list(param_list, all_params=self._cache.params)
 
+        ####################################
+        # Step 1 - Update cache and simulate
+        ####################################
+        self._cache.grow(prior, N)
+        if self.requires_sim():
+            logging.info("Additional simulations are required after growing the cache.")
+            if self._model is not None:
+                self._cache.simulate(self._model)
+            else:
+                logging.warning("No model specified. Run simulator directly on cache.")
+                return
+
+        #################
+        # Step 2 - Train!
+        #################
         marginals = self._train(
             prior=prior,
             N=N,
