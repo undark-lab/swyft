@@ -89,7 +89,7 @@ def plot1d(
             ax = axes[k]
         else:
             i, j = k % ncol, k // ncol
-            ax = axes[k]
+            ax = axes[j, i]
         plot_posterior(post, params[k], ax=ax, color=color, bins=bins)
         ax.set_xlabel(labels[k], **label_args)
         if truth is not None:

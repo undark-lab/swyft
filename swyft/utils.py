@@ -4,6 +4,8 @@ from warnings import warn
 
 import numpy as np
 import scipy
+from scipy.stats import norm
+from scipy.integrate import simps
 import torch
 from torch import nn
 
@@ -374,5 +376,45 @@ def unswyftify_observation(swyft_observation: dict):
     return swyft_observation["x"]
 
 
+def get_entropy(x, y, y_true = None, bins = 1000):
+    """Estimate 1-dim entropy, norm and KL divergence.
+    
+    Args:
+        x (Array): x-values
+        y (Array): probability density y = p(x)
+        y_true (function): functional form of the true probability density for KL calculation
+        bins (int): Number of bins to use for interpolation.
+    """
+    idx = np.argsort(x)
+    x, y = x[idx], y[idx]
+    x_grid = np.linspace(x[0], x[-1], bins)
+    y_grid = np.interp(x_grid, x, y)
+    norm = simps(y_grid, x_grid)
+    y_grid_normed = y_grid/norm
+    entropy = simps(y_grid_normed*np.log(y_grid_normed), x_grid)
+    if y_true is not None:
+        y_grid_true = y_true(x_grid)
+        KL = simps(y_grid_normed*np.log(y_grid_normed/y_grid_true), x_grid)
+        return dict(entropy = entropy, norm = norm, KL = KL)
+    return dict(entropy = entropy, norm = norm)
+
+def sample_diagnostics(samples, true_posteriors = {}):
+    result = {}
+    for params in samples['weights'].keys():
+        if len(params) > 1:
+            continue
+        else:  # 1-dim case
+            x = samples['params'][params[0]]
+            y = samples['weights'][params]
+            if params in true_posteriors.keys():
+                y_true = true_posteriors[params]
+            else:
+                y_true = None
+
+            result[params] = get_entropy(x, y, y_true = y_true)
+    return result
+
+
 if __name__ == "__main__":
     pass
+
