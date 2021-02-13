@@ -174,7 +174,9 @@ def tobytes(x: Array):
 
 
 def depth(seq: Sequence):
-    if seq and isinstance(seq, Sequence):
+    if seq and isinstance(seq, str):
+        return 0
+    elif seq and isinstance(seq, Sequence):
         return 1 + max(depth(item) for item in seq)
     else:
         return 0

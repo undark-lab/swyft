@@ -6,11 +6,13 @@ from sklearn.neighbors import BallTree
 from .types import (
     Array,
     Device,
+    Dict,
     Optional,
     PathType,
     PriorConfig,
     Sequence,
     Shape,
+    Tuple,
     Union,
 )
 from .utils import verbosity
@@ -252,6 +254,37 @@ class Prior:
             return log_prob_unmasked
         else:
             return log_prob_sum
+
+    def factorized_log_prob(
+        self,
+        values: Dict[str, Array],
+        targets: Union[str, Sequence[str], Sequence[Tuple[str]]],
+        unmasked: bool = False,
+    ):
+        if depth(targets) == 0:
+            targets = [(targets,)]
+        elif depth(targets) == 1:
+            targets = [tuple(targets)]
+
+        log_prob_unmasked = {}
+        for target in targets:
+            relevant_log_probs = {key: self.priors[key].log_prob for key in target}
+            relevant_params = {key: array_to_tensor(values[key]) for key in target}
+            log_prob_unmasked[target] = sum(
+                relevant_log_probs[key](relevant_params[key]) for key in target
+            )
+
+        if not unmasked and self.mask is not None:
+            cube_values = self.to_cube(values)
+            m = self.mask(cube_values)
+            log_prob = {
+                target: np.where(m, logp - np.log(self.mask.volume), -np.inf)
+                for target, logp in log_prob_unmasked.items()
+            }
+        else:
+            log_prob = log_prob_unmasked
+
+        return log_prob
 
     def to_cube(self, X):
         out = {}
