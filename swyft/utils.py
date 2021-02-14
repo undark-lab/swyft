@@ -387,8 +387,8 @@ def grid_interpolate_samples(x, y, bins = 1000, return_norm = False):
     else:
         return x_grid, y_grid_normed
 
-def get_entropy(x, y, y_true = None, bins = 1000):
-    """Estimate 1-dim entropy, norm and KL divergence.
+def get_entropy_1d(x, y, y_true = None, x_true = None, bins = 1000):
+    """Estimate 1-dim entropy, norm, KL divergence and p-value.
     
     Args:
         x (Array): x-values
@@ -398,11 +398,19 @@ def get_entropy(x, y, y_true = None, bins = 1000):
     """
     x_int, y_int, norm = grid_interpolate_samples(x, y, bins = bins, return_norm = True)
     entropy = simps(y_int*np.log(y_int), x_int)
+    result = dict(norm = norm, entropy = entropy)
     if y_true is not None:
         y_int_true = y_true(x_int)
         KL = simps(y_int*np.log(y_int/y_int_true), x_int)
-        return dict(entropy = entropy, norm = norm, KL = KL)
-    return dict(entropy = entropy, norm = norm)
+        result['KL'] = KL
+    if x_true is not None:
+        y_sorted = np.sort(y_int)[::-1]  # Sort backwards
+        total_mass = y_sorted.sum()
+        enclosed_mass = np.cumsum(y_sorted)
+        y_at_x_true = np.interp(x_true, x_int, y_int)
+        cont_mass = np.interp(y_at_x_true, y_sorted[::-1], enclosed_mass[::-1]/total_mass)
+        result['cont_mass'] = cont_mass
+    return result
 
 def sample_diagnostics(samples, true_posteriors = {}, true_params = {}):
     result = {}
@@ -416,8 +424,11 @@ def sample_diagnostics(samples, true_posteriors = {}, true_params = {}):
                 y_true = true_posteriors[params]
             else:
                 y_true = None
-
-            result[params] = get_entropy(x, y, y_true = y_true)
+            if params[0] in true_params.keys():
+                x_true = true_params[params[0]]
+            else:
+                x_true = None
+            result[params] = get_entropy_1d(x, y, y_true = y_true, x_true = x_true)
     return result
 
 
