@@ -3,7 +3,7 @@ import pylab as plt
 from scipy.interpolate import griddata
 
 from .types import Array, Sequence, Tuple
-from .utils import verbosity
+from .utils import verbosity, grid_interpolate_samples
 
 # def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
 #    x = np.sort(x)[::-1]  # Sort backwards
@@ -65,6 +65,7 @@ def plot1d(
     ncol=None,
     truth=None,
     bins=100,
+    grid_interpolate=False,
     label_args={},
 ) -> None:
 
@@ -90,7 +91,7 @@ def plot1d(
         else:
             i, j = k % ncol, k // ncol
             ax = axes[j, i]
-        plot_posterior(post, params[k], ax=ax, color=color, bins=bins)
+        plot_posterior(post, params[k], ax=ax, grid_interpolate=grid_interpolate, color=color, bins=bins)
         ax.set_xlabel(labels[k], **label_args)
         if truth is not None:
             ax.axvline(truth[params[k]], ls=":", color="r")
@@ -185,7 +186,7 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 
 
 def plot_posterior(
-    post, params, weights_key=None, ax=plt, bins=100, color="k", **kwargs
+    post, params, weights_key=None, ax=plt, grid_interpolate = False, bins=100, color="k", **kwargs
 ):
     if isinstance(params, str):
         params = (params,)
@@ -199,9 +200,13 @@ def plot_posterior(
 
     if len(params) == 1:
         x = post["params"][params[0]]
-        # v, e, _ = ax.hist(x, weights = w, bins = bins, color = color, alpha = 0.2)
-        v, e = np.histogram(x, weights=w, bins=bins, density=True)
-        zm = (e[1:] + e[:-1]) / 2
+
+        if grid_interpolate:
+            zm, v = grid_interpolate_samples(x, w)
+        else:
+            v, e = np.histogram(x, weights=w, bins=bins, density=True)
+            zm = (e[1:] + e[:-1]) / 2
+
         levels = sorted(get_contour_levels(v))
         contour1d(zm, v, levels, ax=ax, color=color)
         ax.plot(zm, v, color=color, **kwargs)

@@ -375,6 +375,17 @@ def swyftify_observation(observation: torch.Tensor):
 def unswyftify_observation(swyft_observation: dict):
     return swyft_observation["x"]
 
+def grid_interpolate_samples(x, y, bins = 1000, return_norm = False):
+    idx = np.argsort(x)
+    x, y = x[idx], y[idx]
+    x_grid = np.linspace(x[0], x[-1], bins)
+    y_grid = np.interp(x_grid, x, y)
+    norm = simps(y_grid, x_grid)
+    y_grid_normed = y_grid/norm
+    if return_norm:
+        return x_grid, y_grid_normed, norm
+    else:
+        return x_grid, y_grid_normed
 
 def get_entropy(x, y, y_true = None, bins = 1000):
     """Estimate 1-dim entropy, norm and KL divergence.
@@ -385,20 +396,15 @@ def get_entropy(x, y, y_true = None, bins = 1000):
         y_true (function): functional form of the true probability density for KL calculation
         bins (int): Number of bins to use for interpolation.
     """
-    idx = np.argsort(x)
-    x, y = x[idx], y[idx]
-    x_grid = np.linspace(x[0], x[-1], bins)
-    y_grid = np.interp(x_grid, x, y)
-    norm = simps(y_grid, x_grid)
-    y_grid_normed = y_grid/norm
-    entropy = simps(y_grid_normed*np.log(y_grid_normed), x_grid)
+    x_int, y_int, norm = grid_interpolate_samples(x, y, bins = bins, return_norm = True)
+    entropy = simps(y_int*np.log(y_int), x_int)
     if y_true is not None:
-        y_grid_true = y_true(x_grid)
-        KL = simps(y_grid_normed*np.log(y_grid_normed/y_grid_true), x_grid)
+        y_int_true = y_true(x_int)
+        KL = simps(y_int*np.log(y_int/y_int_true), x_int)
         return dict(entropy = entropy, norm = norm, KL = KL)
     return dict(entropy = entropy, norm = norm)
 
-def sample_diagnostics(samples, true_posteriors = {}):
+def sample_diagnostics(samples, true_posteriors = {}, true_params = {}):
     result = {}
     for params in samples['weights'].keys():
         if len(params) > 1:
