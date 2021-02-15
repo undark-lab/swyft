@@ -432,6 +432,31 @@ def sample_diagnostics(samples, true_posteriors = {}, true_params = {}):
     return result
 
 
+def estimate_coverage(marginals, points, nrounds = 10, nsamples = 1000, cred_level=[0.68268, 0.95450, 0.99730]):
+    """Estimate coverage of amortized marginals for points.
+    
+    Args:
+        marginals (Marginals): Marginals of interest.
+        points (Points): Test points within the support of the marginals constrained prior.
+        nrounds (int): Noise realizations for each test point.
+        nsamples (int): Number of marginal samples used for the calculations.
+        cred_level (list): Credible levels.
+    
+    NOTE: This algorithm assumes factorized indicator functions of the constrained priors, to accelerate posterior calculations.
+    NOTE: Only works for 1-dim marginals right now.
+    """
+    diags = []
+    for i in range(nrounds):
+        for point in points:
+            samples = marginals(point['obs'], nsamples)
+            diag = sample_diagnostics(samples, true_params = point['par'])
+            diags.append(diag)
+    cont_mass = {key[0]: [v[key]['cont_mass'] for v in diags] for key in diag.keys()}
+    params = list(cont_mass.keys())
+    cont_fraction = {k: [sum(np.array(cont_mass[k]) < c)/len(cont_mass[k]) for c in cred_level] for k in params}
+    return cont_fraction
+
+
 if __name__ == "__main__":
     pass
 

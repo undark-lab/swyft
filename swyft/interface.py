@@ -9,7 +9,7 @@ from .estimation import Points, RatioEstimator
 from .intensity import Prior
 from .network import DefaultHead, DefaultTail
 from .types import Dict
-from .utils import all_finite, format_param_list, get_entropy
+from .utils import all_finite, format_param_list
 
 
 class MissingModelError(Exception):
