@@ -1,6 +1,7 @@
 # pylint: disable=no-member, not-callable
 from pathlib import Path
 from warnings import warn
+import logging
 
 import numpy as np
 import scipy
@@ -245,12 +246,16 @@ class Module(nn.Module):
         """Store arguments of subclass instantiation."""
         self._swyft_args = [args, kwargs]
         super().__init__()
+        logging.debug("Initializing swyft.Module with tag `%s`"%self._swyft_tag)
+        logging.debug("  args = `%s`"%str(args))
+        logging.debug("  kwargs = `%s`"%str(kwargs))
 
     def __init_subclass__(cls, **kwargs):
         """Register subclasses."""
         super().__init_subclass__(**kwargs)
         cls.registry[cls.__name__] = cls
         cls._swyft_tag = cls.__name__
+        logging.debug("Registering new swyft.Module with tag `%s`"%cls._swyft_tag)
 
     @property
     def swyft_args(self):

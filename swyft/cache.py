@@ -5,6 +5,8 @@ from copy import deepcopy
 from pathlib import Path
 from warnings import warn
 
+import logging
+
 import numcodecs
 import numpy as np
 import torch
@@ -168,6 +170,10 @@ class Cache(ABC):
         self.params = params
         self.root = zarr.group(store=self.store)
         self.intensities = []
+
+        logging.debug("Creating Cache.")
+        logging.debug("  params = %s"%str(params))
+        logging.debug("  obs_shapes = %s"%str(obs_shapes))
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
             if verbosity() >= 1:
@@ -551,8 +557,10 @@ class MemoryCache(Cache):
         """
         if store is None:
             self.store = zarr.MemoryStore()
+            logging.debug("Creating new empty MemoryCache.")
         else:
             self.store = store
+            logging.debug("Creating MemoryCache from store.")
         super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
 
     def save(self, path: PathType) -> None:
