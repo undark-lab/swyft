@@ -380,6 +380,7 @@ def swyftify_observation(observation: torch.Tensor):
 def unswyftify_observation(swyft_observation: dict):
     return swyft_observation["x"]
 
+# FIXME: Norm is not informative; need to multiply by constrained prior density
 def grid_interpolate_samples(x, y, bins = 1000, return_norm = False):
     idx = np.argsort(x)
     x, y = x[idx], y[idx]
@@ -402,7 +403,7 @@ def get_entropy_1d(x, y, y_true = None, x_true = None, bins = 1000):
         bins (int): Number of bins to use for interpolation.
     """
     x_int, y_int, norm = grid_interpolate_samples(x, y, bins = bins, return_norm = True)
-    entropy = simps(y_int*np.log(y_int), x_int)
+    entropy = -simps(y_int*np.log(y_int), x_int)
     result = dict(norm = norm, entropy = entropy)
     if y_true is not None:
         y_int_true = y_true(x_int)

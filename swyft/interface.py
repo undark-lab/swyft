@@ -181,17 +181,14 @@ class NestedRatios:
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
 
-        if cache is None:
-            cache = MemoryCache.from_simulator(model, prior)
-        
         # Not stored
         self._model = model
         self._noise = noise
-        self._obs = obs
-        self._cache = cache
+        self._cache_reference = cache
         self._device = device
 
         # Stored in state_dict()
+        self._obs = obs
         self._config = dict(Ninit=Ninit, Nmax=Nmax,
                 density_factor=density_factor, volume_conv_th=volume_conv_th)
         self._converged = False
@@ -201,14 +198,15 @@ class NestedRatios:
     def converged(self):
         return self._converged
 
+    @property
+    def _cache(self):
+        if self._cache_reference is None:
+            self._cache_reference = MemoryCache.from_simulator(model, prior)
+        return self._cache_reference
+
     def R(self):
         """Number of rounds."""
         return len(self._history)
-
-    @property
-    def obs(self):
-        """Reference observation."""
-        return self._obs
 
     @property
     def obs(self):
@@ -421,30 +419,54 @@ class NestedRatios:
         """Return simulation cache."""
         return self._cache
 
-# TODO: Update to handle self._history
-#    @property
-#    def state_dict(self):
-#        """Return `state_dict`."""
-#        return dict(
-#            base_prior=self._base_prior.state_dict(),
-#            obs=self._obs,
-#            history=self._history,
-#        )
-#
-#    @classmethod
-#    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
-#        """Instantiate NestedRatios from saved `state_dict`."""
-#        base_prior = Prior.from_state_dict(state_dict["base_prior"])
-#        constr_prior = Prior.from_state_dict(state_dict["constr_prior"])
-#        posterior = Marginals.from_state_dict(state_dict["posterior"])
-#        obs = state_dict["obs"]
-#
-#        nr = NestedRatios(
-#            model, base_prior, obs, noise=noise, cache=cache, device=device
-#        )
-#        nr._posterior = posterior
-#        nr._constr_prior = constr_prior
-#        return nr
+    @staticmethod
+    def _history_state_dict(history):
+        state_dict = [
+                {
+                    'marginals': v['marginals'].state_dict(),
+                    'constr_prior': v['constr_prior'].state_dict(),
+                    'N': v['N']
+                    }
+                for v in history
+                ]
+        return state_dict
+
+    @staticmethod
+    def _history_from_state_dict(history_state_dict):
+        history = [
+                {
+                    'marginals': Marginals.from_state_dict(v['marginals']),
+                    'constr_prior': Prior.from_state_dict(v['constr_prior']),
+                    'N': v['N']
+                    }
+                for v in history_state_dict
+                ]
+        return history
+
+    def state_dict(self):
+        """Return `state_dict`."""
+        return dict(
+            base_prior=self._base_prior.state_dict(),
+            obs=self._obs,
+            history=self._history_state_dict(self._history),
+            converged=self._converged,
+            config=self._config
+        )
+
+    @classmethod
+    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
+        """Instantiate NestedRatios from saved `state_dict`."""
+        base_prior = Prior.from_state_dict(state_dict["base_prior"])
+        obs = state_dict["obs"]
+        config = state_dict['config']
+
+        nr = NestedRatios(
+            model, base_prior, obs, noise=noise, cache=cache, device=device, **config
+        )
+
+        nr._converged = state_dict['converged']
+        nr._history = cls._history_from_state_dict(state_dict['history'])
+        return nr
 
     
     def _get_prior_R(self):
