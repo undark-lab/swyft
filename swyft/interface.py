@@ -201,7 +201,7 @@ class NestedRatios:
     @property
     def _cache(self):
         if self._cache_reference is None:
-            self._cache_reference = MemoryCache.from_simulator(model, prior)
+            self._cache_reference = MemoryCache.from_simulator(self._model, self._base_prior)
         return self._cache_reference
 
     def R(self):
