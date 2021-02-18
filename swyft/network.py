@@ -1,8 +1,11 @@
 # pylint: disable=no-member, not-callable, access-member-before-definition
 import math
+from typing import Callable, Optional
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
+from torch.nn import init
 
 from .utils import Module, verbosity
 
@@ -31,6 +34,141 @@ def _combine(params, param_list):
     return z
 
 
+# From: https://github.com/pytorch/pytorch/issues/36591
+class LinearWithChannel(nn.Module):
+    def __init__(self, input_size, output_size, channel_size):
+        super(LinearWithChannel, self).__init__()
+
+        # initialize weights
+        self.weight = torch.nn.Parameter(
+            torch.zeros(channel_size, output_size, input_size)
+        )
+        self.bias = torch.nn.Parameter(torch.zeros(channel_size, output_size))
+
+        # change weights to kaiming
+        self.reset_parameters(self.weight, self.bias)
+
+    def reset_parameters(self, weights, bias):
+        torch.nn.init.kaiming_uniform_(weights, a=math.sqrt(3))
+        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(weights)
+        bound = 1 / math.sqrt(fan_in)
+        torch.nn.init.uniform_(bias, -bound, bound)
+
+    def forward(self, x):
+        assert x.ndim >= 2, "Requires (..., channel, features) shape."
+        x = x.unsqueeze(-1)
+        result = torch.matmul(self.weight, x).squeeze(-1) + self.bias
+        return result
+
+
+class BatchNorm1dWithChannel(nn.BatchNorm1d):
+    def __init__(
+        self,
+        num_channels: int,
+        num_features: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+    ):
+        """BatchNorm1d over the batch, N. Requires shape (N, C, L).
+        
+        Otherwise, same as torch.nn.BatchNorm1d with extra num_channel. Cannot do the temporal batch norm case.
+        """
+        num_features = num_channels * num_features
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
+        self.flatten = nn.Flatten()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        n, c, f = input.shape
+        flat = self.flatten(input)
+        batch_normed = super().forward(flat)
+        return batch_normed.reshape(n, c, f)
+
+
+class ResidualBlockWithChannel(nn.Module):
+    """A general-purpose residual block. Works only with channelized 1-dim inputs."""
+
+    def __init__(
+        self,
+        channels: int,
+        features: int,
+        activation: Callable = F.relu,
+        dropout_probability: float = 0.0,
+        use_batch_norm: bool = False,
+        zero_initialization: bool = True,
+    ):
+        super().__init__()
+        self.activation = activation
+
+        self.use_batch_norm = use_batch_norm
+        if use_batch_norm:
+            self.batch_norm_layers = nn.ModuleList(
+                [BatchNorm1dWithChannel(channels, features, eps=1e-3) for _ in range(2)]
+            )
+        self.linear_layers = nn.ModuleList(
+            [LinearWithChannel(features, features, channels) for _ in range(2)]
+        )
+        self.dropout = nn.Dropout(p=dropout_probability)
+        if zero_initialization:
+            init.uniform_(self.linear_layers[-1].weight, -1e-3, 1e-3)
+            init.uniform_(self.linear_layers[-1].bias, -1e-3, 1e-3)
+
+    def forward(self, inputs):
+        temps = inputs
+        if self.use_batch_norm:
+            temps = self.batch_norm_layers[0](temps)
+        temps = self.activation(temps)
+        temps = self.linear_layers[0](temps)
+        if self.use_batch_norm:
+            temps = self.batch_norm_layers[1](temps)
+        temps = self.activation(temps)
+        temps = self.dropout(temps)
+        temps = self.linear_layers[1](temps)
+        return inputs + temps
+
+
+class ResidualNet(nn.Module):
+    """A general-purpose residual network. Works only with channelized 1-dim inputs."""
+
+    def __init__(
+        self,
+        channels: int,
+        in_features: int,
+        out_features: int,
+        hidden_features: int,
+        num_blocks: int = 2,
+        activation: Callable = F.relu,
+        dropout_probability: float = 0.0,
+        use_batch_norm: bool = False,
+    ):
+        super().__init__()
+        self.hidden_features = hidden_features
+        self.initial_layer = LinearWithChannel(in_features, hidden_features, channels)
+        self.blocks = nn.ModuleList(
+            [
+                ResidualBlockWithChannel(
+                    channels=channels,
+                    features=hidden_features,
+                    activation=activation,
+                    dropout_probability=dropout_probability,
+                    use_batch_norm=use_batch_norm,
+                )
+                for _ in range(num_blocks)
+            ]
+        )
+        self.final_layer = LinearWithChannel(hidden_features, out_features, channels)
+
+    def forward(self, inputs):
+        temps = self.initial_layer(inputs)
+        for block in self.blocks:
+            temps = block(temps)
+        outputs = self.final_layer(temps)
+        return outputs
+
+
+# TODO split this into a function which does the standardizing and a function which calculates the online z_scores
+# That way you can easily handle the case where the user provides mean and standard deviation information
 class OnlineNormalizationLayer(nn.Module):
     def __init__(self, shape, stable: bool = False, epsilon: float = 1e-10):
         """Accumulate mean and variance online using the "parallel algorithm" algorithm from [1].
@@ -91,30 +229,6 @@ class OnlineNormalizationLayer(nn.Module):
     @property
     def std(self):
         return torch.sqrt(self.var + self.epsilon)
-
-
-# From: https://github.com/pytorch/pytorch/issues/36591
-class LinearWithChannel(nn.Module):
-    def __init__(self, input_size, output_size, channel_size):
-        super(LinearWithChannel, self).__init__()
-
-        # initialize weights
-        self.w = torch.nn.Parameter(torch.zeros(channel_size, output_size, input_size))
-        self.b = torch.nn.Parameter(torch.zeros(channel_size, output_size))
-
-        # change weights to kaiming
-        self.reset_parameters(self.w, self.b)
-
-    def reset_parameters(self, weights, bias):
-        torch.nn.init.kaiming_uniform_(weights, a=math.sqrt(3))
-        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(weights)
-        bound = 1 / math.sqrt(fan_in)
-        torch.nn.init.uniform_(bias, -bound, bound)
-
-    def forward(self, x):
-        x = x.unsqueeze(-1)
-        result = torch.matmul(self.w, x).squeeze(-1) + self.b
-        return result
 
 
 class DefaultTail(Module):
