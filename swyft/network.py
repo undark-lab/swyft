@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn import init
-from typing_extensions import Concatenate
 
 from .utils import Module, verbosity
 
