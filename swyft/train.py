@@ -1,7 +1,7 @@
 # pylint: disable=no-member, not-callable
+import logging
 from contextlib import suppress
 from copy import deepcopy
-import logging
 
 import numpy as np
 import torch
@@ -150,7 +150,9 @@ def train(
         head.eval()
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
-        logging.debug("validation loss = %.4g" % (validation_loss / n_validation_batches))
+        logging.debug(
+            "validation loss = %.4g" % (validation_loss / n_validation_batches)
+        )
         validation_losses.append(validation_loss / n_validation_batches)
 
         epoch += 1
@@ -205,7 +207,7 @@ def trainloop(
     # Train!
     train_loss, valid_loss = [], []
     for i, lr in enumerate(lr_schedule):
-        logging.debug("lr: %.3g"%lr)
+        logging.debug("lr: %.3g" % lr)
         tl, vl, sd_head, sd_tail = train(
             head,
             tail,
@@ -223,10 +225,10 @@ def trainloop(
         valid_loss += vl[: vl_min_idx + 1]
         head.load_state_dict(sd_head)
         tail.load_state_dict(sd_tail)
-    logging.debug("Train losses: "+str(train_loss))
-    logging.debug("Valid losses: "+str(valid_loss))
+    logging.debug("Train losses: " + str(train_loss))
+    logging.debug("Valid losses: " + str(valid_loss))
     logging.debug("Finished trainloop.")
-    return dict(train_loss = train_loss, valid_loss = valid_loss)
+    return dict(train_loss=train_loss, valid_loss=valid_loss)
 
 
 # def get_statistics(

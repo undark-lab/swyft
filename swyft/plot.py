@@ -3,7 +3,7 @@ import pylab as plt
 from scipy.interpolate import griddata
 
 from .types import Array, Sequence, Tuple
-from .utils import verbosity, grid_interpolate_samples
+from .utils import grid_interpolate_samples, verbosity
 
 # def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
 #    x = np.sort(x)[::-1]  # Sort backwards
@@ -91,7 +91,14 @@ def plot1d(
         else:
             i, j = k % ncol, k // ncol
             ax = axes[j, i]
-        plot_posterior(post, params[k], ax=ax, grid_interpolate=grid_interpolate, color=color, bins=bins)
+        plot_posterior(
+            post,
+            params[k],
+            ax=ax,
+            grid_interpolate=grid_interpolate,
+            color=color,
+            bins=bins,
+        )
         ax.set_xlabel(labels[k], **label_args)
         if truth is not None:
             ax.axvline(truth[params[k]], ls=":", color="r")
@@ -186,7 +193,14 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 
 
 def plot_posterior(
-    post, params, weights_key=None, ax=plt, grid_interpolate = False, bins=100, color="k", **kwargs
+    post,
+    params,
+    weights_key=None,
+    ax=plt,
+    grid_interpolate=False,
+    bins=100,
+    color="k",
+    **kwargs
 ):
     if isinstance(params, str):
         params = (params,)

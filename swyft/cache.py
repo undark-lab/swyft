@@ -1,11 +1,10 @@
 # pylint: disable=no-member, not-callable
+import logging
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from copy import deepcopy
 from pathlib import Path
 from warnings import warn
-
-import logging
 
 import numcodecs
 import numpy as np
@@ -172,8 +171,8 @@ class Cache(ABC):
         self.intensities = []
 
         logging.debug("Creating Cache.")
-        logging.debug("  params = %s"%str(params))
-        logging.debug("  obs_shapes = %s"%str(obs_shapes))
+        logging.debug("  params = %s" % str(params))
+        logging.debug("  obs_shapes = %s" % str(obs_shapes))
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
             if verbosity() >= 1:
@@ -198,6 +197,7 @@ class Cache(ABC):
     def _setup_new_cache(self, params, obs_shapes, root) -> None:
         # Add parameter names to store
         z = root.create_group(self._filesystem.par)
+
         for name in params:
             z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
             # FIX: Too small chunks lead to problems with appending

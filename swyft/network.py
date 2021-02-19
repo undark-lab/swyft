@@ -1,8 +1,8 @@
 # pylint: disable=no-member, not-callable, access-member-before-definition
 import math
-import numpy as np
 from typing import Callable, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -332,6 +332,7 @@ class DefaultTail(Module):
 
 # FIXME: Remove obs_transform. This should not be required for anything.
 
+
 class DefaultHead(Module):
     def __init__(self, obs_shapes, online_norm=True, obs_transform=None):
         super().__init__(
@@ -340,7 +341,9 @@ class DefaultHead(Module):
         self.obs_transform = obs_transform
 
         if not all(np.array([len(v) for v in obs_shapes.values()]) == 1):
-            raise ValueError("DefaultHead only supports 1-dim data. Please supply custom head network.")
+            raise ValueError(
+                "DefaultHead only supports 1-dim data. Please supply custom head network."
+            )
 
         self.n_features = sum([v[0] for k, v in obs_shapes.items()])
 

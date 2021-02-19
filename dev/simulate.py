@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import sys
-import torch
+
 import simulators
+import torch
+
 
 def main():
     try:
@@ -14,6 +16,7 @@ def main():
     params = torch.load(infile)
     obs = model(params)
     torch.save(obs, outfile)
+
 
 if __name__ == "__main__":
     main()

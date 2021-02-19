@@ -1,13 +1,13 @@
 # pylint: disable=no-member, not-callable
+import logging
 from pathlib import Path
 from warnings import warn
-import logging
 
 import numpy as np
 import scipy
-from scipy.stats import norm
-from scipy.integrate import simps
 import torch
+from scipy.integrate import simps
+from scipy.stats import norm
 from torch import nn
 
 _VERBOSE = 1
@@ -46,7 +46,7 @@ def dict_to_device(d, device, non_blocking=False):
 
 def dict_to_tensor(d, device="cpu", non_blocking=False, indices=slice(0, None)):
     return {
-        k: torch.tensor(v[indices]).float().to(device, non_blocking=non_blocking)
+        k: array_to_tensor(v[indices]).float().to(device, non_blocking=non_blocking)
         for k, v in d.items()
     }
 
@@ -55,7 +55,7 @@ def dict_to_tensor_unsqueeze(
     d, device="cpu", non_blocking=False, indices=slice(0, None)
 ):
     return {
-        k: torch.tensor(v[indices])
+        k: array_to_tensor(v[indices])
         .float()
         .unsqueeze(0)
         .to(device, non_blocking=non_blocking)
@@ -134,6 +134,9 @@ def array_to_tensor(
     """Converts np.ndarray and torch.Tensor to torch.Tensor with dtype and on device.
     When dtype is None, unsafe casts all float-type arrays to torch.float32 and all int-type arrays to torch.int64
     """
+    if not isinstance(array, (np.ndarray, torch.Tensor)):
+        np.asarray(array)
+
     input_dtype = array.dtype
     if isinstance(input_dtype, np.dtype):
         if dtype is None:
@@ -246,16 +249,16 @@ class Module(nn.Module):
         """Store arguments of subclass instantiation."""
         self._swyft_args = [args, kwargs]
         super().__init__()
-        logging.debug("Initializing swyft.Module with tag `%s`"%self._swyft_tag)
-        logging.debug("  args = `%s`"%str(args))
-        logging.debug("  kwargs = `%s`"%str(kwargs))
+        logging.debug("Initializing swyft.Module with tag `%s`" % self._swyft_tag)
+        logging.debug("  args = `%s`" % str(args))
+        logging.debug("  kwargs = `%s`" % str(kwargs))
 
     def __init_subclass__(cls, **kwargs):
         """Register subclasses."""
         super().__init_subclass__(**kwargs)
         cls.registry[cls.__name__] = cls
         cls._swyft_tag = cls.__name__
-        logging.debug("Registering new swyft.Module with tag `%s`"%cls._swyft_tag)
+        logging.debug("Registering new swyft.Module with tag `%s`" % cls._swyft_tag)
 
     @property
     def swyft_args(self):
@@ -380,20 +383,22 @@ def swyftify_observation(observation: torch.Tensor):
 def unswyftify_observation(swyft_observation: dict):
     return swyft_observation["x"]
 
+
 # FIXME: Norm is not informative; need to multiply by constrained prior density
-def grid_interpolate_samples(x, y, bins = 1000, return_norm = False):
+def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
     idx = np.argsort(x)
     x, y = x[idx], y[idx]
     x_grid = np.linspace(x[0], x[-1], bins)
     y_grid = np.interp(x_grid, x, y)
     norm = simps(y_grid, x_grid)
-    y_grid_normed = y_grid/norm
+    y_grid_normed = y_grid / norm
     if return_norm:
         return x_grid, y_grid_normed, norm
     else:
         return x_grid, y_grid_normed
 
-def get_entropy_1d(x, y, y_true = None, x_true = None, bins = 1000):
+
+def get_entropy_1d(x, y, y_true=None, x_true=None, bins=1000):
     """Estimate 1-dim entropy, norm, KL divergence and p-value.
     
     Args:
@@ -402,30 +407,33 @@ def get_entropy_1d(x, y, y_true = None, x_true = None, bins = 1000):
         y_true (function): functional form of the true probability density for KL calculation
         bins (int): Number of bins to use for interpolation.
     """
-    x_int, y_int, norm = grid_interpolate_samples(x, y, bins = bins, return_norm = True)
-    entropy = -simps(y_int*np.log(y_int), x_int)
-    result = dict(norm = norm, entropy = entropy)
+    x_int, y_int, norm = grid_interpolate_samples(x, y, bins=bins, return_norm=True)
+    entropy = -simps(y_int * np.log(y_int), x_int)
+    result = dict(norm=norm, entropy=entropy)
     if y_true is not None:
         y_int_true = y_true(x_int)
-        KL = simps(y_int*np.log(y_int/y_int_true), x_int)
-        result['KL'] = KL
+        KL = simps(y_int * np.log(y_int / y_int_true), x_int)
+        result["KL"] = KL
     if x_true is not None:
         y_sorted = np.sort(y_int)[::-1]  # Sort backwards
         total_mass = y_sorted.sum()
         enclosed_mass = np.cumsum(y_sorted)
         y_at_x_true = np.interp(x_true, x_int, y_int)
-        cont_mass = np.interp(y_at_x_true, y_sorted[::-1], enclosed_mass[::-1]/total_mass)
-        result['cont_mass'] = cont_mass
+        cont_mass = np.interp(
+            y_at_x_true, y_sorted[::-1], enclosed_mass[::-1] / total_mass
+        )
+        result["cont_mass"] = cont_mass
     return result
 
-def sample_diagnostics(samples, true_posteriors = {}, true_params = {}):
+
+def sample_diagnostics(samples, true_posteriors={}, true_params={}):
     result = {}
-    for params in samples['weights'].keys():
+    for params in samples["weights"].keys():
         if len(params) > 1:
             continue
         else:  # 1-dim case
-            x = samples['params'][params[0]]
-            y = samples['weights'][params]
+            x = samples["params"][params[0]]
+            y = samples["weights"][params]
             if params in true_posteriors.keys():
                 y_true = true_posteriors[params]
             else:
@@ -434,11 +442,13 @@ def sample_diagnostics(samples, true_posteriors = {}, true_params = {}):
                 x_true = true_params[params[0]]
             else:
                 x_true = None
-            result[params] = get_entropy_1d(x, y, y_true = y_true, x_true = x_true)
+            result[params] = get_entropy_1d(x, y, y_true=y_true, x_true=x_true)
     return result
 
 
-def estimate_coverage(marginals, points, nrounds = 10, nsamples = 1000, cred_level=[0.68268, 0.95450, 0.99730]):
+def estimate_coverage(
+    marginals, points, nrounds=10, nsamples=1000, cred_level=[0.68268, 0.95450, 0.99730]
+):
     """Estimate coverage of amortized marginals for points.
     
     Args:
@@ -454,15 +464,17 @@ def estimate_coverage(marginals, points, nrounds = 10, nsamples = 1000, cred_lev
     diags = []
     for i in range(nrounds):
         for point in points:
-            samples = marginals(point['obs'], nsamples)
-            diag = sample_diagnostics(samples, true_params = point['par'])
+            samples = marginals(point["obs"], nsamples)
+            diag = sample_diagnostics(samples, true_params=point["par"])
             diags.append(diag)
-    cont_mass = {key[0]: [v[key]['cont_mass'] for v in diags] for key in diag.keys()}
+    cont_mass = {key[0]: [v[key]["cont_mass"] for v in diags] for key in diag.keys()}
     params = list(cont_mass.keys())
-    cont_fraction = {k: [sum(np.array(cont_mass[k]) < c)/len(cont_mass[k]) for c in cred_level] for k in params}
+    cont_fraction = {
+        k: [sum(np.array(cont_mass[k]) < c) / len(cont_mass[k]) for c in cred_level]
+        for k in params
+    }
     return cont_fraction
 
 
 if __name__ == "__main__":
     pass
-

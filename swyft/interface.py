@@ -1,8 +1,9 @@
+import logging
 from warnings import warn
 
 import numpy as np
-import logging
-logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+
+logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 from .cache import DirectoryCache, MemoryCache
 from .estimation import Points, RatioEstimator
@@ -159,9 +160,19 @@ class Marginals:
 class NestedRatios:
     """Main SWYFT interface class."""
 
-    def __init__(self, model, prior, obs, noise=None, cache=None, device="cpu",
-            Ninit = 3000, Nmax = 100000, density_factor = 2., volume_conv_th =
-            0.1):
+    def __init__(
+        self,
+        model,
+        prior,
+        obs,
+        noise=None,
+        cache=None,
+        device="cpu",
+        Ninit=3000,
+        Nmax=100000,
+        density_factor=2.0,
+        volume_conv_th=0.1,
+    ):
         """Initialize swyft.
 
         Args:
@@ -189,8 +200,12 @@ class NestedRatios:
 
         # Stored in state_dict()
         self._obs = obs
-        self._config = dict(Ninit=Ninit, Nmax=Nmax,
-                density_factor=density_factor, volume_conv_th=volume_conv_th)
+        self._config = dict(
+            Ninit=Ninit,
+            Nmax=Nmax,
+            density_factor=density_factor,
+            volume_conv_th=volume_conv_th,
+        )
         self._converged = False
         self._base_prior = prior  # Initial prior
         self._history = []
@@ -201,7 +216,9 @@ class NestedRatios:
     @property
     def _cache(self):
         if self._cache_reference is None:
-            self._cache_reference = MemoryCache.from_simulator(self._model, self._base_prior)
+            self._cache_reference = MemoryCache.from_simulator(
+                self._model, self._base_prior
+            )
         return self._cache_reference
 
     def R(self):
@@ -218,7 +235,7 @@ class NestedRatios:
         """Marginals from the last round."""
         if self._history is []:
             logging.warning("To generated marginals from NRE, call .run(...).")
-        return self._history[-1]['marginals']
+        return self._history[-1]["marginals"]
 
     @property
     def prior(self):
@@ -233,7 +250,7 @@ class NestedRatios:
         head_args: dict = {},
         tail_args: dict = {},
         max_rounds: int = 10,
-        keep_history = False,
+        keep_history=False,
     ):
         """Perform 1-dim marginal focus fits.
 
@@ -252,7 +269,7 @@ class NestedRatios:
         r = 0
 
         while (not self.converged()) and (r < max_rounds):
-            logging.info("NRE round: R = %i"%(self.R()+1))
+            logging.info("NRE round: R = %i" % (self.R() + 1))
 
             ##################################################
             # Step 1 - get prior and number of training points
@@ -264,11 +281,15 @@ class NestedRatios:
             ####################################
             self._cache.grow(prior_R, N_R)
             if self.requires_sim():
-                logging.info("Additional simulations are required after growing the cache.")
+                logging.info(
+                    "Additional simulations are required after growing the cache."
+                )
                 if self._model is not None:
                     self._cache.simulate(self._model)
                 else:
-                    logging.warning("No model specified. Run simulator directly on cache.")
+                    logging.warning(
+                        "No model specified. Run simulator directly on cache."
+                    )
                     return
 
             ################
@@ -287,23 +308,25 @@ class NestedRatios:
             constr_prior_R = marginals_R.gen_constr_prior(self._obs)
 
             # Update object history
-            self._history.append(dict(
-                marginals = marginals_R,
-                constr_prior = constr_prior_R,
-                N = N_R,
-                ))
+            self._history.append(
+                dict(marginals=marginals_R, constr_prior=constr_prior_R, N=N_R,)
+            )
             r += 1
 
             # Drop previous marginals
             if (not keep_history) and (self.R() > 1):
-                self._history[-2]['marginals'] = None
-                self._history[-2]['constr_prior'] = None
+                self._history[-2]["marginals"] = None
+                self._history[-2]["constr_prior"] = None
 
             # Check convergence
-            logging.debug("constr_prior_R : prior_R volume = %.4g : %.4g"%(
-                constr_prior_R.volume(), prior_R.volume()
-                ))
-            if np.log(prior_R.volume()) - np.log(constr_prior_R.volume()) < self._config['volume_conv_th']:
+            logging.debug(
+                "constr_prior_R : prior_R volume = %.4g : %.4g"
+                % (constr_prior_R.volume(), prior_R.volume())
+            )
+            if (
+                np.log(prior_R.volume()) - np.log(constr_prior_R.volume())
+                < self._config["volume_conv_th"]
+            ):
                 logging.info("Volume converged.")
                 self._converged = True
 
@@ -347,7 +370,7 @@ class NestedRatios:
     ):
         """Convenience function to generate 2d marginals."""
         param_list = format_param_list(params, all_params=self._cache.params, mode="2d")
-        logging.info("Generating marginals for: %s"%str(param_list))
+        logging.info("Generating marginals for: %s" % str(param_list))
         return self.gen_custom_marginals(
             param_list,
             N=N,
@@ -382,8 +405,8 @@ class NestedRatios:
         if self.R() == 0:
             prior = self._base_prior
         else:
-            prior = self._history[-1]['constr_prior']
-            logging.debug("Constrained prior volume = %.4f"%prior.volume())
+            prior = self._history[-1]["constr_prior"]
+            logging.debug("Constrained prior volume = %.4f" % prior.volume())
 
         param_list = format_param_list(param_list, all_params=self._cache.params)
 
@@ -422,25 +445,25 @@ class NestedRatios:
     @staticmethod
     def _history_state_dict(history):
         state_dict = [
-                {
-                    'marginals': v['marginals'].state_dict(),
-                    'constr_prior': v['constr_prior'].state_dict(),
-                    'N': v['N']
-                    }
-                for v in history
-                ]
+            {
+                "marginals": v["marginals"].state_dict(),
+                "constr_prior": v["constr_prior"].state_dict(),
+                "N": v["N"],
+            }
+            for v in history
+        ]
         return state_dict
 
     @staticmethod
     def _history_from_state_dict(history_state_dict):
         history = [
-                {
-                    'marginals': Marginals.from_state_dict(v['marginals']),
-                    'constr_prior': Prior.from_state_dict(v['constr_prior']),
-                    'N': v['N']
-                    }
-                for v in history_state_dict
-                ]
+            {
+                "marginals": Marginals.from_state_dict(v["marginals"]),
+                "constr_prior": Prior.from_state_dict(v["constr_prior"]),
+                "N": v["N"],
+            }
+            for v in history_state_dict
+        ]
         return history
 
     def state_dict(self):
@@ -450,7 +473,7 @@ class NestedRatios:
             obs=self._obs,
             history=self._history_state_dict(self._history),
             converged=self._converged,
-            config=self._config
+            config=self._config,
         )
 
     @classmethod
@@ -458,17 +481,16 @@ class NestedRatios:
         """Instantiate NestedRatios from saved `state_dict`."""
         base_prior = Prior.from_state_dict(state_dict["base_prior"])
         obs = state_dict["obs"]
-        config = state_dict['config']
+        config = state_dict["config"]
 
         nr = NestedRatios(
             model, base_prior, obs, noise=noise, cache=cache, device=device, **config
         )
 
-        nr._converged = state_dict['converged']
-        nr._history = cls._history_from_state_dict(state_dict['history'])
+        nr._converged = state_dict["converged"]
+        nr._history = cls._history_from_state_dict(state_dict["history"])
         return nr
 
-    
     def _get_prior_R(self):
         # Method does not change internal states
 
@@ -478,18 +500,18 @@ class NestedRatios:
             prior_R = self._base_prior
             N_R = self._config["Ninit"]
         else:  # Subsequent rounds
-            prior_R = self._history[-1]['constr_prior']
+            prior_R = self._history[-1]["constr_prior"]
 
             # Derive new number of training points
-            prior_Rm1 = self._history[-1]['marginals'].prior
+            prior_Rm1 = self._history[-1]["marginals"].prior
             v_R = prior_R.volume()
             v_Rm1 = prior_Rm1.volume()
-            N_Rm1 = self._history[-1]['N']
+            N_Rm1 = self._history[-1]["N"]
             density_Rm1 = N_Rm1 / v_Rm1 ** (1 / D)
             density_R = self._config["density_factor"] * density_Rm1
             N_R = min(max(density_R * v_R ** (1 / D), N_Rm1), self._config["Nmax"])
 
-        logging.info("Number of training samples is N_R = %i"%N_R)
+        logging.info("Number of training samples is N_R = %i" % N_R)
         return prior_R, N_R
 
     def _train(
