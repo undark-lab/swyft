@@ -1,0 +1,7 @@
+run_args: {}
+train_args:
+  lr_schedule: [1e-3]
+tail_args: {}
+head_args: {}
+Ninit: 500
+max_rounds: 1
