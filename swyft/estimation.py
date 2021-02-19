@@ -204,13 +204,20 @@ class RatioEstimator:
             obs0 (dict): Observation of interest.
             prior (Prior): (Constrained) prior used to generate training data.
             n_samples (int): Number of samples to return.
+
+        Note:
+            log_priors are not normalized.
         """
         pars = prior.sample(n_samples)  # prior samples
+
+        # Unmasked original wrongly normalized log_prob densities
+        log_probs = prior.log_prob(pars, unmasked = True)
+
         lnL = self.lnL(obs0, pars)  # evaluate lnL for reference observation
         weights = {}
         for k, v in lnL.items():
             weights[k] = np.exp(v)
-        return dict(params=pars, weights=weights)
+        return dict(params=pars, weights=weights, log_priors = log_probs)
 
 
 class Points:

@@ -14,52 +14,52 @@ from .utils import grid_interpolate_samples, verbosity
 #    return levels
 
 
-def cont2d(
-    ax, labels, post, cmap: str = "gray_r",
-):
-    """Create a 2d contour plot.
+#def cont2d(
+#    ax, labels, samples, cmap: str = "gray_r",
+#):
+#    """Create a 2d contour plot.
+#
+#    Args:
+#        ax (matplotlib.axes.Axes): matplotlib axes
+#        re: train ratio estimator
+#        x0: true observation
+#        z0: true parameters
+#        i: combination index
+#        j: combination index
+#        cmap: color map
+#        max_n_points: number of points to train on
+#    """
+#    #    z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
+#    #    levels = get_contour_levels(p)
+#
+#    #    if z0 is not None:
+#    #        ax.axvline(z0[i], color="r", ls=":")
+#    #        ax.axhline(z0[j], color="r", ls=":")
+#
+#    #    N = 100 * 1j
+#    #    extent = [z[:, 0].min(), z[:, 0].max(), z[:, 1].min(), z[:, 1].max()]
+#    #    xs, ys = np.mgrid[
+#    #        z[:, 0].min() : z[:, 0].max() : N, z[:, 1].min() : z[:, 1].max() : N
+#    #    ]
+#    #    resampled = griddata(z, p, (xs, ys))
+#    #    ax.imshow(resampled.T, extent=extent, origin="lower", cmap=cmap, aspect="auto")
+#    #    ax.tricontour(z[:, 0], z[:, 1], -p, levels=-levels, colors="k", linestyles=["-"])
+#    w = samples[labels]["weight"]
+#    w = samples[labels]["weight"]
+#    plt.scatter()
 
-    Args:
-        ax (matplotlib.axes.Axes): matplotlib axes
-        re: train ratio estimator
-        x0: true observation
-        z0: true parameters
-        i: combination index
-        j: combination index
-        cmap: color map
-        max_n_points: number of points to train on
-    """
-    #    z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
-    #    levels = get_contour_levels(p)
 
-    #    if z0 is not None:
-    #        ax.axvline(z0[i], color="r", ls=":")
-    #        ax.axhline(z0[j], color="r", ls=":")
-
-    #    N = 100 * 1j
-    #    extent = [z[:, 0].min(), z[:, 0].max(), z[:, 1].min(), z[:, 1].max()]
-    #    xs, ys = np.mgrid[
-    #        z[:, 0].min() : z[:, 0].max() : N, z[:, 1].min() : z[:, 1].max() : N
-    #    ]
-    #    resampled = griddata(z, p, (xs, ys))
-    #    ax.imshow(resampled.T, extent=extent, origin="lower", cmap=cmap, aspect="auto")
-    #    ax.tricontour(z[:, 0], z[:, 1], -p, levels=-levels, colors="k", linestyles=["-"])
-    w = post[labels]["weight"]
-    w = post[labels]["weight"]
-    plt.scatter()
-
-
-def hist1d(ax, re, x0, z0, i, max_n_points=1000):
-    if z0 is not None:
-        ax.axvline(z0[i], color="r", ls=":")
-    z, p = re.posterior(x0, i, max_n_points=max_n_points)
-    ax.plot(z, p, "k")
+#def hist1d(ax, re, x0, z0, i, max_n_points=1000):
+#    if z0 is not None:
+#        ax.axvline(z0[i], color="r", ls=":")
+#    z, p = re.posterior(x0, i, max_n_points=max_n_points)
+#    ax.plot(z, p, "k")
 
 
 def plot1d(
-    post,
+    samples,
     params,
-    figsize=(15, 5),
+    figsize=(15, 10),
     color="k",
     labels=None,
     ncol=None,
@@ -86,13 +86,15 @@ def plot1d(
         labels = [params[i] for i in range(K)]
 
     for k in range(K):
-        if nrow == 1:
+        if nrow == 1 and ncol > 1:
             ax = axes[k]
+        elif nrow == 1 and ncol == 1:
+            ax = axes
         else:
             i, j = k % ncol, k // ncol
             ax = axes[j, i]
         plot_posterior(
-            post,
+            samples,
             params[k],
             ax=ax,
             grid_interpolate=grid_interpolate,
@@ -105,7 +107,7 @@ def plot1d(
 
 
 def corner(
-    post,
+    samples,
     params,
     figsize=(10, 10),
     color="k",
@@ -157,13 +159,13 @@ def corner(
             # 2-dim plots
             if j < i:
                 plot_posterior(
-                    post, [params[j], params[i]], ax=ax, color=color, bins=bins
+                    samples, [params[j], params[i]], ax=ax, color=color, bins=bins
                 )
                 if truth is not None:
                     ax.axvline(truth[params[j]], color="r")
                     ax.axhline(truth[params[i]], color="r")
             if j == i:
-                plot_posterior(post, params[i], ax=ax, color=color, bins=bins)
+                plot_posterior(samples, params[i], ax=ax, color=color, bins=bins)
                 if truth is not None:
                     ax.axvline(truth[params[i]], ls=":", color="r")
 
@@ -193,7 +195,7 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 
 
 def plot_posterior(
-    post,
+    samples,
     params,
     weights_key=None,
     ax=plt,
@@ -208,15 +210,18 @@ def plot_posterior(
     if weights_key is None:
         weights_key = tuple(sorted(params))
     try:
-        w = post["weights"][tuple(weights_key)]
-    except KeyError:
-        w = None
+        w = samples["weights"][tuple(weights_key)]
+    except KeyError:  
+        return  # do not plot anything if weights are missing
 
     if len(params) == 1:
-        x = post["params"][params[0]]
+        x = samples["params"][params[0]]
 
         if grid_interpolate:
-            zm, v = grid_interpolate_samples(x, w)
+            # Grid interpolate samples
+            log_prior = samples['log_priors'][params[0]]
+            w_eff = np.exp(np.log(w) + log_prior)  # p(z|x) = r(x, z) p(z)
+            zm, v = grid_interpolate_samples(x, w_eff)
         else:
             v, e = np.histogram(x, weights=w, bins=bins, density=True)
             zm = (e[1:] + e[:-1]) / 2
@@ -227,8 +232,9 @@ def plot_posterior(
         ax.set_xlim([x.min(), x.max()])
         ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
     elif len(params) == 2:
-        x = post["params"][params[0]]
-        y = post["params"][params[1]]
+        # FIXME: use interpolation when grid_interpolate == True
+        x = samples["params"][params[0]]
+        y = samples["params"][params[1]]
         counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap="gray_r")
         levels = sorted(get_contour_levels(counts))
         try:

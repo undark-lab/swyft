@@ -53,6 +53,8 @@ class Marginals:
         Note: Observations must be restricted to constrained prior space to
         lead to valid results.
         """
+        # FIXME: Make return of log_priors conditional on constrained prior
+        # being factorizable
         return self._re.posterior(obs, self._prior, n_samples=n_samples)
 
     def state_dict(self):
