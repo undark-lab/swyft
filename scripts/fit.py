@@ -1,48 +1,29 @@
 #!/usr/bin/env python3
 
 import logging
-
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-import heads
 import numpy as np
 import pylab as plt
-import simulators
 import torch
 from omegaconf import OmegaConf
 
 import swyft
+from swyft_model import noise, prior, model, par0, obs0, CustomHead
 
 DEVICE = "cuda:0"
-CACHE_PATH = "cache_FermiV1.zarr"
-
-
-def noise(obs, params=None, sigma=1.0):
-    data = {k: v + np.random.randn(*v.shape) * sigma for k, v in obs.items()}
-    return data
-
 
 def main():
-    root = conf_cli = OmegaConf.from_cli().root
-    conf = OmegaConf.load(root + ".yaml")
-
-    # Define model and prior
-    prior = simulators.prior_FermiV1
-    model = simulators.model_FermiV1
-
-    # Target observation
-    par0 = dict(ox=5.0, oy=5.0, a=1.5, p1=0.4, p2=1.1)
-    obs0 = noise(model(par0))
+    conf = OmegaConf.load("swyft_config.yaml")
 
     params = par0.keys()
     obs_shapes = {k: v.shape for k, v in obs0.items()}
-
-    cache = swyft.DirectoryCache(params, obs_shapes=obs_shapes, path=CACHE_PATH)
+    cache = swyft.DirectoryCache(params, obs_shapes=obs_shapes, path=conf.cache)
 
     s = swyft.NestedRatios(
         model,
         prior,
-        noise=None,
+        noise=noise,
         obs=obs0,
         device=DEVICE,
         Ninit=conf.Ninit,
@@ -53,12 +34,12 @@ def main():
     s.run(
         max_rounds=conf.max_rounds,
         train_args=conf.train_args,
-        head=heads.Head_FermiV1,
+        head=CustomHead,
         tail_args=conf.tail_args,
         head_args=conf.head_args,
     )
 
-    samples = s.marginals(obs0, 10000)
+    samples = s.marginals(obs0, 3000)
     swyft.plot.plot1d(
         samples,
         list(prior.params()),
@@ -67,12 +48,11 @@ def main():
         grid_interpolate=True,
         truth=par0,
     )
-    plt.savefig("%s.marginals.pdf" % root)
+    plt.savefig("marginals.pdf")
 
     diagnostics = swyft.utils.sample_diagnostics(samples)
     state_dict = {"NestedRatios": s.state_dict(), "diagnostics": diagnostics}
-    torch.save(state_dict, "%s.diags.pt" % root)
-
+    torch.save(state_dict, "sample_diagnostics.pt")
 
 if __name__ == "__main__":
     main()
