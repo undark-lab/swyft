@@ -521,7 +521,7 @@ class NestedRatios:
     ):
         """Perform amortized inference on constrained priors."""
         if self._cache.requires_sim:
-            raise MissingModelError("Model not defined.")
+            raise MissingModelError("Some points in the cache have not been simulated yet.")
 
         logging.info("Starting neural network training.")
         indices = self._cache.sample(prior, N)
