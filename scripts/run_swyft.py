@@ -1,55 +1,72 @@
 #!/usr/bin/env python3
+# Requires python 3.5+
 
 import logging
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
+import os
+import importlib.util
 import numpy as np
 import pylab as plt
 import torch
 from omegaconf import OmegaConf
 
 import swyft
-from swyft_model import noise, prior, model, par0, obs0, CustomHead
 
 DEVICE = "cuda:0"
 
 def main():
-    conf = OmegaConf.load("swyft_config.yaml")
+    # Pretty hacky way to import local model
+    # https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
+    cwd = os.getcwd()
+    spec = importlib.util.spec_from_file_location("defs", cwd+"/definitions.py")
+    defs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(defs)
 
-    params = par0.keys()
-    obs_shapes = {k: v.shape for k, v in obs0.items()}
+    # Load configuration file
+    conf = OmegaConf.load("config.yaml")
+
+    # Set up cache
+    params = defs.par0.keys()
+    obs_shapes = {k: v.shape for k, v in defs.obs0.items()}
     cache = swyft.DirectoryCache(params, obs_shapes=obs_shapes, path=conf.cache)
 
+    # Set up nested ratio estimator
     s = swyft.NestedRatios(
-        model,
-        prior,
-        noise=noise,
-        obs=obs0,
+        defs.model,
+        defs.prior,
+        noise=defs.noise,
+        obs=defs.obs0,
         device=DEVICE,
         Ninit=conf.Ninit,
         Nmax=conf.Nmax,
         cache=cache,
     )
 
+    # Fit!
     s.run(
         max_rounds=conf.max_rounds,
         train_args=conf.train_args,
-        head=CustomHead,
+        head=defs.CustomHead,
         tail_args=conf.tail_args,
         head_args=conf.head_args,
     )
 
-    samples = s.marginals(obs0, 3000)
+    # Post processing and evaluation
+    samples = s.marginals(defs.obs0, 3000)
+
+    # Save marginals
     swyft.plot.plot1d(
         samples,
-        list(prior.params()),
+        list(defs.prior.params()),
         figsize=(20, 4),
         ncol=5,
         grid_interpolate=True,
-        truth=par0,
+        truth=defs.par0,
     )
     plt.savefig("marginals.pdf")
 
+    # Save diagnostics
     diagnostics = swyft.utils.sample_diagnostics(samples)
     state_dict = {"NestedRatios": s.state_dict(), "diagnostics": diagnostics}
     torch.save(state_dict, "sample_diagnostics.pt")
