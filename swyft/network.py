@@ -1,6 +1,7 @@
 # pylint: disable=no-member, not-callable, access-member-before-definition
 import math
-from typing import Callable, Optional
+from functools import partial
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import torch
@@ -328,6 +329,120 @@ class DefaultTail(Module):
         x = self.ratio_estimator(x)
         x = x.squeeze(-1)
         return x
+
+
+class GenericTail(nn.Module):
+    def __init__(
+        self,
+        num_observation_features: int,
+        parameter_list,
+        get_ratio_estimator: Callable[[int, int], nn.Module],
+        get_observation_embedding: Optional[Callable[[int, int], nn.Module]] = None,
+        get_parameter_embedding: Optional[Callable[[int, int], nn.Module]] = None,
+        online_z_score_obs: bool = True,
+        online_z_score_par: bool = True,
+    ):
+        super().__init__()
+        self.register_buffer("num_observation_features", num_observation_features)
+        self.register_buffer("parameter_list", parameter_list)
+        num_channels, num_parameters = _get_z_shape(self.parameter_list)
+        self.register_buffer("num_channels", num_channels)
+        self.register_buffer("num_parameters", num_parameters)
+
+        self.online_normalization_observations = (
+            OnlineNormalizationLayer((num_channels, num_parameters))
+            if online_z_score_obs
+            else nn.Identity()
+        )
+        self.online_normalization_parameters = (
+            OnlineNormalizationLayer((num_channels, num_parameters))
+            if online_z_score_par
+            else nn.Identity()
+        )
+
+        if get_observation_embedding is None:
+            self.embed_observation = torch.nn.Identity()
+        else:
+            self.embed_observation = get_observation_embedding(
+                num_channels, num_observation_features
+            )
+        _, _, dim_observation_embedding = self.embed_observation(
+            torch.zeros(1, num_channels, num_observation_features)
+        ).shape
+
+        if get_parameter_embedding is None:
+            self.embed_parameter = torch.nn.Identity()
+        else:
+            self.embed_parameter = get_parameter_embedding(num_channels, num_parameters)
+        _, _, dim_parameter_embedding = self.embed_observation(
+            torch.zeros(1, num_channels, num_parameters)
+        ).shape
+
+        self.ratio_estimator = get_ratio_estimator(
+            num_channels, dim_observation_embedding + dim_parameter_embedding,
+        )
+
+    def _channelize_observation(self, observation):
+        shape = observation.shape
+        return observation.unsqueeze(-2).expand(
+            *shape[:-1], self.num_channels, shape[-1]
+        )
+
+    def forward(self, observation: torch.Tensor, parameters: Dict[str, torch.Tensor]):
+        obs = self._channelize_observation(observation)
+        par = _combine(parameters, self.parameter_list)
+
+        obs_zscored = self.online_normalization_observations(obs)
+        par_zscored = self.online_normalization_parameters(par)
+
+        obs_embedded = self.embed_observation(obs_zscored)
+        par_embedded = self.embed_parameter(par_zscored)
+
+        both = torch.cat([obs_embedded, par_embedded], dim=-1)
+        out = self.ratio_estimator(both)
+        return out.squeeze(-1)
+
+
+def make_resenet_tail(
+    num_observation_features: int,
+    parameter_list,
+    hidden_features: int,
+    num_blocks: int,
+    online_z_score_obs: bool = True,
+    online_z_score_par: bool = True,
+    dropout_probability: float = 0.0,
+    activation=F.relu,
+    use_batch_norm: bool = True,
+):
+    get_ratio_estimator = partial(
+        ResidualNet,
+        out_features=1,
+        hidden_features=hidden_features,
+        num_blocks=num_blocks,
+        activation=activation,
+        dropout_probability=dropout_probability,
+        use_batch_norm=use_batch_norm,
+    )
+    get_observation_embedding = partial(
+        ResidualNet,
+        out_features=hidden_features,
+        hidden_features=hidden_features,
+        num_blocks=1,
+        activation=activation,
+        dropout_probability=dropout_probability,
+        use_batch_norm=use_batch_norm,
+    )
+    get_parameter_embedding = None
+
+    return GenericTail(
+        num_observation_features,
+        parameter_list,
+        get_ratio_estimator,
+        get_observation_embedding,
+        get_parameter_embedding,
+        online_z_score_obs,
+        online_z_score_par,
+    )
 
 
 # FIXME: Remove obs_transform. This should not be required for anything.
