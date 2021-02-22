@@ -64,9 +64,9 @@ class DefaultTail(Module):
         # Feature compressor
         if self.tail_features:
             n_hidden = 256
-            self.fcA = LinearWithChannel(n_features, n_hidden, n_channels)
-            self.fcB = LinearWithChannel(n_hidden, n_hidden, n_channels)
-            self.fcC = LinearWithChannel(n_hidden, n_tail_features, n_channels)
+            self.fcA = LinearWithChannel(n_channels, n_features, n_hidden)
+            self.fcB = LinearWithChannel(n_channels, n_hidden, n_hidden)
+            self.fcC = LinearWithChannel(n_channels, n_hidden, n_tail_features)
         else:
             n_tail_features = n_features
 
@@ -83,17 +83,17 @@ class DefaultTail(Module):
         if isinstance(p, float):
             p = [p for i in range(len(hidden_layers))]
         ratio_estimator_config = [
-            LinearWithChannel(pdim + n_tail_features, hidden_layers[0], n_channels),
+            LinearWithChannel(n_channels, pdim + n_tail_features, hidden_layers[0]),
             nn.ReLU(),
             nn.Dropout(p=p[0]),
         ]
         for i in range(len(hidden_layers) - 1):
             ratio_estimator_config += [
-                LinearWithChannel(hidden_layers[i], hidden_layers[i + 1], n_channels),
+                LinearWithChannel(n_channels, hidden_layers[i], hidden_layers[i + 1]),
                 nn.ReLU(),
                 nn.Dropout(p=p[i + 1]),
             ]
-        ratio_estimator_config += [LinearWithChannel(hidden_layers[-1], 1, n_channels)]
+        ratio_estimator_config += [LinearWithChannel(n_channels, hidden_layers[-1], 1)]
         self.ratio_estimator = nn.Sequential(*ratio_estimator_config)
 
         self.af = nn.ReLU()
@@ -135,13 +135,26 @@ class GenericTail(nn.Module):
     def __init__(
         self,
         num_observation_features: int,
-        parameter_list,
+        parameter_list: list,
         get_ratio_estimator: Callable[[int, int], nn.Module],
         get_observation_embedding: Optional[Callable[[int, int], nn.Module]] = None,
         get_parameter_embedding: Optional[Callable[[int, int], nn.Module]] = None,
         online_z_score_obs: bool = True,
         online_z_score_par: bool = True,
     ):
+        """Returns an object suitable for use as a tail in NestedRatios.
+
+        For the various get_* callables, we recommend use of the functools.partial function.
+
+        Args:
+            num_observation_features (int): dimensionality of observation
+            parameter_list (list): list of parameter names
+            get_ratio_estimator (Callable[[int, int], nn.Module]): function taking num_channels, dim_observation_embedding + dim_parameter_embedding to torch Module
+            get_observation_embedding (Optional[Callable[[int, int], nn.Module]], optional): function taking num_channels, num_observation_features to torch Module. Defaults to None.
+            get_parameter_embedding (Optional[Callable[[int, int], nn.Module]], optional): function taking num_channels, num_parameters to torch Module. Defaults to None.
+            online_z_score_obs (bool, optional): perform standard scoring of observation before embedding. Defaults to True.
+            online_z_score_par (bool, optional): perform standard scoring of parameter before embedding. Defaults to True.
+        """
         super().__init__()
         self.register_buffer(
             "num_observation_features", torch.tensor(num_observation_features)

@@ -29,7 +29,7 @@ class ResidualBlockWithChannel(nn.Module):
                 [BatchNorm1dWithChannel(channels, features, eps=1e-3) for _ in range(2)]
             )
         self.linear_layers = nn.ModuleList(
-            [LinearWithChannel(features, features, channels) for _ in range(2)]
+            [LinearWithChannel(channels, features, features) for _ in range(2)]
         )
         self.dropout = nn.Dropout(p=dropout_probability)
         if zero_initialization:
@@ -66,7 +66,7 @@ class ResidualNet(nn.Module):
     ):
         super().__init__()
         self.hidden_features = hidden_features
-        self.initial_layer = LinearWithChannel(in_features, hidden_features, channels)
+        self.initial_layer = LinearWithChannel(channels, in_features, hidden_features)
         self.blocks = nn.ModuleList(
             [
                 ResidualBlockWithChannel(
@@ -79,7 +79,7 @@ class ResidualNet(nn.Module):
                 for _ in range(num_blocks)
             ]
         )
-        self.final_layer = LinearWithChannel(hidden_features, out_features, channels)
+        self.final_layer = LinearWithChannel(channels, hidden_features, out_features)
 
     def forward(self, inputs):
         temps = self.initial_layer(inputs)

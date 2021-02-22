@@ -6,7 +6,7 @@ import torch.nn as nn
 
 # From: https://github.com/pytorch/pytorch/issues/36591
 class LinearWithChannel(nn.Module):
-    def __init__(self, input_size, output_size, channel_size):
+    def __init__(self, channel_size, input_size, output_size):
         super(LinearWithChannel, self).__init__()
 
         # initialize weights
