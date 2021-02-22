@@ -343,14 +343,17 @@ class GenericTail(nn.Module):
         online_z_score_par: bool = True,
     ):
         super().__init__()
-        self.register_buffer("num_observation_features", num_observation_features)
-        self.register_buffer("parameter_list", parameter_list)
+        self.register_buffer(
+            "num_observation_features", torch.tensor(num_observation_features)
+        )
+        self.parameter_list = parameter_list
+        # self.register_buffer("parameter_list", torch.tensor(parameter_list))  # How to save the params list??
         num_channels, num_parameters = _get_z_shape(self.parameter_list)
-        self.register_buffer("num_channels", num_channels)
-        self.register_buffer("num_parameters", num_parameters)
+        self.register_buffer("num_channels", torch.tensor(num_channels))
+        self.register_buffer("num_parameters", torch.tensor(num_parameters))
 
         self.online_normalization_observations = (
-            OnlineNormalizationLayer((num_channels, num_parameters))
+            OnlineNormalizationLayer((num_channels, num_observation_features))
             if online_z_score_obs
             else nn.Identity()
         )
@@ -367,15 +370,15 @@ class GenericTail(nn.Module):
                 num_channels, num_observation_features
             )
         _, _, dim_observation_embedding = self.embed_observation(
-            torch.zeros(1, num_channels, num_observation_features)
+            torch.zeros(10, num_channels, num_observation_features)
         ).shape
 
         if get_parameter_embedding is None:
             self.embed_parameter = torch.nn.Identity()
         else:
             self.embed_parameter = get_parameter_embedding(num_channels, num_parameters)
-        _, _, dim_parameter_embedding = self.embed_observation(
-            torch.zeros(1, num_channels, num_parameters)
+        _, _, dim_parameter_embedding = self.embed_parameter(
+            torch.zeros(10, num_channels, num_parameters)
         ).shape
 
         self.ratio_estimator = get_ratio_estimator(
