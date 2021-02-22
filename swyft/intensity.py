@@ -3,19 +3,7 @@ import numpy as np
 import torch
 from sklearn.neighbors import BallTree
 
-from .types import (
-    Array,
-    Device,
-    Dict,
-    Optional,
-    PathType,
-    PriorConfig,
-    Sequence,
-    Shape,
-    Tuple,
-    Union,
-)
-from .utils import verbosity
+from .types import Array, Dict, PriorConfig, Sequence, Tuple, Union
 
 
 class BallMask:

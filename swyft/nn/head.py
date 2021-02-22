@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ..utils import Module
+from .module import Module
 from .normalization import OnlineNormalizationLayer
 
 

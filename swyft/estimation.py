@@ -4,10 +4,10 @@ import torch.nn as nn
 
 from .cache import Dataset
 from .nn import DefaultHead, DefaultTail
+from .nn.module import Module
 from .train import trainloop
 from .types import Array, Device, Optional, Sequence, Tuple
 from .utils import (
-    Module,
     dict_to_tensor,
     dict_to_tensor_unsqueeze,
     format_param_list,
