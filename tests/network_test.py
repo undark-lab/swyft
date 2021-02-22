@@ -3,7 +3,6 @@ from itertools import product
 
 import pytest
 import torch
-
 from swyft.nn import OnlineNormalizationLayer
 
 

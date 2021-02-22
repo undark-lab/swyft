@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from swyft.estimation import RatioEstimator
 from swyft.eval import eval_net, get_ratios
 

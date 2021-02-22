@@ -4,7 +4,6 @@ from itertools import product
 import numpy as np
 import pytest
 import torch
-
 from swyft.utils import (
     array_to_tensor,
     np_bool_types,

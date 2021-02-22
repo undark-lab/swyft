@@ -5,7 +5,6 @@ from itertools import product
 import numpy as np
 import pytest
 import torch
-
 from swyft.intensity import (
     FactorMask,
     Intensity,

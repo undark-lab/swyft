@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
 from swyft.cache import MemoryCache
 from swyft.estimation import Points, RatioEstimator
 from swyft.intensity import get_unit_intensity
