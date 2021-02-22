@@ -5,10 +5,10 @@ import numpy as np
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-from .cache import DirectoryCache, MemoryCache
+from .cache import MemoryCache
 from .estimation import Points, RatioEstimator
 from .intensity import Prior
-from .network import DefaultHead, DefaultTail
+from .nn import DefaultHead, DefaultTail
 from .types import Dict
 from .utils import all_finite, format_param_list
 

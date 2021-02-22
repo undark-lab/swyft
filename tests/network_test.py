@@ -4,7 +4,7 @@ from itertools import product
 import pytest
 import torch
 
-from swyft.network import OnlineNormalizationLayer
+from swyft.nn import OnlineNormalizationLayer
 
 
 class TestNormalizationLayer:

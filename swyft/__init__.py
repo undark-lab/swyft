@@ -2,7 +2,7 @@ from .cache import DirectoryCache, MemoryCache
 from .estimation import Points, RatioEstimator
 from .intensity import Prior
 from .interface import Marginals, NestedRatios
-from .network import DefaultHead, DefaultTail, OnlineNormalizationLayer
+from .nn import DefaultHead, DefaultTail, OnlineNormalizationLayer
 from .plot import corner, plot1d
 from .utils import Module, format_param_list, set_verbosity
 

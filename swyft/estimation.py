@@ -1,39 +1,17 @@
 # pylint: disable=no-member, not-callable
-from copy import deepcopy
-from warnings import warn
-
 import numpy as np
-import torch
 import torch.nn as nn
-from scipy.integrate import trapz
-from scipy.special import xlogy
 
-from .cache import Dataset, Normalize
-from .network import DefaultHead, DefaultTail
+from .cache import Dataset
+from .nn import DefaultHead, DefaultTail
 from .train import trainloop
-from .types import (
-    Array,
-    Callable,
-    Combinations,
-    Device,
-    Dict,
-    Optional,
-    PathType,
-    Sequence,
-    Tuple,
-    Union,
-)
+from .types import Array, Device, Optional, Sequence, Tuple
 from .utils import (
     Module,
-    array_to_tensor,
-    dict_to_device,
     dict_to_tensor,
     dict_to_tensor_unsqueeze,
     format_param_list,
     get_obs_shapes,
-    process_combinations,
-    tobytes,
-    verbosity,
 )
 
 
@@ -211,13 +189,13 @@ class RatioEstimator:
         pars = prior.sample(n_samples)  # prior samples
 
         # Unmasked original wrongly normalized log_prob densities
-        log_probs = prior.log_prob(pars, unmasked = True)
+        log_probs = prior.log_prob(pars, unmasked=True)
 
         lnL = self.lnL(obs0, pars)  # evaluate lnL for reference observation
         weights = {}
         for k, v in lnL.items():
             weights[k] = np.exp(v)
-        return dict(params=pars, weights=weights, log_priors = log_probs)
+        return dict(params=pars, weights=weights, log_priors=log_probs)
 
 
 class Points:
