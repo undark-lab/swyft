@@ -349,7 +349,7 @@ class NestedRatios:
     ):
         """Convenience function to generate 1d marginals."""
         param_list = format_param_list(params, all_params=self._cache.params, mode="1d")
-        logging.info("Generating marginals for:", str(param_list))
+        logging.info(f"Generating marginals for: {param_list}")
         return self.gen_custom_marginals(
             param_list,
             N=N,
@@ -372,7 +372,7 @@ class NestedRatios:
     ):
         """Convenience function to generate 2d marginals."""
         param_list = format_param_list(params, all_params=self._cache.params, mode="2d")
-        logging.info("Generating marginals for: %s" % str(param_list))
+        logging.info(f"Generating marginals for: {param_list}")
         return self.gen_custom_marginals(
             param_list,
             N=N,

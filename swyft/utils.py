@@ -167,6 +167,20 @@ def array_to_tensor(
         )
 
 
+def tensor_to_array(
+    tensor: Array, dtype: Optional[np.dtype] = None, copy: bool = True
+) -> np.ndarray:
+    if isinstance(tensor, torch.Tensor):
+        out = np.asarray(tensor.detach().cpu().numpy(), dtype=dtype)
+    else:
+        out = np.asarray(tensor, dtype=dtype)
+
+    if copy:
+        return out.copy()
+    else:
+        return out
+
+
 def tobytes(x: Array):
     if isinstance(x, np.ndarray):
         return x.tobytes()

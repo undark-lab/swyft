@@ -4,6 +4,7 @@ import torch
 from sklearn.neighbors import BallTree
 
 from .types import Array, Dict, PriorConfig, Sequence, Tuple, Union
+from .utils import tensor_to_array
 
 
 class BallMask:
@@ -168,7 +169,7 @@ class Prior1d:
             raise KeyError("Tag unknown")
 
     def sample(self, N):
-        return self.prior.sample((N,)).type(torch.float64).numpy()
+        return tensor_to_array(self.prior.sample((N,)), np.float64)
 
     def log_prob(self, value):
         return self.prior.log_prob(value).numpy()
@@ -213,7 +214,7 @@ class Prior:
     def _sample_from_priors(self, N):
         result = {}
         for key, value in self.priors.items():
-            result[key] = np.array(value.sample(N))
+            result[key] = tensor_to_array(value.sample(N))
         return result
 
     def volume(self):
