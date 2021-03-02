@@ -5,10 +5,6 @@ In particular, please provide details about your simulator, the setup that you u
 
 Bug reports, feature requests, etc. are available on [issues on GitHub](https://github.com/mackelab/sbi/issues).
 
-To report bugs and suggest features (including better documentation), please equally
-head over to [issues on GitHub](https://github.com/undark-lab/swyft/issues).
-
-
 ## Would you like to contribute code?
 
 Although our git history doesn't show it at this point, we try to use pull requests when we change `swyft`.
