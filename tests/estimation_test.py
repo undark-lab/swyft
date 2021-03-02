@@ -1,15 +1,14 @@
 import tempfile
-from copy import deepcopy
 from functools import partial
-from itertools import product
 
 import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+
 from swyft.cache import MemoryCache
-from swyft.estimation import Points, RatioEstimator
-from swyft.intensity import get_unit_intensity
+from swyft.inference import RatioEstimator
+from swyft.ip3 import Points, get_unit_intensity
 
 
 def sim_repeat_noise(theta, num_copies):

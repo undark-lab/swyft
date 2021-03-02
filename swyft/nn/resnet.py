@@ -4,8 +4,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn import init
 
-from .batchnorm import BatchNorm1dWithChannel
-from .linear import LinearWithChannel
+from swyft.nn.batchnorm import BatchNorm1dWithChannel
+from swyft.nn.linear import LinearWithChannel
 
 
 class ResidualBlockWithChannel(nn.Module):

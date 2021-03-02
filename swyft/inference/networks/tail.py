@@ -4,9 +4,9 @@ from typing import Callable, Dict, Optional
 import torch
 import torch.nn as nn
 
-from .linear import LinearWithChannel
-from .module import Module
-from .normalization import OnlineNormalizationLayer
+from swyft.nn.linear import LinearWithChannel
+from swyft.nn.module import Module
+from swyft.nn.normalization import OnlineNormalizationLayer
 
 
 def _get_z_shape(param_list):
@@ -195,7 +195,8 @@ class GenericTail(nn.Module):
         ).shape
 
         self.ratio_estimator = get_ratio_estimator(
-            num_channels, dim_observation_embedding + dim_parameter_embedding,
+            num_channels,
+            dim_observation_embedding + dim_parameter_embedding,
         )
 
     def _channelize_observation(self, observation):
