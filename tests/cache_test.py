@@ -4,6 +4,7 @@ from itertools import product
 
 import pytest
 import torch
+
 from swyft.cache import Cache, DirectoryCache, MemoryCache
 
 

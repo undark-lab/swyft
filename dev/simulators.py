@@ -1,4 +1,5 @@
 import numpy as np
+
 import swyft
 
 prior_FermiV1 = swyft.Prior(

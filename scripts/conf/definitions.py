@@ -1,6 +1,7 @@
 import numpy as np
-import swyft
 import torch
+
+import swyft
 
 prior = swyft.Prior(
     {

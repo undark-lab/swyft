@@ -13,7 +13,7 @@ class BatchNorm1dWithChannel(nn.BatchNorm1d):
         track_running_stats: bool = True,
     ):
         """BatchNorm1d over the batch, N. Requires shape (N, C, L).
-        
+
         Otherwise, same as torch.nn.BatchNorm1d with extra num_channel. Cannot do the temporal batch norm case.
         """
         num_features = num_channels * num_features

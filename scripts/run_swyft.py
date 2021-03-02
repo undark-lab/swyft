@@ -10,9 +10,10 @@ import os
 
 import numpy as np
 import pylab as plt
-import swyft
 import torch
 from omegaconf import OmegaConf
+
+import swyft
 
 DEVICE = "cuda:0"
 

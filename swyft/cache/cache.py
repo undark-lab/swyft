@@ -102,7 +102,7 @@ class Cache(ABC):
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
 
         # Requires simulation flag
-        m = root.zeros(
+        m = root.zeros(  # noqa: F841
             self._filesystem.requires_simulation,
             shape=(0, 1),
             chunks=(100000, 1),
@@ -110,7 +110,7 @@ class Cache(ABC):
         )
 
         # Failed simulation flag
-        f = root.zeros(
+        f = root.zeros(  # noqa: F841
             self._filesystem.failed_simulation,
             shape=(0, 1),
             chunks=(100000, 1),
@@ -118,7 +118,7 @@ class Cache(ABC):
         )
 
         # Which intensity flag
-        wu = self.root.zeros(
+        wu = self.root.zeros(  # noqa: F841
             self._filesystem.which_intensity,
             shape=(0,),
             chunks=(100000,),
@@ -126,7 +126,7 @@ class Cache(ABC):
         )
 
         # Intensity object
-        u = root.create(
+        u = root.create(  # noqa: F841
             self._filesystem.intensity,
             shape=(0,),
             dtype=object,
@@ -265,7 +265,7 @@ class Cache(ABC):
             self.u[-1] = intensity.state_dict()
             self.intensities.append(intensity)
 
-    def sample(self, prior: "swyft.intensity.Intensity", N):
+    def sample(self, prior: "swyft.intensity.Intensity", N):  # noqa
         """Sample from Cache.
 
         Args:
