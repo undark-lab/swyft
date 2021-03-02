@@ -5,12 +5,11 @@ import numpy as np
 import pytest
 import torch
 
-from swyft.utils import (
+from swyft.utils.array import (
     array_to_tensor,
     np_bool_types,
     np_float_types,
     np_int_types,
-    torch_bool_types,
     torch_float_types,
     torch_int_types,
 )
