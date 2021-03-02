@@ -30,6 +30,7 @@ and a few other code format rules before every commit.
 It is a good idea to run `pytest` before making commits you intend to pull into the master branch.
 
 Please use [Google Style](http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for docstrings and comments.
+We also highly recommend the use of the **[flake8](https://flake8.pycqa.org/en/latest/)** linter, although we do not have a CLI for it right now.
 
 ## Online documentation
 
