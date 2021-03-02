@@ -1,5 +1,6 @@
 [![PyPI version](https://badge.fury.io/py/swyft.svg)](https://badge.fury.io/py/swyft)
-[![Tests](https://github.com/undark-lab/swyft/actions/workflows/push.yml/badge.svg)](https://github.com/undark-lab/swyft/actions)
+[![Tests](https://github.com/undark-lab/swyft/actions/workflows/tests.yml/badge.svg)](https://github.com/undark-lab/swyft/actions)
+[![Syntax](https://github.com/undark-lab/swyft/actions/workflows/syntax.yml/badge.svg)](https://github.com/undark-lab/swyft/actions)
 [![Documentation Status](https://readthedocs.org/projects/swyft/badge/?version=latest)](https://swyft.readthedocs.io/en/latest/?badge=latest)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/undark-lab/swyft/blob/master/CONTRIBUTING.md)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
