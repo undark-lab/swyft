@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, List, Union
 from warnings import warn
 
 import numcodecs
@@ -212,20 +212,21 @@ class Cache(ABC):
         wu = self.intensity_len * np.ones(n, dtype="int")
         self.wu.append(wu)
 
-    def intensity(self, z: Array) -> np.ndarray:
-        """Evaluate the cache's intensity function.
-
-        Args:
-            z: list of parameter values.
-        """
+    def log_intensity(self, z: Dict[str, np.ndarray]) -> np.ndarray:
         self._update()
 
+        # How many parameters are we evaluating on?
+        shapes = [array.shape for array in z.values()]
+        shape = shapes[0]
+        assert all(shape == s for s in shapes)
+        length = shape[0]
+
         if len(self.u) == 0:
-            d = len(z[list(z)[0]])
-            return np.zeros(d)
+            # An empty cache has log intensity of -infinity.
+            return -np.inf * np.ones(length)
         else:
-            return np.array(
-                [self.intensities[i](z) for i in range(len(self.intensities))]
+            return np.stack(
+                [log_intensity(z) for log_intensity in self.intensities]
             ).max(axis=0)
 
     def grow(self, prior: "swyft.intensity.Intensity", N):  # noqa
@@ -241,7 +242,7 @@ class Cache(ABC):
 
         # Rejection sampling from proposal list
         accepted = []
-        cached_log_intensities = self.intensity(z_prop)
+        cached_log_intensities = self.log_intensity(z_prop)
         target_log_intensities = intensity(z_prop)
         for cached_log_intensity, target_log_intensity in zip(
             cached_log_intensities, target_log_intensities
@@ -266,22 +267,17 @@ class Cache(ABC):
             self.u[-1] = intensity.state_dict()
             self.intensities.append(intensity)
 
-    def sample(self, prior: "swyft.intensity.Intensity", N):  # noqa
-        """Sample from Cache.
-
-        Args:
-            intensity: target parameter intensity function
-        """
+    def sample(
+        self, prior: "swyft.intensity.Intensity", N: int
+    ) -> List[int]:  # noqa: F821
         intensity = Intensity(prior, N)
 
         self._update()
 
-        # self.grow(prior, N)
-
         accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
 
-        cached_intensities = self.intensity(zlist)
+        cached_intensities = self.log_intensity(zlist)
         target_intensities = intensity(zlist)
         assert len(self) == len(cached_intensities)
         assert len(self) == len(target_intensities)

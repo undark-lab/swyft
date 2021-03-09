@@ -1,4 +1,5 @@
 import logging
+from warnings import warn
 
 import numpy as np
 
@@ -29,7 +30,7 @@ class NestedRatios:
         Ninit=3000,
         Nmax=100000,
         density_factor=2.0,
-        volume_conv_th=0.1,
+        log_volume_convergence_threshold=0.1,
     ):
         """Initialize swyft.
 
@@ -42,11 +43,11 @@ class NestedRatios:
             Ninit (int): Initial number of training points.
             Nmax (int): Maximum number of training points per round.
             density_factor (float > 1): Increase of training point density per round.
-            volume_conv_th (float > 0.): Volume convergence threshold.
+            log_volume_convergence_threshold (float > 0.): Convergence threshold measured as difference between log prior volume to log contrainted prior volume.
             device (str): Device.
         """
         assert density_factor > 1.0
-        assert volume_conv_th > 0.0
+        assert log_volume_convergence_threshold > 0.0
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
 
@@ -62,14 +63,11 @@ class NestedRatios:
             Ninit=Ninit,
             Nmax=Nmax,
             density_factor=density_factor,
-            volume_conv_th=volume_conv_th,
+            log_volume_convergence_threshold=log_volume_convergence_threshold,
         )
-        self._converged = False
+        self.converged = False
         self._base_prior = prior  # Initial prior
         self._history = []
-
-    def converged(self):
-        return self._converged
 
     @property
     def _cache(self):
@@ -79,7 +77,8 @@ class NestedRatios:
             )
         return self._cache_reference
 
-    def R(self):
+    @property
+    def num_elapsed_rounds(self):
         """Number of rounds."""
         return len(self._history)
 
@@ -124,8 +123,8 @@ class NestedRatios:
         param_list = self._cache.params
         r = 0
 
-        while (not self.converged()) and (r < max_rounds):
-            logging.info("NRE round: R = %i" % (self.R() + 1))
+        while (not self.converged) and (r < max_rounds):
+            logging.info("NRE round: R = %i" % (self.num_elapsed_rounds + 1))
 
             ##################################################
             # Step 1 - get prior and number of training points
@@ -174,7 +173,7 @@ class NestedRatios:
             r += 1
 
             # Drop previous marginals
-            if (not keep_history) and (self.R() > 1):
+            if (not keep_history) and (self.num_elapsed_rounds > 1):
                 self._history[-2]["marginals"] = None
                 self._history[-2]["constr_prior"] = None
 
@@ -185,10 +184,10 @@ class NestedRatios:
             )
             if (
                 np.log(prior_R.volume()) - np.log(constr_prior_R.volume())
-                < self._config["volume_conv_th"]
+                < self._config["log_volume_convergence_threshold"]
             ):
                 logging.info("Volume converged.")
-                self._converged = True
+                self.converged = True
 
     # NOTE: By convention properties are only quantites that we save in state_dict
     def requires_sim(self):
@@ -262,7 +261,7 @@ class NestedRatios:
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
-        if self.R() == 0:
+        if self.num_elapsed_rounds == 0:
             prior = self._base_prior
         else:
             prior = self._history[-1]["constr_prior"]
@@ -332,7 +331,7 @@ class NestedRatios:
             base_prior=self._base_prior.state_dict(),
             obs=self._obs,
             history=self._history_state_dict(self._history),
-            converged=self._converged,
+            converged=self.converged,
             config=self._config,
         )
 
@@ -343,11 +342,11 @@ class NestedRatios:
         obs = state_dict["obs"]
         config = state_dict["config"]
 
-        nr = NestedRatios(
+        nr = cls(
             model, base_prior, obs, noise=noise, cache=cache, device=device, **config
         )
 
-        nr._converged = state_dict["converged"]
+        nr.converged = state_dict["converged"]
         nr._history = cls._history_from_state_dict(state_dict["history"])
         return nr
 
@@ -356,7 +355,7 @@ class NestedRatios:
 
         param_list = self._cache.params
         D = len(param_list)
-        if self.R() == 0:  # First round
+        if self.num_elapsed_rounds == 0:  # First round
             prior_R = self._base_prior
             N_R = self._config["Ninit"]
         else:  # Subsequent rounds

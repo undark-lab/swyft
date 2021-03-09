@@ -1,3 +1,5 @@
+from typing import Callable, List
+
 import numpy as np
 
 
@@ -8,7 +10,9 @@ class Points:
 
     _save_attrs = ["indices"]
 
-    def __init__(self, indices, cache: "swyft.cache.Cache", noisehook=None):  # noqa
+    def __init__(
+        self, indices: List[int], cache: "swyft.cache.Cache", noisehook: Callable = None
+    ):  # noqa: F821
         """Create a points dataset
 
         Args:
@@ -24,6 +28,9 @@ class Points:
             raise RuntimeError(
                 "The cache has parameters without a corresponding observation. Try running the simulator."
             )
+        assert (
+            len(indices) != 0
+        ), "You passed indices with length zero. That implies no points."
 
         self.cache = cache
         self.noisehook = noisehook

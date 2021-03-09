@@ -131,7 +131,7 @@ class DefaultTail(Module):
         return x
 
 
-class GenericTail(nn.Module):
+class GenericTail(Module):
     def __init__(
         self,
         num_observation_features: int,
