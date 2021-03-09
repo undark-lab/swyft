@@ -113,14 +113,12 @@ class RatioEstimator:
         obs: Array,
         params: Array,
         n_batch=100,
-        max_n_points: int = 1000,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve estimated marginal posterior.
 
         Args:
             x0: real observation to calculate posterior
             combination_indices: z indices in self.combinations
-            max_n_points: number of points to calculate ratios on
 
         Returns:
             parameter array, posterior array
