@@ -6,6 +6,7 @@ import numpy as np
 from swyft.cache import MemoryCache
 from swyft.inference import DefaultHead, DefaultTail, RatioEstimator
 from swyft.ip3 import Points
+from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import Prior, RatioEstimatedPosterior
 from swyft.utils import all_finite, format_param_list
 
@@ -66,6 +67,7 @@ class NestedRatios:
             log_volume_convergence_threshold=log_volume_convergence_threshold,
         )
         self.converged = False
+        self.failed_to_converge = False
         self._base_prior = prior  # Initial prior
         self._history = []
 
@@ -150,16 +152,21 @@ class NestedRatios:
             ################
             # Step 3 - Infer
             ################
-            marginals_R = self._train(
-                prior_R,
-                param_list,
-                head=head,
-                tail=tail,
-                head_args=head_args,
-                tail_args=tail_args,
-                train_args=train_args,
-                N=N_R,
-            )
+            try:
+                marginals_R = self._train(
+                    prior_R,
+                    param_list,
+                    head=head,
+                    tail=tail,
+                    head_args=head_args,
+                    tail_args=tail_args,
+                    train_args=train_args,
+                    N=N_R,
+                )
+            except NoPointsError:
+                self.failed_to_converge = True
+                break
+
             constr_prior_R = marginals_R.gen_constr_prior(self._obs)
 
             # Update object history
@@ -188,6 +195,9 @@ class NestedRatios:
             ):
                 logging.info("Volume converged.")
                 self.converged = True
+
+        if r >= max_rounds:
+            self.failed_to_converge = True
 
     # NOTE: By convention properties are only quantites that we save in state_dict
     def requires_sim(self):
@@ -390,6 +400,11 @@ class NestedRatios:
 
         logging.info("Starting neural network training.")
         indices = self._cache.sample(prior, N)
+
+        # Fail gracefully if no points are drawn.
+        if len(indices) == 0:
+            raise NoPointsError("No points were sampled from the cache.")
+
         points = Points(indices, self._cache, self._noise)
 
         if param_list is None:
