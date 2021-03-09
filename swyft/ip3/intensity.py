@@ -13,7 +13,7 @@ class Intensity:
         return self.prior.sample(N)
 
     def __call__(self, values):
-        return np.exp(self.prior.log_prob(values)) * self.mu
+        return self.prior.log_prob(values) + np.log(self.mu)
 
     @classmethod
     def from_state_dict(cls, state_dict):

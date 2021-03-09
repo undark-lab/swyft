@@ -241,12 +241,13 @@ class Cache(ABC):
 
         # Rejection sampling from proposal list
         accepted = []
-        ds_intensities = self.intensity(z_prop)
-        target_intensities = intensity(z_prop)
-        for Ids, It in zip(ds_intensities, target_intensities):
-            rej_prob = np.minimum(1, Ids / It)
-            w = np.random.rand()
-            accepted.append(rej_prob < w)
+        cached_log_intensities = self.intensity(z_prop)
+        target_log_intensities = intensity(z_prop)
+        for cached_log_intensity, target_log_intensity in zip(
+            cached_log_intensities, target_log_intensities
+        ):
+            log_prob_reject = np.minimum(0, cached_log_intensity - target_log_intensity)
+            accepted.append(log_prob_reject < np.log(np.random.rand()))
         z_accepted = {k: z[accepted, ...] for k, z in z_prop.items()}
 
         # Add new entries to cache
@@ -280,19 +281,25 @@ class Cache(ABC):
         accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
 
-        I_ds = self.intensity(zlist)
-        I_target = intensity(zlist)
-        for i in range(len(self)):
-            accept_prob = I_target[i] / I_ds[i]
-            if accept_prob > 1.0:
+        cached_intensities = self.intensity(zlist)
+        target_intensities = intensity(zlist)
+        assert len(self) == len(cached_intensities)
+        assert len(self) == len(target_intensities)
+        for i, (target_intensity, cached_intensity) in enumerate(
+            zip(target_intensities, cached_intensities)
+        ):
+            log_prob_accept = target_intensity - cached_intensity
+            if log_prob_accept > 0.0:
                 raise LowIntensityError(
-                    f"{accept_prob} > 1, but we expected the ratio of target intensity function to the cache <= 1. "
-                    "There may not be enough samples in the cache "
-                    "or a constrained intensity function was not accounted for."
+                    f"{log_prob_accept} > 0, "
+                    " but we expected the log ratio of target intensity function to the cache <= 0. "
+                    "There may not be enough samples in the cache or "
+                    "a constrained intensity function was not accounted for."
                 )
-            w = np.random.rand()
-            if accept_prob > w:
+            elif log_prob_accept > np.log(np.random.rand()):
                 accepted.append(i)
+            else:
+                continue
         return accepted
 
     def _get_idx_requiring_sim(self):
