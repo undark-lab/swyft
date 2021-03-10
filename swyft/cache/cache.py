@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Callable, Dict, List, Union
 from warnings import warn
 
+import fasteners
 import numcodecs
 import numpy as np
+import tempfile
 import zarr
 from tqdm import tqdm
 
@@ -81,12 +83,32 @@ class Cache(ABC):
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
+        self._setup_lock()
         # assert (
         #    zdim == self.zdim
         # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
         # assert (
         #    xshape == self.xshape
         # ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
+
+    def _setup_lock(self):
+
+        path = self.root.attrs.get('lock_file_path')
+        if path is None:
+            if hasattr(self.store, "dir_path"):
+                path = self.store.dir_path()
+            else:
+                tmpdir = tempfile.TemporaryDirectory()
+                path = tmpdir.name
+
+        lock_file_path = path + "/cache.lock"
+        self.lock = fasteners.InterProcessLock(lock_file_path)
+
+    def lock(self):
+        self.lock.acquire(blocking=True)
+
+    def unlock(self):
+        self.lock.release()
 
     def _setup_new_cache(self, params, obs_shapes, root) -> None:
         # Add parameter names to store
@@ -272,7 +294,10 @@ class Cache(ABC):
     ) -> List[int]:  # noqa: F821
         intensity = Intensity(prior, N)
 
+        self.lock()
         self._update()
+
+        self.grow(prior, N)
 
         accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
@@ -296,6 +321,7 @@ class Cache(ABC):
                 accepted.append(i)
             else:
                 continue
+        self.unlock()
         return accepted
 
     def _get_idx_requiring_sim(self):
