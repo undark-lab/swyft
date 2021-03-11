@@ -1,9 +1,7 @@
 import numpy as np
 import pylab as plt
-from scipy.interpolate import griddata
 
-from .types import Array, Sequence, Tuple
-from .utils import grid_interpolate_samples, verbosity
+from swyft.utils import grid_interpolate_samples
 
 # def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
 #    x = np.sort(x)[::-1]  # Sort backwards
@@ -14,9 +12,9 @@ from .utils import grid_interpolate_samples, verbosity
 #    return levels
 
 
-#def cont2d(
+# def cont2d(
 #    ax, labels, samples, cmap: str = "gray_r",
-#):
+# ):
 #    """Create a 2d contour plot.
 #
 #    Args:
@@ -49,7 +47,7 @@ from .utils import grid_interpolate_samples, verbosity
 #    plt.scatter()
 
 
-#def hist1d(ax, re, x0, z0, i, max_n_points=1000):
+# def hist1d(ax, re, x0, z0, i, max_n_points=1000):
 #    if z0 is not None:
 #        ax.axvline(z0[i], color="r", ls=":")
 #    z, p = re.posterior(x0, i, max_n_points=max_n_points)
@@ -211,7 +209,7 @@ def plot_posterior(
         weights_key = tuple(sorted(params))
     try:
         w = samples["weights"][tuple(weights_key)]
-    except KeyError:  
+    except KeyError:
         return  # do not plot anything if weights are missing
 
     if len(params) == 1:
@@ -219,7 +217,7 @@ def plot_posterior(
 
         if grid_interpolate:
             # Grid interpolate samples
-            log_prior = samples['log_priors'][params[0]]
+            log_prior = samples["log_priors"][params[0]]
             w_eff = np.exp(np.log(w) + log_prior)  # p(z|x) = r(x, z) p(z)
             zm, v = grid_interpolate_samples(x, w_eff)
         else:

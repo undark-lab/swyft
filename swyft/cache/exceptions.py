@@ -1,0 +1,2 @@
+class LowIntensityError(Exception):
+    pass

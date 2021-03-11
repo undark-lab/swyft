@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+
 import swyft
 
 prior = swyft.Prior(
@@ -11,6 +12,7 @@ prior = swyft.Prior(
         "p2": ["uniform", 1.0, 2.0],
     }
 )
+
 
 def simulator(a, ox, oy, p1, p2, sigma=0.1):
     """Some examplary image simulator."""
@@ -25,17 +27,18 @@ def simulator(a, ox, oy, p1, p2, sigma=0.1):
     mu = diff * 5 + psc + n
     return mu
 
+
 def model(params):
     """Model wrapper around simulator code."""
-    mu = simulator(
-        params["a"], params["ox"], params["oy"], params["p1"], params["p2"]
-    )
+    mu = simulator(params["a"], params["ox"], params["oy"], params["p1"], params["p2"])
     return dict(mu=mu)
+
 
 def noise(obs, params=None, sigma=1.0):
     """Associated noise model."""
     data = {k: v + np.random.randn(*v.shape) * sigma for k, v in obs.items()}
     return data
+
 
 class CustomHead(swyft.Module):
     def __init__(self, obs_shapes):
@@ -64,6 +67,7 @@ class CustomHead(swyft.Module):
         x = self.l(x)
 
         return x
+
 
 par0 = dict(ox=5.0, oy=5.0, a=1.5, p1=0.4, p2=1.1)
 obs0 = noise(model(par0))

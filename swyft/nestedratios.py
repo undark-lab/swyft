@@ -3,160 +3,18 @@ from warnings import warn
 
 import numpy as np
 
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+from swyft.cache import MemoryCache
+from swyft.inference import DefaultHead, DefaultTail, RatioEstimator
+from swyft.ip3 import Points
+from swyft.ip3.exceptions import NoPointsError
+from swyft.marginals import Prior, RatioEstimatedPosterior
+from swyft.utils import all_finite, format_param_list
 
-from .cache import DirectoryCache, MemoryCache
-from .estimation import Points, RatioEstimator
-from .intensity import Prior
-from .network import DefaultHead, DefaultTail
-from .types import Dict
-from .utils import all_finite, format_param_list
+logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 
 class MissingModelError(Exception):
     pass
-
-
-class Marginals:
-    """Marginal container"""
-
-    def __init__(self, ratio, prior):
-        """Marginal container initialization.
-
-        Args:
-            re (RatioEstimator)
-            prior (Prior)
-        """
-        self._re = ratio
-        self._prior = prior
-
-    @property
-    def prior(self):
-        """(Constrained) prior of the marginal."""
-        return self._prior
-
-    @property
-    def ratio(self):
-        """Ratio estimator for marginals."""
-        return self._re
-
-    def __call__(self, obs, n_samples=100000):
-        """Return weighted marginal samples.
-
-        Args:
-            obs (dict): Observation.
-            n_samples (int): Number of samples.
-
-        Returns:
-            dict containing samples.
-
-        Note: Observations must be restricted to constrained prior space to
-        lead to valid results.
-        """
-        # FIXME: Make return of log_priors conditional on constrained prior
-        # being factorizable
-        return self._re.posterior(obs, self._prior, n_samples=n_samples)
-
-    def state_dict(self):
-        """Return state_dict."""
-        return dict(re=self._re.state_dict(), prior=self._prior.state_dict())
-
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        """Instantiate Marginals based on state_dict."""
-        return Marginals(
-            RatioEstimator.from_state_dict(state_dict["re"]),
-            Prior.from_state_dict(state_dict["prior"]),
-        )
-
-    def gen_constr_prior(self, obs, th=-10):
-        """Generate new constrained prior based on ratio estimator and target observation.
-
-        Args:
-            obs (dict): Observation.
-            th (float): Cutoff maximum log likelihood ratio. Default is -10,
-                        which correspond roughly to 4 sigma.
-
-        Returns:
-            Prior: Constrained prior.
-        """
-        return self._prior.get_masked(obs, self._re, th=th)
-
-    def sample_posterior(
-        self, obs: dict, n_samples: int, excess_factor: int = 10, maxiter: int = 100
-    ) -> Dict[str, np.ndarray]:
-        """Samples from each marginal using rejection sampling.
-
-        Args:
-            obs (dict): target observation
-            n_samples (int): number of samples in each marginal to output
-            excess_factor (int, optional): n_samples_to_reject = excess_factor * n_samples . Defaults to 100.
-            maxiter (int, optional): maximum loop attempts to draw n_samples. Defaults to 10.
-
-        Returns:
-            Dict[str, np.ndarray]: keys are marginal tuples, values are samples
-        
-        Reference:
-            Section 23.3.3
-            Machine Learning: A Probabilistic Perspective
-            Kevin P. Murphy
-        """
-        draw = self._re.posterior(obs, self._prior, n_samples=excess_factor * n_samples)
-        maximum_log_likelihood_estimates = {
-            k: np.log(np.max(v)) for k, v in draw["weights"].items()
-        }
-        remaining_param_tuples = set(draw["weights"].keys())
-        collector = {k: [] for k in remaining_param_tuples}
-        out = {}
-
-        # Do the rejection sampling.
-        # When a particular key hits the necessary samples, stop calculating on it to reduce cost.
-        # Send that key to out.
-        counter = 0
-        while counter < maxiter:
-            # Calculate chance to keep a sample
-            log_prob_to_keep = {
-                pt: np.log(draw["weights"][pt]) - maximum_log_likelihood_estimates[pt]
-                for pt in remaining_param_tuples
-            }
-
-            # Draw and determine if samples are kept
-            to_keep = {
-                pt: np.less_equal(np.log(np.random.rand(excess_factor * n_samples)), v)
-                for pt, v in log_prob_to_keep.items()
-            }
-
-            # Collect samples for every tuple of parameters, if there are enough, add them to out.
-            for param_tuple in remaining_param_tuples:
-                collector[param_tuple].append(
-                    np.stack(
-                        [
-                            draw["params"][name][to_keep[param_tuple]]
-                            for name in param_tuple
-                        ],
-                        axis=-1,
-                    )
-                )
-                concatenated = np.concatenate(collector[param_tuple])[:n_samples]
-                if len(concatenated) == n_samples:
-                    out[param_tuple] = concatenated
-
-            # Remove the param_tuples which we already have in out, thus not to calculate for them anymore.
-            for param_tuple in out.keys():
-                if param_tuple in remaining_param_tuples:
-                    remaining_param_tuples.remove(param_tuple)
-
-            if len(remaining_param_tuples) > 0:
-                draw = self._re.posterior(
-                    obs, self._prior, n_samples=excess_factor * n_samples
-                )
-            else:
-                return out
-            counter += 1
-        warn(
-            f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}."
-        )
-        return out
 
 
 class NestedRatios:
@@ -173,7 +31,7 @@ class NestedRatios:
         Ninit=3000,
         Nmax=100000,
         density_factor=2.0,
-        volume_conv_th=0.1,
+        log_volume_convergence_threshold=0.1,
     ):
         """Initialize swyft.
 
@@ -186,11 +44,11 @@ class NestedRatios:
             Ninit (int): Initial number of training points.
             Nmax (int): Maximum number of training points per round.
             density_factor (float > 1): Increase of training point density per round.
-            volume_conv_th (float > 0.): Volume convergence threshold.
+            log_volume_convergence_threshold (float > 0.): Convergence threshold measured as difference between log prior volume to log contrainted prior volume.
             device (str): Device.
         """
         assert density_factor > 1.0
-        assert volume_conv_th > 0.0
+        assert log_volume_convergence_threshold > 0.0
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
 
@@ -206,14 +64,12 @@ class NestedRatios:
             Ninit=Ninit,
             Nmax=Nmax,
             density_factor=density_factor,
-            volume_conv_th=volume_conv_th,
+            log_volume_convergence_threshold=log_volume_convergence_threshold,
         )
-        self._converged = False
+        self.converged = False
+        self.failed_to_converge = False
         self._base_prior = prior  # Initial prior
         self._history = []
-
-    def converged(self):
-        return self._converged
 
     @property
     def _cache(self):
@@ -223,7 +79,8 @@ class NestedRatios:
             )
         return self._cache_reference
 
-    def R(self):
+    @property
+    def num_elapsed_rounds(self):
         """Number of rounds."""
         return len(self._history)
 
@@ -266,12 +123,10 @@ class NestedRatios:
         """
 
         param_list = self._cache.params
-        D = len(param_list)
-
         r = 0
 
-        while (not self.converged()) and (r < max_rounds):
-            logging.info("NRE round: R = %i" % (self.R() + 1))
+        while (not self.converged) and (r < max_rounds):
+            logging.info("NRE round: R = %i" % (self.num_elapsed_rounds + 1))
 
             ##################################################
             # Step 1 - get prior and number of training points
@@ -297,26 +152,35 @@ class NestedRatios:
             ################
             # Step 3 - Infer
             ################
-            marginals_R = self._train(
-                prior_R,
-                param_list,
-                head=head,
-                tail=tail,
-                head_args=head_args,
-                tail_args=tail_args,
-                train_args=train_args,
-                N=N_R,
-            )
+            try:
+                marginals_R = self._train(
+                    prior_R,
+                    param_list,
+                    head=head,
+                    tail=tail,
+                    head_args=head_args,
+                    tail_args=tail_args,
+                    train_args=train_args,
+                    N=N_R,
+                )
+            except NoPointsError:
+                self.failed_to_converge = True
+                break
+
             constr_prior_R = marginals_R.gen_constr_prior(self._obs)
 
             # Update object history
             self._history.append(
-                dict(marginals=marginals_R, constr_prior=constr_prior_R, N=N_R,)
+                dict(
+                    marginals=marginals_R,
+                    constr_prior=constr_prior_R,
+                    N=N_R,
+                )
             )
             r += 1
 
             # Drop previous marginals
-            if (not keep_history) and (self.R() > 1):
+            if (not keep_history) and (self.num_elapsed_rounds > 1):
                 self._history[-2]["marginals"] = None
                 self._history[-2]["constr_prior"] = None
 
@@ -327,10 +191,13 @@ class NestedRatios:
             )
             if (
                 np.log(prior_R.volume()) - np.log(constr_prior_R.volume())
-                < self._config["volume_conv_th"]
+                < self._config["log_volume_convergence_threshold"]
             ):
                 logging.info("Volume converged.")
-                self._converged = True
+                self.converged = True
+
+        if r >= max_rounds:
+            self.failed_to_converge = True
 
     # NOTE: By convention properties are only quantites that we save in state_dict
     def requires_sim(self):
@@ -349,7 +216,7 @@ class NestedRatios:
     ):
         """Convenience function to generate 1d marginals."""
         param_list = format_param_list(params, all_params=self._cache.params, mode="1d")
-        logging.info("Generating marginals for:", str(param_list))
+        logging.info(f"Generating marginals for: {param_list}")
         return self.gen_custom_marginals(
             param_list,
             N=N,
@@ -372,7 +239,7 @@ class NestedRatios:
     ):
         """Convenience function to generate 2d marginals."""
         param_list = format_param_list(params, all_params=self._cache.params, mode="2d")
-        logging.info("Generating marginals for: %s" % str(param_list))
+        logging.info(f"Generating marginals for: {param_list}")
         return self.gen_custom_marginals(
             param_list,
             N=N,
@@ -404,7 +271,7 @@ class NestedRatios:
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
-        if self.R() == 0:
+        if self.num_elapsed_rounds == 0:
             prior = self._base_prior
         else:
             prior = self._history[-1]["constr_prior"]
@@ -460,7 +327,7 @@ class NestedRatios:
     def _history_from_state_dict(history_state_dict):
         history = [
             {
-                "marginals": Marginals.from_state_dict(v["marginals"]),
+                "marginals": RatioEstimatedPosterior.from_state_dict(v["marginals"]),
                 "constr_prior": Prior.from_state_dict(v["constr_prior"]),
                 "N": v["N"],
             }
@@ -474,7 +341,7 @@ class NestedRatios:
             base_prior=self._base_prior.state_dict(),
             obs=self._obs,
             history=self._history_state_dict(self._history),
-            converged=self._converged,
+            converged=self.converged,
             config=self._config,
         )
 
@@ -485,11 +352,11 @@ class NestedRatios:
         obs = state_dict["obs"]
         config = state_dict["config"]
 
-        nr = NestedRatios(
+        nr = cls(
             model, base_prior, obs, noise=noise, cache=cache, device=device, **config
         )
 
-        nr._converged = state_dict["converged"]
+        nr.converged = state_dict["converged"]
         nr._history = cls._history_from_state_dict(state_dict["history"])
         return nr
 
@@ -498,7 +365,7 @@ class NestedRatios:
 
         param_list = self._cache.params
         D = len(param_list)
-        if self.R() == 0:  # First round
+        if self.num_elapsed_rounds == 0:  # First round
             prior_R = self._base_prior
             N_R = self._config["Ninit"]
         else:  # Subsequent rounds
@@ -517,7 +384,15 @@ class NestedRatios:
         return prior_R, N_R
 
     def _train(
-        self, prior, param_list, N, train_args, head, tail, head_args, tail_args,
+        self,
+        prior,
+        param_list,
+        N,
+        train_args,
+        head,
+        tail,
+        head_args,
+        tail_args,
     ):
         """Perform amortized inference on constrained priors."""
         if self._cache.requires_sim:
@@ -525,6 +400,11 @@ class NestedRatios:
 
         logging.info("Starting neural network training.")
         indices = self._cache.sample(prior, N)
+
+        # Fail gracefully if no points are drawn.
+        if len(indices) == 0:
+            raise NoPointsError("No points were sampled from the cache.")
+
         points = Points(indices, self._cache, self._noise)
 
         if param_list is None:
@@ -540,4 +420,4 @@ class NestedRatios:
         )
         re.train(points, **train_args)
 
-        return Marginals(re, prior)
+        return RatioEstimatedPosterior(re, prior)

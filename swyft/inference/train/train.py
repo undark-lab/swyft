@@ -2,61 +2,13 @@
 import logging
 from contextlib import suppress
 from copy import deepcopy
+from typing import Sequence
 
 import numpy as np
 import torch
 
-from .types import Array, Combinations, Dict, Sequence, Union
-from .utils import combine_z, dict_to_device, dict_to_tensor, verbosity
-
-
-def double_features(f):
-    """Double feature vector as (A, B, C, D) --> (A, A, B, B, C, C, D, D)
-
-    Args:
-        f (tensor): Feature vectors (n_batch, n_features)
-    Returns:
-        f (tensor): Feature vectors (2*n_btach. n_features)
-    """
-    return torch.repeat_interleave(f, 2, dim=0)
-
-
-def double_params(params):
-    """Double parameters as (A, B, C, D) --> (A, B, A, B, C, D, C, D) etc
-
-    Args:
-        params (dict): Dictionary of parameters with shape (n_batch).
-    Returns:
-        dict: Dictionary of parameters with shape (2*n_batch).
-    """
-    out = {}
-    for k, v in params.items():
-        out[k] = torch.repeat_interleave(v.view(-1, 2), 2, dim=0).flatten()
-    return out
-
-
-def loss_fn(head, tail, obs, params):
-    # Get features
-    f = head(obs)
-    n_batch = f.shape[0]
-
-    assert n_batch % 2 == 0, "Loss function can only handle even-numbered batch sizes."
-
-    # Repeat interleave
-    f_doubled = double_features(f)
-    params_doubled = double_params(params)
-
-    # Get
-    lnL = tail(f_doubled, params_doubled)
-    lnL = lnL.view(-1, 4, lnL.shape[-1])
-
-    loss = -torch.nn.functional.logsigmoid(lnL[:, 0])
-    loss += -torch.nn.functional.logsigmoid(-lnL[:, 1])
-    loss += -torch.nn.functional.logsigmoid(-lnL[:, 2])
-    loss += -torch.nn.functional.logsigmoid(lnL[:, 3])
-    loss = loss.sum(axis=0) / n_batch
-
-    return loss
+from swyft.inference.train.loss import loss_fn
+from swyft.utils import dict_to_device
 
 
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
@@ -206,7 +158,7 @@ def trainloop(
 
     # Train!
     train_loss, valid_loss = [], []
-    for i, lr in enumerate(lr_schedule):
+    for _, lr in enumerate(lr_schedule):
         logging.debug("lr: %.3g" % lr)
         tl, vl, sd_head, sd_tail = train(
             head,
@@ -229,35 +181,6 @@ def trainloop(
     logging.debug("Valid losses: " + str(valid_loss))
     logging.debug("Finished trainloop.")
     return dict(train_loss=train_loss, valid_loss=valid_loss)
-
-
-# def get_statistics(
-#    points: Union["swyft.estimation.Points", Sequence[Dict[str, Array]]],
-#    combinations: Combinations = None,
-#    n_samples: int = 300,
-# ):
-#    """Calculate the mean and std of both x and z.
-#
-#    Args:
-#        points: list of dictionaries with keys 'x' and 'z'.
-#        combinations
-#        n_samples: size of sample
-#
-#    Returns:
-#        x_mean, x_std, z_mean, z_std
-#    """
-#    irand = np.random.choice(len(points), n_samples)
-#    x = [points[i]["x"] for i in irand]
-#    z = [points[i]["z"] for i in irand]
-#    x_mean = sum(x) / len(x)
-#    z_mean = sum(z) / len(z)
-#    x_var = sum([(x[i] - x_mean) ** 2 for i in range(len(x))]) / len(x)
-#    z_var = sum([(z[i] - z_mean) ** 2 for i in range(len(z))]) / len(z)
-#
-#    z_mean = combine_z(z_mean, combinations)
-#    z_var = combine_z(z_var, combinations)
-#
-#    return x_mean, x_var ** 0.5, z_mean, z_var ** 0.5
 
 
 if __name__ == "__main__":

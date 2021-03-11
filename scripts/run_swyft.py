@@ -2,10 +2,12 @@
 # Requires python 3.5+
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-import os
 import importlib.util
+import os
+
 import numpy as np
 import pylab as plt
 import torch
@@ -15,11 +17,12 @@ import swyft
 
 DEVICE = "cuda:0"
 
+
 def main():
     # Pretty hacky way to import local model
     # https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
     cwd = os.getcwd()
-    spec = importlib.util.spec_from_file_location("defs", cwd+"/definitions.py")
+    spec = importlib.util.spec_from_file_location("defs", cwd + "/definitions.py")
     defs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(defs)
 
@@ -70,6 +73,7 @@ def main():
     diagnostics = swyft.utils.sample_diagnostics(samples)
     state_dict = {"NestedRatios": s.state_dict(), "diagnostics": diagnostics}
     torch.save(state_dict, "sample_diagnostics.pt")
+
 
 if __name__ == "__main__":
     main()

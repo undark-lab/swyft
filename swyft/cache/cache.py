@@ -2,125 +2,19 @@
 import logging
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from copy import deepcopy
 from pathlib import Path
+from typing import Callable, Dict, List, Union
 from warnings import warn
 
 import numcodecs
 import numpy as np
-import torch
 import zarr
-from scipy.interpolate import interp1d
 from tqdm import tqdm
 
-from .intensity import Intensity
-from .types import Array, Callable, Dict, PathType, Shape, Union
-from .utils import all_finite, is_empty, verbosity
-
-
-class LowIntensityError(Exception):
-    pass
-
-
-class NormalizeStd:
-    def __init__(self, values):
-        self.mean = {}
-        self.std = {}
-
-        for k, v in values.items():
-            self.mean[k] = v.mean(axis=0)
-            self.std[k] = v.std(axis=0).mean()
-
-    def __call__(self, values):
-        out = {}
-        for k, v in values.items():
-            out[k] = (v - self.mean[k]) / self.std[k]
-        return out
-
-
-class NormalizeScale:
-    def __init__(self, values):
-        self.median = {}
-        self.perc = {}
-
-        for k, v in values.items():
-            median = np.percentile(v, 50, axis=0)
-            perc = np.percentile(v - median, np.linspace(0, 100, 101))
-            self.median[k] = median
-            self.perc[k] = perc
-
-    def __call__(self, values):
-        out = {}
-        for k, v in values.items():
-            v = v - self.median[k]
-            v = interp1d(
-                self.perc[k], np.linspace(-1, 1, 101), fill_value="extrapolate"
-            )(v)
-            out[k] = v
-        return out
-
-
-Normalize = NormalizeStd
-
-
-class Transform:
-    def __init__(self, par_combinations, param_transform=None, obs_transform=None):
-        self.obs_transform = (lambda x: x) if obs_transform is None else obs_transform
-        self.param_transform = (
-            (lambda z: z) if param_transform is None else param_transform
-        )
-        self.par_combinations = par_combinations
-        self.par_comb_shape = self._get_par_comb_shape(par_combinations)
-
-    def _get_par_comb_shape(self, par_combinations):
-        n = len(par_combinations)
-        m = max([len(c) for c in par_combinations])
-        return (n, m)
-
-    def _combine(self, par):
-        shape = par[list(par)[0]].shape
-        if len(shape) == 0:
-            out = torch.zeros(self.par_comb_shape)
-            for i, c in enumerate(self.par_combinations):
-                pars = torch.stack([par[k] for k in c]).T
-                out[i, : pars.shape[0]] = pars
-        else:
-            n = shape[0]
-            out = torch.zeros((n,) + self.par_comb_shape)
-            for i, c in enumerate(self.par_combinations):
-                pars = torch.stack([par[k] for k in c]).T
-                out[:, i, : pars.shape[1]] = pars
-        return out
-
-    def _tensorfy(self, x):
-        return {k: torch.tensor(v).float() for k, v in x.items()}
-
-    def __call__(self, obs=None, par=None):
-        out = {}
-        if obs is not None:
-            tmp = self.obs_transform(obs)
-            out["obs"] = self._tensorfy(tmp)
-        if par is not None:
-            tmp = self.param_transform(par)
-            z = self._tensorfy(tmp)
-            out["par"] = self._combine(z)
-        return out
-
-
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, points):
-        self.points = points
-
-    def _tensorfy(self, x):
-        return {k: torch.tensor(v).float() for k, v in x.items()}
-
-    def __len__(self):
-        return len(self.points)
-
-    def __getitem__(self, i):
-        p = self.points[i]
-        return dict(obs=self._tensorfy(p["obs"]), par=self._tensorfy(p["par"]))
-
+from swyft.cache.exceptions import LowIntensityError
+from swyft.ip3 import Intensity
+from swyft.types import Array, PathType, Shape
+from swyft.utils import all_finite, is_empty, verbosity
 
 Filesystem = namedtuple(
     "Filesystem",
@@ -208,7 +102,7 @@ class Cache(ABC):
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
 
         # Requires simulation flag
-        m = root.zeros(
+        m = root.zeros(  # noqa: F841
             self._filesystem.requires_simulation,
             shape=(0, 1),
             chunks=(100000, 1),
@@ -216,7 +110,7 @@ class Cache(ABC):
         )
 
         # Failed simulation flag
-        f = root.zeros(
+        f = root.zeros(  # noqa: F841
             self._filesystem.failed_simulation,
             shape=(0, 1),
             chunks=(100000, 1),
@@ -224,12 +118,15 @@ class Cache(ABC):
         )
 
         # Which intensity flag
-        wu = self.root.zeros(
-            self._filesystem.which_intensity, shape=(0,), chunks=(100000,), dtype="i4",
+        wu = self.root.zeros(  # noqa: F841
+            self._filesystem.which_intensity,
+            shape=(0,),
+            chunks=(100000,),
+            dtype="i4",
         )
 
         # Intensity object
-        u = root.create(
+        u = root.create(  # noqa: F841
             self._filesystem.intensity,
             shape=(0,),
             dtype=object,
@@ -315,23 +212,24 @@ class Cache(ABC):
         wu = self.intensity_len * np.ones(n, dtype="int")
         self.wu.append(wu)
 
-    def intensity(self, z: Array) -> np.ndarray:
-        """Evaluate the cache's intensity function.
-
-        Args:
-            z: list of parameter values.
-        """
+    def log_intensity(self, z: Dict[str, np.ndarray]) -> np.ndarray:
         self._update()
 
+        # How many parameters are we evaluating on?
+        shapes = [array.shape for array in z.values()]
+        shape = shapes[0]
+        assert all(shape == s for s in shapes)
+        length = shape[0]
+
         if len(self.u) == 0:
-            d = len(z[list(z)[0]])
-            return np.zeros(d)
+            # An empty cache has log intensity of -infinity.
+            return -np.inf * np.ones(length)
         else:
-            return np.array(
-                [self.intensities[i](z) for i in range(len(self.intensities))]
+            return np.stack(
+                [log_intensity(z) for log_intensity in self.intensities]
             ).max(axis=0)
 
-    def grow(self, prior: "swyft.intensity.Intensity", N):
+    def grow(self, prior: "swyft.intensity.Intensity", N):  # noqa
         """Given an intensity function, add parameter samples to the cache.
 
         Args:
@@ -344,12 +242,13 @@ class Cache(ABC):
 
         # Rejection sampling from proposal list
         accepted = []
-        ds_intensities = self.intensity(z_prop)
-        target_intensities = intensity(z_prop)
-        for Ids, It in zip(ds_intensities, target_intensities):
-            rej_prob = np.minimum(1, Ids / It)
-            w = np.random.rand()
-            accepted.append(rej_prob < w)
+        cached_log_intensities = self.log_intensity(z_prop)
+        target_log_intensities = intensity(z_prop)
+        for cached_log_intensity, target_log_intensity in zip(
+            cached_log_intensities, target_log_intensities
+        ):
+            log_prob_reject = np.minimum(0, cached_log_intensity - target_log_intensity)
+            accepted.append(log_prob_reject < np.log(np.random.rand()))
         z_accepted = {k: z[accepted, ...] for k, z in z_prop.items()}
 
         # Add new entries to cache
@@ -368,34 +267,35 @@ class Cache(ABC):
             self.u[-1] = intensity.state_dict()
             self.intensities.append(intensity)
 
-    def sample(self, prior: "swyft.intensity.Intensity", N):
-        """Sample from Cache.
-
-        Args:
-            intensity: target parameter intensity function
-        """
+    def sample(
+        self, prior: "swyft.intensity.Intensity", N: int
+    ) -> List[int]:  # noqa: F821
         intensity = Intensity(prior, N)
 
         self._update()
 
-        # self.grow(prior, N)
-
         accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
 
-        I_ds = self.intensity(zlist)
-        I_target = intensity(zlist)
-        for i in range(len(self)):
-            accept_prob = I_target[i] / I_ds[i]
-            if accept_prob > 1.0:
+        cached_intensities = self.log_intensity(zlist)
+        target_intensities = intensity(zlist)
+        assert len(self) == len(cached_intensities)
+        assert len(self) == len(target_intensities)
+        for i, (target_intensity, cached_intensity) in enumerate(
+            zip(target_intensities, cached_intensities)
+        ):
+            log_prob_accept = target_intensity - cached_intensity
+            if log_prob_accept > 0.0:
                 raise LowIntensityError(
-                    f"{accept_prob} > 1, but we expected the ratio of target intensity function to the cache <= 1. "
-                    "There may not be enough samples in the cache "
-                    "or a constrained intensity function was not accounted for."
+                    f"{log_prob_accept} > 0, "
+                    " but we expected the log ratio of target intensity function to the cache <= 0. "
+                    "There may not be enough samples in the cache or "
+                    "a constrained intensity function was not accounted for."
                 )
-            w = np.random.rand()
-            if accept_prob > w:
+            elif log_prob_accept > np.log(np.random.rand()):
                 accepted.append(i)
+            else:
+                continue
         return accepted
 
     def _get_idx_requiring_sim(self):
@@ -605,7 +505,3 @@ class MemoryCache(Cache):
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
         return MemoryCache(list(prior.prior_config.keys()), obs_shapes)
-
-
-if __name__ == "__main__":
-    pass

@@ -3,5 +3,6 @@ train_args:
 tail_args: {}
 head_args: {}
 Ninit: 3000
+Nmax: 100000
 max_rounds: 3
 cache: cache.zarr
