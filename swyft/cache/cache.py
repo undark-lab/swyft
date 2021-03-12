@@ -14,7 +14,7 @@ from tqdm import tqdm
 from swyft.cache.exceptions import LowIntensityError
 from swyft.ip3 import Intensity
 from swyft.types import Array, PathType, Shape
-from swyft.utils import all_finite, is_empty, verbosity
+from swyft.utils import all_finite, is_empty
 
 Filesystem = namedtuple(
     "Filesystem",
@@ -69,12 +69,10 @@ class Cache(ABC):
         logging.debug("  obs_shapes = %s" % str(obs_shapes))
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
-            if verbosity() >= 1:
-                print("Loading existing cache.")
+            logging.info("Loading existing cache.")
             self._update()
         elif len(self.root.keys()) == 0:
-            if verbosity() >= 1:
-                print("Creating new cache.")
+            logging.info("Creating new cache.")
             self._setup_new_cache(params, obs_shapes, self.root)
         else:
             raise KeyError(
@@ -254,8 +252,7 @@ class Cache(ABC):
         # Add new entries to cache
         if sum(accepted) > 0:
             self._append_z(z_accepted)
-            if verbosity() >= 1:
-                print("  adding %i new samples to simulator cache." % sum(accepted))
+            logging.info("  adding %i new samples to simulator cache." % sum(accepted))
         else:
             pass
 
@@ -375,8 +372,7 @@ class Cache(ABC):
 
         idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
-            if verbosity() >= 2:
-                print("No simulations required.")
+            logging.debug("No simulations required.")
             return True
         for i in tqdm(idx, desc="Simulate"):
             z = {k: v[i] for k, v in self.z.items()}
@@ -419,8 +415,7 @@ class Cache(ABC):
                     self._replace(i, z, x)
             return None
         else:
-            if verbosity() >= 2:
-                print("No failed simulations.")
+            logging.debug("No failed simulations.")
             return None
 
 

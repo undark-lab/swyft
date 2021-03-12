@@ -7,18 +7,6 @@ from scipy.integrate import simps
 
 from swyft.types import Array, PathType
 
-_VERBOSE = 1
-
-
-def set_verbosity(v):
-    global _VERBOSE
-    _VERBOSE = v
-
-
-def verbosity():
-    global _VERBOSE
-    return _VERBOSE
-
 
 def get_obs_shapes(obs):
     return {k: v.shape for k, v in obs.items()}
