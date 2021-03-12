@@ -45,6 +45,8 @@ class Prior1d:
 
 
 class Prior:
+    """Accomodates the completely factorized prior, log_prob, sampling, and 'volume' calculations."""
+
     def __init__(self, prior_config: PriorConfig, mask=None):
         self.prior_config = prior_config
         self.mask = mask
