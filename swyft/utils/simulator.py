@@ -1,3 +1,13 @@
+# New
+import dask.bag as db
+import os
+import shlex
+import subprocess
+import tempfile
+
+from dask.distributed import Client
+
+# Old
 from typing import Dict, List
 
 import numpy as np
@@ -5,42 +15,77 @@ import torch
 
 from swyft.types import Array
 
+class Simulator:
+    """ Setup and run the simulator engine """
+    def __init__(self, simulator, noise=None):
+        self.simulator = simulator
+        self.noise = noise
+        self.client = None
 
-def swyftify_params(params: Array, parameter_names: List[str]) -> Dict[str, Array]:
-    """Translates a [..., dim] tensor into a dictionary with dim keys.
+    def set_dask_cluster(self, cluster=None):
+        """
+        Connect to Dask cluster
 
-    Args:
-        params (Array):
+        Args:
+            cluster (string or Cluster): cluster address or Cluster object
+                                         from dask.distributed (default is
+                                         LocalCluster)
+        """
+        self.client = Client(cluster)
 
-    Returns:
-        swyft_parameters (dict):
-    """
-    return {k: params[..., i] for i, k in enumerate(parameter_names)}
+    def run(self, prior, n_samples, npartitions=None):
+        """
+        Run the simulator on the input parameters
 
+        Args:
+            input_parameters (iterable): set of input parameters that need to
+                                         be run by the simulator
+            npartitions (int): number of partitions in which the input
+                               parameters are divided for the parallelization
+                               (default is about 100)
+        """
+        # Parameter dict to list 
+        z = [{k: v[i] for k, v in prior.sample(n_samples).items()} for i in range(n_samples)]
+        
+        bag = db.from_sequence(z, npartitions=npartitions)
+        bag = bag.map(self.simulator)
+        return bag.compute(scheduler=self.client or 'processes')
 
-def unswyftify_params(
-    swyft_params: Dict[str, Array], parameter_names: List[str]
-) -> Array:
-    """Translates a dictionary with dim keys into a tensor with [..., dim] shape.
+    @classmethod
+    def from_command(cls, command, set_input_method, get_output_method,
+                     tmpdir=None):
+        """
+        Setup command-line simulator
 
-    Args:
-        swyft_params (Dict[str, Array]): dictionary with parameter_names as keys, tensors as values
-        parameter_names (List[str]):
+        Args:
+            command (string): command line simulator
+            set_input_method (callable): method to prepare simulator input
+            get_output_method (callable): method to retrieve results from the
+                                          simulator output
+            tmpdir (string): temporary directory where to run the simulator
+                             instances (one in each subdir). tmpdir must exist.
+        """
+        command_args = shlex.split(command)
 
-    Returns:
-        Array: stacked params
-    """
-    if isinstance(swyft_params[parameter_names[0]], torch.Tensor):
-        return torch.stack([swyft_params[name] for name in parameter_names], dim=-1)
-    # elif isinstance(swyft_params[parameter_names[0]], np.ndarray):
-    else:
-        return np.stack([swyft_params[name] for name in parameter_names], axis=-1)
+        def simulator(z):
+            """
+            Closure to run an instance of the simulator
 
+            Args:
+                z (array-like): input parameters for the simulator
+            """
+            with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
+                cwd = os.getcwd()
+                os.chdir(tmpdirname)
+                input = set_input_method(z)
+                res = subprocess.run(command_args,
+                                     capture_output=True,
+                                     input=input,
+                                     text=True,
+                                     check=True)
+                output = get_output_method(res.stdout, res.stderr)
+                os.chdir(cwd)
+            return output
 
-def swyftify_observation(observation: torch.Tensor):
-    assert observation.ndim == 1, f"ndim was {observation.ndim}, but should be 1."
-    return dict(x=observation)
+        return cls(simulator=simulator)
 
-
-def unswyftify_observation(swyft_observation: dict):
-    return swyft_observation["x"]
