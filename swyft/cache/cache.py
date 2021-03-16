@@ -102,13 +102,15 @@ class Cache(ABC):
                 path = tmpdir.name
 
         lock_file_path = path + "/cache.lock"
-        self.lock = fasteners.InterProcessLock(lock_file_path)
+        self._lock = fasteners.InterProcessLock(lock_file_path)
 
     def lock(self):
-        self.lock.acquire(blocking=True)
+        logging.debug("Cache locked")
+        self._lock.acquire(blocking=True)
 
     def unlock(self):
-        self.lock.release()
+        self._lock.release()
+        logging.debug("Cache unlocked")
 
     def _setup_new_cache(self, params, obs_shapes, root) -> None:
         # Add parameter names to store
@@ -279,6 +281,7 @@ class Cache(ABC):
             if verbosity() >= 1:
                 print("  adding %i new samples to simulator cache." % sum(accepted))
         else:
+            logging.debug("No samples added to simulator cache")
             pass
 
         # save new intensity function. We collect them all to find their maximum.
