@@ -8,7 +8,7 @@ from swyft.inference import DefaultHead, DefaultTail, RatioEstimator
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import Prior, RatioEstimatedPosterior
-from swyft.utils import all_finite, format_param_list
+from swyft.utils import all_finite, format_param_list, simulator
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
@@ -57,6 +57,7 @@ class NestedRatios:
         self._noise = noise
         self._cache_reference = cache
         self._device = device
+        self._simulator = simulator.Simulator(self._model)
 
         # Stored in state_dict()
         self._obs = obs
@@ -141,8 +142,9 @@ class NestedRatios:
                 logging.info(
                     "Additional simulations are required after growing the cache."
                 )
+                idx = self._cache._get_idx_requiring_sim()
                 if self._model is not None:
-                    self._cache.simulate(self._model)
+                    self._cache.simulate(idx, self._simulator)
                 else:
                     logging.warning(
                         "No model specified. Run simulator directly on cache."

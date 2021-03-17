@@ -360,7 +360,8 @@ class Cache(ABC):
 
     def simulate(
         self,
-        simulator: Callable,
+        idx,
+        simulator,
         fail_on_non_finite: bool = True,
         max_attempts: int = 1000,
     ) -> None:
@@ -373,14 +374,17 @@ class Cache(ABC):
         """
         self._update()
 
-        idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
             if verbosity() >= 2:
                 print("No simulations required.")
             return True
-        for i in tqdm(idx, desc="Simulate"):
-            z = {k: v[i] for k, v in self.z.items()}
-            x = simulator(z)
+
+        # Parameter dict to list
+        z = [{k: v[i] for k, v in self.z.items()} for i in idx]
+        x_all = simulator.run(z)
+
+        # TODO put 1) check successful and 2) add point/flag part into simulator
+        for x, i in zip(x_all, idx):
             success = self.did_simulator_succeed(x, fail_on_non_finite)
             if success:
                 self._add_sim(i, x)
