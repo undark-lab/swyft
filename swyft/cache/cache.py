@@ -343,21 +343,6 @@ class Cache(ABC):
         self.m[i] = False
         self.f[i] = False
 
-    @staticmethod
-    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
-        """Is the simulation a success?"""
-
-        assert isinstance(x, dict), "Simulators must return a dictionary."
-
-        def dict_anynone(d): return any(v is None for v in d.values())
-
-        if dict_anynone(x):
-            return False
-        elif fail_on_non_finite and not all_finite(x):
-            return False
-        else:
-            return True
-
     def simulate(
         self,
         idx,
