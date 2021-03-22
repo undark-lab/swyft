@@ -20,7 +20,7 @@ class Simulator:
     """ Setup and run the simulator engine """
 
     def __init__(self, simulator):
-        self.simulator = simulator
+        self.model = simulator
         self.client = None
 
     def set_dask_cluster(self, cluster=None):
@@ -47,7 +47,7 @@ class Simulator:
         """
 
         bag = db.from_sequence(z, npartitions=npartitions)
-        return bag.map(self.simulator).compute(scheduler=self.client or 'processes')
+        return bag.map(self.model).compute(scheduler=self.client or 'processes')
 
     @classmethod
     def from_command(cls, command, set_input_method, get_output_method,

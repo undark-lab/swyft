@@ -1,5 +1,6 @@
 import logging
 from warnings import warn
+import typing
 
 import numpy as np
 
@@ -8,7 +9,8 @@ from swyft.inference import DefaultHead, DefaultTail, RatioEstimator
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import Prior, RatioEstimatedPosterior
-from swyft.utils import all_finite, format_param_list, simulator
+from swyft.utils import all_finite, format_param_list
+from swyft.utils.simulator import Simulator
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
@@ -22,7 +24,7 @@ class NestedRatios:
 
     def __init__(
         self,
-        model,
+        simulator,
         prior,
         obs,
         noise=None,
@@ -36,7 +38,7 @@ class NestedRatios:
         """Initialize swyft.
 
         Args:
-            model (function): Simulator function.
+            simulator (function): A callablefunction, or an instance of swyft.utils.simulator.Simulator.
             prior (Prior): Prior model.
             obs (dict): Target observation
             noise (function): Noise model, optional.
@@ -51,13 +53,18 @@ class NestedRatios:
         assert log_volume_convergence_threshold > 0.0
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
+        
+        if isinstance(simulator, typing.Callable):
+            self._simulator = Simulator(simulator)
+        elif isinstance(simulator, Simulator):
+            self._simulator = simulator
+        else:
+            raise ValueError("Unrecognized type of simulator.")
 
         # Not stored
-        self._model = model
         self._noise = noise
         self._cache_reference = cache
         self._device = device
-        self._simulator = simulator.Simulator(self._model)
 
         # Stored in state_dict()
         self._obs = obs
@@ -76,7 +83,7 @@ class NestedRatios:
     def _cache(self):
         if self._cache_reference is None:
             self._cache_reference = MemoryCache.from_simulator(
-                self._model, self._base_prior
+                self._simulator.model, self._base_prior
             )
         return self._cache_reference
 
@@ -143,7 +150,7 @@ class NestedRatios:
                     "Additional simulations are required after growing the cache."
                 )
                 idx = self._cache._get_idx_requiring_sim()
-                if self._model is not None:
+                if self._simulator.model is not None:
                     self._cache.simulate(idx, self._simulator)
                 else:
                     logging.warning(
@@ -287,8 +294,8 @@ class NestedRatios:
         self._cache.grow(prior, N)
         if self.requires_sim():
             logging.info("Additional simulations are required after growing the cache.")
-            if self._model is not None:
-                self._cache.simulate(self._model)
+            if self._simulator.model is not None:
+                self._cache.simulate(self._simulator.model)
             else:
                 logging.warning("No model specified. Run simulator directly on cache.")
                 return
