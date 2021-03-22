@@ -349,7 +349,7 @@ class Cache(ABC):
 
         assert isinstance(x, dict), "Simulators must return a dictionary."
 
-        dict_anynone = lambda d: any(v is None for v in d.values())
+        def dict_anynone(d): return any(v is None for v in d.values())
 
         if dict_anynone(x):
             return False
@@ -381,23 +381,16 @@ class Cache(ABC):
 
         # Parameter dict to list
         z = [{k: v[i] for k, v in self.z.items()} for i in idx]
-        x_all = simulator.run(z)
+        res = simulator.run(z)
+        x_all, validity = list(zip(*res))  # TODO: check other data formats
 
-        # TODO put 1) check successful and 2) add point/flag part into simulator
-        for x, i in zip(x_all, idx):
-            success = self.did_simulator_succeed(x, fail_on_non_finite)
-            if success:
+        for i, x, v in zip(idx, x_all, validity):
+            if v == 0:
                 self._add_sim(i, x)
             else:
                 self._failed_sim(i)
 
-        if self.any_failed:
-            self.resample_failed_simulations(
-                simulator, fail_on_non_finite, max_attempts
-            )
-            # TODO add test which ensures that volume does not change upon more samples.
-
-        if self.any_failed:
+        if any(validity):
             warn(
                 f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
             )

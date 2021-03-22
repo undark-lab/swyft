@@ -4,24 +4,30 @@ import os
 import shlex
 import subprocess
 import tempfile
+import numpy as np
 
 from dask.distributed import Client
-
-# Old
 from typing import Dict, List
-
-import numpy as np
-import torch
-
+from swyft.utils import all_finite
 from swyft.types import Array
 
 
 class Simulator:
     """ Setup and run the simulator engine """
 
-    def __init__(self, simulator):
-        self.model = simulator
+    def __init__(self, model, fail_on_non_finite: bool = True, max_attempts: int = 2):
+        """
+        initialte Simulator
+
+        Args:
+            model (callable): simulator model function
+            fail_on_non_finite (bool): whether return a invalid code if simulation returns infinite, default True
+            max_attempts (int): maximum number of attempts to re-simulate the failed simulations
+        """
+        self.model = model
         self.client = None
+        self.max_attempts = max_attempts
+        self.fail_on_non_finite = fail_on_non_finite
 
     def set_dask_cluster(self, cluster=None):
         """
@@ -39,15 +45,34 @@ class Simulator:
         Run the simulator on the input parameters
 
         Args:
-            z (iterable): set of input parameters that need to
-                                         be run by the simulator
+            z (list of dictionary): set of input parameters that need to
+                                    be run by the simulator
             npartitions (int): number of partitions in which the input
                                parameters are divided for the parallelization
                                (default is about 100)
         """
 
         bag = db.from_sequence(z, npartitions=npartitions)
-        return bag.map(self.model).compute(scheduler=self.client or 'processes')
+
+        def _run_one_sample(param):
+            """
+            Run model for one set of parameters, check validity and redo for max attempts
+
+            Args:
+                param (dictionary): one set of input parameters
+            """
+            x = self.model(param)
+            validity = self._succeed(x, self.fail_on_non_finite)
+
+            # if failed, re-simulapte for max_attempts
+            iters = 0
+            while validity > 0 and iters < self.max_attempts:
+                x = self.model(param)
+                validity = self._succeed(x, self.fail_on_non_finite)
+
+            return (x, validity)
+
+        return bag.map(_run_one_sample).compute(scheduler=self.client or 'processes')
 
     @classmethod
     def from_command(cls, command, set_input_method, get_output_method,
@@ -65,12 +90,12 @@ class Simulator:
         """
         command_args = shlex.split(command)
 
-        def simulator(z):
+        def model(z):
             """
             Closure to run an instance of the simulator
 
             Args:
-                z (array-like): input parameters for the simulator
+                z (array-like): input parameters for the model
             """
             with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
                 cwd = os.getcwd()
@@ -85,4 +110,26 @@ class Simulator:
                 os.chdir(cwd)
             return output
 
-        return cls(simulator=simulator)
+        return cls(model=model)
+
+    @staticmethod
+    def _succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> int:
+        """Is the simulation a success?"""
+
+        # Code disctionary for validity
+        code = {
+            "valid": 0,
+            "none_value": 1,
+            "non_finite_value": 2
+        }
+
+        assert isinstance(x, dict), "Simulators must return a dictionary."
+
+        def dict_anynone(d): return
+
+        if any([np.isnan(v).any() for v in x.values()]):
+            return code["none_value"]
+        elif fail_on_non_finite and not all_finite(x):
+            return code["non_finite_value"]
+        else:
+            return code["valid"]
