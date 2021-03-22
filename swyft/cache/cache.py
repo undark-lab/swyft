@@ -395,31 +395,6 @@ class Cache(ABC):
                 f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
             )
 
-    def resample_failed_simulations(
-        self, simulator: Callable, fail_on_non_finite: bool, max_attempts: int
-    ) -> None:
-        self._update
-        if self.any_failed:
-            idx = self._get_idx_failing_sim()
-            for i in tqdm(idx, desc="Fix failed sims"):
-                iters = 0
-                success = False
-                which_intensity = self.wu[i]
-                prior = self.intensities[which_intensity].prior
-                while not success and iters < max_attempts:
-                    param = prior.sample(1)
-                    z = {k: v[0] for k, v in param.items()}
-                    x = simulator(z)
-                    success = self.did_simulator_succeed(x, fail_on_non_finite)
-                    iters += 1
-                if success:
-                    self._replace(i, z, x)
-            return None
-        else:
-            if verbosity() >= 2:
-                print("No failed simulations.")
-            return None
-
 
 class DirectoryCache(Cache):
     def __init__(self, params, obs_shapes: Shape, path: PathType):
