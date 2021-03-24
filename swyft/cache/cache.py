@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Union, Optional
 from warnings import warn
 
 import fasteners
@@ -53,6 +53,7 @@ class Cache(ABC):
         params,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
+        sync_path: PathType
     ):
         """Initialize Cache content dimensions.
 
@@ -60,10 +61,15 @@ class Cache(ABC):
             params (list of strings): List of paramater names
             obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
+            sync_path: path to the cache lock files. Must be accessible to all
+                processes working on the cache.
         """
         self.store = store
         self.params = params
-        self.root = zarr.group(store=self.store)
+        self.root = zarr.group(
+            store=self.store,
+            synchronizer=zarr.ProcessSynchronizer(sync_path)
+        )
         self.intensities = []
 
         logging.debug("Creating Cache.")
@@ -83,7 +89,7 @@ class Cache(ABC):
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
-        self._setup_lock()
+        self._setup_lock(sync_path)
         # assert (
         #    zdim == self.zdim
         # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
@@ -91,18 +97,9 @@ class Cache(ABC):
         #    xshape == self.xshape
         # ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
 
-    def _setup_lock(self):
-
-        path = self.root.attrs.get('lock_file_path')
-        if path is None:
-            if hasattr(self.store, "dir_path"):
-                path = self.store.dir_path()
-            else:
-                tmpdir = tempfile.TemporaryDirectory()
-                path = tmpdir.name
-
-        lock_file_path = path + "/cache.lock"
-        self._lock = fasteners.InterProcessLock(lock_file_path)
+    def _setup_lock(self, sync_path):
+        path = os.path.join(sync_path, "cache.lock")
+        self._lock = fasteners.InterProcessLock(path)
 
     def lock(self):
         logging.debug("Cache locked")
@@ -454,16 +451,30 @@ class Cache(ABC):
 
 
 class DirectoryCache(Cache):
-    def __init__(self, params, obs_shapes: Shape, path: PathType):
+    def __init__(
+            self,
+            params,
+            obs_shapes: Shape,
+            path: PathType,
+            sync_path: Optional[PathType] = None
+    ):
         """Instantiate an iP3 cache stored in a directory.
 
         Args:
             zdim: Number of z dimensions
             xshape: Shape of x array
             path: path to storage directory
+            sync_path: path to the cache lock files. Must be accessible to all
+                processes working on the cache and should differ from `path`.
         """
         self.store = zarr.DirectoryStore(path)
-        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
+        sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
+        super().__init__(
+            params=params,
+            obs_shapes=obs_shapes,
+            store=self.store,
+            sync_path=sync_path
+        )
 
     @classmethod
     def load(cls, path: PathType):
@@ -476,13 +487,22 @@ class DirectoryCache(Cache):
 
 
 class MemoryCache(Cache):
-    def __init__(self, params, obs_shapes, store=None):
+    def __init__(
+            self,
+            params,
+            obs_shapes,
+            store=None,
+            sync_path: Optional[PathType] = None
+    ):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
             zdim: Number of z dimensions
             obs_shapes: Shape of x array
-            store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in loading.
+            store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
+                loading.
+            sync_path: path to the cache lock files. Must be accessible to all
+                processes working on the cache.
         """
         if store is None:
             self.store = zarr.MemoryStore()
@@ -490,7 +510,13 @@ class MemoryCache(Cache):
         else:
             self.store = store
             logging.debug("Creating MemoryCache from store.")
-        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
+        sync_path = sync_path or tempfile.TemporaryDirectory().name
+        super().__init__(
+            params=params,
+            obs_shapes=obs_shapes,
+            store=self.store,
+            sync_path=sync_path
+        )
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryCache to a directory."""
