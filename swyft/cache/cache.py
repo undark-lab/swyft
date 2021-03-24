@@ -12,7 +12,6 @@ from warnings import warn
 import fasteners
 import numcodecs
 import numpy as np
-import tempfile
 import zarr
 from tqdm import tqdm
 
@@ -62,7 +61,7 @@ class Cache(ABC):
         params,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
-        sync_path: PathType
+        sync_path: Optional[PathType] = None
     ):
         """Initialize Cache content dimensions.
 
@@ -75,10 +74,9 @@ class Cache(ABC):
         """
         self.store = store
         self.params = params
-        self.root = zarr.group(
-            store=self.store,
-            synchronizer=zarr.ProcessSynchronizer(sync_path)
-        )
+        synchronizer = None if sync_path is None else \
+            zarr.ProcessSynchronizer(sync_path)
+        self.root = zarr.group(store=self.store, synchronizer=synchronizer)
         self.intensities = []
 
         logging.debug("Creating Cache.")
@@ -97,8 +95,9 @@ class Cache(ABC):
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
-
-        self._setup_lock(sync_path)
+        self._lock = None
+        if sync_path is not None:
+            self._setup_lock(sync_path)
         # assert (
         #    zdim == self.zdim
         # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
@@ -111,12 +110,14 @@ class Cache(ABC):
         self._lock = fasteners.InterProcessLock(path)
 
     def lock(self):
-        logging.debug("Cache locked")
-        self._lock.acquire(blocking=True)
+        if self._lock is not None:
+            logging.debug("Cache locked")
+            self._lock.acquire(blocking=True)
 
     def unlock(self):
-        self._lock.release()
-        logging.debug("Cache unlocked")
+        if self._lock is not None:
+            self._lock.release()
+            logging.debug("Cache unlocked")
 
     def _setup_new_cache(self, params, obs_shapes, root) -> None:
         # Add parameter names to store
@@ -544,7 +545,6 @@ class MemoryCache(Cache):
             params,
             obs_shapes,
             store=None,
-            sync_path: Optional[PathType] = None
     ):
         """Instantiate an iP3 cache stored in the memory.
 
@@ -553,8 +553,6 @@ class MemoryCache(Cache):
             obs_shapes: Shape of x array
             store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
                 loading.
-            sync_path: path to the cache lock files. Must be accessible to all
-                processes working on the cache.
         """
         if store is None:
             self.store = zarr.MemoryStore()
@@ -562,12 +560,10 @@ class MemoryCache(Cache):
         else:
             self.store = store
             logging.debug("Creating MemoryCache from store.")
-        sync_path = sync_path or tempfile.TemporaryDirectory().name
         super().__init__(
             params=params,
             obs_shapes=obs_shapes,
             store=self.store,
-            sync_path=sync_path
         )
 
     def save(self, path: PathType) -> None:
