@@ -420,7 +420,7 @@ class Cache(ABC):
     def resample_failed_simulations(
         self, simulator: Callable, fail_on_non_finite: bool, max_attempts: int
     ) -> None:
-        self._update
+        self._update()
         if self.any_failed:
             idx = self._get_idx_failing_sim()
             for i in tqdm(idx, desc="Fix failed sims"):
