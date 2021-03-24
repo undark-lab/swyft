@@ -133,8 +133,8 @@ class Cache(ABC):
         # Failed simulation flag
         f = root.zeros(  # noqa: F841
             self._filesystem.failed_simulation,
-            shape=(0, 1),
-            chunks=(100000, 1),
+            shape=(0,),
+            chunks=(100000,),
             dtype="bool",
         )
 
