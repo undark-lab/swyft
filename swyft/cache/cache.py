@@ -296,32 +296,25 @@ class Cache(ABC):
 
         self.lock()
         self._update()
-
         self.grow(prior, N)
+        self.unlock()
 
-        accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
 
         cached_intensities = self.log_intensity(zlist)
         target_intensities = intensity(zlist)
         assert len(self) == len(cached_intensities)
         assert len(self) == len(target_intensities)
-        for i, (target_intensity, cached_intensity) in enumerate(
-            zip(target_intensities, cached_intensities)
-        ):
-            log_prob_accept = target_intensity - cached_intensity
-            if log_prob_accept > 0.0:
-                raise LowIntensityError(
-                    f"{log_prob_accept} > 0, "
-                    " but we expected the log ratio of target intensity function to the cache <= 0. "
-                    "There may not be enough samples in the cache or "
-                    "a constrained intensity function was not accounted for."
-                )
-            elif log_prob_accept > np.log(np.random.rand()):
-                accepted.append(i)
-            else:
-                continue
-        self.unlock()
+        log_prob_accept = target_intensities - cached_intensities
+        if np.any(log_prob_accept > 0.):
+            raise LowIntensityError(
+                "We expect the log ratio of target intensity function to the cache <= 0. "
+                "There may not be enough samples in the cache or "
+                "a constrained intensity function was not accounted for."
+            )
+        prob_reject = 1. - np.random.random(log_prob_accept.shape)  # (0;1]
+        accept = log_prob_accept > np.log(prob_reject)
+        accepted = np.flatnonzero(accept)
         return accepted
 
     def _get_idx_requiring_sim(self):
