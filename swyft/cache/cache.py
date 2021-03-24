@@ -1,5 +1,8 @@
 # pylint: disable=no-member, not-callable
+import enum
 import logging
+import os
+import time
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
@@ -26,11 +29,17 @@ Filesystem = namedtuple(
         "samples",
         "obs",
         "par",
-        "requires_simulation",
+        "simulation_status",
         "failed_simulation",
         "which_intensity",
     ],
 )
+
+
+class SimulationStatus(enum.IntEnum):
+    PENDING = 0
+    RUNNING = 1
+    FINISHED = 2
 
 
 class Cache(ABC):
@@ -42,7 +51,7 @@ class Cache(ABC):
         "samples",
         "samples/obs",
         "samples/par",
-        "samples/requires_simulation",
+        "samples/simulation_status",
         "samples/failed_simulation",
         "samples/which_intensity",
     )
@@ -122,12 +131,12 @@ class Cache(ABC):
         for name, shape in obs_shapes.items():
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
 
-        # Requires simulation flag
+        # Simulation status code
         m = root.zeros(  # noqa: F841
-            self._filesystem.requires_simulation,
-            shape=(0, 1),
-            chunks=(100000, 1),
-            dtype="bool",
+            self._filesystem.simulation_status,
+            shape=(0,),
+            chunks=(100000,),
+            dtype="int",
         )
 
         # Failed simulation flag
@@ -166,7 +175,7 @@ class Cache(ABC):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
         self.x = self.root[self._filesystem.obs]
         self.z = self.root[self._filesystem.par]
-        self.m = self.root[self._filesystem.requires_simulation]
+        self.m = self.root[self._filesystem.simulation_status]
         self.f = self.root[self._filesystem.failed_simulation]
         assert len(self.f) == len(
             self.m
@@ -222,12 +231,13 @@ class Cache(ABC):
         for key, value in self.z.items():
             value.append(z[key])
 
-        # Register as missing
-        m = np.ones((n, 1), dtype="bool")
+        # Register as pending
+        m = np.full(n, SimulationStatus.PENDING, dtype="int")
         self.m.append(m)
 
         # Simulations have not failed, yet.
-        self.f.append(~m)
+        f = np.zeros(n, dtype="bool")
+        self.f.append(f)
 
         # Which intensity was a parameter drawn with
         wu = self.intensity_len * np.ones(n, dtype="int")
@@ -317,38 +327,68 @@ class Cache(ABC):
         accepted = np.flatnonzero(accept)
         return accepted
 
-    def _get_idx_requiring_sim(self):
-        indices = []
-        m = self.m[:]
-        for i in range(len(self)):
-            if m[i]:
-                indices.append(i)
-        return indices
+    def _get_indices_to_simulate(self, indices=None):
+        """
+        Determine which samples need to be simulated.
+
+        Args:
+            indices: (optional) array with the indices of the samples to
+            consider. If None, consider all samples.
+
+        Returns:
+            array with the sample indices
+        """
+        status = self.get_simulation_status(indices)
+        require_simulation = status == SimulationStatus.PENDING
+        idx = np.flatnonzero(require_simulation)
+        return indices[idx] if indices is not None else idx
+
+    def _set_simulation_status(self, indices, status):
+        """
+        Flag the specified samples with the simulation status.
+
+        Args:
+            indices: array with the indices of the samples to flag
+            status: new status for the samples
+        """
+        assert status in list(SimulationStatus), f"Unknown status {status}"
+        current_status = self.m.oindex[indices]
+        if np.any(current_status == status):
+            raise ValueError(f"Some simulations have already status {status}")
+        self.m.oindex[indices] = status
+
+    def get_simulation_status(self, indices=None):
+        """
+        Determine the status of sample simulations.
+
+        Args:
+            indices: list of indices. If None, check the status of all samples
+
+        Returns:
+            list of simulation statuses
+        """
+        self._update()
+        return self.m.oindex[indices] if indices is not None else self.m[:]
 
     @property
     def requires_sim(self) -> bool:
         """Check whether there are parameters which require a matching simulation."""
         self._update()
-        return len(self._get_idx_requiring_sim()) > 0
+        return self._get_indices_to_simulate().size > 0
 
-    def _get_idx_failing_sim(self):
-        indices = []
-        f = self.f[:]
-        for i, f in enumerate(f):
-            if f:
-                indices.append(i)
-        return indices
+    def _get_indices_failed_simulations(self):
+        return np.flatnonzero(self.f[:])
 
     @property
     def any_failed(self) -> bool:
         """Check whether there are parameters which currently lead to a failed simulation."""
         self._update()
-        return len(self._get_idx_failing_sim()) > 0
+        return self._get_indices_failed_simulations().size > 0
 
     def _add_sim(self, i, x):
         for k, v in x.items():
             self.x[k][i] = v
-        self.m[i] = False
+        self._set_simulation_status(i, SimulationStatus.FINISHED)
         self.f[i] = False
 
     def _failed_sim(self, i):
@@ -359,7 +399,7 @@ class Cache(ABC):
             self.z[key][i] = value
         for k, v in x.items():
             self.x[k][i] = v
-        self.m[i] = False
+        self._set_simulation_status(i, SimulationStatus.FINISHED)
         self.f[i] = False
 
     @staticmethod
@@ -380,6 +420,7 @@ class Cache(ABC):
     def simulate(
         self,
         simulator: Callable,
+        indices: Optional[List[int]] = None,
         fail_on_non_finite: bool = True,
         max_attempts: int = 1000,
     ) -> None:
@@ -387,24 +428,30 @@ class Cache(ABC):
 
         Args:
             simulator: simulates an observation given a parameter input
+            indices: list of sample indices for which a simulation is required
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
             max_attempts: maximum number of resample attempts before giving up.
         """
-        self._update()
+        self.lock()
+        idx = self._get_indices_to_simulate(indices)
+        self._set_simulation_status(idx, SimulationStatus.RUNNING)
+        self.unlock()
 
-        idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
             if verbosity() >= 2:
                 print("No simulations required.")
-            return True
-        for i in tqdm(idx, desc="Simulate"):
-            z = {k: v[i] for k, v in self.z.items()}
-            x = simulator(z)
-            success = self.did_simulator_succeed(x, fail_on_non_finite)
-            if success:
-                self._add_sim(i, x)
-            else:
-                self._failed_sim(i)
+        else:
+            for i in tqdm(idx, desc="Simulate"):
+                z = {k: v[i] for k, v in self.z.items()}
+                x = simulator(z)
+                success = self.did_simulator_succeed(x, fail_on_non_finite)
+                if success:
+                    self._add_sim(i, x)
+                else:
+                    self._failed_sim(i)
+
+        # some of the samples might be run by other processes - wait for these
+        self.wait_for_simulations(indices)
 
         if self.any_failed:
             self.resample_failed_simulations(
@@ -417,12 +464,24 @@ class Cache(ABC):
                 f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
             )
 
+    def wait_for_simulations(self, indices):
+        """
+        Wait for a set of sample simulations to be finished.
+
+        Args:
+            indices: list of sample indices
+        """
+        status = self.get_simulation_status(indices)
+        while not np.all(status == SimulationStatus.FINISHED):
+            time.sleep(1)
+            status = self.get_simulation_status(indices)
+
     def resample_failed_simulations(
         self, simulator: Callable, fail_on_non_finite: bool, max_attempts: int
     ) -> None:
         self._update()
         if self.any_failed:
-            idx = self._get_idx_failing_sim()
+            idx = self._get_indices_failed_simulations()
             for i in tqdm(idx, desc="Fix failed sims"):
                 iters = 0
                 success = False
