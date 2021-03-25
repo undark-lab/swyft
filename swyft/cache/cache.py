@@ -13,7 +13,6 @@ import fasteners
 import numcodecs
 import numpy as np
 import zarr
-from tqdm import tqdm
 
 from swyft.cache.exceptions import LowIntensityError
 from swyft.ip3 import Intensity
