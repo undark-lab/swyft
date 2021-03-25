@@ -144,19 +144,14 @@ class NestedRatios:
             ####################################
             # Step 2 - Update cache and simulate
             ####################################
-            self._cache.grow(prior_R, N_R)
-            if self.requires_sim():
-                logging.info(
-                    "Additional simulations are required after growing the cache."
-                )
-                idx = self._cache._get_idx_requiring_sim()
-                if self._simulator.model is not None:
-                    self._cache.simulate(idx, self._simulator)
-                else:
-                    logging.warning(
-                        "No model specified. Run simulator directly on cache."
-                    )
-                    return
+            indices = self._cache.sample(prior_R, N_R)
+
+            # Fail gracefully if no points are drawn.
+            if len(indices) == 0:
+                raise NoPointsError("No points were sampled from the cache.")
+
+            self._cache.simulate(self._simulator, indices)
+            points = Points(indices, self._cache, self._noise)
 
             ################
             # Step 3 - Infer
@@ -170,7 +165,7 @@ class NestedRatios:
                     head_args=head_args,
                     tail_args=tail_args,
                     train_args=train_args,
-                    N=N_R,
+                    points=points,
                 )
             except NoPointsError:
                 self.failed_to_converge = True
@@ -291,21 +286,21 @@ class NestedRatios:
         ####################################
         # Step 1 - Update cache and simulate
         ####################################
-        self._cache.grow(prior, N)
-        if self.requires_sim():
-            logging.info("Additional simulations are required after growing the cache.")
-            if self._simulator.model is not None:
-                self._cache.simulate(self._simulator.model)
-            else:
-                logging.warning("No model specified. Run simulator directly on cache.")
-                return
+        indices = self._cache.sample(prior, N)
+
+        # Fail gracefully if no points are drawn.
+        if len(indices) == 0:
+            raise NoPointsError("No points were sampled from the cache.")
+
+        self._cache.simulate(self._simulator, indices)
+        points = Points(indices, self._cache, self._noise)
 
         #################
         # Step 2 - Train!
         #################
         marginals = self._train(
             prior=prior,
-            N=N,
+            points=points,
             param_list=param_list,
             head=head,
             tail=tail,
@@ -396,7 +391,7 @@ class NestedRatios:
         self,
         prior,
         param_list,
-        N,
+        points,
         train_args,
         head,
         tail,
@@ -404,19 +399,7 @@ class NestedRatios:
         tail_args,
     ):
         """Perform amortized inference on constrained priors."""
-        if self._cache.requires_sim:
-            raise MissingModelError(
-                "Some points in the cache have not been simulated yet."
-            )
-
         logging.info("Starting neural network training.")
-        indices = self._cache.sample(prior, N)
-
-        # Fail gracefully if no points are drawn.
-        if len(indices) == 0:
-            raise NoPointsError("No points were sampled from the cache.")
-
-        points = Points(indices, self._cache, self._noise)
 
         if param_list is None:
             param_list = prior.params()
