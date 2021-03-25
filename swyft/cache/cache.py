@@ -434,14 +434,13 @@ class Cache(ABC):
                     self._add_sim(i, x)
                 else:
                     self._failed_sim(i)
+            if any(validity):
+                warn(
+                    f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
+                )
 
         # some of the samples might be run by other processes - wait for these
         self.wait_for_simulations(indices)
-
-        if any(validity):
-            warn(
-                f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
-            )
 
     def wait_for_simulations(self, indices):
         """
