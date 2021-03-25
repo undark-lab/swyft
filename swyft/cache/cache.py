@@ -1,11 +1,15 @@
 # pylint: disable=no-member, not-callable
+import enum
 import logging
+import os
+import time
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Union, Optional
 from warnings import warn
 
+import fasteners
 import numcodecs
 import numpy as np
 import zarr
@@ -24,11 +28,17 @@ Filesystem = namedtuple(
         "samples",
         "obs",
         "par",
-        "requires_simulation",
+        "simulation_status",
         "failed_simulation",
         "which_intensity",
     ],
 )
+
+
+class SimulationStatus(enum.IntEnum):
+    PENDING = 0
+    RUNNING = 1
+    FINISHED = 2
 
 
 class Cache(ABC):
@@ -40,7 +50,7 @@ class Cache(ABC):
         "samples",
         "samples/obs",
         "samples/par",
-        "samples/requires_simulation",
+        "samples/simulation_status",
         "samples/failed_simulation",
         "samples/which_intensity",
     )
@@ -51,6 +61,7 @@ class Cache(ABC):
         params,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
+        sync_path: Optional[PathType] = None
     ):
         """Initialize Cache content dimensions.
 
@@ -58,10 +69,14 @@ class Cache(ABC):
             params (list of strings): List of paramater names
             obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
+            sync_path: path to the cache lock files. Must be accessible to all
+                processes working on the cache.
         """
         self.store = store
         self.params = params
-        self.root = zarr.group(store=self.store)
+        synchronizer = None if sync_path is None else \
+            zarr.ProcessSynchronizer(sync_path)
+        self.root = zarr.group(store=self.store, synchronizer=synchronizer)
         self.intensities = []
 
         logging.debug("Creating Cache.")
@@ -80,13 +95,29 @@ class Cache(ABC):
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
-
+        self._lock = None
+        if sync_path is not None:
+            self._setup_lock(sync_path)
         # assert (
         #    zdim == self.zdim
         # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
         # assert (
         #    xshape == self.xshape
         # ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
+
+    def _setup_lock(self, sync_path):
+        path = os.path.join(sync_path, "cache.lock")
+        self._lock = fasteners.InterProcessLock(path)
+
+    def lock(self):
+        if self._lock is not None:
+            logging.debug("Cache locked")
+            self._lock.acquire(blocking=True)
+
+    def unlock(self):
+        if self._lock is not None:
+            self._lock.release()
+            logging.debug("Cache unlocked")
 
     def _setup_new_cache(self, params, obs_shapes, root) -> None:
         # Add parameter names to store
@@ -101,19 +132,19 @@ class Cache(ABC):
         for name, shape in obs_shapes.items():
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
 
-        # Requires simulation flag
+        # Simulation status code
         m = root.zeros(  # noqa: F841
-            self._filesystem.requires_simulation,
-            shape=(0, 1),
-            chunks=(100000, 1),
-            dtype="bool",
+            self._filesystem.simulation_status,
+            shape=(0,),
+            chunks=(100000,),
+            dtype="int",
         )
 
         # Failed simulation flag
         f = root.zeros(  # noqa: F841
             self._filesystem.failed_simulation,
-            shape=(0, 1),
-            chunks=(100000, 1),
+            shape=(0,),
+            chunks=(100000,),
             dtype="bool",
         )
 
@@ -145,7 +176,7 @@ class Cache(ABC):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
         self.x = self.root[self._filesystem.obs]
         self.z = self.root[self._filesystem.par]
-        self.m = self.root[self._filesystem.requires_simulation]
+        self.m = self.root[self._filesystem.simulation_status]
         self.f = self.root[self._filesystem.failed_simulation]
         assert len(self.f) == len(
             self.m
@@ -201,12 +232,13 @@ class Cache(ABC):
         for key, value in self.z.items():
             value.append(z[key])
 
-        # Register as missing
-        m = np.ones((n, 1), dtype="bool")
+        # Register as pending
+        m = np.full(n, SimulationStatus.PENDING, dtype="int")
         self.m.append(m)
 
         # Simulations have not failed, yet.
-        self.f.append(~m)
+        f = np.zeros(n, dtype="bool")
+        self.f.append(f)
 
         # Which intensity was a parameter drawn with
         wu = self.intensity_len * np.ones(n, dtype="int")
@@ -257,6 +289,7 @@ class Cache(ABC):
             if verbosity() >= 1:
                 print("  adding %i new samples to simulator cache." % sum(accepted))
         else:
+            logging.debug("No samples added to simulator cache")
             pass
 
         # save new intensity function. We collect them all to find their maximum.
@@ -272,64 +305,91 @@ class Cache(ABC):
     ) -> List[int]:  # noqa: F821
         intensity = Intensity(prior, N)
 
+        self.lock()
         self._update()
+        self.grow(prior, N)
+        self.unlock()
 
-        accepted = []
         zlist = {k: self.z[k][:] for k in (self.z)}
 
         cached_intensities = self.log_intensity(zlist)
         target_intensities = intensity(zlist)
         assert len(self) == len(cached_intensities)
         assert len(self) == len(target_intensities)
-        for i, (target_intensity, cached_intensity) in enumerate(
-            zip(target_intensities, cached_intensities)
-        ):
-            log_prob_accept = target_intensity - cached_intensity
-            if log_prob_accept > 0.0:
-                raise LowIntensityError(
-                    f"{log_prob_accept} > 0, "
-                    " but we expected the log ratio of target intensity function to the cache <= 0. "
-                    "There may not be enough samples in the cache or "
-                    "a constrained intensity function was not accounted for."
-                )
-            elif log_prob_accept > np.log(np.random.rand()):
-                accepted.append(i)
-            else:
-                continue
+        log_prob_accept = target_intensities - cached_intensities
+        if np.any(log_prob_accept > 0.):
+            raise LowIntensityError(
+                "We expect the log ratio of target intensity function to the cache <= 0. "
+                "There may not be enough samples in the cache or "
+                "a constrained intensity function was not accounted for."
+            )
+        prob_reject = 1. - np.random.random(log_prob_accept.shape)  # (0;1]
+        accept = log_prob_accept > np.log(prob_reject)
+        accepted = np.flatnonzero(accept)
         return accepted
 
-    def _get_idx_requiring_sim(self):
-        indices = []
-        m = self.m[:]
-        for i in range(len(self)):
-            if m[i]:
-                indices.append(i)
-        return indices
+    def _get_indices_to_simulate(self, indices=None):
+        """
+        Determine which samples need to be simulated.
+
+        Args:
+            indices: (optional) array with the indices of the samples to
+            consider. If None, consider all samples.
+
+        Returns:
+            array with the sample indices
+        """
+        status = self.get_simulation_status(indices)
+        require_simulation = status == SimulationStatus.PENDING
+        idx = np.flatnonzero(require_simulation)
+        return indices[idx] if indices is not None else idx
+
+    def _set_simulation_status(self, indices, status):
+        """
+        Flag the specified samples with the simulation status.
+
+        Args:
+            indices: array with the indices of the samples to flag
+            status: new status for the samples
+        """
+        assert status in list(SimulationStatus), f"Unknown status {status}"
+        current_status = self.m.oindex[indices]
+        if np.any(current_status == status):
+            raise ValueError(f"Some simulations have already status {status}")
+        self.m.oindex[indices] = status
+
+    def get_simulation_status(self, indices=None):
+        """
+        Determine the status of sample simulations.
+
+        Args:
+            indices: list of indices. If None, check the status of all samples
+
+        Returns:
+            list of simulation statuses
+        """
+        self._update()
+        return self.m.oindex[indices] if indices is not None else self.m[:]
 
     @property
     def requires_sim(self) -> bool:
         """Check whether there are parameters which require a matching simulation."""
         self._update()
-        return len(self._get_idx_requiring_sim()) > 0
+        return self._get_indices_to_simulate().size > 0
 
-    def _get_idx_failing_sim(self):
-        indices = []
-        f = self.f[:]
-        for i, f in enumerate(f):
-            if f:
-                indices.append(i)
-        return indices
+    def _get_indices_failed_simulations(self):
+        return np.flatnonzero(self.f[:])
 
     @property
     def any_failed(self) -> bool:
         """Check whether there are parameters which currently lead to a failed simulation."""
         self._update()
-        return len(self._get_idx_failing_sim()) > 0
+        return self._get_indices_failed_simulations().size > 0
 
     def _add_sim(self, i, x):
         for k, v in x.items():
             self.x[k][i] = v
-        self.m[i] = False
+        self._set_simulation_status(i, SimulationStatus.FINISHED)
         self.f[i] = False
 
     def _failed_sim(self, i):
@@ -340,13 +400,13 @@ class Cache(ABC):
             self.z[key][i] = value
         for k, v in x.items():
             self.x[k][i] = v
-        self.m[i] = False
+        self._set_simulation_status(i, SimulationStatus.FINISHED)
         self.f[i] = False
 
     def simulate(
         self,
-        idx,
         simulator,
+        indices: Optional[List[int]] = None,
         fail_on_non_finite: bool = True,
         max_attempts: int = 1000,
     ) -> None:
@@ -354,44 +414,75 @@ class Cache(ABC):
 
         Args:
             simulator: simulates an observation given a parameter input
+            indices: list of sample indices for which a simulation is required
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
             max_attempts: maximum number of resample attempts before giving up.
         """
-        self._update()
+        self.lock()
+        idx = self._get_indices_to_simulate(indices)
+        self._set_simulation_status(idx, SimulationStatus.RUNNING)
+        self.unlock()
 
         if len(idx) == 0:
             if verbosity() >= 2:
                 print("No simulations required.")
-            return True
+        else:
+            z = [{k: v[i] for k, v in self.z.items()} for i in idx]
+            res = simulator.run(z)
+            x_all, validity = list(zip(*res))  # TODO: check other data formats
 
-        # Parameter dict to list
-        z = [{k: v[i] for k, v in self.z.items()} for i in idx]
-        res = simulator.run(z)
-        x_all, validity = list(zip(*res))  # TODO: check other data formats
+            for i, x, v in zip(idx, x_all, validity):
+                if v == 0:
+                    self._add_sim(i, x)
+                else:
+                    self._failed_sim(i)
 
-        for i, x, v in zip(idx, x_all, validity):
-            if v == 0:
-                self._add_sim(i, x)
-            else:
-                self._failed_sim(i)
+        # some of the samples might be run by other processes - wait for these
+        self.wait_for_simulations(indices)
 
         if any(validity):
             warn(
                 f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
             )
 
+    def wait_for_simulations(self, indices):
+        """
+        Wait for a set of sample simulations to be finished.
+
+        Args:
+            indices: list of sample indices
+        """
+        status = self.get_simulation_status(indices)
+        while not np.all(status == SimulationStatus.FINISHED):
+            time.sleep(1)
+            status = self.get_simulation_status(indices)
+
 
 class DirectoryCache(Cache):
-    def __init__(self, params, obs_shapes: Shape, path: PathType):
+    def __init__(
+            self,
+            params,
+            obs_shapes: Shape,
+            path: PathType,
+            sync_path: Optional[PathType] = None
+    ):
         """Instantiate an iP3 cache stored in a directory.
 
         Args:
             zdim: Number of z dimensions
             xshape: Shape of x array
             path: path to storage directory
+            sync_path: path to the cache lock files. Must be accessible to all
+                processes working on the cache and should differ from `path`.
         """
         self.store = zarr.DirectoryStore(path)
-        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
+        sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
+        super().__init__(
+            params=params,
+            obs_shapes=obs_shapes,
+            store=self.store,
+            sync_path=sync_path
+        )
 
     @classmethod
     def load(cls, path: PathType):
@@ -404,13 +495,19 @@ class DirectoryCache(Cache):
 
 
 class MemoryCache(Cache):
-    def __init__(self, params, obs_shapes, store=None):
+    def __init__(
+            self,
+            params,
+            obs_shapes,
+            store=None,
+    ):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
             zdim: Number of z dimensions
             obs_shapes: Shape of x array
-            store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in loading.
+            store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
+                loading.
         """
         if store is None:
             self.store = zarr.MemoryStore()
@@ -418,7 +515,11 @@ class MemoryCache(Cache):
         else:
             self.store = store
             logging.debug("Creating MemoryCache from store.")
-        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
+        super().__init__(
+            params=params,
+            obs_shapes=obs_shapes,
+            store=self.store,
+        )
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryCache to a directory."""
