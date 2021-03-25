@@ -406,7 +406,6 @@ class Cache(ABC):
         self,
         simulator,
         indices: Optional[List[int]] = None,
-        fail_on_non_finite: bool = True,
         max_attempts: int = 1000,
     ) -> None:
         """Run simulator sequentially on parameter cache with missing corresponding simulations.
