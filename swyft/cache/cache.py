@@ -6,7 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
-from typing import Callable, Dict, List, Union, Optional
+from typing import Callable, Dict, List, Optional, Union
 from warnings import warn
 
 import fasteners
@@ -60,7 +60,7 @@ class Cache(ABC):
         params,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
-        sync_path: Optional[PathType] = None
+        sync_path: Optional[PathType] = None,
     ):
         """Initialize Cache content dimensions.
 
@@ -73,8 +73,9 @@ class Cache(ABC):
         """
         self.store = store
         self.params = params
-        synchronizer = None if sync_path is None else \
-            zarr.ProcessSynchronizer(sync_path)
+        synchronizer = (
+            None if sync_path is None else zarr.ProcessSynchronizer(sync_path)
+        )
         self.root = zarr.group(store=self.store, synchronizer=synchronizer)
         self.intensities = []
 
@@ -316,13 +317,13 @@ class Cache(ABC):
         assert len(self) == len(cached_intensities)
         assert len(self) == len(target_intensities)
         log_prob_accept = target_intensities - cached_intensities
-        if np.any(log_prob_accept > 0.):
+        if np.any(log_prob_accept > 0.0):
             raise LowIntensityError(
                 "We expect the log ratio of target intensity function to the cache <= 0. "
                 "There may not be enough samples in the cache or "
                 "a constrained intensity function was not accounted for."
             )
-        prob_reject = 1. - np.random.random(log_prob_accept.shape)  # (0;1]
+        prob_reject = 1.0 - np.random.random(log_prob_accept.shape)  # (0;1]
         accept = log_prob_accept > np.log(prob_reject)
         accepted = np.flatnonzero(accept)
         return accepted
@@ -457,11 +458,11 @@ class Cache(ABC):
 
 class DirectoryCache(Cache):
     def __init__(
-            self,
-            params,
-            obs_shapes: Shape,
-            path: PathType,
-            sync_path: Optional[PathType] = None
+        self,
+        params,
+        obs_shapes: Shape,
+        path: PathType,
+        sync_path: Optional[PathType] = None,
     ):
         """Instantiate an iP3 cache stored in a directory.
 
@@ -475,10 +476,7 @@ class DirectoryCache(Cache):
         self.store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
-            params=params,
-            obs_shapes=obs_shapes,
-            store=self.store,
-            sync_path=sync_path
+            params=params, obs_shapes=obs_shapes, store=self.store, sync_path=sync_path
         )
 
     @classmethod
@@ -493,10 +491,10 @@ class DirectoryCache(Cache):
 
 class MemoryCache(Cache):
     def __init__(
-            self,
-            params,
-            obs_shapes,
-            store=None,
+        self,
+        params,
+        obs_shapes,
+        store=None,
     ):
         """Instantiate an iP3 cache stored in the memory.
 

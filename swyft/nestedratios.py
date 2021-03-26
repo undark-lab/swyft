@@ -1,6 +1,6 @@
 import logging
-from warnings import warn
 import typing
+from warnings import warn
 
 import numpy as np
 
@@ -53,7 +53,7 @@ class NestedRatios:
         assert log_volume_convergence_threshold > 0.0
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
-        
+
         if isinstance(simulator, typing.Callable):
             self._simulator = Simulator(simulator)
         elif isinstance(simulator, Simulator):

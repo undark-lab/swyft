@@ -1,15 +1,16 @@
 # New
-import dask.bag as db
 import os
 import shlex
 import subprocess
 import tempfile
-import numpy as np
-
-from dask.distributed import Client
 from typing import Dict, List
-from swyft.utils import all_finite
+
+import dask.bag as db
+import numpy as np
+from dask.distributed import Client
+
 from swyft.types import Array
+from swyft.utils import all_finite
 
 
 class Simulator:
@@ -72,11 +73,10 @@ class Simulator:
 
             return (x, validity)
 
-        return bag.map(_run_one_sample).compute(scheduler=self.client or 'processes')
+        return bag.map(_run_one_sample).compute(scheduler=self.client or "processes")
 
     @classmethod
-    def from_command(cls, command, set_input_method, get_output_method,
-                     tmpdir=None):
+    def from_command(cls, command, set_input_method, get_output_method, tmpdir=None):
         """
         Setup command-line simulator
 
@@ -101,11 +101,13 @@ class Simulator:
                 cwd = os.getcwd()
                 os.chdir(tmpdirname)
                 input = set_input_method(z)
-                res = subprocess.run(command_args,
-                                     capture_output=True,
-                                     input=input,
-                                     text=True,
-                                     check=True)
+                res = subprocess.run(
+                    command_args,
+                    capture_output=True,
+                    input=input,
+                    text=True,
+                    check=True,
+                )
                 output = get_output_method(res.stdout, res.stderr)
                 os.chdir(cwd)
             return output
@@ -117,15 +119,12 @@ class Simulator:
         """Is the simulation a success?"""
 
         # Code disctionary for validity
-        code = {
-            "valid": 0,
-            "none_value": 1,
-            "non_finite_value": 2
-        }
+        code = {"valid": 0, "none_value": 1, "non_finite_value": 2}
 
         assert isinstance(x, dict), "Simulators must return a dictionary."
 
-        def dict_anynone(d): return
+        def dict_anynone(d):
+            return
 
         if any([np.isnan(v).any() for v in x.values()]):
             return code["none_value"]
