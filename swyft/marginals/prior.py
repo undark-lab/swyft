@@ -62,6 +62,7 @@ class Prior:
             result[key] = Prior1d(value[0], *value[1:])
         self.priors = result
 
+    # FIXME: Mask / constraint should be an argument
     def sample(self, N):
         if self.mask is None:
             return self._sample_from_priors(N)
@@ -75,12 +76,15 @@ class Prior:
             result[key] = tensor_to_array(value.sample(N))
         return result
 
+    # FIXME: Do we still need the volume?
     def volume(self):
         if self.mask is None:
             return 1.0
         else:
             return self.mask.volume
 
+    # FIXME: Mask / constraint should be an argument
+    # FIXME: Do we still need masked log_prob?
     def log_prob(self, values, unmasked=False):
         log_prob_unmasked = {}
         for key, value in self.priors.items():
@@ -102,6 +106,7 @@ class Prior:
         else:
             return log_prob_sum
 
+    # FIXME: Do we still need this?
     def factorized_log_prob(
         self,
         values: Dict[str, Array],
@@ -145,10 +150,12 @@ class Prior:
             result[key] = np.array(self.priors[key].from_cube(value))
         return result
 
+    # FIXME: We do not save the mask, just unmasked priors.
     def state_dict(self):
         mask_dict = None if self.mask is None else self.mask.state_dict()
         return dict(prior_config=self.prior_config, mask=mask_dict)
 
+    # FIXME: We do not restore the mask, just unmasked priors.
     @classmethod
     def from_state_dict(cls, state_dict):
         mask = (
@@ -158,6 +165,14 @@ class Prior:
         )
         return cls(state_dict["prior_config"], mask=mask)
 
+    # FIXME: This needs to be extended to high-dim posteriors
+    # Right now the logic is :
+    # - masks don't have a NN inside, and can be stored easily
+    # - masks can be sampled from easily
+    # - masks are defined through those samples
+    # Changes required:
+    # - Constrained priors cannot be saved anymore, only priors can
+    # - We can sample from a constrained prior by providing a network
     def get_masked(self, obs, re, N=10000, th=-7):
         if re is None:
             return self

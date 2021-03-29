@@ -139,8 +139,12 @@ class Cache(ABC):
     def _extract_zdim_from_zarr_group(group):
         return group[Cache._filesystem.par].shape[1]
 
+    # FIXME: Add log_intensity as another entry to datastore
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
+        # FIXME: Update BallTree necessary for intensity calculations
+        # - Distances should be calculated based on prior hypercube projection
+        # - This is only clear when running grow() or sample()
         self.x = self.root[self._filesystem.obs]
         self.z = self.root[self._filesystem.par]
         self.m = self.root[self._filesystem.requires_simulation]
@@ -150,6 +154,7 @@ class Cache(ABC):
         ), "Metadata noting which indices require simulation and which have failed have desynced."
         self.u = self.root[self._filesystem.intensity]
         self.wu = self.root[self._filesystem.which_intensity]
+        # FIXME: Remove intensities instantiation
         self.intensities = [
             Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))
         ]
@@ -210,6 +215,7 @@ class Cache(ABC):
         wu = self.intensity_len * np.ones(n, dtype="int")
         self.wu.append(wu)
 
+    # FIXME: Replace by interpolation
     def log_intensity(self, z: Dict[str, np.ndarray]) -> np.ndarray:
         self._update()
 
@@ -227,6 +233,9 @@ class Cache(ABC):
                 [log_intensity(z) for log_intensity in self.intensities]
             ).max(axis=0)
 
+    # FIXME: We have to run BallTree for interpolation each time we add new
+    # samples, for the subset of samples for which the prior is non-zero, in
+    # the deprojected hypercube space
     def grow(self, prior: "swyft.intensity.Intensity", N):  # noqa
         """Given an intensity function, add parameter samples to the cache.
 
@@ -240,14 +249,21 @@ class Cache(ABC):
 
         # Rejection sampling from proposal list
         accepted = []
+
+        # FIXME: This is where the kNN-based interpolation would come in.
+        # Afterwards we can forget it again, and replace with target_log_int.
         cached_log_intensities = self.log_intensity(z_prop)
+
         target_log_intensities = intensity(z_prop)
+
         for cached_log_intensity, target_log_intensity in zip(
             cached_log_intensities, target_log_intensities
         ):
             log_prob_reject = np.minimum(0, cached_log_intensity - target_log_intensity)
             accepted.append(log_prob_reject < np.log(np.random.rand()))
         z_accepted = {k: z[accepted, ...] for k, z in z_prop.items()}
+
+        # FIXME: Update log_intensity values of **all** samples in the cache based on "intensity"
 
         # Add new entries to cache
         if sum(accepted) > 0:
@@ -264,6 +280,7 @@ class Cache(ABC):
             self.u[-1] = intensity.state_dict()
             self.intensities.append(intensity)
 
+    # FIXME: No Balltree required here, just rejection sampling based on stored intensities.
     def sample(
         self, prior: "swyft.intensity.Intensity", N: int
     ) -> List[int]:  # noqa: F821
