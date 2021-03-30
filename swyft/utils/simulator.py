@@ -3,10 +3,9 @@ import os
 import shlex
 import subprocess
 import tempfile
-from typing import Dict, List
+from typing import Dict
 
 import dask.bag as db
-import numpy as np
 from dask.distributed import Client
 
 from swyft.types import Array
@@ -54,26 +53,10 @@ class Simulator:
         """
 
         bag = db.from_sequence(z, npartitions=npartitions)
-
-        def _run_one_sample(param):
-            """
-            Run model for one set of parameters, check validity and redo for max attempts
-
-            Args:
-                param (dictionary): one set of input parameters
-            """
-            x = self.model(param)
-            validity = self._succeed(x, self.fail_on_non_finite)
-
-            # if failed, re-simulapte for max_attempts
-            iters = 0
-            while validity > 0 and iters < self.max_attempts:
-                x = self.model(param)
-                validity = self._succeed(x, self.fail_on_non_finite)
-
-            return (x, validity)
-
-        return bag.map(_run_one_sample).compute(scheduler=self.client or "processes")
+        bag = bag.map(
+            _run_one_sample, self.model, self.fail_on_non_finite, self.max_attempts
+        )
+        return bag.compute(scheduler=self.client or "processes")
 
     @classmethod
     def from_command(cls, command, set_input_method, get_output_method, tmpdir=None):
@@ -114,21 +97,37 @@ class Simulator:
 
         return cls(model=model)
 
-    @staticmethod
-    def _succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> int:
-        """Is the simulation a success?"""
 
-        # Code disctionary for validity
-        code = {"valid": 0, "none_value": 1, "non_finite_value": 2}
+def _succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> int:
+    """Is the simulation a success?"""
 
-        assert isinstance(x, dict), "Simulators must return a dictionary."
+    # Code disctionary for validity
+    code = {"valid": 0, "none_value": 1, "non_finite_value": 2}
 
-        def dict_anynone(d):
-            return
+    assert isinstance(x, dict), "Simulators must return a dictionary."
 
-        if any([np.isnan(v).any() for v in x.values()]):
-            return code["none_value"]
-        elif fail_on_non_finite and not all_finite(x):
-            return code["non_finite_value"]
-        else:
-            return code["valid"]
+    if any([v is None for v in x.values()]):
+        return code["none_value"]
+    elif fail_on_non_finite and not all_finite(x):
+        return code["non_finite_value"]
+    else:
+        return code["valid"]
+
+
+def _run_one_sample(param, model, fail_on_non_finite, max_attempts):
+    """
+    Run model for one set of parameters, check validity and redo for max attempts
+
+    Args:
+        param (dictionary): one set of input parameters
+    """
+    x = model(param)
+    validity = _succeed(x, fail_on_non_finite)
+
+    # if failed, re-simulapte for max_attempts
+    iters = 0
+    while validity > 0 and iters < max_attempts:
+        x = model(param)
+        validity = _succeed(x, fail_on_non_finite)
+
+    return (x, validity)
