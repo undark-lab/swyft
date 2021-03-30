@@ -407,7 +407,6 @@ class Cache(ABC):
         self,
         simulator,
         indices: Optional[List[int]] = None,
-        max_attempts: int = 1000,
     ) -> None:
         """Run simulator sequentially on parameter cache with missing corresponding simulations.
 
@@ -415,7 +414,6 @@ class Cache(ABC):
             simulator: simulates an observation given a parameter input
             indices: list of sample indices for which a simulation is required
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
-            max_attempts: maximum number of resample attempts before giving up.
         """
         self.lock()
         idx = self._get_indices_to_simulate(indices)
@@ -435,10 +433,6 @@ class Cache(ABC):
                     self._add_sim(i, x)
                 else:
                     self._failed_sim(i)
-            if any(validity):
-                warn(
-                    f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
-                )
 
         # some of the samples might be run by other processes - wait for these
         self.wait_for_simulations(indices)

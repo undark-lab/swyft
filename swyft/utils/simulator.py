@@ -15,18 +15,16 @@ from swyft.utils import all_finite
 class Simulator:
     """ Setup and run the simulator engine """
 
-    def __init__(self, model, fail_on_non_finite: bool = True, max_attempts: int = 2):
+    def __init__(self, model, fail_on_non_finite: bool = True):
         """
         initialte Simulator
 
         Args:
             model (callable): simulator model function
             fail_on_non_finite (bool): whether return a invalid code if simulation returns infinite, default True
-            max_attempts (int): maximum number of attempts to re-simulate the failed simulations
         """
         self.model = model
         self.client = None
-        self.max_attempts = max_attempts
         self.fail_on_non_finite = fail_on_non_finite
 
     def set_dask_cluster(self, cluster=None):
@@ -53,9 +51,7 @@ class Simulator:
         """
 
         bag = db.from_sequence(z, npartitions=npartitions)
-        bag = bag.map(
-            _run_one_sample, self.model, self.fail_on_non_finite, self.max_attempts
-        )
+        bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
         return bag.compute(scheduler=self.client or "processes")
 
     @classmethod
@@ -114,20 +110,15 @@ def _succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> int:
         return code["valid"]
 
 
-def _run_one_sample(param, model, fail_on_non_finite, max_attempts):
-    """
-    Run model for one set of parameters, check validity and redo for max attempts
+def _run_one_sample(param, model, fail_on_non_finite):
+    """Run model for one set of parameters and check validity of the output.
 
     Args:
         param (dictionary): one set of input parameters
+        model (callable): simulator model
+        fail_on_non_finite (bool): whether return a invalid code if simulation
+            returns infinite, default True
     """
     x = model(param)
     validity = _succeed(x, fail_on_non_finite)
-
-    # if failed, re-simulapte for max_attempts
-    iters = 0
-    while validity > 0 and iters < max_attempts:
-        x = model(param)
-        validity = _succeed(x, fail_on_non_finite)
-
     return (x, validity)
