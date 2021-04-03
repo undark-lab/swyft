@@ -8,6 +8,16 @@ from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
 
+#class BoundedPrior:
+#    def __init__(self, ptrans, bound):
+#        self.ptrans = ptrans
+#        self.bound = bound
+#
+#    def sample(self, N): 
+#
+#    def log_prob(self, v): 
+#        return self.ptrans.log_prob(v) - np.log(self.bound.volume)
+#
 
 class PriorTransform:
     def __init__(self, ptrans, ndim, n_steps= 10000):
@@ -24,7 +34,7 @@ class PriorTransform:
         table = []
         for x in grid:
             table.append(ptrans(np.ones(ndim)*x))
-        return np.array(table)
+        return np.array(table).T
 
     def u(self, v):
         """CDF, mapping v->u"""
@@ -40,15 +50,24 @@ class PriorTransform:
             v[:,i] = np.interp(u[:,i], self._grid, self._table[i], left = None, right = None)
         return v
 
-    # FIXME: Confirm numerical stability
-    def dv_du(self, u, du = 1e-6):
-        """Inverse PDF"""
-        dv_du = np.empty_like(u)
+#    def dv_du(self, u, du = 1e-6):
+#        """Inverse PDF of """
+#        dv_du = np.empty_like(u)
+#        for i in range(self._ndim):
+#            dv_du[:,i] = np.interp(u[:,i]+(du/2), self._grid, self._table[i], left = None, right = None)
+#            dv_du[:,i] -= np.interp(u[:,i]-(du/2), self._grid, self._table[i], left = None, right = None)
+#        dv_du /= du
+#        return dv_du
+
+    def log_prob(self, v, du = 1e-6):
+        """log prior(v)"""
+        dv = np.empty_like(v)
+        u = self.u(v)
         for i in range(self._ndim):
-            dv_du[:,i] = np.interp(u[:,i]+(du/2), self._grid, self._table[i], left = None, right = None)
-            dv_du[:,i] -= np.interp(u[:,i]-(du/2), self._grid, self._table[i], left = None, right = None)
-        dv_du /= du
-        return dv_du
+            dv[:,i] = np.interp(u[:,i]+(du/2), self._grid, self._table[i], left = None, right = None)
+            dv[:,i] -= np.interp(u[:,i]-(du/2), self._grid, self._table[i], left = None, right = None)
+        log_prob = np.log(du) - np.log(dv)
+        return log_prob
 
 
 class Prior1d:
