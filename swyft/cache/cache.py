@@ -55,10 +55,13 @@ class Cache(ABC):
         """Initialize Cache content dimensions.
 
         Args:
-            params (list of strings): List of paramater names
+            params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
         """
+        if isinstance(params, int):
+            params = ['z%i'%i for i in range(params)]
+
         self.store = store
         self.params = params
         self.root = zarr.group(store=self.store)
@@ -73,31 +76,23 @@ class Cache(ABC):
             self._update()
         elif len(self.root.keys()) == 0:
             logging.info("Creating new cache.")
-            self._setup_new_cache(params, obs_shapes, self.root)
+            self._setup_new_cache(len(params), obs_shapes, self.root)
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
-        # assert (
-        #    zdim == self.zdim
-        # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
-        # assert (
-        #    xshape == self.xshape
-        # ), f"Your given xshape, {xshape}, was not equal to the one defined in zarr {self.xshape}."
-
-    def _setup_new_cache(self, params, obs_shapes, root) -> None:
-        # Add parameter names to store
-        z = root.create_group(self._filesystem.par)
-
-        for name in params:
-            z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
-            # FIX: Too small chunks lead to problems with appending
-
-        # Adding observational shapes to store
+    def _setup_new_cache(self, zdim, obs_shapes, root) -> None: # Adding observational shapes to store
         x = root.create_group(self._filesystem.obs)
         for name, shape in obs_shapes.items():
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
+
+        z = root.zeros(  # noqa: F841
+            "z",
+            shape=(0, zdim),
+            chunks=(100000, 1),
+            dtype="f8",
+        )
 
         # Requires simulation flag
         m = root.zeros(  # noqa: F841
@@ -146,7 +141,8 @@ class Cache(ABC):
         # - Distances should be calculated based on prior hypercube projection
         # - This is only clear when running grow() or sample()
         self.x = self.root[self._filesystem.obs]
-        self.z = self.root[self._filesystem.par]
+        #self.z = self.root[self._filesystem.par]
+        self.z = self.root['z']
         self.m = self.root[self._filesystem.requires_simulation]
         self.f = self.root[self._filesystem.failed_simulation]
         assert len(self.f) == len(
@@ -162,9 +158,7 @@ class Cache(ABC):
     def __len__(self):
         """Returns number of samples in the cache."""
         self._update()
-        # Return len of first entry
-        params = list(self.z)
-        return len(self.z[params[0]])
+        return len(self.z)
 
     @property
     def intensity_len(self):
@@ -181,18 +175,17 @@ class Cache(ABC):
         for key, value in self.x.items():
             result_x[key] = value[i]
 
-        result_z = {}
-        for key, value in self.z.items():
-            result_z[key] = value[i]
+        result_z = self.z[i]
 
         return dict(x=result_x, z=result_z)
 
     def _append_z(self, z):
-        """Append z to cache content and new slots for x."""
+        """Append z to cache content and generate new slots for x."""
         self._update()
 
         # Length of first element
-        n = len(z[list(z)[0]])
+        n = len(z)
+        #n = len(z[list(z)[0]])
 
         # Add slots for x
         for key, value in self.x.items():
@@ -200,9 +193,9 @@ class Cache(ABC):
             shape[0] += n
             value.resize(*shape)
 
-        # Add z samples
-        for key, value in self.z.items():
-            value.append(z[key])
+        self.root['z'].append(z)
+        #for key, value in self.z.items():
+        #    value.append(z[key])
 
         # Register as missing
         m = np.ones((n, 1), dtype="bool")
@@ -216,7 +209,11 @@ class Cache(ABC):
         self.wu.append(wu)
 
     # FIXME: Replace by interpolation
-    def log_intensity(self, z: Dict[str, np.ndarray]) -> np.ndarray:
+    def log_intensity(self, z: np.ndarray) -> np.ndarray:
+        return -np.inf * np.ones_like(z[:,0])
+
+        # FIXME: Use stored intensities
+
         self._update()
 
         # How many parameters are we evaluating on?
@@ -236,32 +233,29 @@ class Cache(ABC):
     # FIXME: We have to run BallTree for interpolation each time we add new
     # samples, for the subset of samples for which the prior is non-zero, in
     # the deprojected hypercube space
-    def grow(self, prior: "swyft.intensity.Intensity", N):  # noqa
+    def grow(self, pdf, N):  # noqa
         """Given an intensity function, add parameter samples to the cache.
 
         Args:
             intensity: target parameter intensity function
         """
-        intensity = Intensity(prior, N)
 
-        # Proposed new samples z from p
-        z_prop = intensity.sample()
+        # Random Poisson realization - relevant for PPP logic
+        z_prop = pdf.sample(N = np.random.poisson(N))
 
         # Rejection sampling from proposal list
         accepted = []
 
-        # FIXME: This is where the kNN-based interpolation would come in.
-        # Afterwards we can forget it again, and replace with target_log_int.
         cached_log_intensities = self.log_intensity(z_prop)
 
-        target_log_intensities = intensity(z_prop)
+        target_log_intensities = pdf.log_prob(z_prop) + np.log(N)
 
         for cached_log_intensity, target_log_intensity in zip(
             cached_log_intensities, target_log_intensities
         ):
             log_prob_reject = np.minimum(0, cached_log_intensity - target_log_intensity)
             accepted.append(log_prob_reject < np.log(np.random.rand()))
-        z_accepted = {k: z[accepted, ...] for k, z in z_prop.items()}
+        z_accepted = z_prop[accepted]
 
         # FIXME: Update log_intensity values of **all** samples in the cache based on "intensity"
 
@@ -275,24 +269,22 @@ class Cache(ABC):
         # save new intensity function. We collect them all to find their maximum.
         # NOTE: We only do this when new samples are added. This is not
         # entierly correct statistically, but a pain otherwise.
-        if sum(accepted) > 0:
-            self.u.resize(len(self.u) + 1)
-            self.u[-1] = intensity.state_dict()
-            self.intensities.append(intensity)
+        # FIXME: Update intensity functions
+        #if sum(accepted) > 0:
+        #    self.u.resize(len(self.u) + 1)
+        #    self.u[-1] = intensity.state_dict()
+        #    self.intensities.append(intensity)
 
     # FIXME: No Balltree required here, just rejection sampling based on stored intensities.
-    def sample(
-        self, prior: "swyft.intensity.Intensity", N: int
-    ) -> List[int]:  # noqa: F821
-        intensity = Intensity(prior, N)
-
+    def sample(self, prior, N: int) -> List[int]:  # noqa: F821
         self._update()
 
         accepted = []
-        zlist = {k: self.z[k][:] for k in (self.z)}
+        #zlist = {k: self.z[k][:] for k in (self.z)}
+        zlist = self.z
 
         cached_intensities = self.log_intensity(zlist)
-        target_intensities = intensity(zlist)
+        target_intensities = prior.log_prob(zlist) + np.log(N)
         assert len(self) == len(cached_intensities)
         assert len(self) == len(target_intensities)
         for i, (target_intensity, cached_intensity) in enumerate(
@@ -392,7 +384,8 @@ class Cache(ABC):
             logging.debug("No simulations required.")
             return True
         for i in tqdm(idx, desc="Simulate"):
-            z = {k: v[i] for k, v in self.z.items()}
+            #z = {k: v[i] for k, v in self.z.items()}
+            z = self.z[i]
             x = simulator(z)
             success = self.did_simulator_succeed(x, fail_on_non_finite)
             if success:

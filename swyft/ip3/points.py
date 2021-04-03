@@ -61,7 +61,7 @@ class Points:
         x_keys = list(self.cache.x)
         z_keys = list(self.cache.z)
         x = {k: self.cache.x[k][i] for k in x_keys}
-        z = {k: self.cache.z[k][i] for k in z_keys}
+        z = self.cache.z[i]
 
         if self.noisehook is not None:
             x = self.noisehook(x, z)

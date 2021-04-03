@@ -16,8 +16,8 @@ def _get_z_shape(param_list):
 # TODO: Remove redundant combine functions
 def _combine(params, param_list):
     """Combine parameters according to parameter list. Supports one batch dimension."""
-    shape = params[list(params)[0]].shape
-    device = params[list(params)[0]].device
+    shape = params.shape
+    device = params.device
     z_shape = _get_z_shape(param_list)
     if len(shape) == 0:  # No batching
         z = torch.zeros(z_shape).to(device)
@@ -28,28 +28,8 @@ def _combine(params, param_list):
         n = shape[0]
         z = torch.zeros((n,) + z_shape).to(device)
         for i, c in enumerate(param_list):
-            pars = torch.stack([params[k] for k in c]).T
-            z[:, i, : pars.shape[1]] = pars
-    return z
-
-
-# TODO: Remove redundant combine functions
-def _combine(params, param_list):
-    """Combine parameters according to parameter list. Supports one batch dimension."""
-    shape = params[list(params)[0]].shape
-    device = params[list(params)[0]].device
-    z_shape = _get_z_shape(param_list)
-    if len(shape) == 0:  # No batching
-        z = torch.zeros(z_shape).to(device)
-        for i, c in enumerate(param_list):
-            pars = torch.stack([params[k] for k in c]).T
-            z[i, : pars.shape[0]] = pars
-    else:  # Batching
-        n = shape[0]
-        z = torch.zeros((n,) + z_shape).to(device)
-        for i, c in enumerate(param_list):
-            pars = torch.stack([params[k] for k in c]).T
-            z[:, i, : pars.shape[1]] = pars
+            pars = torch.stack([params[:,k] for k in c]).T
+            z[:, i, :] = pars
     return z
 
 

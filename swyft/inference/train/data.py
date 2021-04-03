@@ -15,4 +15,4 @@ class ParamDictDataset(Dataset):
 
     def __getitem__(self, i):
         p = self.points[i]
-        return dict(obs=self._tensorfy(p["obs"]), par=self._tensorfy(p["par"]))
+        return dict(obs=self._tensorfy(p["obs"]), par=torch.tensor(p['par']).float())

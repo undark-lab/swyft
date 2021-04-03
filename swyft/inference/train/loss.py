@@ -20,10 +20,15 @@ def double_params(params):
     Returns:
         dict: Dictionary of parameters with shape (2*n_batch).
     """
-    out = {}
-    for k, v in params.items():
-        out[k] = torch.repeat_interleave(v.view(-1, 2), 2, dim=0).flatten()
+    ##print(params)
+    n = params.shape[-1]
+    out = torch.repeat_interleave(params.view(-1, 2*n), 2, dim=0).view(-1, n)
     return out
+    #print(params)
+    #out = {}
+    #for k, v in params.items():
+    #    out[k] = torch.repeat_interleave(v.view(-1, 2), 2, dim=0).flatten()
+    #return out
 
 
 def loss_fn(head, tail, obs, params):

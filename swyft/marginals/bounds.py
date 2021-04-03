@@ -38,7 +38,8 @@ class UnitCubeBound:
         return np.random.rand(N, self.ndim)
 
     def __call__(self, u):
-        raise NotImplementedError
+        b = np.where(u <= 1., np.where(u >= 0., 1., 0.), 0.)
+        return b.prod(axis=-1)
 
 
 class BallsBound:
