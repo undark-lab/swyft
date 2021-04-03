@@ -29,6 +29,18 @@ class CompositBound:
         return V
 
 
+class UnitCubeBound:
+    def __init__(self, ndim):
+        self.ndim = ndim
+        self.volume = 1.
+
+    def sample(self, N):
+        raise NotImplementedError
+
+    def __call__(self, u):
+        raise NotImplementedError
+
+
 class BallsBound:
     def __init__(self, points, scale=1.0):
         """Simple mask based on coverage balls around inducing points.
@@ -118,6 +130,16 @@ class BallsBound:
         points = points.reshape(len(points), -1)
         dist, ind = self.bt.query(points, k=1)
         return (dist < self.epsilon)[:, 0]
+
+    def _initialize(self, obs, bound, ratio, N=10000, th=-7):
+        raise NotImplementedError
+        u = bound.sample(N)
+        masklist = {}
+        lnL = re.lnL(obs, pars)
+        for k, v in self.to_cube(pars).items():
+            mask = lnL[(k,)].max() - lnL[(k,)] < -th
+            ind_points = v[mask].reshape(-1, 1)
+            masklist[k] = BallsBound(ind_points)
 
 
 class ComboMask:
