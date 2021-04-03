@@ -3,7 +3,7 @@ from typing import Dict, Sequence, Tuple, Union
 import numpy as np
 import torch
 
-from swyft.marginals.mask import BallMask, ComboMask
+from swyft.marginals.bounds import BallsBound, ComboMask
 from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
@@ -224,6 +224,6 @@ class Prior:
         for k, v in self.to_cube(pars).items():
             mask = lnL[(k,)].max() - lnL[(k,)] < -th
             ind_points = v[mask].reshape(-1, 1)
-            masklist[k] = BallMask(ind_points)
+            masklist[k] = BallsBound(ind_points)
         mask = ComboMask(masklist)
         return Prior(self.prior_config, mask=mask)

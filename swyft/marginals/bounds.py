@@ -1,8 +1,35 @@
 import numpy as np
 from sklearn.neighbors import BallTree
 
+# FIXME: Rename mask.py to bounds.py
 
-class BallMask:
+class CompositBound:
+    """Composition bound object in u space."""
+    def __init__(self, bounds):
+        """
+        Args:
+            bounds (dict): dictionary with entries {index_list: Bound}
+        """
+        self._bounds = bounds
+        self.volume = self._get_volume(bounds)
+
+    def sample(self, N):
+        for key, value in self._bounds.items():
+            print(key)
+        raise NotImplementedError
+
+    def __call__(self, u):
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_volume(bounds):
+        V = 1.
+        for key, value in bounds.items():
+            V *= value.volume
+        return V
+
+
+class BallsBound:
     def __init__(self, points, scale=1.0):
         """Simple mask based on coverage balls around inducing points.
 
@@ -30,7 +57,7 @@ class BallMask:
 
     def state_dict(self):
         return dict(
-            masktype="BallMask", points=self.X, epsilon=self.epsilon, volume=self.volume
+            masktype="BallsBound", points=self.X, epsilon=self.epsilon, volume=self.volume
         )
 
     @staticmethod
@@ -137,7 +164,7 @@ class ComboMask:
     def from_state_dict(cls, state_dict):
         samplers = {}
         for key, value in state_dict["samplers"].items():
-            samplers[key] = BallMask.from_state_dict(value)
+            samplers[key] = BallsBound.from_state_dict(value)
         return cls(samplers)
 
     def state_dict(self):
