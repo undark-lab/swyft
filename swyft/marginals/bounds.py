@@ -35,7 +35,7 @@ class UnitCubeBound:
         self.volume = 1.
 
     def sample(self, N):
-        raise NotImplementedError
+        return np.random.rand(N, self.ndim)
 
     def __call__(self, u):
         raise NotImplementedError
