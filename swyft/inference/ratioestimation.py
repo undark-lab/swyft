@@ -3,6 +3,7 @@ from typing import Optional
 
 import numpy as np
 import torch.nn as nn
+import torch
 
 from swyft.inference.networks import DefaultHead, DefaultTail
 from swyft.inference.train import ParamDictDataset, trainloop
@@ -144,7 +145,8 @@ class RatioCollection:
         obs = dict_to_tensor_unsqueeze(obs, device=self.device)
         f = self.head(obs)
 
-        npar = len(params[list(params)[0]])
+        #npar = len(params[list(params)[0]])
+        npar = len(params)
 
         if npar < n_batch:
             params = dict_to_tensor(params, device=self.device)
@@ -153,13 +155,8 @@ class RatioCollection:
         else:
             ratios = []
             for i in range(npar // n_batch + 1):
-                params_batch = dict_to_tensor(
-                    params,
-                    device=self.device,
-                    indices=slice(i * n_batch, (i + 1) * n_batch),
-                )
-                n = len(params_batch[list(params_batch)[0]])
-                # f_batch = f.unsqueeze(0).expand(n, -1)
+                params_batch = torch.tensor(params[i*n_batch : (i+1)*n_batch, :]).to(self.device)
+                n = len(params_batch)
                 f_batch = f.expand(n, -1)
                 tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
                 ratios.append(tmp)
@@ -191,25 +188,25 @@ class RatioCollection:
         )
         return re
 
-#    # FIXME: Ditch posterior method, show live separately
-#    def posterior(self, obs0, prior, n_samples=100000):
-#        """Resturn weighted posterior samples for given observation.
-#
-#        Args:
-#            obs0 (dict): Observation of interest.
-#            prior (Prior): (Constrained) prior used to generate training data.
-#            n_samples (int): Number of samples to return.
-#
-#        Note:
-#            log_priors are not normalized.
-#        """
-#        pars = prior.sample(n_samples)  # prior samples
-#
-#        # Unmasked original wrongly normalized log_prob densities
-#        log_probs = prior.log_prob(pars, unmasked=True)
-#
-#        ratios = self.ratios(obs0, pars)  # evaluate lnL for reference observation
-#        weights = {}
-#        for k, v in ratios.items():
-#            weights[k] = np.exp(v)
-#        return dict(params=pars, weights=weights, log_priors=log_probs)
+    # FIXME: Ditch posterior method, show live separately
+    def posterior(self, obs0, prior, n_samples=100000):
+        """Resturn weighted posterior samples for given observation.
+
+        Args:
+            obs0 (dict): Observation of interest.
+            prior (Prior): (Constrained) prior used to generate training data.
+            n_samples (int): Number of samples to return.
+
+        Note:
+            log_priors are not normalized.
+        """
+        pars = prior.sample(n_samples)  # prior samples
+
+        # Unmasked original wrongly normalized log_prob densities
+        log_probs = prior.log_prob(pars)
+
+        ratios = self.ratios(obs0, pars)  # evaluate lnL for reference observation
+        weights = {}
+        for k, v in ratios.items():
+            weights[k] = np.exp(v)
+        return dict(params=pars, weights=weights, log_priors=log_probs)
