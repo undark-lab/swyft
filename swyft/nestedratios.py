@@ -4,7 +4,7 @@ from warnings import warn
 import numpy as np
 
 from swyft.cache import MemoryCache
-from swyft.inference import DefaultHead, DefaultTail, RatioEstimator
+from swyft.inference import DefaultHead, DefaultTail, RatioCollection
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import Prior, RatioEstimatedPosterior
@@ -412,7 +412,7 @@ class NestedRatios:
         if param_list is None:
             param_list = prior.params()
 
-        re = RatioEstimator(
+        re = RatioCollection(
             param_list,
             device=self._device,
             head=head,

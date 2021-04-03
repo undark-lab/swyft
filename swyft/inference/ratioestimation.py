@@ -40,7 +40,7 @@ class RatioCollection:
         tail_args={},
         device: Device = "cpu",
     ):
-        """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
+        """RatioCollection takes simulated points from the iP3 sample cache and handles training and posterior calculation.
 
         Args:
             points: points dataset from the iP3 sample cache
@@ -177,11 +177,11 @@ class RatioCollection:
 
     def state_dict(self):
         """Return state dictionary."""
-        return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
+        return {attr: getattr(self, attr) for attr in RatioCollection._save_attrs}
 
     @classmethod
     def from_state_dict(cls, state_dict, device: Device = "cpu"):
-        """Instantiate RatioEstimator from state dictionary."""
+        """Instantiate RatioCollectoin from state dictionary."""
         re = cls(state_dict["param_list"], head=None, tail=None, device=device)
         re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(
             device

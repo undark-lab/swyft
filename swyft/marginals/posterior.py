@@ -3,7 +3,7 @@ from warnings import warn
 
 import numpy as np
 
-from swyft.inference import RatioEstimator
+from swyft.inference import RatioCollection
 from swyft.marginals.prior import Prior
 
 
@@ -14,7 +14,7 @@ class RatioEstimatedPosterior:
         """Marginal container initialization.
 
         Args:
-            re (RatioEstimator)
+            re (RatioCollection)
             prior (Prior)
         """
         self._re = ratio
@@ -55,7 +55,7 @@ class RatioEstimatedPosterior:
     def from_state_dict(cls, state_dict):
         """Instantiate RatioEstimatedPosterior based on state_dict."""
         return RatioEstimatedPosterior(
-            RatioEstimator.from_state_dict(state_dict["re"]),
+            RatioCollection.from_state_dict(state_dict["re"]),
             Prior.from_state_dict(state_dict["prior"]),
         )
 

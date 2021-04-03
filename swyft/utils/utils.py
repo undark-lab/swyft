@@ -51,7 +51,7 @@ def cred1d(re, x0: Array):
     """Calculate credible regions.
 
     Args:
-        re (RatioEstimator): ratio estimators
+        re (RatioCollection): ratio estimators
         x0: true observation
     """
     zdim = re.zdim
