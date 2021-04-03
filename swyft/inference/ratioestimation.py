@@ -15,8 +15,20 @@ from swyft.utils import (
     get_obs_shapes,
 )
 
+class SingleRatio:
+    """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
+    def __init__(self, rc, obs, comb):
+        self._rc = rc
+        self._obs = obs
+        self._comb = comb
 
-class RatioEstimator:
+    def __call__(self, u):
+        ratios = self._rc.ratios(self._obs, u)
+        return ratios[self._comb]
+
+
+
+class RatioCollection:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
 
     def __init__(
@@ -108,9 +120,8 @@ class RatioEstimator:
         )
         self._train_diagnostics.append(diagnostics)
 
-    # FIXME: Rename lnL --> ratio, it reruns the ratio
     # FIXME: Type annotations and docstring are wrong
-    def lnL(
+    def ratios(
         self,
         obs: Array,
         params: Array,
@@ -138,9 +149,9 @@ class RatioEstimator:
         if npar < n_batch:
             params = dict_to_tensor(params, device=self.device)
             f = f.unsqueeze(0).expand(npar, -1)
-            lnL = self.tail(f, params).detach().cpu().numpy()
+            ratios = self.tail(f, params).detach().cpu().numpy()
         else:
-            lnL = []
+            ratios = []
             for i in range(npar // n_batch + 1):
                 params_batch = dict_to_tensor(
                     params,
@@ -151,10 +162,10 @@ class RatioEstimator:
                 # f_batch = f.unsqueeze(0).expand(n, -1)
                 f_batch = f.expand(n, -1)
                 tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
-                lnL.append(tmp)
-            lnL = np.vstack(lnL)
+                ratios.append(tmp)
+            ratios = np.vstack(ratios)
 
-        return {k: lnL[..., i] for i, k in enumerate(self.param_list)}
+        return {k: ratios[..., i] for i, k in enumerate(self.param_list)}
 
     @property
     def _tail_swyft_state_dict(self):
@@ -180,25 +191,25 @@ class RatioEstimator:
         )
         return re
 
-    # FIXME: Ditch posterior method, show live separately
-    def posterior(self, obs0, prior, n_samples=100000):
-        """Resturn weighted posterior samples for given observation.
-
-        Args:
-            obs0 (dict): Observation of interest.
-            prior (Prior): (Constrained) prior used to generate training data.
-            n_samples (int): Number of samples to return.
-
-        Note:
-            log_priors are not normalized.
-        """
-        pars = prior.sample(n_samples)  # prior samples
-
-        # Unmasked original wrongly normalized log_prob densities
-        log_probs = prior.log_prob(pars, unmasked=True)
-
-        lnL = self.lnL(obs0, pars)  # evaluate lnL for reference observation
-        weights = {}
-        for k, v in lnL.items():
-            weights[k] = np.exp(v)
-        return dict(params=pars, weights=weights, log_priors=log_probs)
+#    # FIXME: Ditch posterior method, show live separately
+#    def posterior(self, obs0, prior, n_samples=100000):
+#        """Resturn weighted posterior samples for given observation.
+#
+#        Args:
+#            obs0 (dict): Observation of interest.
+#            prior (Prior): (Constrained) prior used to generate training data.
+#            n_samples (int): Number of samples to return.
+#
+#        Note:
+#            log_priors are not normalized.
+#        """
+#        pars = prior.sample(n_samples)  # prior samples
+#
+#        # Unmasked original wrongly normalized log_prob densities
+#        log_probs = prior.log_prob(pars, unmasked=True)
+#
+#        ratios = self.ratios(obs0, pars)  # evaluate lnL for reference observation
+#        weights = {}
+#        for k, v in ratios.items():
+#            weights[k] = np.exp(v)
+#        return dict(params=pars, weights=weights, log_priors=log_probs)

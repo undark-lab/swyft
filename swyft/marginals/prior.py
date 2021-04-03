@@ -8,6 +8,7 @@ from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
 
+
 class PriorTransform:
     def __init__(self, ptrans, ndim, n_steps= 10000):
         """Prior transformation object.  Maps hypercube on physical parameters.
