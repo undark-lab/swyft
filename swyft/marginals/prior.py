@@ -8,6 +8,48 @@ from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
 
+class PriorTransform:
+    def __init__(self, ptrans, ndim, n_steps= 10000):
+        """Prior transformation object.  Maps hypercube on physical parameters.
+
+        Args
+        """
+        self._ndim = ndim
+        self._grid = np.linspace(0, 1., n_steps)
+        self._table = self._generate_table(ptrans, self._grid, ndim, n_steps)
+
+    @staticmethod
+    def _generate_table(ptrans, grid, ndim, n_steps):
+        table = []
+        for x in grid:
+            table.append(ptrans(np.ones(ndim)*x))
+        return np.array(table)
+
+    def u(self, v):
+        """CDF, mapping v->u"""
+        u = np.empty_like(v)
+        for i in range(self._ndim):
+            u[:,i] = np.interp(v[:,i], self._table[i], self._grid, left = None, right = None)
+        return u
+
+    def v(self, u):
+        """Inverse CDF, mapping u->v"""
+        v = np.empty_like(u)
+        for i in range(self._ndim):
+            v[:,i] = np.interp(u[:,i], self._grid, self._table[i], left = None, right = None)
+        return v
+
+    # FIXME: Confirm numerical stability
+    def dv_du(self, u, du = 1e-6):
+        """Inverse PDF"""
+        dv_du = np.empty_like(u)
+        for i in range(self._ndim):
+            dv_du[:,i] = np.interp(u[:,i]+(du/2), self._grid, self._table[i], left = None, right = None)
+            dv_du[:,i] -= np.interp(u[:,i]-(du/2), self._grid, self._table[i], left = None, right = None)
+        dv_du /= du
+        return dv_du
+
+
 class Prior1d:
     def __init__(self, tag, *args):
         self.tag = tag
