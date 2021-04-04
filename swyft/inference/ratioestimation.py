@@ -16,18 +16,19 @@ from swyft.utils import (
     get_obs_shapes,
 )
 
-class SingleRatio:
+class IsolatedRatio:
     """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
-    def __init__(self, rc, obs, comb):
+    def __init__(self, rc, obs, comb, zdim):
         self._rc = rc
         self._obs = obs
         self._comb = comb
+        self._zdim = zdim
 
     def __call__(self, u):
-        ratios = self._rc.ratios(self._obs, u)
+        U = np.random.rand(len(u), self._zdim)
+        U[:, np.array(self._comb)] = u
+        ratios = self._rc.ratios(self._obs, U)
         return ratios[self._comb]
-
-
 
 class RatioCollection:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
@@ -145,12 +146,11 @@ class RatioCollection:
         obs = dict_to_tensor_unsqueeze(obs, device=self.device)
         f = self.head(obs)
 
-        #npar = len(params[list(params)[0]])
         npar = len(params)
 
         if npar < n_batch:
-            params = dict_to_tensor(params, device=self.device)
-            f = f.unsqueeze(0).expand(npar, -1)
+            params = torch.tensor(params, device=self.device)
+            f = f.expand(npar, -1)
             ratios = self.tail(f, params).detach().cpu().numpy()
         else:
             ratios = []

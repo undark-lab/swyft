@@ -202,7 +202,7 @@ def plot_posterior(
     color="k",
     **kwargs
 ):
-    if isinstance(params, str):
+    if isinstance(params, int):
         params = (params,)
 
     if weights_key is None:
@@ -213,7 +213,7 @@ def plot_posterior(
         return  # do not plot anything if weights are missing
 
     if len(params) == 1:
-        x = samples["params"][params[0]]
+        x = samples["params"][:,params[0]]
 
         if grid_interpolate:
             # Grid interpolate samples
@@ -231,8 +231,8 @@ def plot_posterior(
         ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
     elif len(params) == 2:
         # FIXME: use interpolation when grid_interpolate == True
-        x = samples["params"][params[0]]
-        y = samples["params"][params[1]]
+        x = samples["params"][:,params[0]]
+        y = samples["params"][:,params[1]]
         counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap="gray_r")
         levels = sorted(get_contour_levels(counts))
         try:

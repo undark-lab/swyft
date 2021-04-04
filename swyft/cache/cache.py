@@ -15,6 +15,7 @@ from swyft.cache.exceptions import LowIntensityError
 from swyft.ip3 import Intensity
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
+from swyft.marginals.prior import BoundedPrior
 
 Filesystem = namedtuple(
     "Filesystem",
@@ -65,7 +66,7 @@ class Cache(ABC):
         self.store = store
         self.params = params
         self.root = zarr.group(store=self.store)
-        self.intensities = []
+        #self.intensities = []
 
         logging.debug("Creating Cache.")
         logging.debug("  params = %s" % str(params))
@@ -151,22 +152,22 @@ class Cache(ABC):
         self.u = self.root[self._filesystem.intensity]
         self.wu = self.root[self._filesystem.which_intensity]
         # FIXME: Remove intensities instantiation
-        self.intensities = [
-            Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))
-        ]
+        #self.intensities = [
+        #    Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))
+        #]
 
     def __len__(self):
         """Returns number of samples in the cache."""
         self._update()
         return len(self.z)
 
-    @property
-    def intensity_len(self):
-        self._update()
-        assert len(self.u) == len(
-            self.intensities
-        ), "The intensity pickles should be the same length as the state dicts."
-        return len(self.u)
+#    @property
+#    def intensity_len(self):
+#        self._update()
+#        assert len(self.u) == len(
+#            self.intensities
+#        ), "The intensity pickles should be the same length as the state dicts."
+#        return len(self.u)
 
     def __getitem__(self, i):
         self._update()
@@ -204,51 +205,36 @@ class Cache(ABC):
         # Simulations have not failed, yet.
         self.f.append(~m)
 
-        # Which intensity was a parameter drawn with
-        wu = self.intensity_len * np.ones(n, dtype="int")
-        self.wu.append(wu)
+        ## Which intensity was a parameter drawn with
+        #wu = self.intensity_len * np.ones(n, dtype="int")
+        #self.wu.append(wu)
 
-    # FIXME: Replace by interpolation
     def log_intensity(self, z: np.ndarray) -> np.ndarray:
-        return -np.inf * np.ones_like(z[:,0])
-
-        # FIXME: Use stored intensities
-
         self._update()
-
-        # How many parameters are we evaluating on?
-        shapes = [array.shape for array in z.values()]
-        shape = shapes[0]
-        assert all(shape == s for s in shapes)
-        length = shape[0]
-
+        d = -np.inf * np.ones_like(z[:,0])
         if len(self.u) == 0:
-            # An empty cache has log intensity of -infinity.
-            return -np.inf * np.ones(length)
-        else:
-            return np.stack(
-                [log_intensity(z) for log_intensity in self.intensities]
-            ).max(axis=0)
+            return d
+        for i in range(len(self.u)):
+            pdf = BoundedPrior.from_state_dict(self.u[i]['pdf'])
+            N = self.u[i]['N']
+            r = pdf.log_prob(z) + np.log(N)
+            d = np.where(r > d, r, d)
+        return d
 
-    # FIXME: We have to run BallTree for interpolation each time we add new
-    # samples, for the subset of samples for which the prior is non-zero, in
-    # the deprojected hypercube space
     def grow(self, pdf, N):  # noqa
         """Given an intensity function, add parameter samples to the cache.
 
         Args:
             intensity: target parameter intensity function
         """
-
         # Random Poisson realization - relevant for PPP logic
         z_prop = pdf.sample(N = np.random.poisson(N))
 
         # Rejection sampling from proposal list
         accepted = []
 
-        cached_log_intensities = self.log_intensity(z_prop)
-
         target_log_intensities = pdf.log_prob(z_prop) + np.log(N)
+        cached_log_intensities = self.log_intensity(z_prop)
 
         for cached_log_intensity, target_log_intensity in zip(
             cached_log_intensities, target_log_intensities
@@ -257,23 +243,14 @@ class Cache(ABC):
             accepted.append(log_prob_reject < np.log(np.random.rand()))
         z_accepted = z_prop[accepted]
 
-        # FIXME: Update log_intensity values of **all** samples in the cache based on "intensity"
-
-        # Add new entries to cache
         if sum(accepted) > 0:
+            # Add new entries to cache
             self._append_z(z_accepted)
             logging.info("  adding %i new samples to simulator cache." % sum(accepted))
-        else:
-            pass
 
-        # save new intensity function. We collect them all to find their maximum.
-        # NOTE: We only do this when new samples are added. This is not
-        # entierly correct statistically, but a pain otherwise.
-        # FIXME: Update intensity functions
-        #if sum(accepted) > 0:
-        #    self.u.resize(len(self.u) + 1)
-        #    self.u[-1] = intensity.state_dict()
-        #    self.intensities.append(intensity)
+            # And update intensity function
+            self.u.resize(len(self.u) + 1)
+            self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
 
     # FIXME: No Balltree required here, just rejection sampling based on stored intensities.
     def sample(self, prior, N: int) -> List[int]:  # noqa: F821

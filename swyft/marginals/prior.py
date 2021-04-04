@@ -3,7 +3,7 @@ from typing import Dict, Sequence, Tuple, Union
 import numpy as np
 import torch
 
-from swyft.marginals.bounds import BallsBound, ComboMask
+from swyft.marginals.bounds import BallsBound, Bound
 from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
@@ -22,6 +22,15 @@ class BoundedPrior:
         b = np.where(u.sum(axis=-1) == np.inf, 0., self.bound(u))
         log_prob = np.where(b == 0., -np.inf, self.ptrans.log_prob(v).sum(axis=-1) - np.log(self.bound.volume))
         return log_prob
+
+    def state_dict(self):
+        return dict(ptrans=self.ptrans.state_dict(), bound=self.bound.state_dict())
+
+    @classmethod
+    def from_state_dict(cls, state_dict):
+        ptrans = PriorTransform.from_state_dict(state_dict['ptrans'])
+        bound = Bound.from_state_dict(state_dict['bound'])
+        return cls(ptrans, bound)
 
 
 class PriorTransform:
@@ -65,41 +74,52 @@ class PriorTransform:
         log_prob = np.where(u == np.inf, -np.inf, np.log(du) - np.log(dv+1e-300))
         return log_prob
 
-
-class Prior1d:
-    def __init__(self, tag, *args):
-        self.tag = tag
-        self.args = args
-        if tag == "normal":
-            loc, scale = args[0], args[1]
-            self.prior = torch.distributions.Normal(loc, scale)
-        elif tag == "uniform":
-            x0, x1 = args[0], args[1]
-            self.prior = torch.distributions.Uniform(x0, x1)
-        elif tag == "lognormal":
-            loc, scale = args[0], args[1]
-            self.prior = torch.distributions.LogNormal(loc, scale)
-        else:
-            raise KeyError("Tag unknown")
-
-    def sample(self, N):
-        return tensor_to_array(self.prior.sample((N,)), np.float64)
-
-    def log_prob(self, value):
-        return self.prior.log_prob(value).numpy()
-
-    def to_cube(self, value):
-        return self.prior.cdf(torch.tensor(value)).numpy()
-
-    def from_cube(self, value):
-        return self.prior.icdf(torch.tensor(value)).numpy()
-
     def state_dict(self):
-        return dict(tag=self.tag, args=self.args)
+        return dict(table=self._table, grid=self._grid, ndim=self._ndim)
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        return cls(state_dict["tag"], *state_dict["args"])
+        obj = cls.__new__(cls)
+        obj._ndim = state_dict['ndim']
+        obj._grid = state_dict['grid']
+        obj._table = state_dict['table']
+        return obj
+
+
+#class Prior1d:
+#    def __init__(self, tag, *args):
+#        self.tag = tag
+#        self.args = args
+#        if tag == "normal":
+#            loc, scale = args[0], args[1]
+#            self.prior = torch.distributions.Normal(loc, scale)
+#        elif tag == "uniform":
+#            x0, x1 = args[0], args[1]
+#            self.prior = torch.distributions.Uniform(x0, x1)
+#        elif tag == "lognormal":
+#            loc, scale = args[0], args[1]
+#            self.prior = torch.distributions.LogNormal(loc, scale)
+#        else:
+#            raise KeyError("Tag unknown")
+#
+#    def sample(self, N):
+#        return tensor_to_array(self.prior.sample((N,)), np.float64)
+#
+#    def log_prob(self, value):
+#        return self.prior.log_prob(value).numpy()
+#
+#    def to_cube(self, value):
+#        return self.prior.cdf(torch.tensor(value)).numpy()
+#
+#    def from_cube(self, value):
+#        return self.prior.icdf(torch.tensor(value)).numpy()
+#
+#    def state_dict(self):
+#        return dict(tag=self.tag, args=self.args)
+#
+#    @classmethod
+#    def from_state_dict(cls, state_dict):
+#        return cls(state_dict["tag"], *state_dict["args"])
 
 
 class Prior:
