@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.neighbors import BallTree
 from swyft.inference.ratioestimation import IsolatedRatio
 
+
 class Bound:
     def __init__(self):
         pass
@@ -17,6 +18,10 @@ class Bound:
             return BallsBound.from_state_dict(state_dict)
         else:
             raise KeyError
+
+    @classmethod
+    def from_RatioCollection(cls, rc, obs, th, zdim):
+        return CompositBound.from_RatioCollection(rc, obs, th, zdim)
 
 
 class UnitCubeBound:

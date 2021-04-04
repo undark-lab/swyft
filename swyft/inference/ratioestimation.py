@@ -189,7 +189,7 @@ class RatioCollection:
         return re
 
     # FIXME: Ditch posterior method, show live separately
-    def posterior(self, obs0, prior, n_samples=100000):
+    def posterior(self, obs0, prior, ptrans, n_samples=100000):
         """Resturn weighted posterior samples for given observation.
 
         Args:
@@ -205,7 +205,7 @@ class RatioCollection:
         # Unmasked original wrongly normalized log_prob densities
         log_probs = prior.log_prob(pars)
 
-        ratios = self.ratios(obs0, pars)  # evaluate lnL for reference observation
+        ratios = self.ratios(obs0, ptrans.u(pars))  # evaluate lnL for reference observation
         weights = {}
         for k, v in ratios.items():
             weights[k] = np.exp(v)

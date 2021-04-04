@@ -3,14 +3,16 @@ from typing import Dict, Sequence, Tuple, Union
 import numpy as np
 import torch
 
-from swyft.marginals.bounds import BallsBound, Bound
+from swyft.marginals.bounds import BallsBound, Bound, UnitCubeBound
 from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
 
 class BoundedPrior:
-    def __init__(self, ptrans, bound):
+    def __init__(self, ptrans, bound = None):
         self.ptrans = ptrans
+        if bound is None:
+            bound = UnitCubeBound(ptrans.ndim)
         self.bound = bound
 
     def sample(self, N): 
@@ -49,6 +51,10 @@ class PriorTransform:
         for x in grid:
             table.append(ptrans(np.ones(ndim)*x))
         return np.array(table).T
+
+    @property
+    def ndim(self):
+        return self._ndim
 
     def u(self, v):
         """CDF, mapping v->u"""

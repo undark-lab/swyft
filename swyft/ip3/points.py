@@ -13,6 +13,7 @@ class Points:
     def __init__(
         self, 
         cache: "swyft.cache.Cache",
+        ptrans,
         indices: List[int] = None,
         noisehook: Callable = None
     ):  # noqa: F821
@@ -40,6 +41,7 @@ class Points:
         self.cache = cache
         self.noisehook = noisehook
         self.indices = np.array(indices)
+        self.ptrans = ptrans
 
     def __len__(self):
         return len(self.indices)
@@ -67,8 +69,9 @@ class Points:
         z_keys = list(self.cache.z)
         x = {k: self.cache.x[k][i] for k in x_keys}
         z = self.cache.z[i]
+        u = self.ptrans.u(z.reshape(1, -1)).flatten()
 
         if self.noisehook is not None:
             x = self.noisehook(x, z)
 
-        return dict(obs=x, par=z)
+        return dict(obs=x, par=u)
