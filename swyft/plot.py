@@ -205,12 +205,19 @@ def plot_posterior(
     if isinstance(params, int):
         params = (params,)
 
+    # FIXME: Clean up ad hoc code
     if weights_key is None:
         weights_key = tuple(sorted(params))
     try:
         w = samples["weights"][tuple(weights_key)]
     except KeyError:
-        return  # do not plot anything if weights are missing
+        if len(weights_key) == 1:
+            for k in samples['weights'].keys():
+                if weights_key[0] in k:
+                    weights_key = k
+            w = samples["weights"][tuple(weights_key)]
+        else:
+            return  # do not plot anything if weights are missing
 
     if len(params) == 1:
         x = samples["params"][:,params[0]]
