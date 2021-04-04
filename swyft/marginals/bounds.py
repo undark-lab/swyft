@@ -142,6 +142,17 @@ class BallsBound:
             ind_points = v[mask].reshape(-1, 1)
             masklist[k] = BallsBound(ind_points)
 
+    @classmethod
+    def from_ratio(cls, bound, obs, ratio, N=10000, th=-7):
+        u = bound.sample(N)
+        masklist = {}
+        r = ratio(u)
+        mask = r.max() - r < -th
+        print(len(mask), sum(mask))
+        ind_points = u[mask]
+        print(ind_points.shape)
+        return cls(ind_points)
+
 
 class ComboMask:
     def __init__(self, samplers):
@@ -195,3 +206,52 @@ class ComboMask:
         for key, value in self.samplers.items():
             samplers[key] = value.state_dict()
         return dict(samplers=samplers)
+
+class CompositBound:
+    def __init__(self, bounds, zdim):
+        """
+        Args:
+            bounds (dict): Dictionary mapping indices like (0, 3) etc --> bounds
+            zdim (int): Length of parameter vector.
+        """
+        self._bounds = bounds
+        self._zdim = zdim
+        self.mask = self._gen_mask()
+
+    def sample(self, N):
+        """Sample from composit bounds object
+
+        Returns:
+            Returns samples. Returns -1 where no samples where drawn.
+        """
+        results = -np.ones(N, self._zdim)
+        for k, v in self._bounds.items():
+            results[:, np.array(k)] = v.sample(N)
+        return results
+
+    @property
+    def volume(self):
+        volume = 1.0
+        for k, v in self._bounds.items():
+            volume *= v.volume
+        return volume
+
+    def __call__(self, z):
+        res = []
+        for k, v in self._bounds.items():
+            r = v(z[:, np.array(k)])
+            res.append(r)
+        return sum(res) == len(res)
+
+#    @classmethod
+#    def from_state_dict(cls, state_dict):
+#        samplers = {}
+#        for key, value in state_dict["samplers"].items():
+#            samplers[key] = BallsBound.from_state_dict(value)
+#        return cls(samplers)
+#
+#    def state_dict(self):
+#        samplers = {}
+#        for key, value in self.samplers.items():
+#            samplers[key] = value.state_dict()
+#        return dict(samplers=samplers)
