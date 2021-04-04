@@ -4,7 +4,6 @@ from warnings import warn
 import numpy as np
 
 from swyft.inference import RatioCollection
-from swyft.marginals.prior import Prior
 
 
 class RatioEstimatedPosterior:

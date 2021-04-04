@@ -7,7 +7,7 @@ from swyft.cache import MemoryCache
 from swyft.inference import DefaultHead, DefaultTail, RatioCollection
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
-from swyft.marginals import Prior, RatioEstimatedPosterior
+from swyft.marginals import RatioEstimatedPosterior
 from swyft.utils import all_finite, format_param_list
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")

@@ -2,7 +2,6 @@ import numpy as np
 from sklearn.neighbors import BallTree
 from swyft.inference.ratioestimation import IsolatedRatio
 
-
 class Bound:
     def __init__(self):
         pass
@@ -216,94 +215,3 @@ class CompositBound:
         bounds = {k: Bound.from_state_dict(v) for k, v in state_dict['bounds'].items()}
         zdim = state_dict['zdim']
         return cls(bounds, zdim)
-
-
-#class CompositBound:
-#    """Composition bound object in u space."""
-#    def __init__(self, bounds):
-#        """
-#        Args:
-#            bounds (dict): dictionary with entries {index_list: Bound}
-#        """
-#        self._bounds = bounds
-#        self._volume = self._get_volume(bounds)
-#
-#    @property
-#    def volume(self):
-#        return self._volume
-#
-#    def sample(self, N):
-#        for key, value in self._bounds.items():
-#        raise NotImplementedError
-#
-#    def __call__(self, u):
-#        raise NotImplementedError
-#
-#    @staticmethod
-#    def _get_volume(bounds):
-#        V = 1.
-#        for key, value in bounds.items():
-#            V *= value.volume
-#        return V
-#
-#    def state_dict(self):
-#        state_dict = dict(bounds = {k: v.state_dict() for k, v in self._bounds.items()})
-#
-#    @classmethod
-#    def from_state_dict(cls, state_dict):
-#        bounds = {k: Bound.from_state_dict(v) for k, v in state_dict['bounds'].items()}
-#        return cls(bounds)
-
-
-#class ComboMask:
-#    def __init__(self, samplers):
-#        """Combination of lower dimensional masks.
-#
-#        Args:
-#            samplers (dict): Dictionary of masks, mapping parameter names
-#            (strings or tuple of strings) to masks.
-#
-#        Example:
-#            samplers = {"x": mask_1d, ("y", "z"): mask_2d}
-#        """
-#        self.samplers = samplers
-#        self.masks = None  # TODO: Implement additional masks
-#
-#    def sample(self, N):
-#        result = {}
-#        for key in self.samplers.keys():
-#            if isinstance(key, str):
-#                result[key] = self.samplers[key].sample(N)[:, 0]
-#            elif isinstance(key, tuple):
-#                for i, k in enumerate(key):
-#                    result[k] = self.samplers[key].sample(N)[:, i]
-#            else:
-#                raise KeyError("ComboMask keys must be strings or string tuples.")
-#        return result
-#
-#    @property
-#    def volume(self):
-#        volume = 1.0
-#        for key in self.samplers:
-#            volume *= self.samplers[key].volume
-#        return volume
-#
-#    def __call__(self, X):
-#        res = []
-#        for k in self.samplers:
-#            r = self.samplers[k](X[k])
-#            res.append(r)
-#        return sum(res) == len(res)
-#
-#    @classmethod
-#    def from_state_dict(cls, state_dict):
-#        samplers = {}
-#        for key, value in state_dict["samplers"].items():
-#            samplers[key] = BallsBound.from_state_dict(value)
-#        return cls(samplers)
-#
-#    def state_dict(self):
-#        samplers = {}
-#        for key, value in self.samplers.items():
-#            samplers[key] = value.state_dict()
-#        return dict(samplers=samplers)

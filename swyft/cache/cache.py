@@ -12,7 +12,6 @@ import zarr
 from tqdm import tqdm
 
 from swyft.cache.exceptions import LowIntensityError
-from swyft.ip3 import Intensity
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
 from swyft.marginals.prior import BoundedPrior
@@ -151,10 +150,6 @@ class Cache(ABC):
         ), "Metadata noting which indices require simulation and which have failed have desynced."
         self.u = self.root[self._filesystem.intensity]
         self.wu = self.root[self._filesystem.which_intensity]
-        # FIXME: Remove intensities instantiation
-        #self.intensities = [
-        #    Intensity.from_state_dict(self.u[i]) for i in range(len(self.u))
-        #]
 
     def __len__(self):
         """Returns number of samples in the cache."""
