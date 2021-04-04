@@ -156,14 +156,6 @@ class Cache(ABC):
         self._update()
         return len(self.z)
 
-#    @property
-#    def intensity_len(self):
-#        self._update()
-#        assert len(self.u) == len(
-#            self.intensities
-#        ), "The intensity pickles should be the same length as the state dicts."
-#        return len(self.u)
-
     def __getitem__(self, i):
         self._update()
 
