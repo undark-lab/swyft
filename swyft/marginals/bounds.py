@@ -154,6 +154,46 @@ class BallsBound:
         return obj
 
 
+class RectangleBound:
+    def __init__(self, bounds, zdim):
+        self._bounds = bounds
+        self._zdim = zdim
+
+    @property
+    def volume(self):
+        V = 1.
+        for k, v in self._bounds.items():
+            V *= (v[1] - v[0])
+        return V
+            
+    def sample(self, N):
+        u = np.random.rand(N, self._zdim)
+        for k, v in self._bounds.items():
+            u[:,k] *= v[1]-v[0]
+            u[:,k] += v[0]
+        return u
+
+    def __call__(self, z):
+        m = np.ones(len(z))
+        for k, v in self._bounds.items():
+            m *= np.where(z[:,k] >= v[0], np.where(z[:,k] <= v[1], 1., 0.), 0.)
+        return m > 0.5
+
+    @classmethod
+    def from_RatioCollection(cls, rc, obs, th, zdim):
+        bound = UnitCubeBound(zdim)
+        N = 10000
+        u = bound.sample(N)
+        ratios = rc.ratios(obs, u)
+        res = {}
+        for k, v in ratios.items():
+            if len(k) == 1:
+                us = u[:,k[0]][v > th]
+                res[k[0]] = (us.min(), us.max())
+        
+        return cls(res, zdim)
+
+
 class CompositBound:
     def __init__(self, bounds, zdim):
         """
@@ -193,13 +233,15 @@ class CompositBound:
     @classmethod
     def from_RatioCollection(cls, rc, obs, th, zdim):
         bounds = {}
+        # FIXME: Implement rectangle bound
+        #rb = RectangleBound.from_RatioCollection(rc, obs, th, zdim)
         for comb in rc.param_list:
-            ratio = IsolatedRatio(rc, obs, comb, zdim)
             if len(comb) == 1:  # 1-dim case
                 bound = UnitCubeBound(1)
                 b = BallsBound.from_ratio(bound, obs, ratio)
             elif len(comb) == 2:  # 2-dim case
-                bound = UnitCubeBound(2)
+                bound = UnitCubeBound(2)  # FIXME: Missing recursion
+                ratio = IsolatedRatio(rc, obs, comb, zdim)
                 b = BallsBound.from_ratio(bound, obs, ratio)
             else:
                 raise NotImplementedError

@@ -4,7 +4,7 @@ from .inference.networks import DefaultHead, DefaultTail, GenericTail
 from .ip3 import Points
 from .marginals import PosteriorCollection
 from .marginals.prior import PriorTransform, BoundedPrior, Prior
-from .marginals.bounds import UnitCubeBound, CompositBound, Bound
+from .marginals.bounds import UnitCubeBound, CompositBound, Bound, RectangleBound
 from .nestedratios import NestedRatios
 from .nn import OnlineNormalizationLayer
 from .nn.module import Module
@@ -14,6 +14,7 @@ __all__ = [
     "Bound",
     "Prior",
     "CompositBound",
+    "RectangleBound",
     "PriorTransform",
     "BoundedPrior",
     "UnitCubeBound",
