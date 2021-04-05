@@ -1,7 +1,6 @@
 import pytest
 import numpy as np
 from dask.distributed import LocalCluster
-from itertools import product
 from swyft.utils.simulator import Simulator
 
 # linear model
