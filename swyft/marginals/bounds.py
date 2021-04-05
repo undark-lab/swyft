@@ -125,8 +125,8 @@ class RectangleBound(Bound):
 
     def __call__(self, u):
         m = np.ones(len(u))
-        for k, v in self._rec_bounds.items():
-            m *= np.where(u[:,k] >= v[0], np.where(u[:,k] <= v[1], 1., 0.), 0.)
+        for i, v in enumerate(self._rec_bounds):
+            m *= np.where(u[:,i] >= v[0], np.where(u[:,i] <= v[1], 1., 0.), 0.)
         return m > 0.5
 
     @classmethod
