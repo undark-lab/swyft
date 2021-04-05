@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # Requires python 3.5+
 
-import logging
-
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
-
 import importlib.util
+import logging
 import os
 
 import numpy as np
@@ -16,6 +13,7 @@ from omegaconf import OmegaConf
 import swyft
 
 DEVICE = "cuda:0"
+logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 
 def main():

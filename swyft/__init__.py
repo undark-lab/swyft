@@ -7,10 +7,8 @@ from .nestedratios import NestedRatios
 from .nn import OnlineNormalizationLayer
 from .nn.module import Module
 from .plot import corner, plot1d
-from .utils import set_verbosity
 
 __all__ = [
-    "set_verbosity",
     "Prior",
     "Module",
     "DirectoryCache",
