@@ -17,6 +17,188 @@ class MissingModelError(Exception):
     pass
 
 
+class ISIC:
+    def __init__(
+        self,
+        prior,
+        obs,
+        cache,
+        device="cpu",
+    ):
+        self._ptrans = prior.ptrans
+        self._obs = obs
+        self._cache = cache
+        self._device = device
+
+        self._bounds = [prior.bound]
+        self._N = []
+        self._ratios = []
+
+    @property
+    def obs(self):
+        """The target observation."""
+        return self._obs
+
+    def initialize(self, ntrain = 1000):
+        # Already initialized next round?
+        # Note: this is signaled by _N and _bounds having same length
+        if len(self._N) == len(self._bounds):
+            logging.info("Already initialized")
+            return
+
+        # Determine new number of training points
+        # FIXME: Automatize update of training points
+        N = ntrain
+
+        # Grow cache
+        bound = self._bounds[-1]
+        bp = BoundedPrior(self._ptran, bound)
+        self._cache.grow(bp, N)
+
+        self._N.append(N)
+        self._ratios.append([])
+
+    def simulate(self, model):
+        self._cache.simulate(model)
+
+    def infer(
+        self,
+        partitions, 
+        train_args: dict = {},
+        head=DefaultHead,
+        tail=DefaultTail,
+        head_args: dict = {},
+        tail_args: dict = {},
+        max_rounds: int = 10,
+        keep_history=False,
+    ):
+        """Perform 1-dim marginal focus fits.
+
+        Args:
+            train_args (dict): Training keyword arguments.
+            head (swyft.Module instance or type): Head network (optional).
+            tail (swyft.Module instance or type): Tail network (optional).
+            head_args (dict): Keyword arguments for head network instantiation.
+            tail_args (dict): Keyword arguments for tail network instantiation.
+            max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
+        """
+        ntrain = self._N[-1]
+        bound = self._bound[-1]
+        bp = BoundedPrior(self._ptrans, bound)
+
+        re = self._train(
+            bp,
+            partitions,
+            head=head,
+            tail=tail,
+            head_args=head_args,
+            tail_args=tail_args,
+            train_args=train_args,
+            N=ntrain,
+        )
+        self._ratios[-1].append(re)
+
+    def check(self):
+        rc = self._ratios[-1][0]  # FIXME: Use JoinedRatioCollection
+        new_bound = Bound.from_RatioCollection(rc, self._obs, self._bound[-1])
+        self._bounds.append(new_bound)
+
+    def _train(
+        self,
+        prior,
+        param_list,
+        N,
+        train_args,
+        head,
+        tail,
+        head_args,
+        tail_args,
+    ):
+        """Perform amortized inference on constrained priors."""
+        if self._cache.requires_sim:
+            raise MissingModelError(
+                "Some points in the cache have not been simulated yet."
+            )
+
+        logging.info("Starting neural network training.")
+        indices = self._cache.sample(prior, N)
+
+        # Fail gracefully if no points are drawn.
+        if len(indices) == 0:
+            raise NoPointsError("No points were sampled from the cache.")
+
+        points = Points(self._cache, self.prior.ptrans, indices, self._noise)
+
+        if param_list is None:
+            param_list = prior.params()
+
+        re = RatioCollection(
+            param_list,
+            device=self._device,
+            head=head,
+            tail=tail,
+            tail_args=tail_args,
+            head_args=head_args,
+        )
+        re.train(points, **train_args)
+
+        return PosteriorCollection(re, prior)
+
+    @staticmethod
+    def _history_state_dict(history):
+        state_dict = [
+            {
+                "marginals": v["marginals"].state_dict(),
+                "constr_prior": v["constr_prior"].state_dict(),
+                "N": v["N"],
+            }
+            for v in history
+        ]
+        return state_dict
+
+    @staticmethod
+    def _history_from_state_dict(history_state_dict):
+        history = [
+            {
+                "marginals": PosteriorCollection.from_state_dict(v["marginals"]),
+                "constr_prior": Prior.from_state_dict(v["constr_prior"]),
+                "N": v["N"],
+            }
+            for v in history_state_dict
+        ]
+        return history
+
+    def state_dict(self):
+        """Return `state_dict`."""
+        return dict(
+            base_prior=self._base_prior.state_dict(),
+            obs=self._obs,
+            history=self._history_state_dict(self._history),
+            converged=self.converged,
+            config=self._config,
+        )
+
+    @classmethod
+    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
+        """Instantiate NestedRatios from saved `state_dict`."""
+        base_prior = Prior.from_state_dict(state_dict["base_prior"])
+        obs = state_dict["obs"]
+        config = state_dict["config"]
+
+        nr = cls(
+            model, base_prior, obs, noise=noise, cache=cache, device=device, **config
+        )
+
+        nr.converged = state_dict["converged"]
+        nr._history = cls._history_from_state_dict(state_dict["history"])
+        return nr
+
+
+
+
+
+
+
 class NestedRatios:
     """Main SWYFT interface class."""
 
@@ -335,31 +517,6 @@ class NestedRatios:
         ]
         return history
 
-    def state_dict(self):
-        """Return `state_dict`."""
-        return dict(
-            base_prior=self._base_prior.state_dict(),
-            obs=self._obs,
-            history=self._history_state_dict(self._history),
-            converged=self.converged,
-            config=self._config,
-        )
-
-    @classmethod
-    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
-        """Instantiate NestedRatios from saved `state_dict`."""
-        base_prior = Prior.from_state_dict(state_dict["base_prior"])
-        obs = state_dict["obs"]
-        config = state_dict["config"]
-
-        nr = cls(
-            model, base_prior, obs, noise=noise, cache=cache, device=device, **config
-        )
-
-        nr.converged = state_dict["converged"]
-        nr._history = cls._history_from_state_dict(state_dict["history"])
-        return nr
-
     def _get_prior_R(self):
         # Method does not change internal states
 
@@ -423,3 +580,28 @@ class NestedRatios:
         re.train(points, **train_args)
 
         return PosteriorCollection(re, prior)
+
+    def state_dict(self):
+        """Return `state_dict`."""
+        return dict(
+            base_prior=self._base_prior.state_dict(),
+            obs=self._obs,
+            history=self._history_state_dict(self._history),
+            converged=self.converged,
+            config=self._config,
+        )
+
+    @classmethod
+    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
+        """Instantiate NestedRatios from saved `state_dict`."""
+        base_prior = Prior.from_state_dict(state_dict["base_prior"])
+        obs = state_dict["obs"]
+        config = state_dict["config"]
+
+        nr = cls(
+            model, base_prior, obs, noise=noise, cache=cache, device=device, **config
+        )
+
+        nr.converged = state_dict["converged"]
+        nr._history = cls._history_from_state_dict(state_dict["history"])
+        return nr
