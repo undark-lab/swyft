@@ -75,7 +75,7 @@ class NestedRatios:
     def _cache(self):
         if self._cache_reference is None:
             self._cache_reference = MemoryCache.from_simulator(
-                self._model, self._base_prior
+                self._model, self._base_prior, noise = self._noise
             )
         return self._cache_reference
 
@@ -122,7 +122,7 @@ class NestedRatios:
             max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
         """
 
-        param_list = self._cache.params
+        param_list = list(range(len(self._cache.params)))
         r = 0
 
         while (not self.converged) and (r < max_rounds):
@@ -407,7 +407,7 @@ class NestedRatios:
         if len(indices) == 0:
             raise NoPointsError("No points were sampled from the cache.")
 
-        points = Points(indices, self._cache, self._noise)
+        points = Points(self._cache, self.prior.ptrans, indices, self._noise)
 
         if param_list is None:
             param_list = prior.params()

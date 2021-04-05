@@ -458,7 +458,7 @@ class MemoryCache(Cache):
         return MemoryCache(zdim=zdim, xshape=xshape, store=memory_store)
 
     @classmethod
-    def from_simulator(cls, model, prior):
+    def from_simulator(cls, model, prior, noise = None):
         """Convenience function to instantiate new MemoryCache with correct obs_shapes.
 
         Args:
@@ -468,9 +468,13 @@ class MemoryCache(Cache):
         Note:
             The simulator model is run once in order to infer observable shapes from the output.
         """
-        params = prior.sample(1)
-        params = {k: v.item() for k, v in params.items()}
-        obs = model(params)
+        v = prior.sample(1)[0]
+        vdim = len(v)
+
+        obs = model(v)
+        if noise is not None:
+            obs = noise(obs, v)
+
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
-        return MemoryCache(list(prior.prior_config.keys()), obs_shapes)
+        return MemoryCache(vdim, obs_shapes)
