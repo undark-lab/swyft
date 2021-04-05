@@ -165,12 +165,15 @@ class Cache(ABC):
         )
 
     @staticmethod
-    def _extract_xshape_from_zarr_group(group):
-        return group[Cache._filesystem.obs].shape[1:]
+    def _extract_obs_shapes_from_zarr_group(group):
+        obs_key = [k for k in group[Cache._filesystem.obs].keys()]
+        assert len(obs_key) == 1
+        obs_key = obs_key[0]
+        return group[Cache._filesystem.obs][obs_key].shape[1:]
 
     @staticmethod
-    def _extract_zdim_from_zarr_group(group):
-        return group[Cache._filesystem.par].shape[1]
+    def _extract_params_from_zarr_group(group):
+        return [k for k in group[Cache._filesystem.par].keys()]
 
     def _update(self):
         # This could be removed with a property for each attribute which only loads from disk if something has changed. TODO
@@ -462,7 +465,7 @@ class DirectoryCache(Cache):
 
         Args:
             zdim: Number of z dimensions
-            xshape: Shape of x array
+            obs_shapes: Shape of x array
             path: path to storage directory
             sync_path: path to the cache lock files. Must be accessible to all
                 processes working on the cache and should differ from `path`.
@@ -478,9 +481,9 @@ class DirectoryCache(Cache):
         """Load existing DirectoryStore."""
         store = zarr.DirectoryStore(path)
         group = zarr.group(store=store)
-        xshape = cls._extract_xshape_from_zarr_group(group)
-        zdim = cls._extract_zdim_from_zarr_group(group)
-        return DirectoryCache(zdim=zdim, xshape=xshape, path=path)
+        obs_shapes = cls._extract_obs_shapes_from_zarr_group(group)
+        z = cls._extract_params_from_zarr_group(group)
+        return DirectoryCache(params=z, obs_shapes=obs_shapes, path=path)
 
 
 class MemoryCache(Cache):
@@ -531,9 +534,9 @@ class MemoryCache(Cache):
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)
 
         group = zarr.group(store=memory_store)
-        xshape = cls._extract_xshape_from_zarr_group(group)
-        zdim = cls._extract_zdim_from_zarr_group(group)
-        return MemoryCache(zdim=zdim, xshape=xshape, store=memory_store)
+        obs_shapes = cls._extract_obs_shapes_from_zarr_group(group)
+        z = cls._extract_params_from_zarr_group(group)
+        return MemoryCache(params=z, obs_shapes=obs_shapes, store=memory_store)
 
     @classmethod
     def from_simulator(cls, model, prior):
