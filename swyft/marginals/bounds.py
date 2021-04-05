@@ -56,8 +56,8 @@ class Bound:
             raise KeyError
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, th, udim):
-        return CompositBound.from_RatioCollection(rc, obs, th, udim)
+    def from_RatioCollection(cls, rc, obs, bound, th = -13.):
+        return CompositBound.from_RatioCollection(rc, obs, bound, th = th)
 
 
 class UnitCubeBound(Bound):
