@@ -7,12 +7,9 @@ from swyft.marginals.bounds import BallsBound, Bound, UnitCubeBound
 from swyft.types import Array, PriorConfig
 from swyft.utils import array_to_tensor, depth, tensor_to_array
 
-
 class BoundedPrior:
-    def __init__(self, ptrans, bound = None):
+    def __init__(self, ptrans, bound):
         self.ptrans = ptrans
-        if bound is None:
-            bound = UnitCubeBound(ptrans.ndim)
         self.bound = bound
 
     def sample(self, N): 
@@ -34,6 +31,10 @@ class BoundedPrior:
         bound = Bound.from_state_dict(state_dict['bound'])
         return cls(ptrans, bound)
 
+class Prior(BoundedPrior):
+    def __init__(self, ptrans):
+        bound = UnitCubeBound(ptrans.ndim)
+        super().__init__(ptrans, bound)
 
 class PriorTransform:
     def __init__(self, ptrans, ndim, n_steps= 10000):

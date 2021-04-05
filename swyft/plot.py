@@ -215,6 +215,13 @@ def plot_posterior(
             for k in samples['weights'].keys():
                 if weights_key[0] in k:
                     weights_key = k
+                    break
+            w = samples["weights"][tuple(weights_key)]
+        elif len(weights_key) == 2:
+            for k in samples['weights'].keys():
+                if set(weights_key).issubset(k):
+                    weights_key = k
+                    break
             w = samples["weights"][tuple(weights_key)]
         else:
             return  # do not plot anything if weights are missing

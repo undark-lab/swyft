@@ -188,25 +188,3 @@ class RatioCollection:
         )
         return re
 
-    # FIXME: Ditch posterior method, show live separately
-    def posterior(self, obs0, prior, ptrans, n_samples=100000):
-        """Resturn weighted posterior samples for given observation.
-
-        Args:
-            obs0 (dict): Observation of interest.
-            prior (Prior): (Constrained) prior used to generate training data.
-            n_samples (int): Number of samples to return.
-
-        Note:
-            log_priors are not normalized.
-        """
-        pars = prior.sample(n_samples)  # prior samples
-
-        # Unmasked original wrongly normalized log_prob densities
-        log_probs = prior.log_prob(pars)
-
-        ratios = self.ratios(obs0, ptrans.u(pars))  # evaluate lnL for reference observation
-        weights = {}
-        for k, v in ratios.items():
-            weights[k] = np.exp(v)
-        return dict(params=pars, weights=weights, log_priors=log_probs)

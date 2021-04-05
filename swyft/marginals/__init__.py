@@ -1,5 +1,5 @@
-from .posterior import RatioEstimatedPosterior
+from .posterior import PosteriorCollection
 
 __all__ = [
-    "RatioEstimatedPosterior",
+    "PosteriorCollection",
 ]

@@ -7,7 +7,7 @@ from swyft.cache import MemoryCache
 from swyft.inference import DefaultHead, DefaultTail, RatioCollection
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
-from swyft.marginals import RatioEstimatedPosterior
+from swyft.marginals import PosteriorCollection
 from swyft.utils import all_finite, format_param_list
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -327,7 +327,7 @@ class NestedRatios:
     def _history_from_state_dict(history_state_dict):
         history = [
             {
-                "marginals": RatioEstimatedPosterior.from_state_dict(v["marginals"]),
+                "marginals": PosteriorCollection.from_state_dict(v["marginals"]),
                 "constr_prior": Prior.from_state_dict(v["constr_prior"]),
                 "N": v["N"],
             }
@@ -422,4 +422,4 @@ class NestedRatios:
         )
         re.train(points, **train_args)
 
-        return RatioEstimatedPosterior(re, prior)
+        return PosteriorCollection(re, prior)
