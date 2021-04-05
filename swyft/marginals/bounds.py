@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.neighbors import BallTree
 from swyft.inference.ratioestimation import IsolatedRatio
 
-# FIXME: Finalize
+# FIXME: Add docstring
 class Bound:
     def __init__(self):
         pass
@@ -123,10 +123,10 @@ class RectangleBound(Bound):
             u[:,i] += self._rec_bounds[i,0]
         return u
 
-    def __call__(self, z):
-        m = np.ones(len(z))
+    def __call__(self, u):
+        m = np.ones(len(u))
         for k, v in self._rec_bounds.items():
-            m *= np.where(z[:,k] >= v[0], np.where(z[:,k] <= v[1], 1., 0.), 0.)
+            m *= np.where(u[:,k] >= v[0], np.where(u[:,k] <= v[1], 1., 0.), 0.)
         return m > 0.5
 
     @classmethod
@@ -163,7 +163,7 @@ class RectangleBound(Bound):
         return cls(state_dict['rec_bounds'])
 
 
-class BallsBound:
+class BallsBound(Bound):
     def __init__(self, points, scale=1.0):
         """Simple mask based on coverage balls around inducing points.
 
@@ -173,10 +173,18 @@ class BallsBound:
         """
         assert len(points.shape) == 2
         self.X = points
-        self.dim = self.X.shape[-1]
+        self._udim = self.X.shape[-1]
         self.bt = BallTree(self.X, leaf_size=2)
         self.epsilon = self._set_epsilon(self.X, self.bt, scale)
-        self.volume = self._get_volume(self.X, self.epsilon, self.bt)
+        self._volume = self._get_volume(self.X, self.epsilon, self.bt)
+
+    @property
+    def volume(self):
+        return self._volume
+
+    @property
+    def udim(self):
+        return self._udim
 
     @staticmethod
     def _set_epsilon(X, bt, scale):
@@ -231,25 +239,25 @@ class BallsBound:
         ind = np.random.choice(range(len(samples)), size=N, replace=False)
         return samples[ind]
 
-    def __call__(self, points):
-        """Evaluate points in mask."""
-        points = points.reshape(len(points), -1)
-        dist, ind = self.bt.query(points, k=1)
+    def __call__(self, u):
+        u = u.reshape(len(u), -1)
+        dist, ind = self.bt.query(u, k=1)
         return (dist < self.epsilon)[:, 0]
 
-    def _initialize(self, obs, bound, ratio, N=10000, th=-7):
-        raise NotImplementedError
-        u = bound.sample(N)
-        masklist = {}
-        lnL = re.lnL(obs, pars)
-        for k, v in self.to_cube(pars).items():
-            mask = lnL[(k,)].max() - lnL[(k,)] < -th
-            ind_points = v[mask].reshape(-1, 1)
-            masklist[k] = BallsBound(ind_points)
-
     @classmethod
-    def from_ratio(cls, bound, obs, ratio, N=10000, th=-7):
-        u = bound.sample(N)
+    def from_IsolatedRatio(cls, ratio, obs, bound, n=10000, th=-13):
+        """Generate new BallsBound object based on IsolatedRatio.
+
+        Args:
+            ratio (IsolatedRatio): Single ratio.
+            obs (dict): Reference observation.
+            bound (Bound): Bound of RatioCollection.
+            th (float): Threshold value, default -13
+            n (int): Number of random samples from bound to determine parameter boundaries.
+
+        Note: All components of the RatioCollection will be used.  Avoid overlapping ratios.
+        """
+        u = bound.sample(n)
         masklist = {}
         r = ratio(u)
         mask = r.max() - r < -th
@@ -258,7 +266,7 @@ class BallsBound:
 
     def state_dict(self):
         return dict(
-            tag="BallsBound", points=self.X, epsilon=self.epsilon, volume=self.volume
+            tag="BallsBound", points=self.X, epsilon=self.epsilon, volume=self._volume
         )
 
     @classmethod
@@ -266,30 +274,25 @@ class BallsBound:
         obj = cls.__new__(cls)
         obj.X = state_dict["points"]
         assert len(obj.X.shape) == 2
-        obj.dim = obj.X.shape[-1]
+        obj._udim = obj.X.shape[-1]
         obj.epsilon = state_dict["epsilon"]
-        obj.volume = state_dict["volume"]
+        obj._volume = state_dict["volume"]
         obj.bt = BallTree(obj.X, leaf_size=2)
         return obj
 
 
-class CompositBound:
-    def __init__(self, bounds, udim):
+class CompositBound(Bound):
+    """Composit bound object. Product of multiple bounds."""
+    def __init__(self, bounds_map, udim):
         """
         Args:
-            bounds (dict): Dictionary mapping indices like (0, 3) etc --> bounds
+            bounds_map (dict): Dictionary mapping indices like (0, 3) etc --> bounds
             udim (int): Length of parameter vector.
         """
-        self._bounds = bounds
+        self._bounds = bounds_map
         self._udim = udim
-        #self.mask = self._gen_mask()
 
     def sample(self, N):
-        """Sample from composit bounds object
-
-        Returns:
-            Returns samples. Returns -1 where no samples where drawn.
-        """
         results = -np.ones((N, self._udim))
         for k, v in self._bounds.items():
             results[:, np.array(k)] = v.sample(N)
@@ -302,32 +305,44 @@ class CompositBound:
             volume *= v.volume
         return volume
 
-    def __call__(self, z):
+    def __call__(self, u):
         res = []
         for k, v in self._bounds.items():
-            r = v(z[:, np.array(k)])
+            r = v(u[:, np.array(k)])
             res.append(r)
         return sum(res) == len(res)
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, th, udim):
-        bounds = {}
-        # FIXME: Implement rectangle bound
-        #rb = RectangleBound.from_RatioCollection(rc, obs, th, udim)
-        for comb in rc.param_list:
-            if len(comb) == 1:  # 1-dim case
-                bound = UnitCubeBound(1)
-                ratio = IsolatedRatio(rc, obs, comb, udim)
-                b = BallsBound.from_ratio(bound, obs, ratio)
-            elif len(comb) == 2:  # 2-dim case
-                bound = UnitCubeBound(2)  # FIXME: Missing recursion
-                ratio = IsolatedRatio(rc, obs, comb, udim)
-                b = BallsBound.from_ratio(bound, obs, ratio)
-            else:
-                raise NotImplementedError
-            bounds[comb] = b
+    def from_RatioCollection(cls, rc, obs, bound, th = -13.):
+        """Generate new CompositBound object based on RatioCollection.
 
+        Args:
+            rc (RatioCollection): RatioCollection to evaluate.
+            obs (dict): Reference observation.
+            bound (Bound): Bound of RatioCollection.
+            th (float): Threshold value, default -13
+        """
+        bounds = {}
+        # FIXME: Do something more clever here
+        udim = bound.udim
+        bounds[tuple(range(udim))] = RectangleBound.from_RatioCollection(rc, obs, bound, th = th)
         return cls(bounds, udim)
+
+#        #rb = RectangleBound.from_RatioCollection(rc, obs, th, udim)
+#        for comb in rc.param_list:
+#            if len(comb) == 1:  # 1-dim case
+#                bound = UnitCubeBound(1)
+#                ratio = IsolatedRatio(rc, obs, comb, udim)
+#                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
+#            elif len(comb) == 2:  # 2-dim case
+#                bound = UnitCubeBound(2)  
+#                ratio = IsolatedRatio(rc, obs, comb, udim)
+#                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
+#            else:
+#                raise NotImplementedError
+#            bounds[comb] = b
+#
+#        return cls(bounds, udim)
 
     def state_dict(self):
         state_dict = dict(
