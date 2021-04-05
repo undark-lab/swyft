@@ -30,6 +30,22 @@ class IsolatedRatio:
         ratios = self._rc.ratios(self._obs, U)
         return ratios[self._comb]
 
+
+class JoinedRatioCollection:
+    def __init__(self, ratio_collections):
+        self._rcs = ratio_collections
+        self.param_list = []
+        [self.param_list.extend(rc.param_list) for rc in self._rcs]
+        self.param_list = list(set(self.param_list))
+
+    def ratios(self, obs: Array, params: Array, n_batch=100):
+        result = {}
+        for rc in self._rcs:
+            ratios = rc.ratios(obs, params, n_batch=n_batch)
+            result.update(ratios)
+        return result
+
+
 class RatioCollection:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
 

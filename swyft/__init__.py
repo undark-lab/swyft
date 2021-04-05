@@ -1,5 +1,5 @@
 from .cache import DirectoryCache, MemoryCache
-from .inference import RatioCollection
+from .inference import RatioCollection, JoinedRatioCollection
 from .inference.networks import DefaultHead, DefaultTail, GenericTail
 from .ip3 import Points
 from .marginals import PosteriorCollection
@@ -25,6 +25,7 @@ __all__ = [
     "OnlineNormalizationLayer",
     "MemoryCache",
     "RatioCollection",
+    "JoinedRatioCollection",
     "Points",
     "corner",
     "plot1d",
