@@ -8,6 +8,7 @@ from swyft.inference import DefaultHead, DefaultTail, RatioCollection
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import PosteriorCollection
+from swyft.marginals.prior import BoundedPrior
 from swyft.utils import all_finite, format_param_list
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -23,12 +24,16 @@ class ISIC:
         prior,
         obs,
         cache,
+        noise = None,
+        model = None,
         device="cpu",
     ):
         self._ptrans = prior.ptrans
         self._obs = obs
         self._cache = cache
         self._device = device
+        self._model = model
+        self._noise = noise
 
         self._bounds = [prior.bound]
         self._N = []
@@ -43,7 +48,7 @@ class ISIC:
         # Already initialized next round?
         # Note: this is signaled by _N and _bounds having same length
         if len(self._N) == len(self._bounds):
-            logging.info("Already initialized")
+            logging.warning("Already initialized")
             return
 
         # Determine new number of training points
@@ -52,14 +57,17 @@ class ISIC:
 
         # Grow cache
         bound = self._bounds[-1]
-        bp = BoundedPrior(self._ptran, bound)
+        bp = BoundedPrior(self._ptrans, bound)
         self._cache.grow(bp, N)
 
         self._N.append(N)
         self._ratios.append([])
 
-    def simulate(self, model):
-        self._cache.simulate(model)
+    def simulate(self):
+        if self._model is not None:
+            self._cache.simulate(self._model)
+        else:
+            logging.warning("Model not specified.")
 
     def infer(
         self,
@@ -83,7 +91,7 @@ class ISIC:
             max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
         """
         ntrain = self._N[-1]
-        bound = self._bound[-1]
+        bound = self._bounds[-1]
         bp = BoundedPrior(self._ptrans, bound)
 
         re = self._train(
@@ -127,7 +135,7 @@ class ISIC:
         if len(indices) == 0:
             raise NoPointsError("No points were sampled from the cache.")
 
-        points = Points(self._cache, self.prior.ptrans, indices, self._noise)
+        points = Points(self._cache, self._ptrans, indices, self._noise)
 
         if param_list is None:
             param_list = prior.params()
@@ -142,7 +150,7 @@ class ISIC:
         )
         re.train(points, **train_args)
 
-        return PosteriorCollection(re, prior)
+        return re
 
     @staticmethod
     def _history_state_dict(history):
