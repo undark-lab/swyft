@@ -59,6 +59,10 @@ class Bound:
     def from_RatioCollection(cls, rc, obs, bound, th = -13.):
         return CompositBound.from_RatioCollection(rc, obs, bound, th = th)
 
+    @classmethod
+    def from_Posteriors(cls, post, obs, th = -13.):
+        return CompositBound.from_RatioCollection(post.ratios, obs, post.bound, th = th)
+
 
 class UnitCubeBound(Bound):
     """The unit hypercube bound."""
@@ -304,6 +308,10 @@ class CompositBound(Bound):
         for k, v in self._bounds.items():
             volume *= v.volume
         return volume
+
+    @property
+    def udim(self):
+        return self._udim
 
     def __call__(self, u):
         res = []

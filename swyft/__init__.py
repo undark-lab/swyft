@@ -5,12 +5,14 @@ from .ip3 import Points
 from .marginals import PosteriorCollection
 from .marginals.prior import PriorTransform, BoundedPrior, Prior
 from .marginals.bounds import UnitCubeBound, CompositBound, Bound, RectangleBound
-from .nestedratios import NestedRatios, ISIC
+from .nestedratios import NestedRatios, ISIC, Dataset, Posteriors
 from .nn import OnlineNormalizationLayer
 from .nn.module import Module
 from .plot import corner, plot1d
 
 __all__ = [
+    "Dataset",
+    "Posteriors",
     "ISIC",
     "Bound",
     "CompositBound",

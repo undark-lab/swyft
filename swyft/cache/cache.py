@@ -51,6 +51,7 @@ class Cache(ABC):
         params,
         obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
+        simulator = None,
     ):
         """Initialize Cache content dimensions.
 
@@ -66,6 +67,8 @@ class Cache(ABC):
         self.params = params
         self.root = zarr.group(store=self.store)
         #self.intensities = []
+
+        self._simulator = simulator
 
         logging.debug("Creating Cache.")
         logging.debug("  params = %s" % str(params))
@@ -328,9 +331,11 @@ class Cache(ABC):
         else:
             return True
 
+    def set_simulator(self, simulator):
+        self._simulator = simulator
+
     def simulate(
         self,
-        simulator: Callable,
         fail_on_non_finite: bool = True,
         max_attempts: int = 1000,
     ) -> None:
@@ -342,6 +347,12 @@ class Cache(ABC):
             max_attempts: maximum number of resample attempts before giving up.
         """
         self._update()
+
+        if self._simulator is None:
+            logging.warning("No simulator specified")
+            return
+        else:
+            simulator = self._simulator
 
         idx = self._get_idx_requiring_sim()
         if len(idx) == 0:
@@ -416,7 +427,7 @@ class DirectoryCache(Cache):
 
 
 class MemoryCache(Cache):
-    def __init__(self, params, obs_shapes, store=None):
+    def __init__(self, params, obs_shapes, store=None, simulator=None):
         """Instantiate an iP3 cache stored in the memory.
 
         Args:
@@ -430,7 +441,7 @@ class MemoryCache(Cache):
         else:
             self.store = store
             logging.debug("Creating MemoryCache from store.")
-        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store)
+        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store, simulator=simulator)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryCache to a directory."""

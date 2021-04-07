@@ -4,11 +4,12 @@ from warnings import warn
 import numpy as np
 
 from swyft.cache import MemoryCache
-from swyft.inference import DefaultHead, DefaultTail, RatioCollection
+from swyft.inference import DefaultHead, DefaultTail, RatioCollection, JoinedRatioCollection
 from swyft.ip3 import Points
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import PosteriorCollection
 from swyft.marginals.prior import BoundedPrior
+from swyft.marginals.bounds import Bound
 from swyft.utils import all_finite, format_param_list
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -16,6 +17,137 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 class MissingModelError(Exception):
     pass
+
+
+class Dataset:
+    def __init__(self, N, bounded_prior, store, simhook = None):
+        # Initialization
+        store.grow(bounded_prior, N)
+        indices = store.sample(bounded_prior, N)
+
+        self._N = N
+        self._bounded_prior = bounded_prior
+        self._indices = indices
+
+        self._store = store
+        self._simhook = simhook
+
+    def __len__(self):
+        return self._N
+
+    @property
+    def bounded_prior(self):
+        return self._bounded_prior
+
+    @property
+    def indices(self):
+        return self._indices
+
+    def simulate(self):
+        self._store.simulate()
+
+    def get_points(self):
+        return Points(self._store, self._bounded_prior.ptrans, self._indices, self._simhook)
+
+
+class Posteriors:
+    def __init__(self, dataset, simhook = None, device = 'cpu'):
+        # Store relevant information about dataset
+        self._bounded_prior = dataset.bounded_prior
+        self._indices = dataset.indices
+        self._N = len(dataset)
+        self._ratios = []
+
+        # Temporary
+        self._dataset = dataset
+        self._device = device
+
+    def infer(self):
+        pass
+
+    def sample(self, N, obs):
+        post = self._get_posteriors()
+        samples = post.sample(N, obs)
+        return samples
+
+    def infer(
+        self,
+        partitions, 
+        train_args: dict = {},
+        head=DefaultHead,
+        tail=DefaultTail,
+        head_args: dict = {},
+        tail_args: dict = {},
+        max_rounds: int = 10,
+        keep_history=False,
+    ):
+        """Perform 1-dim marginal focus fits.
+
+        Args:
+            train_args (dict): Training keyword arguments.
+            head (swyft.Module instance or type): Head network (optional).
+            tail (swyft.Module instance or type): Tail network (optional).
+            head_args (dict): Keyword arguments for head network instantiation.
+            tail_args (dict): Keyword arguments for tail network instantiation.
+            max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
+        """
+        ntrain = self._N
+        bp = self._bounded_prior.bound
+
+        re = self._train(
+            bp,
+            partitions,
+            head=head,
+            tail=tail,
+            head_args=head_args,
+            tail_args=tail_args,
+            train_args=train_args,
+            N=ntrain,
+        )
+        self._ratios.append(re)
+
+    def _get_posteriors(self):
+        return PosteriorCollection(self.ratios, self._bounded_prior)
+
+    @property
+    def bound(self):
+        return self._bounded_prior.bound
+
+    @property
+    def ptrans(self):
+        return self._bounded_prior.ptrans
+
+    @property
+    def ratios(self):
+        return JoinedRatioCollection(self._ratios[::-1])
+
+    def _train(
+        self,
+        prior,
+        param_list,
+        N,
+        train_args,
+        head,
+        tail,
+        head_args,
+        tail_args,
+    ):
+        points = self._dataset.get_points()
+
+        if param_list is None:
+            param_list = prior.params()
+
+        re = RatioCollection(
+            param_list,
+            device=self._device,
+            head=head,
+            tail=tail,
+            tail_args=tail_args,
+            head_args=head_args,
+        )
+        re.train(points, **train_args)
+
+        return re
 
 
 class ISIC:
@@ -44,30 +176,48 @@ class ISIC:
         """The target observation."""
         return self._obs
 
-    def initialize(self, ntrain = 1000):
-        # Already initialized next round?
-        # Note: this is signaled by _N and _bounds having same length
+    @property
+    def status(self):
+        pass
+        #assert len(self._bound) >= len(self._N)
+        #assert len(self._bound) <= len(self._N) + 1
+        #assert len(self._N) >= len(self._ratios)
+        #assert len(self._N) <= len(self._ratios) + 1
+
+        #round = len(self._bounds)
+
+
+    def focus(self, partition = None):
         if len(self._N) == len(self._bounds):
-            logging.warning("Already initialized")
-            return
+            rc = JoinedRatioCollection(self._ratios[round][::-1])
+            new_bound = Bound.from_RatioCollection(rc, self._obs, self._bounds[-1])
+            self._bounds.append(new_bound)
+        return self._bounds[-1].volume
 
-        # Determine new number of training points
-        # FIXME: Automatize update of training points
-        N = ntrain
+#    def generate(self, ntrain = 1000):
+#        # Already initialized next round?
+#        # Note: this is signaled by _N and _bounds having same length
+#        if len(self._N) == len(self._bounds):
+#            logging.warning("Already initialized")
+#            return
+#
+#        # Determine new number of training points
+#        # FIXME: Automatize update of training points
+#        N = ntrain
+#
+#        # Grow cache
+#        bound = self._bounds[-1]
+#        bp = BoundedPrior(self._ptrans, bound)
+#        self._cache.grow(bp, N)
+#
+#        self._N.append(N)
+#        self._ratios.append([])
 
-        # Grow cache
-        bound = self._bounds[-1]
-        bp = BoundedPrior(self._ptrans, bound)
-        self._cache.grow(bp, N)
-
-        self._N.append(N)
-        self._ratios.append([])
-
-    def simulate(self):
-        if self._model is not None:
-            self._cache.simulate(self._model)
-        else:
-            logging.warning("Model not specified.")
+#    def simulate(self):
+#        if self._model is not None:
+#            self._cache.simulate(self._model)
+#        else:
+#            logging.warning("Model not specified.")
 
     def infer(
         self,
@@ -106,10 +256,12 @@ class ISIC:
         )
         self._ratios[-1].append(re)
 
-    def check(self):
-        rc = self._ratios[-1][0]  # FIXME: Use JoinedRatioCollection
-        new_bound = Bound.from_RatioCollection(rc, self._obs, self._bound[-1])
-        self._bounds.append(new_bound)
+
+    def get_posteriors(self, round=-1):
+        rc = JoinedRatioCollection(self._ratios[round][::-1])
+        bp = BoundedPrior(self._ptrans, self._bounds[round])
+        post = PosteriorCollection(rc, bp)
+        return post
 
     def _train(
         self,
