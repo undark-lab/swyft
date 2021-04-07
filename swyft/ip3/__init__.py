@@ -1,5 +1,5 @@
-from .points import Points
+from .dataset import Dataset
 
 __all__ = [
-    "Points",
+    "Dataset",
 ]

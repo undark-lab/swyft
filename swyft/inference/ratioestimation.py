@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch
 
 from swyft.inference.networks import DefaultHead, DefaultTail
-from swyft.inference.train import ParamDictDataset, trainloop
+from swyft.inference.train import trainloop
 from swyft.nn.module import Module
 from swyft.types import Array, Device, Sequence, Tuple
 from swyft.utils import (
@@ -58,10 +58,10 @@ class RatioCollection:
         tail_args={},
         device: Device = "cpu",
     ):
-        """RatioCollection takes simulated points from the iP3 sample cache and handles training and posterior calculation.
+        """RatioCollection takes simulated points from the iP3 sample store and handles training and posterior calculation.
 
         Args:
-            points: points dataset from the iP3 sample cache
+            points: points dataset from the iP3 sample store
             combinations: which combinations of z parameters to learn
             head: initialized module which processes observations, head(x0) = y
             previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
@@ -97,7 +97,7 @@ class RatioCollection:
 
     def train(
         self,
-        points,
+        dataset,
         max_epochs: int = 10,
         batch_size: int = 32,
         lr_schedule: Sequence[float] = [1e-3, 3e-4, 1e-4],
@@ -115,7 +115,6 @@ class RatioCollection:
             nworkers: number of Dataloader workers (0 for no dataloader parallelization)
             percent_validation: percentage to allocate to validation set
         """
-        dataset = ParamDictDataset(points)
 
         if self.tail is None:
             self._init_networks(dataset)

@@ -1,11 +1,11 @@
-from .cache import DirectoryCache, MemoryCache
+from .store import DirectoryStore, MemoryStore
 from .inference import RatioCollection, JoinedRatioCollection
 from .inference.networks import DefaultHead, DefaultTail, GenericTail
-from .ip3 import Points
+from .ip3 import Dataset
 from .marginals import PosteriorCollection
 from .marginals.prior import PriorTransform, BoundedPrior, Prior
 from .marginals.bounds import UnitCubeBound, CompositBound, Bound, RectangleBound
-from .nestedratios import NestedRatios, ISIC, Dataset, Posteriors
+from .nestedratios import Dataset, Posteriors
 from .nn import OnlineNormalizationLayer
 from .nn.module import Module
 from .plot import corner, plot1d
@@ -13,7 +13,6 @@ from .plot import corner, plot1d
 __all__ = [
     "Dataset",
     "Posteriors",
-    "ISIC",
     "Bound",
     "CompositBound",
     "RectangleBound",
@@ -23,16 +22,15 @@ __all__ = [
     "Prior",
     "PosteriorCollection",
     "Module",
-    "DirectoryCache",
-    "MemoryCache",
+    "DirectoryStore",
+    "MemoryStore",
     "DefaultHead",
     "DefaultTail",
     "GenericTail",
     "OnlineNormalizationLayer",
     "RatioCollection",
     "JoinedRatioCollection",
-    "Points",
+    "Dataset",
     "corner",
     "plot1d",
-    "NestedRatios",
 ]

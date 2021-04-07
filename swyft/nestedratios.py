@@ -3,9 +3,9 @@ from warnings import warn
 
 import numpy as np
 
-from swyft.cache import MemoryCache
+from swyft.store import MemoryStore
 from swyft.inference import DefaultHead, DefaultTail, RatioCollection, JoinedRatioCollection
-from swyft.ip3 import Points
+from swyft.ip3 import Dataset
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import PosteriorCollection
 from swyft.marginals.prior import BoundedPrior
@@ -17,37 +17,6 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 class MissingModelError(Exception):
     pass
-
-
-class Dataset:
-    def __init__(self, N, bounded_prior, store, simhook = None):
-        # Initialization
-        store.grow(N, bounded_prior)
-        indices = store.sample(N, bounded_prior)
-
-        self._N = N
-        self._bounded_prior = bounded_prior
-        self._indices = indices
-
-        self._store = store
-        self._simhook = simhook
-
-    def __len__(self):
-        return self._N
-
-    @property
-    def bounded_prior(self):
-        return self._bounded_prior
-
-    @property
-    def indices(self):
-        return self._indices
-
-    def simulate(self):
-        self._store.simulate()
-
-    def get_points(self):
-        return Points(self._store, self._bounded_prior.ptrans, self._indices, self._simhook)
 
 
 class Posteriors:
@@ -132,8 +101,6 @@ class Posteriors:
         head_args,
         tail_args,
     ):
-        points = self._dataset.get_points()
-
         if param_list is None:
             param_list = prior.params()
 
@@ -145,7 +112,7 @@ class Posteriors:
             tail_args=tail_args,
             head_args=head_args,
         )
-        re.train(points, **train_args)
+        re.train(self._dataset, **train_args)
 
         return re
 
@@ -155,14 +122,14 @@ class Posteriors:
 #        self,
 #        prior,
 #        obs,
-#        cache,
+#        store,
 #        noise = None,
 #        model = None,
 #        device="cpu",
 #    ):
 #        self._ptrans = prior.ptrans
 #        self._obs = obs
-#        self._cache = cache
+#        self._store = store
 #        self._device = device
 #        self._model = model
 #        self._noise = noise
@@ -205,17 +172,17 @@ class Posteriors:
 #        # FIXME: Automatize update of training points
 #        N = ntrain
 #
-#        # Grow cache
+#        # Grow store
 #        bound = self._bounds[-1]
 #        bp = BoundedPrior(self._ptrans, bound)
-#        self._cache.grow(bp, N)
+#        self._store.grow(bp, N)
 #
 #        self._N.append(N)
 #        self._ratios.append([])
 
 #    def simulate(self):
 #        if self._model is not None:
-#            self._cache.simulate(self._model)
+#            self._store.simulate(self._model)
 #        else:
 #            logging.warning("Model not specified.")
 #
@@ -275,19 +242,19 @@ class Posteriors:
 #        tail_args,
 #    ):
 #        """Perform amortized inference on constrained priors."""
-#        if self._cache.requires_sim:
+#        if self._store.requires_sim:
 #            raise MissingModelError(
-#                "Some points in the cache have not been simulated yet."
+#                "Some points in the store have not been simulated yet."
 #            )
 #
 #        logging.info("Starting neural network training.")
-#        indices = self._cache.sample(prior, N)
+#        indices = self._store.sample(prior, N)
 #
 #        # Fail gracefully if no points are drawn.
 #        if len(indices) == 0:
-#            raise NoPointsError("No points were sampled from the cache.")
+#            raise NoPointsError("No points were sampled from the store.")
 #
-#        points = Points(self._cache, self._ptrans, indices, self._noise)
+#        points = Points(self._store, self._ptrans, indices, self._noise)
 #
 #        if param_list is None:
 #            param_list = prior.params()
@@ -339,14 +306,14 @@ class Posteriors:
 #        )
 #
 #    @classmethod
-#    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
+#    def from_state_dict(cls, state_dict, model, noise=None, store=None, device="cpu"):
 #        """Instantiate NestedRatios from saved `state_dict`."""
 #        base_prior = Prior.from_state_dict(state_dict["base_prior"])
 #        obs = state_dict["obs"]
 #        config = state_dict["config"]
 #
 #        nr = cls(
-#            model, base_prior, obs, noise=noise, cache=cache, device=device, **config
+#            model, base_prior, obs, noise=noise, store=store, device=device, **config
 #        )
 #
 #        nr.converged = state_dict["converged"]
@@ -368,7 +335,7 @@ class Posteriors:
 #        prior,
 #        obs,
 #        noise=None,
-#        cache=None,
+#        store=None,
 #        device="cpu",
 #        Ninit=3000,
 #        Nmax=100000,
@@ -382,7 +349,7 @@ class Posteriors:
 #            prior (Prior): Prior model.
 #            obs (dict): Target observation
 #            noise (function): Noise model, optional.
-#            cache (Cache): Storage for simulator results.  If none, create MemoryCache.
+#            store (Store): Storage for simulator results.  If none, create MemoryStore.
 #            Ninit (int): Initial number of training points.
 #            Nmax (int): Maximum number of training points per round.
 #            density_factor (float > 1): Increase of training point density per round.
@@ -397,7 +364,7 @@ class Posteriors:
 #        # Not stored
 #        self._model = model
 #        self._noise = noise
-#        self._cache_reference = cache
+#        self._store_reference = store
 #        self._device = device
 #
 #        # Stored in state_dict()
@@ -414,12 +381,12 @@ class Posteriors:
 #        self._history = []
 #
 #    @property
-#    def _cache(self):
-#        if self._cache_reference is None:
-#            self._cache_reference = MemoryCache.from_simulator(
+#    def _store(self):
+#        if self._store_reference is None:
+#            self._store_reference = MemoryStore.from_simulator(
 #                self._model, self._base_prior, noise = self._noise
 #            )
-#        return self._cache_reference
+#        return self._store_reference
 #
 #    @property
 #    def num_elapsed_rounds(self):
@@ -464,7 +431,7 @@ class Posteriors:
 #            max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
 #        """
 #
-#        param_list = list(range(len(self._cache.params)))
+#        param_list = list(range(len(self._store.params)))
 #        r = 0
 #
 #        while (not self.converged) and (r < max_rounds):
@@ -476,18 +443,18 @@ class Posteriors:
 #            prior_R, N_R = self._get_prior_R()
 #
 #            ####################################
-#            # Step 2 - Update cache and simulate
+#            # Step 2 - Update store and simulate
 #            ####################################
-#            self._cache.grow(prior_R, N_R)
+#            self._store.grow(prior_R, N_R)
 #            if self.requires_sim():
 #                logging.info(
-#                    "Additional simulations are required after growing the cache."
+#                    "Additional simulations are required after growing the store."
 #                )
 #                if self._model is not None:
-#                    self._cache.simulate(self._model)
+#                    self._store.simulate(self._model)
 #                else:
 #                    logging.warning(
-#                        "No model specified. Run simulator directly on cache."
+#                        "No model specified. Run simulator directly on store."
 #                    )
 #                    return
 #
@@ -543,8 +510,8 @@ class Posteriors:
 #
 #    # NOTE: By convention properties are only quantites that we save in state_dict
 #    def requires_sim(self):
-#        """Does cache require simulation runs?"""
-#        return self._cache.requires_sim
+#        """Does store require simulation runs?"""
+#        return self._store.requires_sim
 #
 #    def gen_1d_marginals(
 #        self,
@@ -557,7 +524,7 @@ class Posteriors:
 #        tail_args={},
 #    ):
 #        """Convenience function to generate 1d marginals."""
-#        param_list = format_param_list(params, all_params=self._cache.params, mode="1d")
+#        param_list = format_param_list(params, all_params=self._store.params, mode="1d")
 #        logging.info(f"Generating marginals for: {param_list}")
 #        return self.gen_custom_marginals(
 #            param_list,
@@ -580,7 +547,7 @@ class Posteriors:
 #        tail_args={},
 #    ):
 #        """Convenience function to generate 2d marginals."""
-#        param_list = format_param_list(params, all_params=self._cache.params, mode="2d")
+#        param_list = format_param_list(params, all_params=self._store.params, mode="2d")
 #        logging.info(f"Generating marginals for: {param_list}")
 #        return self.gen_custom_marginals(
 #            param_list,
@@ -619,18 +586,18 @@ class Posteriors:
 #            prior = self._history[-1]["constr_prior"]
 #            logging.debug("Constrained prior volume = %.4f" % prior.volume())
 #
-#        param_list = format_param_list(param_list, all_params=self._cache.params)
+#        param_list = format_param_list(param_list, all_params=self._store.params)
 #
 #        ####################################
-#        # Step 1 - Update cache and simulate
+#        # Step 1 - Update store and simulate
 #        ####################################
-#        self._cache.grow(prior, N)
+#        self._store.grow(prior, N)
 #        if self.requires_sim():
-#            logging.info("Additional simulations are required after growing the cache.")
+#            logging.info("Additional simulations are required after growing the store.")
 #            if self._model is not None:
-#                self._cache.simulate(self._model)
+#                self._store.simulate(self._model)
 #            else:
-#                logging.warning("No model specified. Run simulator directly on cache.")
+#                logging.warning("No model specified. Run simulator directly on store.")
 #                return
 #
 #        #################
@@ -649,9 +616,9 @@ class Posteriors:
 #        return marginals
 #
 #    @property
-#    def cache(self):
-#        """Return simulation cache."""
-#        return self._cache
+#    def store(self):
+#        """Return simulation store."""
+#        return self._store
 #
 #    @staticmethod
 #    def _history_state_dict(history):
@@ -680,7 +647,7 @@ class Posteriors:
 #    def _get_prior_R(self):
 #        # Method does not change internal states
 #
-#        param_list = self._cache.params
+#        param_list = self._store.params
 #        D = len(param_list)
 #        if self.num_elapsed_rounds == 0:  # First round
 #            prior_R = self._base_prior
@@ -712,19 +679,19 @@ class Posteriors:
 #        tail_args,
 #    ):
 #        """Perform amortized inference on constrained priors."""
-#        if self._cache.requires_sim:
+#        if self._store.requires_sim:
 #            raise MissingModelError(
-#                "Some points in the cache have not been simulated yet."
+#                "Some points in the store have not been simulated yet."
 #            )
 #
 #        logging.info("Starting neural network training.")
-#        indices = self._cache.sample(prior, N)
+#        indices = self._store.sample(prior, N)
 #
 #        # Fail gracefully if no points are drawn.
 #        if len(indices) == 0:
-#            raise NoPointsError("No points were sampled from the cache.")
+#            raise NoPointsError("No points were sampled from the store.")
 #
-#        points = Points(self._cache, self.prior.ptrans, indices, self._noise)
+#        points = Points(self._store, self.prior.ptrans, indices, self._noise)
 #
 #        if param_list is None:
 #            param_list = prior.params()
@@ -752,14 +719,14 @@ class Posteriors:
 #        )
 #
 #    @classmethod
-#    def from_state_dict(cls, state_dict, model, noise=None, cache=None, device="cpu"):
+#    def from_state_dict(cls, state_dict, model, noise=None, store=None, device="cpu"):
 #        """Instantiate NestedRatios from saved `state_dict`."""
 #        base_prior = Prior.from_state_dict(state_dict["base_prior"])
 #        obs = state_dict["obs"]
 #        config = state_dict["config"]
 #
 #        nr = cls(
-#            model, base_prior, obs, noise=noise, cache=cache, device=device, **config
+#            model, base_prior, obs, noise=noise, store=store, device=device, **config
 #        )
 #
 #        nr.converged = state_dict["converged"]

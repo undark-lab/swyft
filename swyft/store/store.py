@@ -11,7 +11,7 @@ import numpy as np
 import zarr
 from tqdm import tqdm
 
-from swyft.cache.exceptions import LowIntensityError
+from swyft.store.exceptions import LowIntensityError
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
 from swyft.marginals.prior import BoundedPrior
@@ -31,8 +31,8 @@ Filesystem = namedtuple(
 )
 
 
-class Cache(ABC):
-    """Abstract base class for various caches."""
+class Store(ABC):
+    """Abstract base class for various stores."""
 
     _filesystem = Filesystem(
         "metadata",
@@ -53,7 +53,7 @@ class Cache(ABC):
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
         simulator = None,
     ):
-        """Initialize Cache content dimensions.
+        """Initialize Store content dimensions.
 
         Args:
             params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
@@ -70,22 +70,22 @@ class Cache(ABC):
 
         self._simulator = simulator
 
-        logging.debug("Creating Cache.")
+        logging.debug("Creating Store.")
         logging.debug("  params = %s" % str(params))
         logging.debug("  obs_shapes = %s" % str(obs_shapes))
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
-            logging.info("Loading existing cache.")
+            logging.info("Loading existing store.")
             self._update()
         elif len(self.root.keys()) == 0:
-            logging.info("Creating new cache.")
-            self._setup_new_cache(len(params), obs_shapes, self.root)
+            logging.info("Creating new store.")
+            self._setup_new_store(len(params), obs_shapes, self.root)
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
-    def _setup_new_cache(self, zdim, obs_shapes, root) -> None: # Adding observational shapes to store
+    def _setup_new_store(self, zdim, obs_shapes, root) -> None: # Adding observational shapes to store
         x = root.create_group(self._filesystem.obs)
         for name, shape in obs_shapes.items():
             x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
@@ -131,11 +131,11 @@ class Cache(ABC):
 
     @staticmethod
     def _extract_xshape_from_zarr_group(group):
-        return group[Cache._filesystem.obs].shape[1:]
+        return group[Store._filesystem.obs].shape[1:]
 
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
-        return group[Cache._filesystem.par].shape[1]
+        return group[Store._filesystem.par].shape[1]
 
     # FIXME: Add log_intensity as another entry to datastore
     def _update(self):
@@ -155,7 +155,7 @@ class Cache(ABC):
         self.wu = self.root[self._filesystem.which_intensity]
 
     def __len__(self):
-        """Returns number of samples in the cache."""
+        """Returns number of samples in the store."""
         self._update()
         return len(self.z)
 
@@ -171,7 +171,7 @@ class Cache(ABC):
         return dict(x=result_x, z=result_z)
 
     def _append_z(self, z):
-        """Append z to cache content and generate new slots for x."""
+        """Append z to store content and generate new slots for x."""
         self._update()
 
         # Length of first element
@@ -212,7 +212,7 @@ class Cache(ABC):
         return d
 
     def grow(self, N, pdf):  # noqa
-        """Given an intensity function, add parameter samples to the cache.
+        """Given an intensity function, add parameter samples to the store.
 
         Args:
             intensity: target parameter intensity function
@@ -224,19 +224,19 @@ class Cache(ABC):
         accepted = []
 
         target_log_intensities = pdf.log_prob(z_prop) + np.log(N)
-        cached_log_intensities = self.log_intensity(z_prop)
+        stored_log_intensities = self.log_intensity(z_prop)
 
-        for cached_log_intensity, target_log_intensity in zip(
-            cached_log_intensities, target_log_intensities
+        for stored_log_intensity, target_log_intensity in zip(
+            stored_log_intensities, target_log_intensities
         ):
-            log_prob_reject = np.minimum(0, cached_log_intensity - target_log_intensity)
+            log_prob_reject = np.minimum(0, stored_log_intensity - target_log_intensity)
             accepted.append(log_prob_reject < np.log(np.random.rand()))
         z_accepted = z_prop[accepted]
 
         if sum(accepted) > 0:
-            # Add new entries to cache
+            # Add new entries to store
             self._append_z(z_accepted)
-            logging.info("  adding %i new samples to simulator cache." % sum(accepted))
+            logging.info("  adding %i new samples to simulator store." % sum(accepted))
 
             # And update intensity function
             self.u.resize(len(self.u) + 1)
@@ -250,19 +250,19 @@ class Cache(ABC):
         #zlist = {k: self.z[k][:] for k in (self.z)}
         zlist = self.z
 
-        cached_intensities = self.log_intensity(zlist)
+        stored_intensities = self.log_intensity(zlist)
         target_intensities = prior.log_prob(zlist) + np.log(N)
-        assert len(self) == len(cached_intensities)
+        assert len(self) == len(stored_intensities)
         assert len(self) == len(target_intensities)
-        for i, (target_intensity, cached_intensity) in enumerate(
-            zip(target_intensities, cached_intensities)
+        for i, (target_intensity, stored_intensity) in enumerate(
+            zip(target_intensities, stored_intensities)
         ):
-            log_prob_accept = target_intensity - cached_intensity
+            log_prob_accept = target_intensity - stored_intensity
             if log_prob_accept > 0.0:
                 raise LowIntensityError(
                     f"{log_prob_accept} > 0, "
-                    " but we expected the log ratio of target intensity function to the cache <= 0. "
-                    "There may not be enough samples in the cache or "
+                    " but we expected the log ratio of target intensity function to the store <= 0. "
+                    "There may not be enough samples in the store or "
                     "a constrained intensity function was not accounted for."
                 )
             elif log_prob_accept > np.log(np.random.rand()):
@@ -339,7 +339,7 @@ class Cache(ABC):
         fail_on_non_finite: bool = True,
         max_attempts: int = 1000,
     ) -> None:
-        """Run simulator sequentially on parameter cache with missing corresponding simulations.
+        """Run simulator sequentially on parameter store with missing corresponding simulations.
 
         Args:
             simulator: simulates an observation given a parameter input
@@ -376,7 +376,7 @@ class Cache(ABC):
 
         if self.any_failed:
             warn(
-                f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the cache."
+                f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the store."
             )
 
     def resample_failed_simulations(
@@ -404,9 +404,9 @@ class Cache(ABC):
             return None
 
 
-class DirectoryCache(Cache):
+class DirectoryStore(Store):
     def __init__(self, params, obs_shapes: Shape, path: PathType):
-        """Instantiate an iP3 cache stored in a directory.
+        """Instantiate an iP3 store stored in a directory.
 
         Args:
             zdim: Number of z dimensions
@@ -423,12 +423,12 @@ class DirectoryCache(Cache):
         group = zarr.group(store=store)
         xshape = cls._extract_xshape_from_zarr_group(group)
         zdim = cls._extract_zdim_from_zarr_group(group)
-        return DirectoryCache(zdim=zdim, xshape=xshape, path=path)
+        return DirectoryStore(zdim=zdim, xshape=xshape, path=path)
 
 
-class MemoryCache(Cache):
+class MemoryStore(Store):
     def __init__(self, params, obs_shapes, store=None, simulator=None):
-        """Instantiate an iP3 cache stored in the memory.
+        """Instantiate an iP3 store stored in the memory.
 
         Args:
             zdim: Number of z dimensions
@@ -437,14 +437,14 @@ class MemoryCache(Cache):
         """
         if store is None:
             self.store = zarr.MemoryStore()
-            logging.debug("Creating new empty MemoryCache.")
+            logging.debug("Creating new empty MemoryStore.")
         else:
             self.store = store
-            logging.debug("Creating MemoryCache from store.")
+            logging.debug("Creating MemoryStore from store.")
         super().__init__(params=params, obs_shapes=obs_shapes, store=self.store, simulator=simulator)
 
     def save(self, path: PathType) -> None:
-        """Save the current state of the MemoryCache to a directory."""
+        """Save the current state of the MemoryStore to a directory."""
         path = Path(path)
         if path.exists() and not path.is_dir():
             raise NotADirectoryError(f"{path} should be a directory")
@@ -458,7 +458,7 @@ class MemoryCache(Cache):
 
     @classmethod
     def load(cls, path: PathType):
-        """Load existing DirectoryStore state into a MemoryCache object."""
+        """Load existing DirectoryStore state into a MemoryStore object."""
         memory_store = zarr.MemoryStore()
         directory_store = zarr.DirectoryStore(path)
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)
@@ -466,11 +466,11 @@ class MemoryCache(Cache):
         group = zarr.group(store=memory_store)
         xshape = cls._extract_xshape_from_zarr_group(group)
         zdim = cls._extract_zdim_from_zarr_group(group)
-        return MemoryCache(zdim=zdim, xshape=xshape, store=memory_store)
+        return MemoryStore(zdim=zdim, xshape=xshape, store=memory_store)
 
     @classmethod
     def from_simulator(cls, model, prior, noise = None):
-        """Convenience function to instantiate new MemoryCache with correct obs_shapes.
+        """Convenience function to instantiate new MemoryStore with correct obs_shapes.
 
         Args:
             model (function): Simulator model.
@@ -488,4 +488,4 @@ class MemoryCache(Cache):
 
         obs_shapes = {k: v.shape for k, v in obs.items()}
 
-        return MemoryCache(vdim, obs_shapes)
+        return MemoryStore(vdim, obs_shapes)
