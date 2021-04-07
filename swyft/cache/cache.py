@@ -166,10 +166,7 @@ class Cache(ABC):
 
     @staticmethod
     def _extract_obs_shapes_from_zarr_group(group):
-        obs_key = [k for k in group[Cache._filesystem.obs].keys()]
-        assert len(obs_key) == 1
-        obs_key = obs_key[0]
-        return group[Cache._filesystem.obs][obs_key].shape[1:]
+        return {k:v.shape[1:] for k,v in group[Cache._filesystem.obs].items()}
 
     @staticmethod
     def _extract_params_from_zarr_group(group):
