@@ -211,7 +211,7 @@ class Cache(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def grow(self, pdf, N):  # noqa
+    def grow(self, N, pdf):  # noqa
         """Given an intensity function, add parameter samples to the cache.
 
         Args:
@@ -243,7 +243,7 @@ class Cache(ABC):
             self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
 
     # FIXME: No Balltree required here, just rejection sampling based on stored intensities.
-    def sample(self, prior, N: int) -> List[int]:  # noqa: F821
+    def sample(self, N: int, prior) -> List[int]:  # noqa: F821
         self._update()
 
         accepted = []
