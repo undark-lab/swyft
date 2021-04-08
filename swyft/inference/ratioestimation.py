@@ -108,6 +108,8 @@ class RatioEstimator:
         )
         self._train_diagnostics.append(diagnostics)
 
+    # FIXME: Rename lnL --> ratio, it reruns the ratio
+    # FIXME: Type annotations and docstring are wrong
     def lnL(
         self,
         obs: Array,
@@ -178,6 +180,7 @@ class RatioEstimator:
         )
         return re
 
+    # FIXME: Ditch posterior method, show live separately
     def posterior(self, obs0, prior, n_samples=100000):
         """Resturn weighted posterior samples for given observation.
 
