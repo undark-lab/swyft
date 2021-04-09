@@ -1,7 +1,7 @@
 import numpy as np
 
 from swyft.inference import RatioCollection
-from swyft.marginals.prior import BoundedPrior
+from swyft.marginals.prior import Prior
 
 
 class PosteriorCollection:
@@ -41,7 +41,7 @@ class PosteriorCollection:
     def from_state_dict(cls, state_dict):
         return RatioEstimatedPosterior(
             RatioCollection.from_state_dict(state_dict["rc"]),
-            BoundedPrior.from_state_dict(state_dict["prior"]),
+            Prior.from_state_dict(state_dict["prior"]),
         )
 
     @classmethod

@@ -2,10 +2,10 @@ import numpy as np
 from swyft.marginals.bounds import Bound, UnitCubeBound
 import torch
 
-class BoundedPrior:
+class Prior:
     """Prior with bounds."""
     def __init__(self, ptrans, bound = None):
-        """Instantiate BoundedPrior.
+        """Instantiate Prior.
 
         Args:
             ptrans (PriorTransform): Map from hypercube to physical parameters.
@@ -46,10 +46,15 @@ class BoundedPrior:
         return dict(ptrans=self.ptrans.state_dict(), bound=self.bound.state_dict())
 
     @classmethod
+    def from_uv(cls, uv, zdim, bound = None, n = 10000):
+        ptrans = PriorTransform(uv, zdim, n=n)
+        return cls(ptrans, bound = bound)
+
+    @classmethod
     def from_state_dict(cls, state_dict):
         ptrans = PriorTransform.from_state_dict(state_dict['ptrans'])
         bound = Bound.from_state_dict(state_dict['bound'])
-        return BoundedPrior(ptrans, bound)
+        return Prior(ptrans, bound)
 
     @classmethod
     def load(cls, filename):
@@ -59,17 +64,6 @@ class BoundedPrior:
     def save(self, filename):
         sd = self.state_dict()
         torch.save(sd, filename)
-
-
-#class Prior(BoundedPrior):
-#    def __init__(self, ptrans):
-#        """Generate prior without bounds.  Usually used for initial unbounded prior.
-#
-#        Args:
-#            ptrans (PriorTransform)
-#        """
-#        bound = UnitCubeBound(ptrans.zdim)
-#        super().__init__(ptrans, bound)
 
 
 class PriorTransform:

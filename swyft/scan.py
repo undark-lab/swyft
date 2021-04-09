@@ -8,7 +8,7 @@
 #from swyft.ip3 import Dataset
 #from swyft.ip3.exceptions import NoPointsError
 #from swyft.marginals import PosteriorCollection
-#from swyft.marginals.prior import BoundedPrior
+#from swyft.marginals.prior import Prior
 #from swyft.marginals.bounds import Bound
 #from swyft.utils import all_finite, format_param_list
 #

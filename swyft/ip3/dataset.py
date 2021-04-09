@@ -4,18 +4,18 @@ import logging
 
 import numpy as np
 from torch.utils.data import Dataset as torch_Dataset
-from swyft.marginals.prior import BoundedPrior
+from swyft.marginals.prior import Prior
 import torch
 
 
 class Dataset(torch_Dataset):
-    def __init__(self, N, bounded_prior, store, simhook = None):
+    def __init__(self, N, prior, store, simhook = None):
         super().__init__()
 
         # Initialization
-        indices = store.sample(N, bounded_prior)
+        indices = store.sample(N, prior)
 
-        self._bounded_prior = bounded_prior
+        self._prior = prior
         self._indices = indices
 
         self._store = store
@@ -26,8 +26,8 @@ class Dataset(torch_Dataset):
         return len(self._indices)
 
     @property
-    def bounded_prior(self):
-        return self._bounded_prior
+    def prior(self):
+        return self._prior
 
     def _tensorfy(self, x):
         return {k: torch.tensor(v).float() for k, v in x.items()}
@@ -45,7 +45,7 @@ class Dataset(torch_Dataset):
         z_keys = list(self._store.z)
         x = {k: self._store.x[k][i] for k in x_keys}
         z = self._store.z[i]
-        u = self._bounded_prior.ptrans.u(z.reshape(1, -1)).flatten()
+        u = self._prior.ptrans.u(z.reshape(1, -1)).flatten()
 
         if self._simhook is not None:
             x = self._simhook(x, z)
@@ -54,14 +54,14 @@ class Dataset(torch_Dataset):
 
     def state_dict(self):
         return dict(indices = self._indices,
-                bounded_prior = self._bounded_prior.state_dict(),
+                prior = self._prior.state_dict(),
                 simhook = bool(self._simhook)
                 )
 
     @classmethod
     def from_state_dict(cls, state_dict, store = None, simhook = None):
         obj = Dataset.__new__(Dataset)
-        obj._bounded_prior = BoundedPrior.from_state_dict(state_dict['bounded_prior'])
+        obj._prior = Prior.from_state_dict(state_dict['prior'])
         obj._indices = state_dict['indices']
 
         obj._store = store

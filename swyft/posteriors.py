@@ -4,7 +4,7 @@ from warnings import warn
 import torch
 from swyft.store import MemoryStore
 from swyft.inference import DefaultHead, DefaultTail, RatioCollection, JoinedRatioCollection
-from swyft.marginals.prior import BoundedPrior
+from swyft.marginals.prior import Prior
 from swyft.ip3 import Dataset
 from swyft.marginals import PosteriorCollection
 
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 class Posteriors:
     def __init__(self, dataset, simhook = None):
         # Store relevant information about dataset
-        self._bounded_prior = dataset.bounded_prior
+        self._prior = dataset.prior
         self._indices = dataset.indices
         self._N = len(dataset)
         self._ratios = []
@@ -42,7 +42,7 @@ class Posteriors:
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
         ntrain = self._N
-        bp = self._bounded_prior.bound
+        bp = self._prior.bound
 
         re = self._train(
             bp,
@@ -58,17 +58,17 @@ class Posteriors:
         self._ratios.append(re)
 
     def sample(self, N, obs):
-        post = PosteriorCollection(self.ratios, self._bounded_prior)
+        post = PosteriorCollection(self.ratios, self._prior)
         samples = post.sample(N, obs)
         return samples
 
     @property
     def bound(self):
-        return self._bounded_prior.bound
+        return self._prior.bound
 
     @property
     def ptrans(self):
-        return self._bounded_prior.ptrans
+        return self._prior.ptrans
 
     @property
     def ratios(self):
@@ -103,7 +103,7 @@ class Posteriors:
 
     def state_dict(self):
         state_dict = dict(
-                bounded_prior=self._bounded_prior.state_dict(),
+                prior=self._prior.state_dict(),
                 indices=self._indices,
                 N=self._N,
                 ratios=[r.state_dict() for r in self._ratios],
@@ -113,7 +113,7 @@ class Posteriors:
     @classmethod
     def from_state_dict(cls, state_dict, dataset = None, device = 'cpu'):
         obj = Posteriors.__new__(Posteriors)
-        obj._bounded_prior = BoundedPrior.from_state_dict(state_dict['bounded_prior'])
+        obj._prior = Prior.from_state_dict(state_dict['prior'])
         obj._indices = state_dict['indices']
         obj._N = state_dict['N']
         obj._ratios = [RatioCollection.from_state_dict(sd) for sd in state_dict['ratios']]

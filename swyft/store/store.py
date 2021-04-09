@@ -17,7 +17,7 @@ import zarr
 from swyft.store.exceptions import LowIntensityError
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
-from swyft.marginals.prior import BoundedPrior
+from swyft.marginals.prior import Prior
 
 Filesystem = namedtuple(
     "Filesystem",
@@ -266,7 +266,7 @@ class Store(ABC):
         if len(self.u) == 0:
             return d
         for i in range(len(self.u)):
-            pdf = BoundedPrior.from_state_dict(self.u[i]['pdf'])
+            pdf = Prior.from_state_dict(self.u[i]['pdf'])
             N = self.u[i]['N']
             r = pdf.log_prob(z) + np.log(N)
             d = np.where(r > d, r, d)
