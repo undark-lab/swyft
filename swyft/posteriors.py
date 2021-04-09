@@ -1,8 +1,10 @@
 import logging
 from warnings import warn
 
+import torch
 from swyft.store import MemoryStore
 from swyft.inference import DefaultHead, DefaultTail, RatioCollection, JoinedRatioCollection
+from swyft.marginals.prior import BoundedPrior
 from swyft.ip3 import Dataset
 from swyft.marginals import PosteriorCollection
 
@@ -10,7 +12,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 
 class Posteriors:
-    def __init__(self, dataset, simhook = None, device = 'cpu'):
+    def __init__(self, dataset, simhook = None):
         # Store relevant information about dataset
         self._bounded_prior = dataset.bounded_prior
         self._indices = dataset.indices
@@ -19,7 +21,6 @@ class Posteriors:
 
         # Temporary
         self._dataset = dataset
-        self._device = device
 
     def infer(
         self,
@@ -29,8 +30,7 @@ class Posteriors:
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        max_rounds: int = 10,
-        keep_history=False,
+        device = 'cpu'
     ):
         """Perform 1-dim marginal focus fits.
 
@@ -40,7 +40,6 @@ class Posteriors:
             tail (swyft.Module instance or type): Tail network (optional).
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
-            max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
         """
         ntrain = self._N
         bp = self._bounded_prior.bound
@@ -54,6 +53,7 @@ class Posteriors:
             tail_args=tail_args,
             train_args=train_args,
             N=ntrain,
+            device=device
         )
         self._ratios.append(re)
 
@@ -84,13 +84,14 @@ class Posteriors:
         tail,
         head_args,
         tail_args,
+        device
     ):
         if param_list is None:
             param_list = prior.params()
 
         re = RatioCollection(
             param_list,
-            device=self._device,
+            device=device,
             head=head,
             tail=tail,
             tail_args=tail_args,
@@ -101,8 +102,31 @@ class Posteriors:
         return re
 
     def state_dict(self):
-        raise NotImplementedError
+        state_dict = dict(
+                bounded_prior=self._bounded_prior.state_dict(),
+                indices=self._indices,
+                N=self._N,
+                ratios=[r.state_dict() for r in self._ratios],
+                )
+        return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict):
-        raise NotImplementedError
+    def from_state_dict(cls, state_dict, dataset = None, device = 'cpu'):
+        obj = Posteriors.__new__(Posteriors)
+        obj._bounded_prior = BoundedPrior.from_state_dict(state_dict['bounded_prior'])
+        obj._indices = state_dict['indices']
+        obj._N = state_dict['N']
+        obj._ratios = [RatioCollection.from_state_dict(sd) for sd in state_dict['ratios']]
+
+        obj._dataset = dataset
+        obj._device = device
+        return obj
+
+    @classmethod
+    def load(cls, filename, dataset = None, device = 'cpu'):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd, dataset = dataset, device = device)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)

@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.neighbors import BallTree
 from swyft.inference.ratioestimation import IsolatedRatio
+import torch
 
 # FIXME: Add docstring
 class Bound:
@@ -54,6 +55,15 @@ class Bound:
             return CompositBound.from_state_dict(state_dict)
         else:
             raise KeyError
+
+    @classmethod
+    def load(cls, filename):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)
 
     @classmethod
     def from_RatioCollection(cls, rc, obs, bound, th = -13.):

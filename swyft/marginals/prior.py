@@ -1,9 +1,10 @@
 import numpy as np
 from swyft.marginals.bounds import Bound, UnitCubeBound
+import torch
 
 class BoundedPrior:
     """Prior with bounds."""
-    def __init__(self, ptrans, bound):
+    def __init__(self, ptrans, bound = None):
         """Instantiate BoundedPrior.
 
         Args:
@@ -11,6 +12,8 @@ class BoundedPrior:
             bound (Bound): Bound on hypercube.
         """
         self.ptrans = ptrans
+        if bound is None:
+            bound = UnitCubeBound(ptrans.zdim)
         self.bound = bound
 
     def sample(self, N): 
@@ -46,18 +49,27 @@ class BoundedPrior:
     def from_state_dict(cls, state_dict):
         ptrans = PriorTransform.from_state_dict(state_dict['ptrans'])
         bound = Bound.from_state_dict(state_dict['bound'])
-        return cls(ptrans, bound)
+        return BoundedPrior(ptrans, bound)
+
+    @classmethod
+    def load(cls, filename):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)
 
 
-class Prior(BoundedPrior):
-    def __init__(self, ptrans):
-        """Generate prior without bounds.  Usually used for initial unbounded prior.
-
-        Args:
-            ptrans (PriorTransform)
-        """
-        bound = UnitCubeBound(ptrans.zdim)
-        super().__init__(ptrans, bound)
+#class Prior(BoundedPrior):
+#    def __init__(self, ptrans):
+#        """Generate prior without bounds.  Usually used for initial unbounded prior.
+#
+#        Args:
+#            ptrans (PriorTransform)
+#        """
+#        bound = UnitCubeBound(ptrans.zdim)
+#        super().__init__(ptrans, bound)
 
 
 class PriorTransform:
@@ -141,3 +153,12 @@ class PriorTransform:
         obj._grid = state_dict['grid']
         obj._table = state_dict['table']
         return obj
+
+    @classmethod
+    def load(cls, filename):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)

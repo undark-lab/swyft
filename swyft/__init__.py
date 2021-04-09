@@ -3,7 +3,7 @@ from .inference import RatioCollection, JoinedRatioCollection
 from .inference.networks import DefaultHead, DefaultTail, GenericTail
 from .ip3 import Dataset
 from .marginals import PosteriorCollection
-from .marginals.prior import PriorTransform, BoundedPrior, Prior
+from .marginals.prior import PriorTransform, BoundedPrior
 from .marginals.bounds import UnitCubeBound, CompositBound, Bound, RectangleBound
 from .posteriors import Posteriors
 from .nn import OnlineNormalizationLayer
@@ -19,7 +19,6 @@ __all__ = [
     "UnitCubeBound",
     "BoundedPrior",
     "PriorTransform",
-    "Prior",
     "PosteriorCollection",
     "Module",
     "DirectoryStore",

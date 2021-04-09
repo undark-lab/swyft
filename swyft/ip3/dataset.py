@@ -1,12 +1,17 @@
 from typing import Callable, List
 
+import logging
+
 import numpy as np
 from torch.utils.data import Dataset as torch_Dataset
+from swyft.marginals.prior import BoundedPrior
 import torch
 
 
 class Dataset(torch_Dataset):
     def __init__(self, N, bounded_prior, store, simhook = None):
+        super().__init__()
+
         # Initialization
         store.grow(N, bounded_prior)
         indices = store.sample(N, bounded_prior)
@@ -16,6 +21,7 @@ class Dataset(torch_Dataset):
 
         self._store = store
         self._simhook = simhook
+
 
     def __len__(self):
         return len(self._indices)
@@ -46,6 +52,37 @@ class Dataset(torch_Dataset):
             x = self._simhook(x, z)
 
         return dict(obs=self._tensorfy(x), par=torch.tensor(u).float())
+
+    def state_dict(self):
+        return dict(indices = self._indices,
+                bounded_prior = self._bounded_prior.state_dict(),
+                simhook = bool(self._simhook)
+                )
+
+    @classmethod
+    def from_state_dict(cls, state_dict, store = None, simhook = None):
+        obj = Dataset.__new__(Dataset)
+        obj._bounded_prior = BoundedPrior.from_state_dict(state_dict['bounded_prior'])
+        obj._indices = state_dict['indices']
+
+        obj._store = store
+        if store is None:
+            logging.warning("No store specified!")
+        obj._simhook = simhook
+        if state_dict['simhook'] and not simhook:
+            logging.warning("A simhook was specified when the dataset was saved, but is missing now.")
+        if not state_dict['simhook'] and simhook:
+            logging.warning("A simhook was specified, but no simhook was specified when the Dataset was saved.")
+        return obj
+
+    def save(self, filename):
+        torch.save(self.state_dict(), filename)
+
+    @classmethod
+    def load(cls, filename, store = None, simhook = None):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd, store = store, simhook = simhook)
+
 
 
 #class Points:

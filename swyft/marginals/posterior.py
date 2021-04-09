@@ -43,3 +43,12 @@ class PosteriorCollection:
             RatioCollection.from_state_dict(state_dict["rc"]),
             BoundedPrior.from_state_dict(state_dict["prior"]),
         )
+
+    @classmethod
+    def load(cls, filename):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)

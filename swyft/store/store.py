@@ -238,9 +238,9 @@ class Store(ABC):
             self._append_z(z_accepted)
             logging.info("  adding %i new samples to simulator store." % sum(accepted))
 
-            # And update intensity function
-            self.u.resize(len(self.u) + 1)
-            self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
+        # And update intensity function
+        self.u.resize(len(self.u) + 1)
+        self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
 
     # FIXME: No Balltree required here, just rejection sampling based on stored intensities.
     def sample(self, N: int, prior) -> List[int]:  # noqa: F821
@@ -259,6 +259,8 @@ class Store(ABC):
         ):
             log_prob_accept = target_intensity - stored_intensity
             if log_prob_accept > 0.0:
+                print(target_intensity)
+                print(stored_intensity)
                 raise LowIntensityError(
                     f"{log_prob_accept} > 0, "
                     " but we expected the log ratio of target intensity function to the store <= 0. "
