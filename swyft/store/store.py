@@ -58,7 +58,6 @@ class Store(ABC):
     def __init__(
         self,
         params,
-        obs_shapes: Shape,
         store: Union[zarr.MemoryStore, zarr.DirectoryStore],
         simulator = None,
         sync_path: Optional[PathType] = None,
@@ -67,7 +66,6 @@ class Store(ABC):
 
         Args:
             params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
-            obs_shapes (dict): Map of obs names to shapes
             store: zarr storage.
             sync_path: path to the cache lock files. Must be accessible to all
                 processes working on the cache.
@@ -85,14 +83,14 @@ class Store(ABC):
 
         logging.debug("Creating Store.")
         logging.debug("  params = %s" % str(params))
-        logging.debug("  obs_shapes = %s" % str(obs_shapes))
 
         if all(key in self.root.keys() for key in ["samples", "metadata"]):
             logging.info("Loading existing store.")
             self._update()
         elif len(self.root.keys()) == 0:
             logging.info("Creating new store.")
-            self._setup_new_store(len(params), obs_shapes, self.root)
+            self._setup_new_store(len(params), simulator.obs_shapes, self.root)
+            logging.debug("  obs_shapes = %s" % str(simulator.obs_shapes))
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
@@ -112,10 +110,7 @@ class Store(ABC):
             self._lock.release()
             logging.debug("Cache unlocked")
 
-
-
-
-    def _setup_new_store(self, zdim, obs_shapes, root) -> None: # Adding observational shapes to store
+    def _setup_new_store(self, zdim, obs_shapes, root, sync_path = None) -> None: # Adding observational shapes to store
         self._lock = None
         if sync_path is not None:
             self._setup_lock(sync_path)
@@ -298,10 +293,8 @@ class Store(ABC):
             self.u.resize(len(self.u) + 1)
             self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
 
-# FIXME: Include lock
 #        self.lock()
-#        self._update()
-#        self.grow(prior, N)
+        self._update()
 #        self.unlock()
 
         # Select points from cache
@@ -421,7 +414,6 @@ class Store(ABC):
         """
         self.lock()
         idx = self._get_indices_to_simulate(indices)
-        #idx = self._get_idx_requiring_sim()
         self._set_simulation_status(idx, SimulationStatus.RUNNING)
         self.unlock()
 
@@ -435,7 +427,6 @@ class Store(ABC):
             logging.debug("No simulations required.")
             return
         else:
-            #z = [{k: v[i] for k, v in self.z.items()} for i in idx]
             z = [self.z[i] for i in idx]
             res = simulator.run(z)
             x_all, validity = list(zip(*res))  # TODO: check other data formats
@@ -480,21 +471,13 @@ class Store(ABC):
             time.sleep(1)
             status = self.get_simulation_status(indices)
 
-
-
-
-
-
-
-
-
 class DirectoryStore(Store):
     def __init__(
         self,
         params,
-        obs_shapes: Shape,
         path: PathType,
         sync_path: Optional[PathType] = None,
+        simulator = None,
     ):
         """Instantiate an iP3 store stored in a directory.
 
@@ -508,7 +491,7 @@ class DirectoryStore(Store):
         self.store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
-            params=params, obs_shapes=obs_shapes, store=self.store, sync_path=sync_path
+            params=params, store=self.store, sync_path=sync_path, simulator=simulator
         )
 
     @classmethod
@@ -529,14 +512,14 @@ class MemoryStore(Store):
     def __init__(
         self,
         params,
-        obs_shapes,
         store=None,
+        simulator=None,
+        sync_path: Optional[PathType] = None,
     ):
         """Instantiate an iP3 store stored in the memory.
 
         Args:
             zdim: Number of z dimensions
-            obs_shapes: Shape of x array
             store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
                 loading.
         """
@@ -546,7 +529,7 @@ class MemoryStore(Store):
         else:
             self.store = store
             logging.debug("Creating MemoryStore from store.")
-        super().__init__(params=params, obs_shapes=obs_shapes, store=self.store, simulator=simulator)
+        super().__init__(params=params, store=self.store, simulator=simulator, sync_path=sync_path)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryStore to a directory."""

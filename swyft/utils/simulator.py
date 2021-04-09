@@ -15,7 +15,7 @@ from swyft.utils import all_finite
 class Simulator:
     """ Setup and run the simulator engine """
 
-    def __init__(self, model, fail_on_non_finite: bool = True):
+    def __init__(self, model, obs_shapes, fail_on_non_finite: bool = True):
         """
         initialte Simulator
 
@@ -25,6 +25,7 @@ class Simulator:
         """
         self.model = model
         self.client = None
+        self.obs_shapes = obs_shapes
         self.fail_on_non_finite = fail_on_non_finite
 
     def set_dask_cluster(self, cluster=None):
