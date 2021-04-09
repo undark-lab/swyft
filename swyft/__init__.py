@@ -9,6 +9,7 @@ from .posteriors import Posteriors
 from .nn import OnlineNormalizationLayer
 from .nn.module import Module
 from .plot import corner, plot1d
+from .utils.simulator import Simulator
 
 __all__ = [
     "Dataset",
@@ -32,4 +33,5 @@ __all__ = [
     "Dataset",
     "corner",
     "plot1d",
+    "Simulator",
 ]
