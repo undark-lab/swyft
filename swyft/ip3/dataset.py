@@ -13,7 +13,6 @@ class Dataset(torch_Dataset):
         super().__init__()
 
         # Initialization
-        store.grow(N, bounded_prior)
         indices = store.sample(N, bounded_prior)
 
         self._bounded_prior = bounded_prior

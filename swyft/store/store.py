@@ -97,6 +97,13 @@ class Store(ABC):
             dtype="f8",
         )
 
+        log_w = root.zeros(  # noqa: F841
+            "log_w",
+            shape=(0,),
+            chunks=(100000,),
+            dtype="f8",
+        )
+
         # Requires simulation flag
         m = root.zeros(  # noqa: F841
             self._filesystem.requires_simulation,
@@ -146,6 +153,7 @@ class Store(ABC):
         self.x = self.root[self._filesystem.obs]
         #self.z = self.root[self._filesystem.par]
         self.z = self.root['z']
+        self.log_w = self.root['log_w']
         self.m = self.root[self._filesystem.requires_simulation]
         self.f = self.root[self._filesystem.failed_simulation]
         assert len(self.f) == len(
@@ -170,7 +178,7 @@ class Store(ABC):
 
         return dict(x=result_x, z=result_z)
 
-    def _append_z(self, z):
+    def _append_z(self, z, log_w):
         """Append z to store content and generate new slots for x."""
         self._update()
 
@@ -185,6 +193,7 @@ class Store(ABC):
             value.resize(*shape)
 
         self.root['z'].append(z)
+        self.root['log_w'].append(log_w)
         #for key, value in self.z.items():
         #    value.append(z[key])
 
@@ -211,67 +220,95 @@ class Store(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def grow(self, N, pdf):  # noqa
-        """Given an intensity function, add parameter samples to the store.
-
-        Args:
-            intensity: target parameter intensity function
-        """
-        # Random Poisson realization - relevant for PPP logic
-        z_prop = pdf.sample(N = np.random.poisson(N))
-
-        # Rejection sampling from proposal list
-        accepted = []
-
-        target_log_intensities = pdf.log_prob(z_prop) + np.log(N)
-        stored_log_intensities = self.log_intensity(z_prop)
-
-        for stored_log_intensity, target_log_intensity in zip(
-            stored_log_intensities, target_log_intensities
-        ):
-            log_prob_reject = np.minimum(0, stored_log_intensity - target_log_intensity)
-            accepted.append(log_prob_reject < np.log(np.random.rand()))
-        z_accepted = z_prop[accepted]
-
-        if sum(accepted) > 0:
-            # Add new entries to store
-            self._append_z(z_accepted)
-            logging.info("  adding %i new samples to simulator store." % sum(accepted))
-
-        # And update intensity function
-        self.u.resize(len(self.u) + 1)
-        self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
-
-    # FIXME: No Balltree required here, just rejection sampling based on stored intensities.
-    def sample(self, N: int, prior) -> List[int]:  # noqa: F821
+    def sample(self, N, pdf):
         self._update()
 
-        accepted = []
-        #zlist = {k: self.z[k][:] for k in (self.z)}
-        zlist = self.z
+        # Generate new points
+        z_prop = pdf.sample(N = np.random.poisson(N))
+        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
+        log_lambda_store = self.log_intensity(z_prop)
+        log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
+        accept_new = log_w > log_lambda_store
+        z_new = z_prop[accept_new]
+        log_w_new = log_w[accept_new]
 
-        stored_intensities = self.log_intensity(zlist)
-        target_intensities = prior.log_prob(zlist) + np.log(N)
-        assert len(self) == len(stored_intensities)
-        assert len(self) == len(target_intensities)
-        for i, (target_intensity, stored_intensity) in enumerate(
-            zip(target_intensities, stored_intensities)
-        ):
-            log_prob_accept = target_intensity - stored_intensity
-            if log_prob_accept > 0.0:
-                print(target_intensity)
-                print(stored_intensity)
-                raise LowIntensityError(
-                    f"{log_prob_accept} > 0, "
-                    " but we expected the log ratio of target intensity function to the store <= 0. "
-                    "There may not be enough samples in the store or "
-                    "a constrained intensity function was not accounted for."
-                )
-            elif log_prob_accept > np.log(np.random.rand()):
-                accepted.append(i)
-            else:
-                continue
-        return accepted
+        # Anything new?
+        if sum(accept_new) > 0:
+            # Add new entries to store
+            self._append_z(z_new, log_w_new)
+            logging.info("  adding %i new samples to simulator store." % sum(accept_new))
+            # Update intensity function
+            self.u.resize(len(self.u) + 1)
+            self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
+
+        # Select points from cache
+        z_store = self.z
+        log_w_store = self.log_w
+        log_lambda_target = pdf.log_prob(z_store) + np.log(N)
+        accept_stored = log_w_store < log_lambda_target
+        indices = np.array(range(len(accept_stored)))[accept_stored]
+
+        return indices
+
+#    def grow(self, N, pdf):  # noqa
+#        """Given an intensity function, add parameter samples to the store.
+#
+#        Args:
+#            intensity: target parameter intensity function
+#        """
+#        # Random Poisson realization - relevant for PPP logic
+#        z_prop = pdf.sample(N = np.random.poisson(N))
+#
+#        # Rejection sampling from proposal list
+#        accepted = []
+#
+#        target_log_intensities = pdf.log_prob(z_prop) + np.log(N)
+#        stored_log_intensities = self.log_intensity(z_prop)
+#
+#        for stored_log_intensity, target_log_intensity in zip(
+#            stored_log_intensities, target_log_intensities
+#        ):
+#            log_prob_reject = np.minimum(0, stored_log_intensity - target_log_intensity)
+#            accepted.append(log_prob_reject < np.log(np.random.rand()))
+#        z_accepted = z_prop[accepted]
+#
+#        if sum(accepted) > 0:
+#            # Add new entries to store
+#            self._append_z(z_accepted)
+#            logging.info("  adding %i new samples to simulator store." % sum(accepted))
+#
+#        # And update intensity function
+#        self.u.resize(len(self.u) + 1)
+#        self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
+#
+#    def sample(self, N: int, prior) -> List[int]:  # noqa: F821
+#        self._update()
+#
+#        accepted = []
+#        zlist = self.z
+#
+#        stored_intensities = self.log_intensity(zlist)
+#        target_intensities = prior.log_prob(zlist) + np.log(N)
+#        assert len(self) == len(stored_intensities)
+#        assert len(self) == len(target_intensities)
+#        for i, (target_intensity, stored_intensity) in enumerate(
+#            zip(target_intensities, stored_intensities)
+#        ):
+#            log_prob_accept = target_intensity - stored_intensity
+#            if log_prob_accept > 0.0:
+#                print(target_intensity)
+#                print(stored_intensity)
+#                raise LowIntensityError(
+#                    f"{log_prob_accept} > 0, "
+#                    " but we expected the log ratio of target intensity function to the store <= 0. "
+#                    "There may not be enough samples in the store or "
+#                    "a constrained intensity function was not accounted for."
+#                )
+#            elif log_prob_accept > np.log(np.random.rand()):
+#                accepted.append(i)
+#            else:
+#                continue
+#        return accepted
 
     def _get_idx_requiring_sim(self):
         indices = []
