@@ -135,6 +135,14 @@ def trainloop(
     percent_validation=0.1,
 ):
     logging.debug("Entering trainloop")
+    logging.debug("  combinations = "+str(combinations))
+    logging.debug("  batch_size = %i"%batch_size)
+    logging.debug("  nworkers = %i"%nworkers)
+    logging.debug("  max_epochs = %i"%max_epochs)
+    logging.debug("  early_stopping_patience = %i"%early_stopping_patience)
+    logging.debug("  lr_schedule = "+str(lr_schedule))
+    logging.debug("  percent_validation = %i"%percent_validation)
+
     percent_train = 1.0 - percent_validation
     ntrain, nvalid = split_length_by_percentage(
         len(dataset), (percent_train, percent_validation)
