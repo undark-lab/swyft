@@ -241,6 +241,8 @@ class Store(ABC):
             self.u.resize(len(self.u) + 1)
             self.u[-1] = dict(pdf = pdf.state_dict(), N = N)
 
+        self._update()
+
         # Select points from cache
         z_store = self.z
         log_w_store = self.log_w
