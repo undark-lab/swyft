@@ -130,3 +130,9 @@ class Posteriors:
     def save(self, filename):
         sd = self.state_dict()
         torch.save(sd, filename)
+
+    @classmethod
+    def from_Microscope(cls, micro):
+        # FIXME: Return copy
+        return micro._posteriors[-1]
+

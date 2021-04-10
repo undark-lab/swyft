@@ -107,10 +107,11 @@ class Store(ABC):
 
     def _setup_new_zarr_store(self, zdim, sim_shapes, root) -> None: # Adding observational shapes to store
         # Parameters
+        # FIXME: Optimize chuck size
         root.zeros(  # noqa: F841
             self._filesystem.pars,
             shape=(0, zdim),
-            chunks=(100000, 1),
+            chunks=(1, zdim),
             dtype="f8",
         )
 

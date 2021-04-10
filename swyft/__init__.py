@@ -10,10 +10,10 @@ from .nn import OnlineNormalizationLayer
 from .nn.module import Module
 from .plot import corner, plot1d
 from .utils.simulator import Simulator
-from .scan import NestedInference
+from .scan import Microscope
 
 __all__ = [
-        "NestedInference",
+    "Microscope",
     "Dataset",
     "Posteriors",
     "Bound",

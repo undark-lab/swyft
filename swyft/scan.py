@@ -25,7 +25,7 @@ class MissingModelError(Exception):
     pass
 
 
-class NestedInference:
+class Microscope:
     """Main SWYFT interface class."""
 
     def __init__(
@@ -115,7 +115,7 @@ class NestedInference:
     def _conv_crit(self, v_old, v_new):
         return v_new/v_old > 0.8
 
-    def run(
+    def focus(
         self,
         max_rounds: int = 10,
     ):

@@ -70,9 +70,6 @@ def train(
                 obs = dict_to_device(
                     sim, device=device, non_blocking=non_blocking
                 )
-#                params = dict_to_device(
-#                    batch["par"], device=device, non_blocking=non_blocking
-##                )
                 params = z.to(device, non_blocking=non_blocking)
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
