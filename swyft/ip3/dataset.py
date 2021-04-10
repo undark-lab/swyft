@@ -49,9 +49,9 @@ class Dataset(torch_Dataset):
 
     def __getitem__(self, idx):
         i = self._indices[idx]
-        x_keys = list(self._store.x)
-        x = {k: self._store.x[k][i] for k in x_keys}
-        z = self._store.z[i]
+        x_keys = list(self._store.sims)
+        x = {k: self._store.sims[k][i] for k in x_keys}
+        z = self._store.pars[i]
         u = self._prior.ptrans.u(z.reshape(1, -1)).flatten()
 
         if self._simhook is not None:
