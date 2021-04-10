@@ -45,14 +45,14 @@ class Bound:
         Args:
             state_dict (dict): State dictionary
         """
-        tag = state_dict['tag']
-        if tag == 'UnitCubeBound':
+        tag = state_dict["tag"]
+        if tag == "UnitCubeBound":
             return UnitCubeBound.from_state_dict(state_dict)
-        elif tag == 'RectangleBound':
+        elif tag == "RectangleBound":
             return RectangleBound.from_state_dict(state_dict)
-        elif tag == 'BallsBound':
+        elif tag == "BallsBound":
             return BallsBound.from_state_dict(state_dict)
-        elif tag == 'CompositBound':
+        elif tag == "CompositBound":
             return CompositBound.from_state_dict(state_dict)
         else:
             raise KeyError
@@ -67,16 +67,19 @@ class Bound:
         torch.save(sd, filename)
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, th = -13.):
-        return CompositBound.from_RatioCollection(rc, obs, bound, th = th)
+    def from_RatioCollection(cls, rc, obs, bound, th=-13.0):
+        return CompositBound.from_RatioCollection(rc, obs, bound, th=th)
 
     @classmethod
-    def from_Posteriors(cls, partitions, post, obs, th = -13.):
-        return CompositBound.from_RatioCollection(partitions, post.ratios, obs, post.bound, th = th)
+    def from_Posteriors(cls, partitions, post, obs, th=-13.0):
+        return CompositBound.from_RatioCollection(
+            partitions, post.ratios, obs, post.bound, th=th
+        )
 
 
 class UnitCubeBound(Bound):
     """The unit hypercube bound."""
+
     def __init__(self, udim):
         """Initialize unit hypercube bound.
 
@@ -84,7 +87,7 @@ class UnitCubeBound(Bound):
             udim (int): Number of parameters.
         """
         self._udim = udim
-        self._volume = 1.
+        self._volume = 1.0
 
     @property
     def volume(self):
@@ -98,15 +101,15 @@ class UnitCubeBound(Bound):
         return np.random.rand(N, self.udim)
 
     def __call__(self, u):
-        b = np.where(u <= 1., np.where(u >= 0., 1., 0.), 0.)
+        b = np.where(u <= 1.0, np.where(u >= 0.0, 1.0, 0.0), 0.0)
         return b.prod(axis=-1)
 
     def state_dict(self):
-        return dict(tag='UnitCubeBound', udim=self.udim)
+        return dict(tag="UnitCubeBound", udim=self.udim)
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        return cls(state_dict['udim'])
+        return cls(state_dict["udim"])
 
 
 class RectangleBound(Bound):
@@ -122,30 +125,30 @@ class RectangleBound(Bound):
 
     @property
     def volume(self):
-        V = 1.
+        V = 1.0
         for i in range(self.udim):
-            V *= self._rec_bounds[i,1] - self._rec_bounds[i,0]
+            V *= self._rec_bounds[i, 1] - self._rec_bounds[i, 0]
         return V
 
     @property
     def udim(self):
         return len(self._rec_bounds)
-            
+
     def sample(self, N):
         u = np.random.rand(N, self.udim)
         for i in range(self.udim):
-            u[:,i] *= self._rec_bounds[i,1]-self._rec_bounds[i,0]
-            u[:,i] += self._rec_bounds[i,0]
+            u[:, i] *= self._rec_bounds[i, 1] - self._rec_bounds[i, 0]
+            u[:, i] += self._rec_bounds[i, 0]
         return u
 
     def __call__(self, u):
         m = np.ones(len(u))
         for i, v in enumerate(self._rec_bounds):
-            m *= np.where(u[:,i] >= v[0], np.where(u[:,i] <= v[1], 1., 0.), 0.)
+            m *= np.where(u[:, i] >= v[0], np.where(u[:, i] <= v[1], 1.0, 0.0), 0.0)
         return m > 0.5
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, partition = None, th = -13, n = 10000):
+    def from_RatioCollection(cls, rc, obs, bound, partition=None, th=-13, n=10000):
         """Generate new RectangleBound object based on RatioCollection.
 
         Args:
@@ -161,24 +164,24 @@ class RectangleBound(Bound):
         u = bound.sample(n)
         ratios = rc.ratios(obs, u)
         res = np.zeros((udim, 2))
-        res[:,1] = 1.
+        res[:, 1] = 1.0
         for comb, v in ratios.items():
             for i in comb:
-                us = u[:,i][v-v.max() > th]
+                us = u[:, i][v - v.max() > th]
                 res[i, 0] = us.min()
                 res[i, 1] = us.max()
 
         if partition is not None:
             res = res[np.array(partition)]
-        
+
         return cls(res)
 
     def state_dict(self):
-        return dict(tag='RectangleBound', rec_bounds=self._rec_bounds)
+        return dict(tag="RectangleBound", rec_bounds=self._rec_bounds)
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        return cls(state_dict['rec_bounds'])
+        return cls(state_dict["rec_bounds"])
 
 
 class BallsBound(Bound):
@@ -232,7 +235,7 @@ class BallsBound(Bound):
         out, err = vol_est.mean(), vol_est.std() / np.sqrt(N)
         rel = err / out
         if rel > 0.01:
-            logging.debug("WARNING: Rel volume uncertainty is %.4g"%rel)
+            logging.debug("WARNING: Rel volume uncertainty is %.4g" % rel)
         return out
 
     def sample(self, N):
@@ -301,6 +304,7 @@ class BallsBound(Bound):
 
 class CompositBound(Bound):
     """Composit bound object. Product of multiple bounds."""
+
     def __init__(self, bounds_map, udim):
         """
         Args:
@@ -335,7 +339,7 @@ class CompositBound(Bound):
         return sum(res) == len(res)
 
     @classmethod
-    def from_RatioCollection(cls, partitions, rc, obs, bound, th = -13.):
+    def from_RatioCollection(cls, partitions, rc, obs, bound, th=-13.0):
         """Generate new CompositBound object based on RatioCollection.
 
         Args:
@@ -361,36 +365,37 @@ class CompositBound(Bound):
         if len(idx_rec) > 0:
             partition = tuple(idx_rec)
             bounds[partition] = RectangleBound.from_RatioCollection(
-                    rc, obs, bound, th = th, partition = partition)
+                rc, obs, bound, th=th, partition=partition
+            )
 
         return cls(bounds, udim)
 
-#        #rb = RectangleBound.from_RatioCollection(rc, obs, th, udim)
-#        for comb in rc.param_list:
-#            if len(comb) == 1:  # 1-dim case
-#                bound = UnitCubeBound(1)
-#                ratio = IsolatedRatio(rc, obs, comb, udim)
-#                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
-#            elif len(comb) == 2:  # 2-dim case
-#                bound = UnitCubeBound(2)  
-#                ratio = IsolatedRatio(rc, obs, comb, udim)
-#                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
-#            else:
-#                raise NotImplementedError
-#            bounds[comb] = b
-#
-#        return cls(bounds, udim)
+    #        #rb = RectangleBound.from_RatioCollection(rc, obs, th, udim)
+    #        for comb in rc.param_list:
+    #            if len(comb) == 1:  # 1-dim case
+    #                bound = UnitCubeBound(1)
+    #                ratio = IsolatedRatio(rc, obs, comb, udim)
+    #                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
+    #            elif len(comb) == 2:  # 2-dim case
+    #                bound = UnitCubeBound(2)
+    #                ratio = IsolatedRatio(rc, obs, comb, udim)
+    #                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
+    #            else:
+    #                raise NotImplementedError
+    #            bounds[comb] = b
+    #
+    #        return cls(bounds, udim)
 
     def state_dict(self):
         state_dict = dict(
-                tag="CompositBound",
-                udim=self._udim,
-                bounds = {k: v.state_dict() for k, v in self._bounds.items()}
-                )
+            tag="CompositBound",
+            udim=self._udim,
+            bounds={k: v.state_dict() for k, v in self._bounds.items()},
+        )
         return state_dict
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        bounds = {k: Bound.from_state_dict(v) for k, v in state_dict['bounds'].items()}
-        udim = state_dict['udim']
+        bounds = {k: Bound.from_state_dict(v) for k, v in state_dict["bounds"].items()}
+        udim = state_dict["udim"]
         return cls(bounds, udim)

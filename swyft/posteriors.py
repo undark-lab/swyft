@@ -3,7 +3,12 @@ from warnings import warn
 
 import torch
 from swyft.store import MemoryStore
-from swyft.inference import DefaultHead, DefaultTail, RatioCollection, JoinedRatioCollection
+from swyft.inference import (
+    DefaultHead,
+    DefaultTail,
+    RatioCollection,
+    JoinedRatioCollection,
+)
 from swyft.marginals.prior import Prior
 from swyft.ip3 import Dataset
 from swyft.marginals import PosteriorCollection
@@ -12,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 
 class Posteriors:
-    def __init__(self, dataset, simhook = None):
+    def __init__(self, dataset, simhook=None):
         # Store relevant information about dataset
         self._prior = dataset.prior
         self._indices = dataset.indices
@@ -24,13 +29,13 @@ class Posteriors:
 
     def infer(
         self,
-        partitions, 
+        partitions,
         train_args: dict = {},
         head=DefaultHead,
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        device = 'cpu'
+        device="cpu",
     ):
         """Perform 1-dim marginal focus fits.
 
@@ -53,7 +58,7 @@ class Posteriors:
             tail_args=tail_args,
             train_args=train_args,
             N=ntrain,
-            device=device
+            device=device,
         )
         self._ratios.append(re)
 
@@ -75,16 +80,7 @@ class Posteriors:
         return JoinedRatioCollection(self._ratios[::-1])
 
     def _train(
-        self,
-        prior,
-        param_list,
-        N,
-        train_args,
-        head,
-        tail,
-        head_args,
-        tail_args,
-        device
+        self, prior, param_list, N, train_args, head, tail, head_args, tail_args, device
     ):
         if param_list is None:
             param_list = prior.params()
@@ -103,29 +99,31 @@ class Posteriors:
 
     def state_dict(self):
         state_dict = dict(
-                prior=self._prior.state_dict(),
-                indices=self._indices,
-                N=self._N,
-                ratios=[r.state_dict() for r in self._ratios],
-                )
+            prior=self._prior.state_dict(),
+            indices=self._indices,
+            N=self._N,
+            ratios=[r.state_dict() for r in self._ratios],
+        )
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict, dataset = None, device = 'cpu'):
+    def from_state_dict(cls, state_dict, dataset=None, device="cpu"):
         obj = Posteriors.__new__(Posteriors)
-        obj._prior = Prior.from_state_dict(state_dict['prior'])
-        obj._indices = state_dict['indices']
-        obj._N = state_dict['N']
-        obj._ratios = [RatioCollection.from_state_dict(sd) for sd in state_dict['ratios']]
+        obj._prior = Prior.from_state_dict(state_dict["prior"])
+        obj._indices = state_dict["indices"]
+        obj._N = state_dict["N"]
+        obj._ratios = [
+            RatioCollection.from_state_dict(sd) for sd in state_dict["ratios"]
+        ]
 
         obj._dataset = dataset
         obj._device = device
         return obj
 
     @classmethod
-    def load(cls, filename, dataset = None, device = 'cpu'):
+    def load(cls, filename, dataset=None, device="cpu"):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd, dataset = dataset, device = device)
+        return cls.from_state_dict(sd, dataset=dataset, device=device)
 
     def save(self, filename):
         sd = self.state_dict()
@@ -135,4 +133,3 @@ class Posteriors:
     def from_Microscope(cls, micro):
         # FIXME: Return copy
         return micro._posteriors[-1]
-

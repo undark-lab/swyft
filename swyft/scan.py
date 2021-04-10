@@ -4,7 +4,12 @@ from warnings import warn
 import numpy as np
 
 from swyft.store import MemoryStore
-from swyft.inference import DefaultHead, DefaultTail, RatioCollection, JoinedRatioCollection
+from swyft.inference import (
+    DefaultHead,
+    DefaultTail,
+    RatioCollection,
+    JoinedRatioCollection,
+)
 from swyft.ip3 import Dataset
 from swyft.ip3.exceptions import NoPointsError
 from swyft.marginals import PosteriorCollection
@@ -20,6 +25,7 @@ class RoundStatus:
     Initialized = 0
     Simulated = 1
     Done = 2
+
 
 class MissingModelError(Exception):
     pass
@@ -38,10 +44,8 @@ class Microscope:
         device="cpu",
         Ninit=3000,
         Nmax=100000,
-
         head=DefaultHead,
         tail=DefaultTail,
-
         density_factor=2.0,
         train_args: dict = {},
         head_args: dict = {},
@@ -110,10 +114,10 @@ class Microscope:
         return self._initial_prior
 
     def _update_crit(self, N_prev, volumes):
-        return int(N_prev*1.5)
+        return int(N_prev * 1.5)
 
     def _conv_crit(self, v_old, v_new):
-        return v_new/v_old > 0.8
+        return v_new / v_old > 0.8
 
     def focus(
         self,
@@ -133,23 +137,32 @@ class Microscope:
         while self._status != 5 and len(self._next_priors) < max_rounds:
             # Define dataset
             if self._status == 0:
-                logging.info("Starting round %i"%(len(self._datasets)+1))
-                logging.debug("Step 0: Initializing dataset for round %i"%(len(self._datasets)+1))
+                logging.info("Starting round %i" % (len(self._datasets) + 1))
+                logging.debug(
+                    "Step 0: Initializing dataset for round %i"
+                    % (len(self._datasets) + 1)
+                )
                 if len(self._datasets) == 0:
                     N = self._config["Ninit"]
                 else:
                     N_prev = len(self._datasets[-1])
                     N = self._update_crit(N_prev, self.volumes)
-                logging.debug("  dataset size N = %i"%N)
-                prior = self._initial_prior if len(self._next_priors) == 0 else self._next_priors[-1]
-                dataset = Dataset(N, prior, store = self._store, simhook = self._simhook)
+                logging.debug("  dataset size N = %i" % N)
+                prior = (
+                    self._initial_prior
+                    if len(self._next_priors) == 0
+                    else self._next_priors[-1]
+                )
+                dataset = Dataset(N, prior, store=self._store, simhook=self._simhook)
 
                 self._datasets.append(dataset)
                 self._status = 1
 
             # Perform simulations
             elif self._status == 1:
-                logging.debug("Step 1: Perform simulations for round %i"%(len(self._datasets)))
+                logging.debug(
+                    "Step 1: Perform simulations for round %i" % (len(self._datasets))
+                )
                 if self._datasets[-1].requires_sim:
                     self._datasets[-1].simulate()
                     if self._datasets[-1].requires_sim:
@@ -159,19 +172,27 @@ class Microscope:
 
             # Perform training
             elif self._status == 2:
-                logging.debug("Step 2: Training for round %i"%(len(self._datasets)))
+                logging.debug("Step 2: Training for round %i" % (len(self._datasets)))
                 dataset = self._datasets[-1]
                 posteriors = Posteriors(dataset)
-                posteriors.infer(self._partitions, device = self._device, train_args = self._config["train_args"])
+                posteriors.infer(
+                    self._partitions,
+                    device=self._device,
+                    train_args=self._config["train_args"],
+                )
 
                 self._posteriors.append(posteriors)
                 self._status = 3
 
             # Generate new constrained prior
             elif self._status == 3:
-                logging.debug("Step 3: Generate new bounds from round %i"%(len(self._datasets)))
+                logging.debug(
+                    "Step 3: Generate new bounds from round %i" % (len(self._datasets))
+                )
                 posteriors = self._posteriors[-1]
-                bound = Bound.from_Posteriors(self._partitions, posteriors, self._obs, th = -13)
+                bound = Bound.from_Posteriors(
+                    self._partitions, posteriors, self._obs, th=-13
+                )
                 prior = self._datasets[-1].prior
                 new_prior = prior.rebounded(bound)
 
@@ -180,17 +201,21 @@ class Microscope:
 
             # Check convergence
             elif self._status == 4:
-                logging.debug("Step 4: Convergence check for round %i"%(len(self._datasets)))
+                logging.debug(
+                    "Step 4: Convergence check for round %i" % (len(self._datasets))
+                )
                 v_old = self._datasets[-1].prior.bound.volume
                 v_new = self._next_priors[-1].bound.volume
-                logging.debug("  old volume = %.4g"%v_old)
-                logging.debug("  new volume = %.4g"%v_new)
+                logging.debug("  old volume = %.4g" % v_old)
+                logging.debug("  new volume = %.4g" % v_new)
                 converged = self._conv_crit(v_old, v_new)
                 self._status = 5 if converged else 0
 
     @property
     def volumes(self):
-        return [self._datasets[0].prior.bound.volume] + [prior.bound.volume for prior in self._next_priors]
+        return [self._datasets[0].prior.bound.volume] + [
+            prior.bound.volume for prior in self._next_priors
+        ]
 
     @property
     def N(self):
@@ -203,6 +228,7 @@ class Microscope:
     @property
     def requires_sim(self):
         return self._status == 2
+
 
 #    def state_dict(self):
 #        """Return `state_dict`."""

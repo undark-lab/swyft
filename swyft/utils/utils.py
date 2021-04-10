@@ -124,7 +124,11 @@ def sample_diagnostics(samples, true_posteriors={}, true_params={}):
 
 
 def estimate_coverage(
-    marginals, dataset, nrounds=10, nsamples=1000, cred_level=[0.68268, 0.95450, 0.99730]
+    marginals,
+    dataset,
+    nrounds=10,
+    nsamples=1000,
+    cred_level=[0.68268, 0.95450, 0.99730],
 ):
     """Estimate coverage of amortized marginals for dataset.
 

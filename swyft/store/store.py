@@ -47,7 +47,7 @@ class Store(ABC):
         self,
         params: Union[int, list],
         zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
-        simulator = None,
+        simulator=None,
         sync_path: Optional[PathType] = None,
     ):
         """Initialize Store content dimensions.
@@ -62,7 +62,7 @@ class Store(ABC):
         self._simulator = simulator
 
         if isinstance(params, int):
-            params = ['z%i'%i for i in range(params)]
+            params = ["z%i" % i for i in range(params)]
         self.params = params
 
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
@@ -75,7 +75,9 @@ class Store(ABC):
             self._update()
         elif len(self._root.keys()) == 0:
             logging.info("Creating new store.")
-            self._setup_new_zarr_store(len(self.params), simulator.sim_shapes, self._root)
+            self._setup_new_zarr_store(
+                len(self.params), simulator.sim_shapes, self._root
+            )
             logging.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
             raise KeyError(
@@ -105,7 +107,9 @@ class Store(ABC):
             self._lock.release()
             logging.debug("Cache unlocked")
 
-    def _setup_new_zarr_store(self, zdim, sim_shapes, root) -> None: # Adding observational shapes to store
+    def _setup_new_zarr_store(
+        self, zdim, sim_shapes, root
+    ) -> None:  # Adding observational shapes to store
         # Parameters
         # FIXME: Optimize chuck size
         root.zeros(  # noqa: F841
@@ -180,12 +184,12 @@ class Store(ABC):
 
     def log_lambda(self, z: np.ndarray) -> np.ndarray:
         self._update()
-        d = -np.inf * np.ones_like(z[:,0])
+        d = -np.inf * np.ones_like(z[:, 0])
         if len(self.log_lambdas) == 0:
             return d
         for i in range(len(self.log_lambdas)):
-            pdf = Prior.from_state_dict(self.log_lambdas[i]['pdf'])
-            N = self.log_lambdas[i]['N']
+            pdf = Prior.from_state_dict(self.log_lambdas[i]["pdf"])
+            N = self.log_lambdas[i]["N"]
             r = pdf.log_prob(z) + np.log(N)
             d = np.where(r > d, r, d)
         return d
@@ -194,7 +198,7 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        z_prop = pdf.sample(N = np.random.poisson(N))
+        z_prop = pdf.sample(N=np.random.poisson(N))
         log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
         log_lambda_store = self.log_lambda(z_prop)
         log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
@@ -206,10 +210,12 @@ class Store(ABC):
         if sum(accept_new) > 0:
             # Add new entries to store
             self._append_new_points(z_new, log_w_new)
-            logging.info("  adding %i new samples to simulator store." % sum(accept_new))
+            logging.info(
+                "  adding %i new samples to simulator store." % sum(accept_new)
+            )
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
-            self.log_lambdas[-1] = dict(pdf = pdf.state_dict(), N = N)
+            self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
 
         self._update()
 
@@ -249,7 +255,9 @@ class Store(ABC):
         assert status in list(SimulationStatus), f"Unknown status {status}"
         current_status = self.sim_status.oindex[indices]
         if np.any(current_status == status):
-            logging.warning(f"Changing simulation status to {status}, but some simulations have already status {status}")
+            logging.warning(
+                f"Changing simulation status to {status}, but some simulations have already status {status}"
+            )
         self.sim_status.oindex[indices] = status
 
     def get_simulation_status(self, indices=None):
@@ -263,9 +271,13 @@ class Store(ABC):
             list of simulation statuses
         """
         self._update()
-        return self.sim_status.oindex[indices] if indices is not None else self.sim_status[:]
+        return (
+            self.sim_status.oindex[indices]
+            if indices is not None
+            else self.sim_status[:]
+        )
 
-    def requires_sim(self, indices = None) -> bool:
+    def requires_sim(self, indices=None) -> bool:
         """Check whether there are parameters which require a matching simulation."""
         self._update()
         return self._get_indices_to_simulate(indices).size > 0
@@ -372,7 +384,7 @@ class Store(ABC):
 
     @staticmethod
     def _extract_sim_shapes_from_zarr_group(group):
-        return {k:v.shape[1:] for k,v in group[Cache._filesystem.sims].items()}
+        return {k: v.shape[1:] for k, v in group[Cache._filesystem.sims].items()}
 
     @staticmethod
     def _extract_params_from_zarr_group(group):
@@ -385,7 +397,7 @@ class DirectoryStore(Store):
         params,
         path: PathType,
         sync_path: Optional[PathType] = None,
-        simulator = None,
+        simulator=None,
     ):
         """Instantiate an iP3 store stored in a directory.
 
@@ -399,7 +411,10 @@ class DirectoryStore(Store):
         zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
-            params=params, zarr_store=zarr_store, sync_path=sync_path, simulator=simulator
+            params=params,
+            zarr_store=zarr_store,
+            sync_path=sync_path,
+            simulator=simulator,
         )
 
     @classmethod
@@ -432,7 +447,12 @@ class MemoryStore(Store):
             logging.debug("Creating new empty MemoryStore.")
         else:
             logging.debug("Creating MemoryStore from zarr_store.")
-        super().__init__(params=params, zarr_store=zarr_store, simulator=simulator, sync_path=sync_path)
+        super().__init__(
+            params=params,
+            zarr_store=zarr_store,
+            simulator=simulator,
+            sync_path=sync_path,
+        )
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryStore to a directory."""
@@ -458,9 +478,9 @@ class MemoryStore(Store):
         xshape = cls._extract_xshape_from_zarr_group(group)
         zdim = cls._extract_zdim_from_zarr_group(group)
         return MemoryStore(zdim=zdim, xshape=xshape, store=memory_store)
-        #sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
-        #z = cls._extract_params_from_zarr_group(group)
-        #return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
+        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
+        # z = cls._extract_params_from_zarr_group(group)
+        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
 
     @classmethod
     def from_simulator(cls, model, prior):

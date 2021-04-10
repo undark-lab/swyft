@@ -28,7 +28,7 @@ def _combine(params, param_list):
         n = shape[0]
         z = torch.zeros((n,) + z_shape).to(device)
         for i, c in enumerate(param_list):
-            pars = torch.stack([params[:,k] for k in c]).T
+            pars = torch.stack([params[:, k] for k in c]).T
             z[:, i, :] = pars
     return z
 

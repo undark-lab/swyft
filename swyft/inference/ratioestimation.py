@@ -16,8 +16,10 @@ from swyft.utils import (
     get_obs_shapes,
 )
 
+
 class IsolatedRatio:
     """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
+
     def __init__(self, rc, obs, comb, zdim):
         self._rc = rc
         self._obs = obs
@@ -170,7 +172,9 @@ class RatioCollection:
         else:
             ratios = []
             for i in range(npar // n_batch + 1):
-                params_batch = torch.tensor(params[i*n_batch : (i+1)*n_batch, :]).to(self.device)
+                params_batch = torch.tensor(
+                    params[i * n_batch : (i + 1) * n_batch, :]
+                ).to(self.device)
                 n = len(params_batch)
                 f_batch = f.expand(n, -1)
                 tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
@@ -202,4 +206,3 @@ class RatioCollection:
             device
         )
         return re
-

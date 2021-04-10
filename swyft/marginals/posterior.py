@@ -13,7 +13,7 @@ class PosteriorCollection:
             prior (BoundPrior)
         """
         self._rc = rc
-        self._prior = prior 
+        self._prior = prior
 
     def sample(self, N, obs0):
         """Resturn weighted posterior samples for given observation.

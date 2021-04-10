@@ -1,8 +1,8 @@
 ## pylint: disable=no-member, not-callable
-#import torch
-#from torch.utils.data import Dataset
+# import torch
+# from torch.utils.data import Dataset
 #
-#class ParamDictDataset(Dataset):
+# class ParamDictDataset(Dataset):
 #    def __init__(self, points):
 #        self.points = points
 #
