@@ -76,9 +76,7 @@ class Store(ABC):
         self.store = store
         self.params = params
         self._simulator = simulator
-        synchronizer = (
-            None if sync_path is None else zarr.ProcessSynchronizer(sync_path)
-        )
+        synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self.root = zarr.group(store=self.store, synchronizer=synchronizer)
 
         logging.debug("Creating Store.")
@@ -96,6 +94,10 @@ class Store(ABC):
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
+        self._lock = None
+        if sync_path is not None:
+            self._setup_lock(sync_path)
+
     def _setup_lock(self, sync_path):
         path = os.path.join(sync_path, "cache.lock")
         self._lock = fasteners.InterProcessLock(path)
@@ -110,10 +112,10 @@ class Store(ABC):
             self._lock.release()
             logging.debug("Cache unlocked")
 
-    def _setup_new_store(self, zdim, obs_shapes, root, sync_path = None) -> None: # Adding observational shapes to store
-        self._lock = None
-        if sync_path is not None:
-            self._setup_lock(sync_path)
+    def _setup_new_store(self, zdim, obs_shapes, root) -> None: # Adding observational shapes to store
+#        self._lock = None
+#        if sync_path is not None:
+#            self._setup_lock(sync_path)
         # assert (
         #    zdim == self.zdim
         # ), f"Your given zdim, {zdim}, was not equal to the one defined in zarr {self.zdim}."
@@ -349,11 +351,10 @@ class Store(ABC):
         self._update()
         return self.m.oindex[indices] if indices is not None else self.m[:]
 
-    @property
-    def requires_sim(self) -> bool:
+    def requires_sim(self, indices = None) -> bool:
         """Check whether there are parameters which require a matching simulation."""
         self._update()
-        return self._get_indices_to_simulate().size > 0
+        return self._get_indices_to_simulate(indices).size > 0
 
     def _get_indices_failed_simulations(self):
         return np.flatnonzero(self.f[:])

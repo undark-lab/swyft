@@ -45,6 +45,9 @@ class Prior:
     def state_dict(self):
         return dict(ptrans=self.ptrans.state_dict(), bound=self.bound.state_dict())
 
+    def rebounded(self, bound):
+        return Prior(self.ptrans, bound)
+
     @classmethod
     def from_uv(cls, uv, zdim, bound = None, n = 10000):
         ptrans = PriorTransform(uv, zdim, n=n)

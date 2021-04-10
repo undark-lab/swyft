@@ -87,7 +87,7 @@ class RatioCollection:
         self._train_diagnostics = []
 
     def _init_networks(self, dataset):
-        obs_shapes = get_obs_shapes(dataset[0]["obs"])
+        obs_shapes = get_obs_shapes(dataset[0][0])
         self.head = self._uninitialized_head(
             obs_shapes, **self._uninitialized_head_args
         ).to(self.device)

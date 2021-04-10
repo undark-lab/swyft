@@ -37,12 +37,19 @@ class Dataset(torch_Dataset):
         return self._indices
 
     def simulate(self):
-        self._store.simulate()
+        self._store.simulate(self.indices)
+
+    @property
+    def requires_sim(self):
+        return self._store.requires_sim(self.indices)
+
+    @property
+    def z(self):
+        return np.array([self._store.z[i] for i in self._indices])
 
     def __getitem__(self, idx):
         i = self._indices[idx]
         x_keys = list(self._store.x)
-        z_keys = list(self._store.z)
         x = {k: self._store.x[k][i] for k in x_keys}
         z = self._store.z[i]
         u = self._prior.ptrans.u(z.reshape(1, -1)).flatten()
@@ -50,7 +57,7 @@ class Dataset(torch_Dataset):
         if self._simhook is not None:
             x = self._simhook(x, z)
 
-        return dict(obs=self._tensorfy(x), par=torch.tensor(u).float())
+        return (self._tensorfy(x), torch.tensor(u).float())
 
     def state_dict(self):
         return dict(indices = self._indices,

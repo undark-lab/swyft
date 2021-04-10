@@ -65,14 +65,15 @@ def train(
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
+                sim, z = batch
 
                 obs = dict_to_device(
-                    batch["obs"], device=device, non_blocking=non_blocking
+                    sim, device=device, non_blocking=non_blocking
                 )
 #                params = dict_to_device(
 #                    batch["par"], device=device, non_blocking=non_blocking
 ##                )
-                params = batch["par"].to(device, non_blocking=non_blocking)
+                params = z.to(device, non_blocking=non_blocking)
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
 

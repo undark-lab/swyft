@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.neighbors import BallTree
 from swyft.inference.ratioestimation import IsolatedRatio
 import torch
+import logging
 
 # FIXME: Add docstring
 class Bound:
@@ -70,8 +71,8 @@ class Bound:
         return CompositBound.from_RatioCollection(rc, obs, bound, th = th)
 
     @classmethod
-    def from_Posteriors(cls, post, obs, th = -13.):
-        return CompositBound.from_RatioCollection(post.ratios, obs, post.bound, th = th)
+    def from_Posteriors(cls, partitions, post, obs, th = -13.):
+        return CompositBound.from_RatioCollection(partitions, post.ratios, obs, post.bound, th = th)
 
 
 class UnitCubeBound(Bound):
@@ -144,7 +145,7 @@ class RectangleBound(Bound):
         return m > 0.5
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, th = -13, n = 10000):
+    def from_RatioCollection(cls, rc, obs, bound, partition = None, th = -13, n = 10000):
         """Generate new RectangleBound object based on RatioCollection.
 
         Args:
@@ -161,11 +162,14 @@ class RectangleBound(Bound):
         ratios = rc.ratios(obs, u)
         res = np.zeros((udim, 2))
         res[:,1] = 1.
-        for k, v in ratios.items():
-            for i in k:
+        for comb, v in ratios.items():
+            for i in comb:
                 us = u[:,i][v-v.max() > th]
                 res[i, 0] = us.min()
                 res[i, 1] = us.max()
+
+        if partition is not None:
+            res = res[np.array(partition)]
         
         return cls(res)
 
@@ -228,7 +232,7 @@ class BallsBound(Bound):
         out, err = vol_est.mean(), vol_est.std() / np.sqrt(N)
         rel = err / out
         if rel > 0.01:
-            print("WARNING: Rel volume uncertainty is:", rel)
+            logging.debug("WARNING: Rel volume uncertainty is %.4g"%rel)
         return out
 
     def sample(self, N):
@@ -331,7 +335,7 @@ class CompositBound(Bound):
         return sum(res) == len(res)
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, th = -13.):
+    def from_RatioCollection(cls, partitions, rc, obs, bound, th = -13.):
         """Generate new CompositBound object based on RatioCollection.
 
         Args:
@@ -341,9 +345,24 @@ class CompositBound(Bound):
             th (float): Threshold value, default -13
         """
         bounds = {}
-        # FIXME: Do something more clever here
         udim = bound.udim
-        bounds[tuple(range(udim))] = RectangleBound.from_RatioCollection(rc, obs, bound, th = th)
+        idx_rec = []
+
+        for partition in partitions:
+            if len(partition) == 1:
+                idx_rec.append(partition[0])
+            else:
+                # FIXME: Use actual current bound
+                subbound = UnitCubeBound(len(partition))
+                ratio = IsolatedRatio(rc, obs, partition, udim)
+                b = BallsBound.from_IsolatedRatio(ratio, obs, subbound)
+                bounds[partition] = b
+
+        if len(idx_rec) > 0:
+            partition = tuple(idx_rec)
+            bounds[partition] = RectangleBound.from_RatioCollection(
+                    rc, obs, bound, th = th, partition = partition)
+
         return cls(bounds, udim)
 
 #        #rb = RectangleBound.from_RatioCollection(rc, obs, th, udim)
