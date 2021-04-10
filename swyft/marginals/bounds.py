@@ -370,22 +370,6 @@ class CompositBound(Bound):
 
         return cls(bounds, udim)
 
-    #        #rb = RectangleBound.from_RatioCollection(rc, obs, th, udim)
-    #        for comb in rc.param_list:
-    #            if len(comb) == 1:  # 1-dim case
-    #                bound = UnitCubeBound(1)
-    #                ratio = IsolatedRatio(rc, obs, comb, udim)
-    #                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
-    #            elif len(comb) == 2:  # 2-dim case
-    #                bound = UnitCubeBound(2)
-    #                ratio = IsolatedRatio(rc, obs, comb, udim)
-    #                b = BallsBound.from_IsolatedRatio(ratio, obs, bound)
-    #            else:
-    #                raise NotImplementedError
-    #            bounds[comb] = b
-    #
-    #        return cls(bounds, udim)
-
     def state_dict(self):
         state_dict = dict(
             tag="CompositBound",
