@@ -86,16 +86,11 @@ class NestedInference:
 
         self._datasets = []
         self._posteriors = []
-        self._priors = []
+        self._next_priors = []
 
     def status(self):
         pass
 
-#    @property
-#    def num_elapsed_rounds(self):
-#        """Number of rounds."""
-#        return len(self._history)
-#
     @property
     def obs(self):
         """The target observation."""
@@ -135,7 +130,7 @@ class NestedInference:
             max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
         """
 
-        while self._status != 5 and len(self._priors) < max_rounds:
+        while self._status != 5 and len(self._next_priors) < max_rounds:
             # Define dataset
             if self._status == 0:
                 logging.info("Starting round %i"%(len(self._datasets)+1))
@@ -146,7 +141,7 @@ class NestedInference:
                     N_prev = len(self._datasets[-1])
                     N = self._update_crit(N_prev, self.volumes)
                 logging.debug("  dataset size N = %i"%N)
-                prior = self._initial_prior if len(self._priors) == 0 else self._priors[-1]
+                prior = self._initial_prior if len(self._next_priors) == 0 else self._next_priors[-1]
                 dataset = Dataset(N, prior, store = self._store, simhook = self._simhook)
 
                 self._datasets.append(dataset)
@@ -180,14 +175,14 @@ class NestedInference:
                 prior = self._datasets[-1].prior
                 new_prior = prior.rebounded(bound)
 
-                self._priors.append(new_prior)
+                self._next_priors.append(new_prior)
                 self._status = 4
 
             # Check convergence
             elif self._status == 4:
                 logging.debug("Step 4: Convergence check for round %i"%(len(self._datasets)))
                 v_old = self._datasets[-1].prior.bound.volume
-                v_new = self._priors[-1].bound.volume
+                v_new = self._next_priors[-1].bound.volume
                 logging.debug("  old volume = %.4g"%v_old)
                 logging.debug("  new volume = %.4g"%v_new)
                 converged = self._conv_crit(v_old, v_new)
@@ -195,7 +190,7 @@ class NestedInference:
 
     @property
     def volumes(self):
-        return [self._datasets[0].prior.bound.volume] + [prior.bound.volume for prior in self._priors]
+        return [self._datasets[0].prior.bound.volume] + [prior.bound.volume for prior in self._next_priors]
 
     @property
     def N(self):
@@ -208,7 +203,6 @@ class NestedInference:
     @property
     def requires_sim(self):
         return self._status == 2
-
 
 #    def state_dict(self):
 #        """Return `state_dict`."""

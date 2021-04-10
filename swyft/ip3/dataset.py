@@ -44,8 +44,8 @@ class Dataset(torch_Dataset):
         return self._store.requires_sim(self.indices)
 
     @property
-    def z(self):
-        return np.array([self._store.z[i] for i in self._indices])
+    def pars(self):
+        return np.array([self._store.pars[i] for i in self._indices])
 
     def __getitem__(self, idx):
         i = self._indices[idx]
@@ -88,78 +88,3 @@ class Dataset(torch_Dataset):
     def load(cls, filename, store = None, simhook = None):
         sd = torch.load(filename)
         return cls.from_state_dict(sd, store = store, simhook = simhook)
-
-
-
-#class Points:
-#    """Points references (observation, parameter) pairs drawn from an inhomogenous Poisson Point Proccess (iP3) Store.
-#    Points implements this via a list of indices corresponding to data contained in a store which is provided at initialization.
-#    """
-#
-#    _save_attrs = ["indices"]
-#
-#    def __init__(
-#        self, 
-#        store: "swyft.store.Store",
-#        ptrans,
-#        indices: List[int] = None,
-#        noisehook: Callable = None
-#    ):  # noqa: F821
-#        """Create a points dataset
-#
-#        Args:
-#            store (Store): iP3 store for zarr storage
-#            intensity (Intensity): inhomogenous Poisson Point Proccess intensity function on parameters
-#            noisehook (function): (optional) maps from (x, z) to x with noise
-#        """
-#        if store.any_failed:
-#            raise RuntimeError(
-#                "The store has parameters which failed to return a simulation. Try resampling them."
-#            )
-#        elif store.requires_sim:
-#            raise RuntimeError(
-#                "The store has parameters without a corresponding observation. Try running the simulator."
-#            )
-#        if indices is None:
-#            indices = range(len(store))
-#        assert (
-#            len(indices) != 0
-#        ), "You passed indices with length zero. That implies no points."
-#
-#        self.store = store
-#        self.noisehook = noisehook
-#        self.indices = np.array(indices)
-#        self.ptrans = ptrans
-#
-#    def __len__(self):
-#        return len(self.indices)
-#
-#    def params(self):
-#        return self.store.params
-#
-#    def get_range(self, indices):
-#        N = len(indices)
-#        obs_comb = {k: np.empty((N,) + v.shape) for k, v in self[0]["obs"].items()}
-#        par_comb = {k: np.empty((N,) + v.shape) for k, v in self[0]["par"].items()}
-#
-#        for i in indices:
-#            p = self[i]
-#            for k, v in p["obs"].items():
-#                obs_comb[k][i] = v
-#            for k, v in p["par"].items():
-#                par_comb[k][i] = v
-#
-#        return dict(obs=obs_comb, par=par_comb)
-#
-#    def __getitem__(self, idx):
-#        i = self.indices[idx]
-#        x_keys = list(self.store.x)
-#        z_keys = list(self.store.z)
-#        x = {k: self.store.x[k][i] for k in x_keys}
-#        z = self.store.z[i]
-#        u = self.ptrans.u(z.reshape(1, -1)).flatten()
-#
-#        if self.noisehook is not None:
-#            x = self.noisehook(x, z)
-#
-#        return dict(obs=x, par=u)
