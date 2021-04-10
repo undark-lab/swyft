@@ -24,7 +24,7 @@ class SimulationStatus(enum.IntEnum):
     PENDING = 0
     RUNNING = 1
     FINISHED = 2
-    FAILED = 2
+    FAILED = 3
 
 
 class Filesystem:
@@ -35,8 +35,6 @@ class Filesystem:
     pars = "samples/pars"
     log_w = "samples/log_w"
     simulation_status = "samples/simulation_status"
-    #failed_simulation = "samples/failed_simulation"
-    #which_intensity = "samples/which_intensity"
 
 
 class Store(ABC):
@@ -48,7 +46,7 @@ class Store(ABC):
     def __init__(
         self,
         params: Union[int, list],
-        store: Union[zarr.MemoryStore, zarr.DirectoryStore],
+        zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
         simulator = None,
         sync_path: Optional[PathType] = None,
     ):
@@ -56,11 +54,11 @@ class Store(ABC):
 
         Args:
             params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
-            store: zarr storage.
+            zarr_store: zarr storage.
             sync_path: path to the cache lock files. Must be accessible to all
                 processes working on the cache.
         """
-        self._store = store
+        self._zarr_store = zarr_store
         self._simulator = simulator
 
         if isinstance(params, int):
@@ -68,7 +66,7 @@ class Store(ABC):
         self.params = params
 
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
-        self._root = zarr.group(store=self.store, synchronizer=synchronizer)
+        self._root = zarr.group(store=self.zarr_store, synchronizer=synchronizer)
 
         logging.debug("  params = %s" % str(params))
 
@@ -77,7 +75,7 @@ class Store(ABC):
             self._update()
         elif len(self._root.keys()) == 0:
             logging.info("Creating new store.")
-            self._setup_new_store(len(self.params), simulator.sim_shapes, self._root)
+            self._setup_new_zarr_store(len(self.params), simulator.sim_shapes, self._root)
             logging.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
             raise KeyError(
@@ -89,13 +87,14 @@ class Store(ABC):
             self._setup_lock(sync_path)
 
     @property
-    def store(self):
-        return self._store
+    def zarr_store(self):
+        return self._zarr_store
 
     def _setup_lock(self, sync_path):
         path = os.path.join(sync_path, "cache.lock")
         self._lock = fasteners.InterProcessLock(path)
 
+    # FIXME: Where is locking really required?
     def lock(self):
         if self._lock is not None:
             logging.debug("Cache locked")
@@ -106,7 +105,7 @@ class Store(ABC):
             self._lock.release()
             logging.debug("Cache unlocked")
 
-    def _setup_new_store(self, zdim, sim_shapes, root) -> None: # Adding observational shapes to store
+    def _setup_new_zarr_store(self, zdim, sim_shapes, root) -> None: # Adding observational shapes to store
         # Parameters
         root.zeros(  # noqa: F841
             self._filesystem.pars,
@@ -144,51 +143,12 @@ class Store(ABC):
             dtype="int",
         )
 
-#        # Failed simulation flag
-#        f = root.zeros(  # noqa: F841
-#            self._filesystem.failed_simulation,
-#            shape=(0,),
-#            chunks=(100000,),
-#            dtype="bool",
-#        )
-
-#        # Which intensity flag
-#        wu = self._root.zeros(  # noqa: F841
-#            self._filesystem.which_intensity,
-#            shape=(0,),
-#            chunks=(100000,),
-#            dtype="i4",
-#        )
-
-
-    @staticmethod
-    def _extract_xshape_from_zarr_group(group):
-        return group[Store._filesystem.sims].shape[1:]
-
-    @staticmethod
-    def _extract_zdim_from_zarr_group(group):
-        return group[Store._filesystem.par].shape[1]
-
-    @staticmethod
-    def _extract_sim_shapes_from_zarr_group(group):
-        return {k:v.shape[1:] for k,v in group[Cache._filesystem.sims].items()}
-
-    @staticmethod
-    def _extract_params_from_zarr_group(group):
-        return [k for k in group[Store._filesystem.pars].keys()]
-
     def _update(self):
         self.sims = self._root[self._filesystem.sims]
         self.pars = self._root[self._filesystem.pars]
         self.log_w = self._root[self._filesystem.log_w]
         self.log_lambdas = self._root[self._filesystem.log_lambdas]
         self.sim_status = self._root[self._filesystem.simulation_status]
-
-        #self.f = self._root[self._filesystem.failed_simulation]
-        #assert len(self.f) == len(
-        #    self.m
-        #), "Metadata noting which indices require simulation and which have failed have desynced."
-        #self.wu = self._root[self._filesystem.which_intensity]
 
     def __len__(self):
         """Returns number of samples in the store."""
@@ -197,45 +157,25 @@ class Store(ABC):
 
     def __getitem__(self, i):
         self._update()
-
-        result_x = {}
+        sim = {}
         for key, value in self.sims.items():
-            result_x[key] = value[i]
+            sim[key] = value[i]
+        par = self.pars[i]
+        return (sim, par)
 
-        result_z = self.pars[i]
-
-        return dict(x=result_x, z=result_z)
-
-    def _append_z(self, z, log_w):
-        """Append z to store content and generate new slots for x."""
+    def _append_new_points(self, pars, log_w):
+        """Append z to zarr_store content and generate new slots for x."""
         self._update()
-
-        # Length of first element
-        n = len(z)
-        #n = len(z[list(z)[0]])
-
-        # Add slots for x
+        n = len(pars)
         for key, value in self.sims.items():
             shape = list(value.shape)
             shape[0] += n
             value.resize(*shape)
 
-        self._root[self._filesystem.pars].append(z)
+        self._root[self._filesystem.pars].append(pars)
         self._root[self._filesystem.log_w].append(log_w)
-        #for key, value in self.pars.items():
-        #    value.append(z[key])
-
-        # Register as pending
         m = np.full(n, SimulationStatus.PENDING, dtype="int")
         self.sim_status.append(m)
-
-#        # Simulations have not failed, yet.
-#        f = np.zeros(n, dtype="bool")
-#        self.f.append(f)
-
-        ## Which intensity was a parameter drawn with
-        #wu = self.intensity_len * np.ones(n, dtype="int")
-        #self.wu.append(wu)
 
     def log_lambda(self, z: np.ndarray) -> np.ndarray:
         self._update()
@@ -264,15 +204,13 @@ class Store(ABC):
         # Anything new?
         if sum(accept_new) > 0:
             # Add new entries to store
-            self._append_z(z_new, log_w_new)
+            self._append_new_points(z_new, log_w_new)
             logging.info("  adding %i new samples to simulator store." % sum(accept_new))
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf = pdf.state_dict(), N = N)
 
-#        self.lock()
         self._update()
-#        self.unlock()
 
         # Select points from cache
         z_store = self.pars
@@ -310,7 +248,7 @@ class Store(ABC):
         assert status in list(SimulationStatus), f"Unknown status {status}"
         current_status = self.sim_status.oindex[indices]
         if np.any(current_status == status):
-            raise ValueError(f"Some simulations have already status {status}")
+            logging.warning(f"Changing simulation status to {status}, but some simulations have already status {status}")
         self.sim_status.oindex[indices] = status
 
     def get_simulation_status(self, indices=None):
@@ -332,7 +270,8 @@ class Store(ABC):
         return self._get_indices_to_simulate(indices).size > 0
 
     def _get_indices_failed_simulations(self):
-        return np.flatnonzero(self.f[:])
+        self._update()
+        return np.flatnonzero(self.sim_status == SimulationStatus.FAILED)
 
     @property
     def any_failed(self) -> bool:
@@ -344,19 +283,12 @@ class Store(ABC):
         for k, v in x.items():
             self.sims[k][i] = v
         self._set_simulation_status(i, SimulationStatus.FINISHED)
-        #self.f[i] = False
 
-#    def _failed_sim(self, i):
-#        self.f[i] = True
+    def _failed_sim(self, i):
+        self._update()
+        self._set_simulation_status(i, SimulationStatus.FAILED)
 
-    def _replace(self, i, z, x):
-        for key, value in z.items():
-            self.pars[key][i] = value
-        for k, v in x.items():
-            self.sims[k][i] = v
-        self._set_simulation_status(i, SimulationStatus.FINISHED)
-#        self.f[i] = False
-
+    # FIXME: Necessary?
     @staticmethod
     def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
         """Is the simulation a success?"""
@@ -373,13 +305,14 @@ class Store(ABC):
             return True
 
     def set_simulator(self, simulator):
+        if self._simulator is not None:
+            logging.warning("Simulator already set!  Overwriting.")
         self._simulator = simulator
 
     def simulate(
         self,
         indices: Optional[List[int]] = None,
         fail_on_non_finite: bool = True,
-#        max_attempts: int = 1000,
     ) -> None:
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
@@ -388,23 +321,22 @@ class Store(ABC):
             indices: list of sample indices for which a simulation is required
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
         """
+        if self._simulator is None:
+            logging.warning("No simulator specified.  No simulations will run.")
+            return
+
         self.lock()
+        self._update()
         idx = self._get_indices_to_simulate(indices)
         self._set_simulation_status(idx, SimulationStatus.RUNNING)
         self.unlock()
-
-        if self._simulator is None:
-            logging.warning("No simulator specified")
-            return
-        else:
-            simulator = self._simulator
 
         if len(idx) == 0:
             logging.debug("No simulations required.")
             return
         else:
             z = [self.pars[i] for i in idx]
-            res = simulator.run(z)
+            res = self._simulator.run(z)
             x_all, validity = list(zip(*res))  # TODO: check other data formats
 
             for i, x, v in zip(idx, x_all, validity):
@@ -416,25 +348,6 @@ class Store(ABC):
         # some of the samples might be run by other processes - wait for these
         self.wait_for_simulations(indices)
 
-#        for i in tqdm(idx, desc="Simulate"):
-#            x = simulator(z)
-#            success = self.did_simulator_succeed(x, fail_on_non_finite)
-#            if success:
-#                self._add_sim(i, x)
-#            else:
-#                self._failed_sim(i)
-#
-#        if self.any_failed:
-#            self.resample_failed_simulations(
-#                simulator, fail_on_non_finite, max_attempts
-#            )
-#            # TODO add test which ensures that volume does not change upon more samples.
-#
-#        if self.any_failed:
-#            warn(
-#                f"Some simulations failed, despite {max_attempts} to resample them. They have been marked in the store."
-#            )
-
     def wait_for_simulations(self, indices):
         """
         Wait for a set of sample simulations to be finished.
@@ -444,8 +357,26 @@ class Store(ABC):
         """
         status = self.get_simulation_status(indices)
         while not np.all(status == SimulationStatus.FINISHED):
-            time.sleep(1)
+            time.sleep(3)
             status = self.get_simulation_status(indices)
+
+    # FIXME: Necessary
+    @staticmethod
+    def _extract_xshape_from_zarr_group(group):
+        return group[Store._filesystem.sims].shape[1:]
+
+    @staticmethod
+    def _extract_zdim_from_zarr_group(group):
+        return group[Store._filesystem.par].shape[1]
+
+    @staticmethod
+    def _extract_sim_shapes_from_zarr_group(group):
+        return {k:v.shape[1:] for k,v in group[Cache._filesystem.sims].items()}
+
+    @staticmethod
+    def _extract_params_from_zarr_group(group):
+        return [k for k in group[Store._filesystem.pars].keys()]
+
 
 class DirectoryStore(Store):
     def __init__(
@@ -464,31 +395,27 @@ class DirectoryStore(Store):
             sync_path: path to the cache lock files. Must be accessible to all
                 processes working on the cache and should differ from `path`.
         """
-        store = zarr.DirectoryStore(path)
+        zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
-            params=params, store=store, sync_path=sync_path, simulator=simulator
+            params=params, zarr_store=zarr_store, sync_path=sync_path, simulator=simulator
         )
 
     @classmethod
     def load(cls, path: PathType):
         """Load existing DirectoryStore."""
-        store = zarr.DirectoryStore(path)
-        group = zarr.group(store=store)
+        zarr_store = zarr.DirectoryStore(path)
+        group = zarr.group(store=zarr_store)
         xshape = cls._extract_xshape_from_zarr_group(group)
         zdim = cls._extract_zdim_from_zarr_group(group)
         return DirectoryStore(zdim=zdim, xshape=xshape, path=path)
-
-        #sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
-        #z = cls._extract_params_from_zarr_group(group)
-        #return DirectoryCache(params=z, sim_shapes=sim_shapes, path=path)
 
 
 class MemoryStore(Store):
     def __init__(
         self,
         params,
-        store=None,
+        zarr_store=None,
         simulator=None,
         sync_path: Optional[PathType] = None,
     ):
@@ -496,15 +423,15 @@ class MemoryStore(Store):
 
         Args:
             zdim: Number of z dimensions
-            store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
+            zarr_store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
                 loading.
         """
-        if store is None:
-            store = zarr.MemoryStore()
+        if zarr_store is None:
+            zarr_store = zarr.MemoryStore()
             logging.debug("Creating new empty MemoryStore.")
         else:
-            logging.debug("Creating MemoryStore from store.")
-        super().__init__(params=params, store=store, simulator=simulator, sync_path=sync_path)
+            logging.debug("Creating MemoryStore from zarr_store.")
+        super().__init__(params=params, zarr_store=zarr_store, simulator=simulator, sync_path=sync_path)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryStore to a directory."""
@@ -515,7 +442,7 @@ class MemoryStore(Store):
             raise FileExistsError(f"{path} is not empty")
         else:
             path.mkdir(parents=True, exist_ok=True)
-            store = zarr.DirectoryStore(path)
+            zarr_store = zarr.DirectoryStore(path)
             zarr.convenience.copy_store(source=self.store, dest=store)
             return None
 

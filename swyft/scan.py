@@ -156,16 +156,16 @@ class NestedInference:
             elif self._status == 1:
                 logging.debug("Step 1: Perform simulations for round %i"%(len(self._datasets)))
                 if self._datasets[-1].requires_sim:
-                    #if self._store._simulator is not None:
                     self._datasets[-1].simulate()
-                    #else:
-                    #    return
+                    if self._datasets[-1].requires_sim:
+                        return
                 else:
                     self._status = 2
 
             # Perform training
             elif self._status == 2:
                 logging.debug("Step 2: Training for round %i"%(len(self._datasets)))
+                dataset = self._datasets[-1]
                 posteriors = Posteriors(dataset)
                 posteriors.infer(self._partitions, device = self._device, train_args = self._config["train_args"])
 
@@ -177,6 +177,7 @@ class NestedInference:
                 logging.debug("Step 3: Generate new bounds from round %i"%(len(self._datasets)))
                 posteriors = self._posteriors[-1]
                 bound = Bound.from_Posteriors(self._partitions, posteriors, self._obs, th = -13)
+                prior = self._datasets[-1].prior
                 new_prior = prior.rebounded(bound)
 
                 self._priors.append(new_prior)
