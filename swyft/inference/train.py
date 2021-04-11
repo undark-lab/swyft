@@ -7,7 +7,7 @@ from typing import Sequence
 import numpy as np
 import torch
 
-from swyft.inference.train.loss import loss_fn
+from .loss import loss_fn
 from swyft.utils import dict_to_device
 
 

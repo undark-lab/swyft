@@ -1,7 +1,7 @@
 import numpy as np
-from swyft.marginals.bounds import Bound, UnitCubeBound
 import torch
 
+from .bounds import Bound, UnitCubeBound
 
 class Prior:
     """Prior with bounds."""

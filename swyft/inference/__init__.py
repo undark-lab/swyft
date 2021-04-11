@@ -1,10 +1,9 @@
-from .networks import DefaultHead, DefaultTail, GenericTail
-from .ratioestimation import RatioCollection, JoinedRatioCollection
+from .posteriors import Posteriors
+from .microscope import Microscope
+from .ratios import IsolatedRatio
 
 __all__ = [
-    "DefaultHead",
-    "DefaultTail",
-    "GenericTail",
-    "RatioCollection",
-    "JoinedRatioCollection",
+    "Posteriors",
+    "Microscope",
+    "IsolatedRatio"
 ]

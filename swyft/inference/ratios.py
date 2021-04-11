@@ -5,9 +5,8 @@ import numpy as np
 import torch.nn as nn
 import torch
 
-from swyft.inference.networks import DefaultHead, DefaultTail
-from swyft.inference.train import trainloop
-from swyft.nn.module import Module
+from .train import trainloop
+from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device, Sequence, Tuple
 from swyft.utils import (
     dict_to_tensor,

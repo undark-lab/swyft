@@ -1,11 +1,10 @@
-from typing import Callable, List
-
 import logging
 
 import numpy as np
-from torch.utils.data import Dataset as torch_Dataset
-from swyft.marginals.prior import Prior
 import torch
+from torch.utils.data import Dataset as torch_Dataset
+
+import swyft
 
 
 class Dataset(torch_Dataset):
@@ -68,7 +67,7 @@ class Dataset(torch_Dataset):
     @classmethod
     def from_state_dict(cls, state_dict, store=None, simhook=None):
         obj = Dataset.__new__(Dataset)
-        obj._prior = Prior.from_state_dict(state_dict["prior"])
+        obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
         obj._indices = state_dict["indices"]
 
         obj._store = store

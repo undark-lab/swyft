@@ -4,9 +4,9 @@ from typing import Callable, Dict, Optional
 import torch
 import torch.nn as nn
 
-from swyft.nn.linear import LinearWithChannel
-from swyft.nn.module import Module
-from swyft.nn.normalization import OnlineNormalizationLayer
+from .linear import LinearWithChannel
+from .module import Module
+from .normalization import OnlineNormalizationLayer
 
 
 def _get_z_shape(param_list):

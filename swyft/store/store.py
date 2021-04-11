@@ -4,20 +4,17 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from collections import namedtuple
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union
-from warnings import warn
+from typing import Dict, List, Optional, Union
 
 import fasteners
 import numcodecs
 import numpy as np
 import zarr
 
-from swyft.store.exceptions import LowIntensityError
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
-from swyft.marginals.prior import Prior
+import swyft
 
 
 class SimulationStatus(enum.IntEnum):
@@ -188,7 +185,7 @@ class Store(ABC):
         if len(self.log_lambdas) == 0:
             return d
         for i in range(len(self.log_lambdas)):
-            pdf = Prior.from_state_dict(self.log_lambdas[i]["pdf"])
+            pdf = swyft.Prior.from_state_dict(self.log_lambdas[i]["pdf"])
             N = self.log_lambdas[i]["N"]
             r = pdf.log_prob(z) + np.log(N)
             d = np.where(r > d, r, d)

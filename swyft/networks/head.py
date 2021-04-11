@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from swyft.nn.module import Module
-from swyft.nn.normalization import OnlineNormalizationLayer
+from .module import Module
+from .normalization import OnlineNormalizationLayer
 
 
 # FIXME: Remove obs_transform. This should not be required for anything.

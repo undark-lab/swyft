@@ -1,7 +1,7 @@
 import numpy as np
 import pylab as plt
 
-from swyft.utils import grid_interpolate_samples
+from .utils import grid_interpolate_samples
 
 def plot1d(
     samples,

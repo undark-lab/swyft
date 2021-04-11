@@ -3,20 +3,11 @@ from warnings import warn
 
 import numpy as np
 
-from swyft.store import MemoryStore
-from swyft.inference import (
-    DefaultHead,
-    DefaultTail,
-    RatioCollection,
-    JoinedRatioCollection,
-)
-from swyft.ip3 import Dataset
-from swyft.ip3.exceptions import NoPointsError
-from swyft.marginals import PosteriorCollection
-from swyft.marginals.prior import Prior
-from swyft.marginals.bounds import Bound
+from .posteriors import Posteriors
+from swyft.networks import DefaultHead, DefaultTail
 from swyft.utils import all_finite, format_param_list
-from swyft.posteriors import Posteriors
+import swyft
+
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
@@ -153,7 +144,7 @@ class Microscope:
                     if len(self._next_priors) == 0
                     else self._next_priors[-1]
                 )
-                dataset = Dataset(N, prior, store=self._store, simhook=self._simhook)
+                dataset = swyft.Dataset(N, prior, store=self._store, simhook=self._simhook)
 
                 self._datasets.append(dataset)
                 self._status = 1
@@ -190,7 +181,7 @@ class Microscope:
                     "Step 3: Generate new bounds from round %i" % (len(self._datasets))
                 )
                 posteriors = self._posteriors[-1]
-                bound = Bound.from_Posteriors(
+                bound = swyft.Bound.from_Posteriors(
                     self._partitions, posteriors, self._obs, th=-13
                 )
                 prior = self._datasets[-1].prior
