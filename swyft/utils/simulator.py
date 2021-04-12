@@ -3,69 +3,127 @@ import os
 import shlex
 import subprocess
 import tempfile
-from typing import Dict
+from operator import getitem
+from typing import Callable, List, Mapping, Optional, Tuple, Union
 
-import dask.bag as db
+import dask.array as da
+import numpy as np
 from dask.distributed import Client
 
-from swyft.types import Array
+from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite
 
 
 class Simulator:
     """ Setup and run the simulator engine """
 
-    def __init__(self, model, fail_on_non_finite: bool = True):
-        """
-        initialte Simulator
+    def __init__(
+        self,
+        model: Callable,
+        params: List,
+        obs_shapes: Mapping[str, Shape],
+        fail_on_non_finite: bool = True,
+    ):
+        """Initiate Simulator using a python function.
 
         Args:
-            model (callable): simulator model function
-            fail_on_non_finite (bool): whether return a invalid code if simulation returns infinite, default True
+            model: simulator model function
+            params: TODO
+            obs_shapes: TODO
+            fail_on_non_finite: whether return an invalid code if simulation
+                returns NaN or infinite, default True
         """
         self.model = model
-        self.client = None
+        self.params = params
+        self.obs_shapes = obs_shapes
         self.fail_on_non_finite = fail_on_non_finite
 
-    def set_dask_cluster(self, cluster=None):
-        """
-        Connect to Dask cluster
+        self.client = None
+
+    def set_dask_cluster(self, cluster=None) -> None:  # TODO type for cluster
+        """Connect to Dask cluster.
 
         Args:
-            cluster (string or Cluster): cluster address or Cluster object
-                                         from dask.distributed (default is
-                                         LocalCluster)
+            cluster: cluster address or Cluster object from dask.distributed
+                (default is LocalCluster)
         """
         self.client = Client(cluster)
 
-    def run(self, z, npartitions=None):
-        """
-        Run the simulator on the input parameters
+    def run(
+        self,
+        z: Union[np.ndarray, da.Array],
+        batch_size: Optional[int] = None,
+    ) -> Tuple:  # TODO specify tuple element tyoes
+        """Run the simulator on the input parameters.
 
         Args:
-            z (list of dictionary): set of input parameters that need to
-                                    be run by the simulator
-            npartitions (int): number of partitions in which the input
-                               parameters are divided for the parallelization
-                               (default is about 100)
-        """
+            z: array of input parameters that need to be run by the simulator.
+                Should have shape (num. samples, num. parameters)
+            batch_size: simulations will be submitted in batches of the specified
+                size
 
-        bag = db.from_sequence(z, npartitions=npartitions)
-        bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
-        return bag.compute(scheduler=self.client or "processes")
+        Returns:
+            # TODO
+        """
+        n_samples, n_parameters = z.shape
+        assert n_parameters == len(self.params), "Wrong number of parameters"
+
+        # split parameter array in chunks corresponding to sample subsets
+        z = da.array(z)
+        z = da.rechunk(
+            z,
+            chunks=(batch_size or n_samples, n_parameters),
+        )
+
+        # block-wise run the model function on the parameter array
+        out = da.map_blocks(
+            _run_model_chunk,
+            z,
+            model=self.model,
+            params=self.params,
+            obs_shapes=self.obs_shapes,
+            fail_on_non_finite=self.fail_on_non_finite,
+            drop_axis=1,
+            dtype=np.object,
+        )
+
+        # split result dictionary and simulation status array
+        results = out.map_blocks(getitem, 0, dtype=np.object)
+        is_valid = out.map_blocks(getitem, 1, meta=np.array(()), dtype=np.bool)
+
+        # unpack array of dictionaries to dictionary of arrays
+        result_dict = {}
+        for obs, shape in self.obs_shapes.items():
+            result_dict[obs] = results.map_blocks(
+                getitem,
+                obs,
+                new_axis=[i + 1 for i in range(len(shape))],
+                chunks=(z.chunks[0], *shape),
+                meta=np.array(()),
+                dtype=np.float,
+            )
+        return result_dict, is_valid
 
     @classmethod
-    def from_command(cls, command, set_input_method, get_output_method, tmpdir=None):
-        """
-        Setup command-line simulator
+    def from_command(
+        cls,
+        command: str,
+        set_input_method: Callable,
+        get_output_method: Callable,
+        tmpdir: PathType = None,
+        **kwargs,
+    ):
+        """Convenience function to setup a command-line simulator
 
         Args:
-            command (string): command line simulator
-            set_input_method (callable): method to prepare simulator input
-            get_output_method (callable): method to retrieve results from the
-                                          simulator output
-            tmpdir (string): temporary directory where to run the simulator
-                             instances (one in each subdir). tmpdir must exist.
+            command: command line simulator
+            set_input_method: method to prepare simulator input
+            get_output_method: method to retrieve results from the simulator
+                output
+            tmpdir: temporary directory where to run the simulator instances
+                (one in each subdir). tmpdir must exist.
+            **kwargs: other key-word arguments required to initialize the
+                Simulator object.
         """
         command_args = shlex.split(command)
 
@@ -91,34 +149,66 @@ class Simulator:
                 os.chdir(cwd)
             return output
 
-        return cls(model=model)
+        return cls(model=model, **kwargs)
+
+    @classmethod
+    def from_model(cls, model: Callable, prior):  # TODO define type of prior
+        """Convenience function to instantiate a Simulator with the correct obs_shapes.
+
+        Args:
+            model: simulator model.
+            prior: model prior.
+
+        Note:
+            The simulator model is run once in order to infer observable shapes from the output.
+        """
+        params = prior.sample(1)
+        params = {k: v.item() for k, v in params.items()}
+        obs = model(params)
+        obs_shapes = {k: v.shape for k, v in obs.items()}
+
+        return cls(
+            model=model, params=list(prior.prior_config.keys()), obs_shapes=obs_shapes
+        )
 
 
-def _succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> int:
-    """Is the simulation a success?"""
+def _run_model_chunk(
+    z: np.ndarray,
+    model: Callable,
+    params: List,
+    obs_shapes: Mapping[str, Shape],
+    fail_on_non_finite: bool,
+):
+    """Run the model over a set of input parameters.
 
-    # Code disctionary for validity
-    code = {"valid": 0, "none_value": 1, "non_finite_value": 2}
+    Args:
+        # TODO
+
+    Returns:
+        # TODO
+    """
+    chunk_size = len(z)
+    x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in obs_shapes.items()}
+    has_failed = np.zeros(len(z), dtype=np.bool)
+    for i, z_i in enumerate(z):
+        inp = {p: val for p, val in zip(params, z_i)}
+        out = model(inp)
+        _failed = _has_failed(out, fail_on_non_finite)
+        if _failed:
+            for obs, val in out.items():
+                x[obs][i] = val
+            has_failed[i] = _failed
+    return x, has_failed
+
+
+def _has_failed(x: Mapping[str, Array], fail_on_non_finite: bool) -> bool:
+    """Did the simulation fail?"""
 
     assert isinstance(x, dict), "Simulators must return a dictionary."
 
     if any([v is None for v in x.values()]):
-        return code["none_value"]
+        return True
     elif fail_on_non_finite and not all_finite(x):
-        return code["non_finite_value"]
+        return True
     else:
-        return code["valid"]
-
-
-def _run_one_sample(param, model, fail_on_non_finite):
-    """Run model for one set of parameters and check validity of the output.
-
-    Args:
-        param (dictionary): one set of input parameters
-        model (callable): simulator model
-        fail_on_non_finite (bool): whether return a invalid code if simulation
-            returns infinite, default True
-    """
-    x = model(param)
-    validity = _succeed(x, fail_on_non_finite)
-    return (x, validity)
+        return False

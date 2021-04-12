@@ -9,15 +9,17 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 from warnings import warn
 
+import dask.array as da
 import fasteners
 import numcodecs
 import numpy as np
 import zarr
+from dask.distributed import fire_and_forget, wait
 
 from swyft.cache.exceptions import LowIntensityError
 from swyft.ip3 import Intensity
 from swyft.types import Array, PathType, Shape
-from swyft.utils import all_finite, is_empty
+from swyft.utils import Simulator, all_finite, is_empty
 
 Filesystem = namedtuple(
     "Filesystem",
@@ -118,17 +120,19 @@ class Cache(ABC):
             logging.debug("Cache unlocked")
 
     def _setup_new_cache(self, params, obs_shapes, root) -> None:
-        # Add parameter names to store
-        z = root.create_group(self._filesystem.par)
-
-        for name in params:
-            z.zeros(name, shape=(0,), chunks=(100000,), dtype="f8")
-            # FIX: Too small chunks lead to problems with appending
+        # Add parameter array to store
+        z = root.zeros(
+            self._filesystem.par,
+            shape=(0, len(params)),
+            chunks=(100000, len(params)),
+            dtype="f8",
+        )
+        # FIX: Too small chunks lead to problems with appending
 
         # Adding observational shapes to store
         x = root.create_group(self._filesystem.obs)
         for name, shape in obs_shapes.items():
-            x.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
+            x.zeros(name, shape=(0, *shape), chunks=(100000, *shape), dtype="f8")
 
         # Simulation status code
         m = root.zeros(  # noqa: F841
@@ -164,7 +168,7 @@ class Cache(ABC):
 
     @staticmethod
     def _extract_obs_shapes_from_zarr_group(group):
-        return {k:v.shape[1:] for k,v in group[Cache._filesystem.obs].items()}
+        return {k: v.shape[1:] for k, v in group[Cache._filesystem.obs].items()}
 
     @staticmethod
     def _extract_params_from_zarr_group(group):
@@ -194,8 +198,7 @@ class Cache(ABC):
         """Returns number of samples in the cache."""
         self._update()
         # Return len of first entry
-        params = list(self.z)
-        return len(self.z[params[0]])
+        return self.z.shape[0]
 
     @property
     def intensity_len(self):
@@ -213,8 +216,8 @@ class Cache(ABC):
             result_x[key] = value[i]
 
         result_z = {}
-        for key, value in self.z.items():
-            result_z[key] = value[i]
+        for n, param in enumerate(self.params):
+            result_z[param] = self.z[i, n]
 
         return dict(x=result_x, z=result_z)
 
@@ -222,8 +225,8 @@ class Cache(ABC):
         """Append z to cache content and new slots for x."""
         self._update()
 
-        # Length of first element
-        n = len(z[list(z)[0]])
+        # Length of first dimension
+        n = z.shape[0]
 
         # Add slots for x
         for key, value in self.x.items():
@@ -232,8 +235,7 @@ class Cache(ABC):
             value.resize(*shape)
 
         # Add z samples
-        for key, value in self.z.items():
-            value.append(z[key])
+        self.z.append(z)
 
         # Register as pending
         m = np.full(n, SimulationStatus.PENDING, dtype="int")
@@ -293,7 +295,8 @@ class Cache(ABC):
         ):
             log_prob_reject = np.minimum(0, cached_log_intensity - target_log_intensity)
             accepted.append(log_prob_reject < np.log(np.random.rand()))
-        z_accepted = {k: z[accepted, ...] for k, z in z_prop.items()}
+
+        z_accepted = np.stack([z_prop[key][accepted] for key in self.params], axis=1)
 
         # FIXME: Update log_intensity values of **all** samples in the cache based on "intensity"
 
@@ -324,7 +327,7 @@ class Cache(ABC):
         self.grow(prior, N)
         self.unlock()
 
-        zlist = {k: self.z[k][:] for k in (self.z)}
+        zlist = {p: self.z[:, n] for n, p in enumerate(self.params)}
 
         cached_intensities = self.log_intensity(zlist)
         target_intensities = intensity(zlist)
@@ -410,8 +413,7 @@ class Cache(ABC):
         self.f[i] = True
 
     def _replace(self, i, z, x):
-        for key, value in z.items():
-            self.z[key][i] = value
+        self.z[i] = z
         for k, v in x.items():
             self.x[k][i] = v
         self._set_simulation_status(i, SimulationStatus.FINISHED)
@@ -421,35 +423,46 @@ class Cache(ABC):
         self,
         simulator,
         indices: Optional[List[int]] = None,
+        batch_size: Optional[int] = None,
+        wait_simulations: bool = True,
     ) -> None:
         """Run simulator sequentially on parameter cache with missing corresponding simulations.
 
         Args:
             simulator: simulates an observation given a parameter input
             indices: list of sample indices for which a simulation is required
-            fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
+            batch_size: TODO
+            wait_simulations: TODO
         """
         self.lock()
         idx = self._get_indices_to_simulate(indices)
         self._set_simulation_status(idx, SimulationStatus.RUNNING)
         self.unlock()
 
+        futures = []
         if len(idx) == 0:
-            if verbosity() >= 2:
-                logging.debug("No simulations required.")
+            logging.debug("No simulations required.")
         else:
-            z = [{k: v[i] for k, v in self.z.items()} for i in idx]
-            res = simulator.run(z)
-            x_all, validity = list(zip(*res))  # TODO: check other data formats
+            z = da.from_zarr(self.z)
+            z = z[idx]
+            res, has_failed = simulator.run(z, batch_size)
+            delayed = [
+                has_failed.store(
+                    self.f.oindex, regions=(idx.tolist(),), lock=False, compute=False
+                )
+            ]
+            for key, value in self.x.items():
+                store = res[key].store(
+                    value.oindex, regions=(idx.tolist(),), lock=False, compute=False
+                )
+                delayed.append(store)
+            futures = simulator.client.compute(delayed)
+            fire_and_forget(futures)
 
-            for i, x, v in zip(idx, x_all, validity):
-                if v == 0:
-                    self._add_sim(i, x)
-                else:
-                    self._failed_sim(i)
-
-        # some of the samples might be run by other processes - wait for these
-        self.wait_for_simulations(indices)
+        if wait_simulations:
+            wait(futures)
+            # also wait for the samples that are run by other processes
+            self.wait_for_simulations(indices)
 
     def wait_for_simulations(self, indices):
         """
@@ -462,7 +475,6 @@ class Cache(ABC):
         while not np.all(status == SimulationStatus.FINISHED):
             time.sleep(1)
             status = self.get_simulation_status(indices)
-
 
 
 class DirectoryCache(Cache):

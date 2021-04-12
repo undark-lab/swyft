@@ -54,16 +54,16 @@ class NestedRatios:
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
 
-        if isinstance(simulator, typing.Callable):
-            self._simulator = Simulator(simulator)
-        elif isinstance(simulator, Simulator):
-            self._simulator = simulator
-        else:
-            raise ValueError("Unrecognized type of simulator.")
-
         # Not stored
+        self._simulator = (
+            simulator
+            if isinstance(simulator, Simulator)
+            else Simulator.from_model(simulator, prior)
+        )
         self._noise = noise
-        self._cache_reference = cache
+        self._cache = cache or MemoryCache(
+            self._simulator.params, self._simulator.obs_shapes
+        )
         self._device = device
 
         # Stored in state_dict()
@@ -78,14 +78,6 @@ class NestedRatios:
         self.failed_to_converge = False
         self._base_prior = prior  # Initial prior
         self._history = []
-
-    @property
-    def _cache(self):
-        if self._cache_reference is None:
-            self._cache_reference = MemoryCache.from_simulator(
-                self._simulator.model, self._base_prior
-            )
-        return self._cache_reference
 
     @property
     def num_elapsed_rounds(self):
