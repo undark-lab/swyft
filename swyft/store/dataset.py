@@ -8,7 +8,21 @@ import swyft
 
 
 class Dataset(torch_Dataset):
+    """Dataset for access to swyft.Store."""
     def __init__(self, N, prior, store, simhook=None):
+        """Initialize Dataset.
+
+        Args:
+            N (int): Number of samples.
+            prior (swyft.Prior): Parameter prior.
+            store (swyft.Store): Store reference.
+            simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
+
+        Notes:
+            Due to the statistical nature of the Store, the returned number of
+            samples is effectively drawn from a Poisson distribution with mean
+            N.
+        """
         super().__init__()
 
         # Initialization
@@ -35,14 +49,17 @@ class Dataset(torch_Dataset):
         return self._indices
 
     def simulate(self):
+        """Trigger simulations for points in the dataset."""
         self._store.simulate(self.indices)
 
     @property
     def requires_sim(self):
+        """Check if simulations are required for points in the dataset."""
         return self._store.requires_sim(self.indices)
 
     @property
     def pars(self):
+        """Return all parameters as npoints x zdim array."""
         return np.array([self._store.pars[i] for i in self._indices])
 
     def __getitem__(self, idx):
