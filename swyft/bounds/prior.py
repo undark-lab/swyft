@@ -3,6 +3,7 @@ import torch
 
 from .bounds import Bound, UnitCubeBound
 
+
 class Prior:
     """Prior with bounds."""
 

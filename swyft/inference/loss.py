@@ -25,6 +25,7 @@ def double_params(params):
     out = torch.repeat_interleave(params.view(-1, 2 * n), 2, dim=0).view(-1, n)
     return out
 
+
 def loss_fn(head, tail, obs, params):
     # Get features
     f = head(obs)

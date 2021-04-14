@@ -146,7 +146,9 @@ class Microscope:
                     if len(self._next_priors) == 0
                     else self._next_priors[-1]
                 )
-                dataset = swyft.Dataset(N, prior, store=self._store, simhook=self._simhook)
+                dataset = swyft.Dataset(
+                    N, prior, store=self._store, simhook=self._simhook
+                )
 
                 self._datasets.append(dataset)
                 self._status = 1

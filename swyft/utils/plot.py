@@ -3,6 +3,7 @@ import pylab as plt
 
 from .utils import grid_interpolate_samples
 
+
 def plot1d(
     samples,
     params,
