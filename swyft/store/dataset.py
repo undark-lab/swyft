@@ -9,6 +9,7 @@ import swyft
 
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
+
     def __init__(self, N, prior, store, simhook=None):
         """Initialize Dataset.
 
