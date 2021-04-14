@@ -76,6 +76,8 @@ class Microscope:
             train_args=train_args,
             head_args=head_args,
             tail_args=tail_args,
+            head=head,
+            tail=tail,
         )
         self._initial_prior = prior  # Initial prior
 
@@ -170,6 +172,10 @@ class Microscope:
                     self._partitions,
                     device=self._device,
                     train_args=self._config["train_args"],
+                    head=self._config["head"],
+                    tail=self._config["tail"],
+                    head_args=self._config["head_args"],
+                    tail_args=self._config["tail_args"],
                 )
 
                 self._posteriors.append(posteriors)
