@@ -15,8 +15,6 @@ Array = Union[np.ndarray, torch.Tensor]
 
 WeightsType = Dict[Tuple[int], np.ndarray]
 
-Combinations = Union[int, Sequence[int], Sequence[Sequence[int]]]
-
 Shape = Union[torch.Size, Tuple[int, ...]]
 DictInt = Union[int, Dict[str, int]]
 DictShape = Union[Shape, Dict[str, Shape]]

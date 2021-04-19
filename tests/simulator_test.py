@@ -1,7 +1,9 @@
-import pytest
 import numpy as np
+import pytest
 from dask.distributed import LocalCluster
+
 from swyft.utils.simulator import Simulator
+
 
 # linear model
 def model(params):

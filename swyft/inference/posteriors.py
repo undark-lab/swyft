@@ -1,13 +1,13 @@
 import logging
 from warnings import warn
 
-import torch
 import numpy as np
+import torch
 
-from .ratios import RatioCollection, JoinedRatioCollection
-from swyft.networks import DefaultHead, DefaultTail
 import swyft
+from swyft.networks import DefaultHead, DefaultTail
 
+from .ratios import JoinedRatioCollection, RatioCollection
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 

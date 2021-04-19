@@ -1,9 +1,11 @@
-import numpy as np
-from sklearn.neighbors import BallTree
-import torch
 import logging
 
+import numpy as np
+import torch
+from sklearn.neighbors import BallTree
+
 from swyft.inference import IsolatedRatio
+
 
 # FIXME: Add docstring
 class Bound:

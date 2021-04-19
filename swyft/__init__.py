@@ -1,7 +1,7 @@
-from .store import DirectoryStore, MemoryStore, Dataset, Simulator
-from .bounds import Prior, Bound
-from .inference import Posteriors, Microscope
-from .networks import OnlineNormalizationLayer, Module, DefaultHead, DefaultTail
+from .bounds import Bound, Prior
+from .inference import Microscope, Posteriors
+from .networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
+from .store import Dataset, DirectoryStore, MemoryStore, Simulator
 from .utils import corner, plot1d
 
 __all__ = [
