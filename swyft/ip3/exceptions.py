@@ -1,2 +1,0 @@
-class NoPointsError(Exception):
-    pass

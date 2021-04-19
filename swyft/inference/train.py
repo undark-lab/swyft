@@ -7,7 +7,7 @@ from typing import Sequence
 import numpy as np
 import torch
 
-from swyft.inference.train.loss import loss_fn
+from .loss import loss_fn
 from swyft.utils import dict_to_device
 
 
@@ -65,13 +65,10 @@ def train(
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
+                sim, z = batch
 
-                obs = dict_to_device(
-                    batch["obs"], device=device, non_blocking=non_blocking
-                )
-                params = dict_to_device(
-                    batch["par"], device=device, non_blocking=non_blocking
-                )
+                obs = dict_to_device(sim, device=device, non_blocking=non_blocking)
+                params = z.to(device, non_blocking=non_blocking)
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
 
@@ -134,13 +131,13 @@ def trainloop(
     percent_validation=0.1,
 ):
     logging.debug("Entering trainloop")
-    logging.debug("  combinations = "+str(combinations))
-    logging.debug("  batch_size = %i"%batch_size)
-    logging.debug("  nworkers = %i"%nworkers)
-    logging.debug("  max_epochs = %i"%max_epochs)
-    logging.debug("  early_stopping_patience = %i"%early_stopping_patience)
-    logging.debug("  lr_schedule = "+str(lr_schedule))
-    logging.debug("  percent_validation = %i"%percent_validation)
+    logging.debug("  combinations = " + str(combinations))
+    logging.debug("  batch_size = %i" % batch_size)
+    logging.debug("  nworkers = %i" % nworkers)
+    logging.debug("  max_epochs = %i" % max_epochs)
+    logging.debug("  early_stopping_patience = %i" % early_stopping_patience)
+    logging.debug("  lr_schedule = " + str(lr_schedule))
+    logging.debug("  percent_validation = %i" % percent_validation)
 
     percent_train = 1.0 - percent_validation
     ntrain, nvalid = split_length_by_percentage(

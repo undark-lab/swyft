@@ -1,26 +1,22 @@
-from .cache import DirectoryCache, MemoryCache
-from .inference import RatioEstimator
-from .inference.networks import DefaultHead, DefaultTail, GenericTail
-from .ip3 import Points
-from .marginals import Prior, RatioEstimatedPosterior
-from .nestedratios import NestedRatios
-from .nn import OnlineNormalizationLayer
-from .nn.module import Module
-from .plot import corner, plot1d
+from .store import DirectoryStore, MemoryStore, Dataset, Simulator
+from .bounds import Prior, Bound
+from .inference import Posteriors, Microscope
+from .networks import OnlineNormalizationLayer, Module, DefaultHead, DefaultTail
+from .utils import corner, plot1d
 
 __all__ = [
+    "Microscope",
+    "Posteriors",
     "Prior",
+    "Bound",
     "Module",
-    "DirectoryCache",
+    "DirectoryStore",
+    "MemoryStore",
     "DefaultHead",
     "DefaultTail",
-    "GenericTail",
     "OnlineNormalizationLayer",
-    "MemoryCache",
-    "RatioEstimator",
-    "Points",
+    "Dataset",
+    "Simulator",
     "corner",
     "plot1d",
-    "NestedRatios",
-    "RatioEstimatedPosterior",
 ]

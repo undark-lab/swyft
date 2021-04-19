@@ -3,10 +3,10 @@ from typing import Optional
 
 import numpy as np
 import torch.nn as nn
+import torch
 
-from swyft.inference.networks import DefaultHead, DefaultTail
-from swyft.inference.train import ParamDictDataset, trainloop
-from swyft.nn.module import Module
+from .train import trainloop
+from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device, Sequence, Tuple
 from swyft.utils import (
     dict_to_tensor,
@@ -16,7 +16,38 @@ from swyft.utils import (
 )
 
 
-class RatioEstimator:
+class IsolatedRatio:
+    """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
+
+    def __init__(self, rc, obs, comb, zdim):
+        self._rc = rc
+        self._obs = obs
+        self._comb = comb
+        self._zdim = zdim
+
+    def __call__(self, u):
+        U = np.random.rand(len(u), self._zdim)
+        U[:, np.array(self._comb)] = u
+        ratios = self._rc.ratios(self._obs, U)
+        return ratios[self._comb]
+
+
+class JoinedRatioCollection:
+    def __init__(self, ratio_collections):
+        self._rcs = ratio_collections
+        self.param_list = []
+        [self.param_list.extend(rc.param_list) for rc in self._rcs]
+        self.param_list = list(set(self.param_list))
+
+    def ratios(self, obs: Array, params: Array, n_batch=100):
+        result = {}
+        for rc in self._rcs:
+            ratios = rc.ratios(obs, params, n_batch=n_batch)
+            result.update(ratios)
+        return result
+
+
+class RatioCollection:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
 
     def __init__(
@@ -28,10 +59,10 @@ class RatioEstimator:
         tail_args={},
         device: Device = "cpu",
     ):
-        """RatioEstimator takes simulated points from the iP3 sample cache and handles training and posterior calculation.
+        """RatioCollection takes simulated points from the iP3 sample store and handles training and posterior calculation.
 
         Args:
-            points: points dataset from the iP3 sample cache
+            points: points dataset from the iP3 sample store
             combinations: which combinations of z parameters to learn
             head: initialized module which processes observations, head(x0) = y
             previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
@@ -57,7 +88,7 @@ class RatioEstimator:
         self._train_diagnostics = []
 
     def _init_networks(self, dataset):
-        obs_shapes = get_obs_shapes(dataset[0]["obs"])
+        obs_shapes = get_obs_shapes(dataset[0][0])
         self.head = self._uninitialized_head(
             obs_shapes, **self._uninitialized_head_args
         ).to(self.device)
@@ -67,7 +98,7 @@ class RatioEstimator:
 
     def train(
         self,
-        points,
+        dataset,
         max_epochs: int = 10,
         batch_size: int = 32,
         lr_schedule: Sequence[float] = [1e-3, 3e-4, 1e-4],
@@ -85,7 +116,6 @@ class RatioEstimator:
             nworkers: number of Dataloader workers (0 for no dataloader parallelization)
             percent_validation: percentage to allocate to validation set
         """
-        dataset = ParamDictDataset(points)
 
         if self.tail is None:
             self._init_networks(dataset)
@@ -108,9 +138,8 @@ class RatioEstimator:
         )
         self._train_diagnostics.append(diagnostics)
 
-    # FIXME: Rename lnL --> ratio, it reruns the ratio
     # FIXME: Type annotations and docstring are wrong
-    def lnL(
+    def ratios(
         self,
         obs: Array,
         params: Array,
@@ -133,28 +162,25 @@ class RatioEstimator:
         obs = dict_to_tensor_unsqueeze(obs, device=self.device)
         f = self.head(obs)
 
-        npar = len(params[list(params)[0]])
+        npar = len(params)
 
         if npar < n_batch:
-            params = dict_to_tensor(params, device=self.device)
-            f = f.unsqueeze(0).expand(npar, -1)
-            lnL = self.tail(f, params).detach().cpu().numpy()
+            params = torch.tensor(params, device=self.device)
+            f = f.expand(npar, -1)
+            ratios = self.tail(f, params).detach().cpu().numpy()
         else:
-            lnL = []
+            ratios = []
             for i in range(npar // n_batch + 1):
-                params_batch = dict_to_tensor(
-                    params,
-                    device=self.device,
-                    indices=slice(i * n_batch, (i + 1) * n_batch),
-                )
-                n = len(params_batch[list(params_batch)[0]])
-                # f_batch = f.unsqueeze(0).expand(n, -1)
+                params_batch = torch.tensor(
+                    params[i * n_batch : (i + 1) * n_batch, :]
+                ).to(self.device)
+                n = len(params_batch)
                 f_batch = f.expand(n, -1)
                 tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
-                lnL.append(tmp)
-            lnL = np.vstack(lnL)
+                ratios.append(tmp)
+            ratios = np.vstack(ratios)
 
-        return {k: lnL[..., i] for i, k in enumerate(self.param_list)}
+        return {k: ratios[..., i] for i, k in enumerate(self.param_list)}
 
     @property
     def _tail_swyft_state_dict(self):
@@ -166,11 +192,11 @@ class RatioEstimator:
 
     def state_dict(self):
         """Return state dictionary."""
-        return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
+        return {attr: getattr(self, attr) for attr in RatioCollection._save_attrs}
 
     @classmethod
     def from_state_dict(cls, state_dict, device: Device = "cpu"):
-        """Instantiate RatioEstimator from state dictionary."""
+        """Instantiate RatioCollectoin from state dictionary."""
         re = cls(state_dict["param_list"], head=None, tail=None, device=device)
         re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(
             device
@@ -179,26 +205,3 @@ class RatioEstimator:
             device
         )
         return re
-
-    # FIXME: Ditch posterior method, show live separately
-    def posterior(self, obs0, prior, n_samples=100000):
-        """Resturn weighted posterior samples for given observation.
-
-        Args:
-            obs0 (dict): Observation of interest.
-            prior (Prior): (Constrained) prior used to generate training data.
-            n_samples (int): Number of samples to return.
-
-        Note:
-            log_priors are not normalized.
-        """
-        pars = prior.sample(n_samples)  # prior samples
-
-        # Unmasked original wrongly normalized log_prob densities
-        log_probs = prior.log_prob(pars, unmasked=True)
-
-        lnL = self.lnL(obs0, pars)  # evaluate lnL for reference observation
-        weights = {}
-        for k, v in lnL.items():
-            weights[k] = np.exp(v)
-        return dict(params=pars, weights=weights, log_priors=log_probs)

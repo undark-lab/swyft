@@ -51,7 +51,7 @@ def cred1d(re, x0: Array):
     """Calculate credible regions.
 
     Args:
-        re (RatioEstimator): ratio estimators
+        re (RatioCollection): ratio estimators
         x0: true observation
     """
     zdim = re.zdim
@@ -124,13 +124,17 @@ def sample_diagnostics(samples, true_posteriors={}, true_params={}):
 
 
 def estimate_coverage(
-    marginals, points, nrounds=10, nsamples=1000, cred_level=[0.68268, 0.95450, 0.99730]
+    marginals,
+    dataset,
+    nrounds=10,
+    nsamples=1000,
+    cred_level=[0.68268, 0.95450, 0.99730],
 ):
-    """Estimate coverage of amortized marginals for points.
+    """Estimate coverage of amortized marginals for dataset.
 
     Args:
         marginals (RatioEstimatedPosterior): Marginals of interest.
-        points (Points): Test points within the support of the marginals constrained prior.
+        dataset (Dataset): Test dataset within the support of the marginals constrained prior.
         nrounds (int): Noise realizations for each test point.
         nsamples (int): Number of marginal samples used for the calculations.
         cred_level (list): Credible levels.
@@ -140,7 +144,7 @@ def estimate_coverage(
     """
     diags = []
     for _ in range(nrounds):
-        for point in points:
+        for point in dataset:
             samples = marginals(point["obs"], nsamples)
             diag = sample_diagnostics(samples, true_params=point["par"])
             diags.append(diag)

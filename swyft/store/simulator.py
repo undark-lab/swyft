@@ -37,7 +37,6 @@ class Simulator:
         self.params = params
         self.obs_shapes = obs_shapes
         self.fail_on_non_finite = fail_on_non_finite
-
         self.client = None
 
     def set_dask_cluster(self, cluster=None) -> None:  # TODO type for cluster

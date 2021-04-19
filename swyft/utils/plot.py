@@ -1,57 +1,7 @@
 import numpy as np
 import pylab as plt
 
-from swyft.utils import grid_interpolate_samples
-
-# def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
-#    x = np.sort(x)[::-1]  # Sort backwards
-#    total_mass = x.sum()
-#    enclosed_mass = np.cumsum(x)
-#    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
-#    levels = np.array(x[idx])
-#    return levels
-
-
-# def cont2d(
-#    ax, labels, samples, cmap: str = "gray_r",
-# ):
-#    """Create a 2d contour plot.
-#
-#    Args:
-#        ax (matplotlib.axes.Axes): matplotlib axes
-#        re: train ratio estimator
-#        x0: true observation
-#        z0: true parameters
-#        i: combination index
-#        j: combination index
-#        cmap: color map
-#        max_n_points: number of points to train on
-#    """
-#    #    z, p = re.posterior(x0, [i, j], max_n_points=max_n_points)
-#    #    levels = get_contour_levels(p)
-#
-#    #    if z0 is not None:
-#    #        ax.axvline(z0[i], color="r", ls=":")
-#    #        ax.axhline(z0[j], color="r", ls=":")
-#
-#    #    N = 100 * 1j
-#    #    extent = [z[:, 0].min(), z[:, 0].max(), z[:, 1].min(), z[:, 1].max()]
-#    #    xs, ys = np.mgrid[
-#    #        z[:, 0].min() : z[:, 0].max() : N, z[:, 1].min() : z[:, 1].max() : N
-#    #    ]
-#    #    resampled = griddata(z, p, (xs, ys))
-#    #    ax.imshow(resampled.T, extent=extent, origin="lower", cmap=cmap, aspect="auto")
-#    #    ax.tricontour(z[:, 0], z[:, 1], -p, levels=-levels, colors="k", linestyles=["-"])
-#    w = samples[labels]["weight"]
-#    w = samples[labels]["weight"]
-#    plt.scatter()
-
-
-# def hist1d(ax, re, x0, z0, i, max_n_points=1000):
-#    if z0 is not None:
-#        ax.axvline(z0[i], color="r", ls=":")
-#    z, p = re.posterior(x0, i, max_n_points=max_n_points)
-#    ax.plot(z, p, "k")
+from .utils import grid_interpolate_samples
 
 
 def plot1d(
@@ -202,18 +152,33 @@ def plot_posterior(
     color="k",
     **kwargs
 ):
-    if isinstance(params, str):
+    if isinstance(params, int):
         params = (params,)
 
+    w = None
+
+    # FIXME: Clean up ad hoc code
     if weights_key is None:
         weights_key = tuple(sorted(params))
     try:
         w = samples["weights"][tuple(weights_key)]
     except KeyError:
-        return  # do not plot anything if weights are missing
+        if len(weights_key) == 1:
+            for k in samples["weights"].keys():
+                if weights_key[0] in k:
+                    weights_key = k
+                    break
+            w = samples["weights"][tuple(weights_key)]
+        elif len(weights_key) == 2:
+            for k in samples["weights"].keys():
+                if set(weights_key).issubset(k):
+                    weights_key = k
+                    w = samples["weights"][k]
+    if w is None:
+        return
 
     if len(params) == 1:
-        x = samples["params"][params[0]]
+        x = samples["params"][:, params[0]]
 
         if grid_interpolate:
             # Grid interpolate samples
@@ -231,8 +196,8 @@ def plot_posterior(
         ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
     elif len(params) == 2:
         # FIXME: use interpolation when grid_interpolate == True
-        x = samples["params"][params[0]]
-        y = samples["params"][params[1]]
+        x = samples["params"][:, params[0]]
+        y = samples["params"][:, params[1]]
         counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap="gray_r")
         levels = sorted(get_contour_levels(counts))
         try:
