@@ -133,14 +133,14 @@ def trainloop(
     device="cpu",
 ):
     logging.debug("Entering trainloop")
-    logging.debug(f"  batch_size {batch_size:>5}")
-    logging.debug(f"  percent_validation {percent_validation:>5}")
-    logging.debug(f"  early_stopping_patience {early_stopping_patience:>5}")
-    logging.debug(f"  max_epochs {max_epochs:>5}")
-    logging.debug(f"  lr {lr:>5}")
-    logging.debug(f"  reduce_lr_factor {reduce_lr_factor:>5}")
-    logging.debug(f"  reduce_lr_patience {reduce_lr_patience:>5}")
-    logging.debug(f"  nworkers {nworkers:>5}")
+    logging.debug(f"{'batch_size':>25} {batch_size:<4}")
+    logging.debug(f"{'percent_validation':>25} {percent_validation:<4}")
+    logging.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
+    logging.debug(f"{'max_epochs':>25} {max_epochs:<4}")
+    logging.debug(f"{'lr':>25} {lr:<4}")
+    logging.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
+    logging.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
+    logging.debug(f"{'nworkers':>25} {nworkers:<4}")
 
     percent_train = 1.0 - percent_validation
     nvalid, ntrain = split_length_by_percentage(
