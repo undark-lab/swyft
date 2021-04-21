@@ -107,6 +107,7 @@ class RatioCollection:
         reduce_lr_factor=0.1,
         reduce_lr_patience=5,
         nworkers=0,
+        **kwargs,
     ) -> None:
         """Train higher-dimensional marginal posteriors.
 
@@ -133,6 +134,7 @@ class RatioCollection:
             reduce_lr_patience=reduce_lr_patience,
             nworkers=nworkers,
             device=self.device,
+            **kwargs,
         )
         self._train_diagnostics.append(diagnostics)
 
