@@ -5,9 +5,8 @@ import numpy as np
 import torch
 
 import swyft
+from swyft.inference.ratios import JoinedRatioCollection, RatioCollection
 from swyft.networks import DefaultHead, DefaultTail
-
-from .ratios import JoinedRatioCollection, RatioCollection
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 

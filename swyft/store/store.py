@@ -214,6 +214,8 @@ class Store(ABC):
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
 
+        logging.info(f"  total size of simulator store {len(self)}.")
+
         self._update()
 
         # Select points from cache
