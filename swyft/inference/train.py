@@ -86,8 +86,8 @@ def train(
         patience=reduce_lr_patience,
     )
 
-    n_train_batches = len(train_loader) if len(train_loader) < 0 else 1
-    n_validation_batches = len(validation_loader) if len(validation_loader) < 0 else 1
+    n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
+    n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
 
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
@@ -123,12 +123,12 @@ def train(
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 
 
-def _get_nvalid_ntrain(validation_size, len_dataset):
+def _get_ntrain_nvalid(validation_size, len_dataset):
     if isinstance(validation_size, float):
         percent_validation = validation_size
         percent_train = 1.0 - percent_validation
-        nvalid, ntrain = split_length_by_percentage(
-            len_dataset, (percent_validation, percent_train)
+        ntrain, nvalid = split_length_by_percentage(
+            len_dataset, (percent_train, percent_validation)
         )
         if nvalid % 2 != 0:
             nvalid += 1
@@ -143,7 +143,7 @@ def _get_nvalid_ntrain(validation_size, len_dataset):
             ntrain -= 1
     else:
         raise TypeError()
-    return nvalid, ntrain
+    return ntrain, nvalid
 
 
 def trainloop(
@@ -175,7 +175,7 @@ def trainloop(
     logging.debug(f"{'nworkers':>25} {nworkers:<4}")
 
     assert validation_size > 0
-    ntrain, nvalid = _get_nvalid_ntrain(validation_size, len(dataset))
+    ntrain, nvalid = _get_ntrain_nvalid(validation_size, len(dataset))
 
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]
