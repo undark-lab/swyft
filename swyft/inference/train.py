@@ -103,7 +103,6 @@ def train(
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
         avg_validation_loss = validation_loss / n_validation_batches
-        logging.debug("validation loss = %.4g" % (avg_validation_loss))
         validation_losses.append(avg_validation_loss)
 
         epoch += 1
@@ -116,6 +115,11 @@ def train(
         else:
             fruitless_epoch += 1
         scheduler.step(avg_validation_loss)
+        print(
+            f"Epoch {epoch}. Validation Loss {avg_validation_loss:.4g}",
+            end="\r",
+            flush=True,
+        )
 
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 
