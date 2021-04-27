@@ -5,16 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
-from swyft.types import Array, Device, Sequence, Tuple
-from swyft.utils import (
-    dict_to_tensor,
-    dict_to_tensor_unsqueeze,
-    format_param_list,
-    get_obs_shapes,
-)
-
-from .train import trainloop
+from swyft.types import Array, Device
+from swyft.utils import dict_to_tensor_unsqueeze, format_param_list, get_obs_shapes
 
 
 class IsolatedRatio:
@@ -100,7 +94,7 @@ class RatioCollection:
         self,
         dataset,
         batch_size=64,
-        percent_validation=0.1,
+        validation_size=0.1,
         early_stopping_patience=10,
         max_epochs=50,
         lr=1e-3,
@@ -126,7 +120,7 @@ class RatioCollection:
             tail=self.tail,
             dataset=dataset,
             batch_size=batch_size,
-            percent_validation=percent_validation,
+            validation_size=validation_size,
             early_stopping_patience=early_stopping_patience,
             max_epochs=max_epochs,
             lr=lr,
