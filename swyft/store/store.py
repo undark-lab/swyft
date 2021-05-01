@@ -191,11 +191,14 @@ class Store(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def sample(self, N, pdf):
+    def sample(self, N, pdf, exactly_n: bool = False):
         self._update()
 
         # Generate new points
-        z_prop = pdf.sample(N=np.random.poisson(N))
+        if exactly_n:
+            z_prop = pdf.sample(N=N)
+        else:
+            z_prop = pdf.sample(N=np.random.poisson(N))
         log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
         log_lambda_store = self.log_lambda(z_prop)
         log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target

@@ -10,7 +10,7 @@ import swyft
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
 
-    def __init__(self, N, prior, store, simhook=None):
+    def __init__(self, N, prior, store, simhook=None, exactly_n: bool = False):
         """Initialize Dataset.
 
         Args:
@@ -18,6 +18,7 @@ class Dataset(torch_Dataset):
             prior (swyft.Prior): Parameter prior.
             store (swyft.Store): Store reference.
             simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
+            exactly_n (bool): Produce exactly N samples, rather than N_ ~ Poisson(N).
 
         Notes:
             Due to the statistical nature of the Store, the returned number of
@@ -27,7 +28,7 @@ class Dataset(torch_Dataset):
         super().__init__()
 
         # Initialization
-        indices = store.sample(N, prior)
+        indices = store.sample(N, prior, exactly_n=exactly_n)
 
         self._prior = prior
         self._indices = indices
