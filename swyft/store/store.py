@@ -1,5 +1,4 @@
 # pylint: disable=no-member, not-callable
-import enum
 import logging
 import os
 import time
@@ -11,18 +10,13 @@ import fasteners
 import numcodecs
 import numpy as np
 import zarr
+import dask.array as da
+from dask.distributed import fire_and_forget, wait
 
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
+from swyft.store.simulator import SimulationStatus
 import swyft
-
-
-class SimulationStatus(enum.IntEnum):
-    PENDING = 0
-    RUNNING = 1
-    FINISHED = 2
-    FAILED = 3
-
 
 class Filesystem:
     metadata = "metadata"
@@ -32,7 +26,6 @@ class Filesystem:
     pars = "samples/pars"
     log_w = "samples/log_w"
     simulation_status = "samples/simulation_status"
-
 
 class Store(ABC):
     """Abstract base class for various stores."""
@@ -322,6 +315,7 @@ class Store(ABC):
     def simulate(
         self,
         indices: Optional[List[int]] = None,
+        batch_size: Optional[int] = None,
         fail_on_non_finite: bool = True,
     ) -> None:
         """Run simulator sequentially on parameter store with missing corresponding simulations.
@@ -341,23 +335,51 @@ class Store(ABC):
         self._set_simulation_status(idx, SimulationStatus.RUNNING)
         self.unlock()
 
+        futures = []
         if len(idx) == 0:
             logging.debug("No simulations required.")
             return
         else:
-            z = [self.pars[i] for i in idx]
-            res = self._simulator.run(z)
-            x_all, validity = list(zip(*res))  # TODO: check other data formats
+            z = da.from_zarr(self.pars)
+            z = z[idx]
+            res, sim_status = self._simulator.run(z, batch_size)
+            delayed = [
+                sim_status.store(
+                    self.sim_status.oindex,
+                    regions=(idx.tolist(),),
+                    lock=False,
+                    compute=False,
+                )
+            ]
+            for key, value in self.sims.items():
+                store = res[key].store(
+                    value.oindex, regions=(idx.tolist(),), lock=False, compute=False
+                )
+                delayed.append(store)
+            futures = self._simulator.client.compute(delayed)
+            fire_and_forget(futures)
 
-            for i, x, v in zip(idx, x_all, validity):
-                if v == 0:
-                    self._add_sim(i, x)
-                else:
-                    self._failed_sim(i)
-
-        # some of the samples might be run by other processes - wait for these
         self.wait_for_simulations(indices)
 
+        # if wait_simulations:
+        #     wait(futures)
+        #     # also wait for the samples that are run by other processes
+        #     self.wait_for_simulations(indices)
+
+        #     z = [self.pars[i] for i in idx]
+        #     res = self._simulator.run(z)
+        #     x_all, validity = list(zip(*res))  # TODO: check other data formats
+
+        #     for i, x, v in zip(idx, x_all, validity):
+        #         if v == 0:
+        #             self._add_sim(i, x)
+        #         else:
+        #             self._failed_sim(i)
+
+        # # some of the samples might be run by other processes - wait for these
+        # self.wait_for_simulations(indices)
+
+    # FIXME: Necessary?
     def wait_for_simulations(self, indices):
         """
         Wait for a set of sample simulations to be finished.

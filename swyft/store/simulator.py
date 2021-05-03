@@ -1,8 +1,8 @@
-# New
 import os
 import shlex
 import subprocess
 import tempfile
+import enum
 from operator import getitem
 from typing import Callable, List, Mapping, Optional, Tuple, Union
 
@@ -14,39 +14,37 @@ from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite
 
 
+class SimulationStatus(enum.IntEnum):
+    PENDING = 0
+    RUNNING = 1
+    FINISHED = 2
+    FAILED = 3
+
+
 class Simulator:
     """ Setup and run the simulator engine """
 
     def __init__(
         self,
         model: Callable,
-        params: List,
-        obs_shapes: Mapping[str, Shape],
+        sim_shapes: Mapping[str, Shape],
         fail_on_non_finite: bool = True,
+        cluster=None,
     ):
         """Initiate Simulator using a python function.
 
         Args:
             model: simulator model function
-            params: TODO
-            obs_shapes: TODO
+            sim_shapes: TODO
             fail_on_non_finite: whether return an invalid code if simulation
                 returns NaN or infinite, default True
-        """
-        self.model = model
-        self.params = params
-        self.obs_shapes = obs_shapes
-        self.fail_on_non_finite = fail_on_non_finite
-        self.client = None
-
-    def set_dask_cluster(self, cluster=None) -> None:  # TODO type for cluster
-        """Connect to Dask cluster.
-
-        Args:
             cluster: cluster address or Cluster object from dask.distributed
                 (default is LocalCluster)
         """
-        self.client = Client(cluster)
+        self.model = model
+        self.sim_shapes = sim_shapes
+        self.fail_on_non_finite = fail_on_non_finite
+        self.set_dask_cluster(cluster)
 
     def run(
         self,
@@ -65,7 +63,6 @@ class Simulator:
             # TODO
         """
         n_samples, n_parameters = z.shape
-        assert n_parameters == len(self.params), "Wrong number of parameters"
 
         # split parameter array in chunks corresponding to sample subsets
         z = da.array(z)
@@ -79,8 +76,7 @@ class Simulator:
             _run_model_chunk,
             z,
             model=self.model,
-            params=self.params,
-            obs_shapes=self.obs_shapes,
+            sim_shapes=self.sim_shapes,
             fail_on_non_finite=self.fail_on_non_finite,
             drop_axis=1,
             dtype=np.object,
@@ -92,7 +88,7 @@ class Simulator:
 
         # unpack array of dictionaries to dictionary of arrays
         result_dict = {}
-        for obs, shape in self.obs_shapes.items():
+        for obs, shape in self.sim_shapes.items():
             result_dict[obs] = results.map_blocks(
                 getitem,
                 obs,
@@ -151,8 +147,10 @@ class Simulator:
         return cls(model=model, **kwargs)
 
     @classmethod
-    def from_model(cls, model: Callable, prior):  # TODO define type of prior
-        """Convenience function to instantiate a Simulator with the correct obs_shapes.
+    def from_model(
+        cls, model: Callable, prior, fail_on_non_finite: bool = True
+    ):  # TODO define type of prior
+        """Convenience function to instantiate a Simulator with the correct sim_shapes.
 
         Args:
             model: simulator model.
@@ -161,21 +159,27 @@ class Simulator:
         Note:
             The simulator model is run once in order to infer observable shapes from the output.
         """
-        params = prior.sample(1)
-        params = {k: v.item() for k, v in params.items()}
-        obs = model(params)
-        obs_shapes = {k: v.shape for k, v in obs.items()}
+        obs = model(prior.sample(1)[0])
+        sim_shapes = {k: v.shape for k, v in obs.items()}
 
         return cls(
-            model=model, params=list(prior.prior_config.keys()), obs_shapes=obs_shapes
+            model=model, sim_shapes=sim_shapes, fail_on_non_finite=fail_on_non_finite
         )
+
+    def set_dask_cluster(self, cluster=None) -> None:  # TODO type for cluster
+        """Connect to Dask cluster.
+
+        Args:
+            cluster: cluster address or Cluster object from dask.distributed
+                (default is LocalCluster)
+        """
+        self.client = Client(cluster)
 
 
 def _run_model_chunk(
     z: np.ndarray,
     model: Callable,
-    params: List,
-    obs_shapes: Mapping[str, Shape],
+    sim_shapes: Mapping[str, Shape],
     fail_on_non_finite: bool,
 ):
     """Run the model over a set of input parameters.
@@ -187,11 +191,10 @@ def _run_model_chunk(
         # TODO
     """
     chunk_size = len(z)
-    x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in obs_shapes.items()}
+    x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
     has_failed = np.zeros(len(z), dtype=np.bool)
     for i, z_i in enumerate(z):
-        inp = {p: val for p, val in zip(params, z_i)}
-        out = model(inp)
+        out = model(z_i)
         _failed = _has_failed(out, fail_on_non_finite)
         if _failed:
             for obs, val in out.items():
@@ -206,8 +209,8 @@ def _has_failed(x: Mapping[str, Array], fail_on_non_finite: bool) -> bool:
     assert isinstance(x, dict), "Simulators must return a dictionary."
 
     if any([v is None for v in x.values()]):
-        return True
+        return SimulationStatus.FAILED
     elif fail_on_non_finite and not all_finite(x):
-        return True
+        return SimulationStatus.FAILED
     else:
-        return False
+        return SimulationStatus.FINISHED
