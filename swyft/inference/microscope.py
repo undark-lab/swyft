@@ -30,30 +30,31 @@ class Microscope:
         simhook=None,
         device="cpu",
         Ninit=3000,
-        Nmax=100000,
         head=DefaultHead,
         tail=DefaultTail,
-        density_factor=2.0,
+        new_simulation_factor=1.5,
+        convergence_ratio=0.8,
         train_args: dict = {},
         head_args: dict = {},
         tail_args: dict = {},
-        log_volume_convergence_threshold=0.1,
     ):
         """Initialize swyft.
 
         Args:
+            partitions,
             prior (Prior): Prior model.
             obs (dict): Target observation
-            noise (function): Noise model, optional.
             store (Store): Storage for simulator results.  If none, create MemoryStore.
-            Ninit (int): Initial number of training points.
-            Nmax (int): Maximum number of training points per round.
-            density_factor (float > 1): Increase of training point density per round.
-            log_volume_convergence_threshold (float > 0.): Convergence threshold measured as difference between log prior volume to log contrainted prior volume.
+            simhook (function): Noise model, optional.
             device (str): Device.
+            Ninit (int): Initial number of training points.
+            head
+            tail
+            new_simulation_factor (float > 1): Increase of number of simulated points by this factor.
+            convergence_ratio (float > 0.): Convergence ratio between new_volume / old_volume.
         """
-        assert density_factor > 1.0
-        assert log_volume_convergence_threshold > 0.0
+        assert new_simulation_factor > 1.0
+        assert convergence_ratio > 0.0
         if not all_finite(obs):
             raise ValueError("obs must be finite.")
 
@@ -68,12 +69,13 @@ class Microscope:
         self._obs = obs
         self._config = dict(
             Ninit=Ninit,
-            Nmax=Nmax,
             train_args=train_args,
             head_args=head_args,
             tail_args=tail_args,
             head=head,
             tail=tail,
+            convergence_ratio=convergence_ratio,
+            new_simulation_factor=new_simulation_factor,
         )
         self._initial_prior = prior  # Initial prior
 
@@ -104,27 +106,25 @@ class Microscope:
         """Original (unconstrained) prior."""
         return self._initial_prior
 
-    def _update_crit(self, N_prev, volumes):
-        return int(N_prev * 1.5)
+    def _calculate_new_N(self, N_prev):
+        return int(N_prev * self._config["new_simulation_factor"])
 
-    def _conv_crit(self, v_old, v_new):
-        return v_new / v_old > 0.8
+    def _convergence_criterion(self, v_old, v_new):
+        return v_new / v_old > self._config["convergence_ratio"]
 
     def focus(
         self,
         max_rounds: int = 10,
-    ):
-        """
+    ) -> int:
+        """[summary]
 
         Args:
-            train_args (dict): Training keyword arguments.
-            head (swyft.Module instance or type): Head network (optional).
-            tail (swyft.Module instance or type): Tail network (optional).
-            head_args (dict): Keyword arguments for head network instantiation.
-            tail_args (dict): Keyword arguments for tail network instantiation.
-            max_rounds (int): Maximum number of rounds per invokation of `run`, default 10.
-        """
+            max_rounds (int, optional): Maximum number of rounds per invocation of `focus`. Defaults to 10.
 
+        Returns:
+            elapsed_rounds (int)
+        """
+        elapsed_rounds = 0
         while self._status != 5 and len(self._next_priors) < max_rounds:
             # Define dataset
             if self._status == 0:
@@ -137,7 +137,7 @@ class Microscope:
                     N = self._config["Ninit"]
                 else:
                     N_prev = len(self._datasets[-1])
-                    N = self._update_crit(N_prev, self.volumes)
+                    N = self._calculate_new_N(N_prev)
                 logging.debug("  dataset size N = %i" % N)
                 prior = (
                     self._initial_prior
@@ -206,8 +206,11 @@ class Microscope:
                 v_new = self._next_priors[-1].bound.volume
                 logging.debug("  old volume = %.4g" % v_old)
                 logging.debug("  new volume = %.4g" % v_new)
-                converged = self._conv_crit(v_old, v_new)
+                converged = self._convergence_criterion(v_old, v_new)
                 self._status = 5 if converged else 0
+
+            elapsed_rounds += 1
+        return elapsed_rounds
 
     @property
     def volumes(self):

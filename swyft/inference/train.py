@@ -44,16 +44,9 @@ def train(
     """Network training loop.
 
     Args:
-        network (nn.Module): network for ratio estimation.
-        train_loader (DataLoader): DataLoader of samples.
-        validation_loader (DataLoader): DataLoader of samples.
-        max_epochs (int): Number of epochs.
-        lr (float): learning rate.
-        device (str, device): Move batches to this device.
-        non_blocking (bool): non_blocking in .to(device) expression.
 
     Returns:
-        list: list of training losses.
+        train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
     """
     # TODO consider that the user might want other training stats, like number of correct samples for example
     def do_epoch(loader: torch.utils.data.dataloader.DataLoader, train: bool):
