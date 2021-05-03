@@ -8,7 +8,7 @@ from typing import Callable, List, Mapping, Optional, Tuple, Union
 
 import dask.array as da
 import numpy as np
-from dask.distributed import Client
+from dask.distributed import Client, fire_and_forget, wait
 
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite
@@ -49,6 +49,8 @@ class Simulator:
     def run(
         self,
         z: Union[np.ndarray, da.Array],
+        store,
+        indices,
         batch_size: Optional[int] = None,
     ) -> Tuple:  # TODO specify tuple element tyoes
         """Run the simulator on the input parameters.
@@ -97,7 +99,27 @@ class Simulator:
                 meta=np.array(()),
                 dtype=np.float,
             )
-        return result_dict, is_valid
+        
+        delayed = [
+            is_valid.store(
+                store.sim_status.oindex,
+                regions=(indices.tolist(),),
+                lock=False,
+                compute=False,
+            )
+        ]
+
+        for key, value in store.sims.items():
+            task = result_dict[key].store(
+                value.oindex, regions=(indices.tolist(),), lock=False, compute=False
+            )
+            delayed.append(task)
+        
+        futures = self.client.compute(delayed)
+        fire_and_forget(futures)
+        wait(futures)
+        
+        return
 
     @classmethod
     def from_command(
@@ -111,14 +133,9 @@ class Simulator:
         """Convenience function to setup a command-line simulator
 
         Args:
-            command: command line simulator
-            set_input_method: method to prepare simulator input
-            get_output_method: method to retrieve results from the simulator
-                output
-            tmpdir: temporary directory where to run the simulator instances
-                (one in each subdir). tmpdir must exist.
-            **kwargs: other key-word arguments required to initialize the
-                Simulator object.
+           #TODO
+
+
         """
         command_args = shlex.split(command)
 
@@ -192,18 +209,17 @@ def _run_model_chunk(
     """
     chunk_size = len(z)
     x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
-    has_failed = np.zeros(len(z), dtype=np.bool)
+    status = np.zeros(len(z), dtype=np.int)
     for i, z_i in enumerate(z):
         out = model(z_i)
-        _failed = _has_failed(out, fail_on_non_finite)
-        if _failed:
-            for obs, val in out.items():
-                x[obs][i] = val
-            has_failed[i] = _failed
-    return x, has_failed
+        _sim_stat = _get_sim_status(out, fail_on_non_finite)
+        for obs, val in out.items():
+            x[obs][i] = val
+        status[i] = _sim_stat
+    return x, status
 
 
-def _has_failed(x: Mapping[str, Array], fail_on_non_finite: bool) -> bool:
+def _get_sim_status(x: Mapping[str, Array], fail_on_non_finite: bool) -> bool:
     """Did the simulation fail?"""
 
     assert isinstance(x, dict), "Simulators must return a dictionary."

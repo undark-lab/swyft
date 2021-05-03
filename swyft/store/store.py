@@ -11,7 +11,7 @@ import numcodecs
 import numpy as np
 import zarr
 import dask.array as da
-from dask.distributed import fire_and_forget, wait
+# from dask.distributed import fire_and_forget, wait
 
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
@@ -334,63 +334,15 @@ class Store(ABC):
         idx = self._get_indices_to_simulate(indices)
         self._set_simulation_status(idx, SimulationStatus.RUNNING)
         self.unlock()
-
-        futures = []
+        
+        # Run simulations and collect status
         if len(idx) == 0:
             logging.debug("No simulations required.")
             return
         else:
             z = da.from_zarr(self.pars)
             z = z[idx]
-            res, sim_status = self._simulator.run(z, batch_size)
-            delayed = [
-                sim_status.store(
-                    self.sim_status.oindex,
-                    regions=(idx.tolist(),),
-                    lock=False,
-                    compute=False,
-                )
-            ]
-            for key, value in self.sims.items():
-                store = res[key].store(
-                    value.oindex, regions=(idx.tolist(),), lock=False, compute=False
-                )
-                delayed.append(store)
-            futures = self._simulator.client.compute(delayed)
-            fire_and_forget(futures)
-
-        self.wait_for_simulations(indices)
-
-        # if wait_simulations:
-        #     wait(futures)
-        #     # also wait for the samples that are run by other processes
-        #     self.wait_for_simulations(indices)
-
-        #     z = [self.pars[i] for i in idx]
-        #     res = self._simulator.run(z)
-        #     x_all, validity = list(zip(*res))  # TODO: check other data formats
-
-        #     for i, x, v in zip(idx, x_all, validity):
-        #         if v == 0:
-        #             self._add_sim(i, x)
-        #         else:
-        #             self._failed_sim(i)
-
-        # # some of the samples might be run by other processes - wait for these
-        # self.wait_for_simulations(indices)
-
-    # FIXME: Necessary?
-    def wait_for_simulations(self, indices):
-        """
-        Wait for a set of sample simulations to be finished.
-
-        Args:
-            indices: list of sample indices
-        """
-        status = self.get_simulation_status(indices)
-        while not np.all(status == SimulationStatus.FINISHED):
-            time.sleep(3)
-            status = self.get_simulation_status(indices)
+            self._simulator.run(z, self, idx, batch_size)
 
     # FIXME: Necessary
     @staticmethod
