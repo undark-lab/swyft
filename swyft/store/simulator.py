@@ -48,10 +48,13 @@ class Simulator:
 
     def run(
         self,
-        z: Union[np.ndarray, da.Array],
-        store,
+        pars,
+        sims,
+        sim_status,
         indices,
+        f_collect,
         batch_size: Optional[int] = None,
+        wait_for_results: bool = True,
     ) -> Tuple:  # TODO specify tuple element tyoes
         """Run the simulator on the input parameters.
 
@@ -64,10 +67,12 @@ class Simulator:
         Returns:
             # TODO
         """
+        z = da.from_zarr(pars)
+        z = z[indices]
+
         n_samples, n_parameters = z.shape
 
         # split parameter array in chunks corresponding to sample subsets
-        z = da.array(z)
         z = da.rechunk(
             z,
             chunks=(batch_size or n_samples, n_parameters),
@@ -86,7 +91,7 @@ class Simulator:
 
         # split result dictionary and simulation status array
         results = out.map_blocks(getitem, 0, dtype=np.object)
-        is_valid = out.map_blocks(getitem, 1, meta=np.array(()), dtype=np.bool)
+        is_valid = out.map_blocks(getitem, 1, meta=np.array(()), dtype=np.int)
 
         # unpack array of dictionaries to dictionary of arrays
         result_dict = {}
@@ -99,27 +104,32 @@ class Simulator:
                 meta=np.array(()),
                 dtype=np.float,
             )
-        
-        delayed = [
-            is_valid.store(
-                store.sim_status.oindex,
-                regions=(indices.tolist(),),
-                lock=False,
-                compute=False,
-            )
-        ]
 
-        for key, value in store.sims.items():
-            task = result_dict[key].store(
-                value.oindex, regions=(indices.tolist(),), lock=False, compute=False
-            )
-            delayed.append(task)
-        
-        futures = self.client.compute(delayed)
-        fire_and_forget(futures)
-        wait(futures)
-        
-        return
+        if f_collect:
+            sim_status.oindex[indices.tolist()] = is_valid.compute()
+            for key, value in sims.items():
+                value.oindex[indices.tolist()] = result_dict[key].compute()
+        else:
+            delayed = [
+                is_valid.store(
+                    sim_status.oindex,
+                    regions=(indices.tolist(),),
+                    lock=False,
+                    compute=False,
+                )
+            ]
+
+            for key, value in sims.items():
+                task = result_dict[key].store(
+                    value.oindex, regions=(indices.tolist(),), lock=False, compute=False
+                )
+                delayed.append(task)
+
+            futures = self.client.compute(delayed)
+            fire_and_forget(futures)
+
+            if wait_for_results:
+                wait(futures)
 
     @classmethod
     def from_command(

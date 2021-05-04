@@ -10,13 +10,12 @@ import fasteners
 import numcodecs
 import numpy as np
 import zarr
-import dask.array as da
-# from dask.distributed import fire_and_forget, wait
 
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
 from swyft.store.simulator import SimulationStatus
 import swyft
+
 
 class Filesystem:
     metadata = "metadata"
@@ -26,6 +25,7 @@ class Filesystem:
     pars = "samples/pars"
     log_w = "samples/log_w"
     simulation_status = "samples/simulation_status"
+
 
 class Store(ABC):
     """Abstract base class for various stores."""
@@ -291,22 +291,6 @@ class Store(ABC):
         self._update()
         self._set_simulation_status(i, SimulationStatus.FAILED)
 
-    # FIXME: Necessary?
-    @staticmethod
-    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
-        """Is the simulation a success?"""
-
-        assert isinstance(x, dict), "Simulators must return a dictionary."
-
-        dict_anynone = lambda d: any(v is None for v in d.values())
-
-        if dict_anynone(x):
-            return False
-        elif fail_on_non_finite and not all_finite(x):
-            return False
-        else:
-            return True
-
     def set_simulator(self, simulator):
         if self._simulator is not None:
             logging.warning("Simulator already set!  Overwriting.")
@@ -317,6 +301,7 @@ class Store(ABC):
         indices: Optional[List[int]] = None,
         batch_size: Optional[int] = None,
         fail_on_non_finite: bool = True,
+        wait_for_results: bool = True,
     ) -> None:
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
@@ -334,15 +319,38 @@ class Store(ABC):
         idx = self._get_indices_to_simulate(indices)
         self._set_simulation_status(idx, SimulationStatus.RUNNING)
         self.unlock()
-        
+
         # Run simulations and collect status
         if len(idx) == 0:
             logging.debug("No simulations required.")
             return
         else:
-            z = da.from_zarr(self.pars)
-            z = z[idx]
-            self._simulator.run(z, self, idx, batch_size)
+            # TODO: Memory Zarr Array does not support distributed scheduler.
+            # Is there a better way to handle this?
+            f_collect = True if isinstance(self, MemoryStore) else False
+            self._simulator.run(
+                self.pars,
+                self.sims,
+                self.sim_status,
+                idx,
+                f_collect,
+                batch_size=batch_size,
+                wait_for_results=wait_for_results,
+            )
+
+        if wait_for_results:
+            self.wait_for_simulations(indices)
+
+    def wait_for_simulations(self, indices):
+        """
+        Wait for a set of sample simulations to be finished.
+        Args:
+            indices: list of sample indices
+        """
+        status = self.get_simulation_status(indices)
+        while not np.all(status == SimulationStatus.FINISHED):
+            time.sleep(1)
+            status = self.get_simulation_status(indices)
 
     # FIXME: Necessary
     @staticmethod

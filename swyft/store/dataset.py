@@ -49,9 +49,9 @@ class Dataset(torch_Dataset):
     def indices(self):
         return self._indices
 
-    def simulate(self):
+    def simulate(self, batch_size=None, wait_for_results=True):
         """Trigger simulations for points in the dataset."""
-        self._store.simulate(self.indices)
+        self._store.simulate(self.indices, batch_size=batch_size, wait_for_results=wait_for_results)
 
     @property
     def requires_sim(self):
