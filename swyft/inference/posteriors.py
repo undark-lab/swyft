@@ -98,18 +98,11 @@ class PosteriorCollection:
                 pt: np.less_equal(np.log(np.random.rand(*v.shape)), v)
                 for pt, v in log_prob_to_keep.items()
             }
-
             # Collect samples for every tuple of parameters, if there are enough, add them to out.
             for param_tuple in remaining_param_tuples:
-                collector[param_tuple].append(
-                    np.stack(
-                        [
-                            weighted_samples["params"][to_keep[param_tuple]]
-                            for name in param_tuple
-                        ],
-                        axis=-1,
-                    )
-                )
+                kept_all_params = weighted_samples["params"][to_keep[param_tuple]]
+                kept_params = kept_all_params[..., param_tuple]
+                collector[param_tuple].append(kept_params)
                 concatenated = np.concatenate(collector[param_tuple])[:N]
                 if len(concatenated) == N:
                     out[param_tuple] = concatenated
