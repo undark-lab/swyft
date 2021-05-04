@@ -44,7 +44,7 @@ class Simulator:
         self.model = model
         self.sim_shapes = sim_shapes
         self.fail_on_non_finite = fail_on_non_finite
-        self.set_dask_cluster(cluster)
+        self.cluster = cluster
 
     def run(
         self,
@@ -67,6 +67,8 @@ class Simulator:
         Returns:
             # TODO
         """
+        self.set_dask_cluster(self.cluster)
+
         z = da.from_zarr(pars)
         z = z[indices]
 
