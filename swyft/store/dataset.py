@@ -6,6 +6,8 @@ from torch.utils.data import Dataset as torch_Dataset
 
 import swyft
 
+log = logging.getLogger(__name__)
+
 
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
@@ -91,14 +93,14 @@ class Dataset(torch_Dataset):
 
         obj._store = store
         if store is None:
-            logging.warning("No store specified!")
+            log.warning("No store specified!")
         obj._simhook = simhook
         if state_dict["simhook"] and not simhook:
-            logging.warning(
+            log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."
             )
         if not state_dict["simhook"] and simhook:
-            logging.warning(
+            log.warning(
                 "A simhook was specified, but no simhook was specified when the Dataset was saved."
             )
         return obj

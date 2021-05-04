@@ -10,6 +10,8 @@ import torch
 from swyft.inference.loss import loss_fn
 from swyft.utils import dict_to_device
 
+log = logging.getLogger(__name__)
+
 
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
     assert np.isclose(sum(percents), 1.0), f"{percents} does not sum to 1."
@@ -155,17 +157,17 @@ def trainloop(
     nworkers=0,
     device="cpu",
 ):
-    logging.debug("Entering trainloop")
-    logging.debug(f"{'batch_size':>25} {batch_size:<4}")
-    logging.debug(f"{'validation_size':>25} {validation_size:<4}")
-    logging.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
-    logging.debug(f"{'max_epochs':>25} {max_epochs:<4}")
-    logging.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
-    logging.debug(f"{'lr':>25} {lr:<4}")
-    logging.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
-    logging.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
-    logging.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
-    logging.debug(f"{'nworkers':>25} {nworkers:<4}")
+    log.debug("Entering trainloop")
+    log.debug(f"{'batch_size':>25} {batch_size:<4}")
+    log.debug(f"{'validation_size':>25} {validation_size:<4}")
+    log.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
+    log.debug(f"{'max_epochs':>25} {max_epochs:<4}")
+    log.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
+    log.debug(f"{'lr':>25} {lr:<4}")
+    log.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
+    log.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
+    log.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
+    log.debug(f"{'nworkers':>25} {nworkers:<4}")
 
     assert validation_size > 0
     ntrain, nvalid = _get_ntrain_nvalid(validation_size, len(dataset))
@@ -207,9 +209,9 @@ def trainloop(
     valid_loss = vl[: vl_min_idx + 1]
     head.load_state_dict(sd_head)
     tail.load_state_dict(sd_tail)
-    logging.debug("Train losses: " + str(train_loss))
-    logging.debug("Valid losses: " + str(valid_loss))
-    logging.debug("Finished trainloop.")
+    log.debug("Train losses: " + str(train_loss))
+    log.debug("Valid losses: " + str(valid_loss))
+    log.debug("Finished trainloop.")
     return dict(train_loss=train_loss, valid_loss=valid_loss)
 
 

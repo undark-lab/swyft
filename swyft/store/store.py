@@ -16,6 +16,8 @@ import swyft
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
 
+log = logging.getLogger(__name__)
+
 
 class SimulationStatus(enum.IntEnum):
     PENDING = 0
@@ -65,17 +67,17 @@ class Store(ABC):
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self._root = zarr.group(store=self.zarr_store, synchronizer=synchronizer)
 
-        logging.debug("  params = %s" % str(params))
+        log.debug("  params = %s" % str(params))
 
         if set(["samples", "metadata"]) == set(self._root.keys()):
-            logging.info("Loading existing store.")
+            log.debug("Loading existing store.")
             self._update()
         elif len(self._root.keys()) == 0:
-            logging.info("Creating new store.")
+            log.debug("Creating new store.")
             self._setup_new_zarr_store(
                 len(self.params), simulator.sim_shapes, self._root
             )
-            logging.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
+            log.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
@@ -96,13 +98,13 @@ class Store(ABC):
     # FIXME: Where is locking really required?
     def lock(self):
         if self._lock is not None:
-            logging.debug("Cache locked")
+            log.debug("Cache locked")
             self._lock.acquire(blocking=True)
 
     def unlock(self):
         if self._lock is not None:
             self._lock.release()
-            logging.debug("Cache unlocked")
+            log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
         self, zdim, sim_shapes, root
@@ -210,14 +212,12 @@ class Store(ABC):
         if sum(accept_new) > 0:
             # Add new entries to store
             self._append_new_points(z_new, log_w_new)
-            logging.info(
-                "  adding %i new samples to simulator store." % sum(accept_new)
-            )
+            log.debug("  adding %i new samples to simulator store." % sum(accept_new))
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
 
-        logging.info(f"  total size of simulator store {len(self)}.")
+        log.debug(f"  total size of simulator store {len(self)}.")
 
         self._update()
 
@@ -257,7 +257,7 @@ class Store(ABC):
         assert status in list(SimulationStatus), f"Unknown status {status}"
         current_status = self.sim_status.oindex[indices]
         if np.any(current_status == status):
-            logging.warning(
+            log.warning(
                 f"Changing simulation status to {status}, but some simulations have already status {status}"
             )
         self.sim_status.oindex[indices] = status
@@ -321,7 +321,7 @@ class Store(ABC):
 
     def set_simulator(self, simulator):
         if self._simulator is not None:
-            logging.warning("Simulator already set!  Overwriting.")
+            log.warning("Simulator already set!  Overwriting.")
         self._simulator = simulator
 
     def simulate(
@@ -337,7 +337,7 @@ class Store(ABC):
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
         """
         if self._simulator is None:
-            logging.warning("No simulator specified.  No simulations will run.")
+            log.warning("No simulator specified.  No simulations will run.")
             return
 
         self.lock()
@@ -347,7 +347,7 @@ class Store(ABC):
         self.unlock()
 
         if len(idx) == 0:
-            logging.debug("No simulations required.")
+            log.debug("No simulations required.")
             return
         else:
             z = [self.pars[i] for i in idx]
@@ -446,9 +446,9 @@ class MemoryStore(Store):
         """
         if zarr_store is None:
             zarr_store = zarr.MemoryStore()
-            logging.debug("Creating new empty MemoryStore.")
+            log.debug("Creating new empty MemoryStore.")
         else:
-            logging.debug("Creating MemoryStore from zarr_store.")
+            log.debug("Creating MemoryStore from zarr_store.")
         super().__init__(
             params=params,
             zarr_store=zarr_store,

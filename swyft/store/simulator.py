@@ -50,7 +50,6 @@ class Simulator:
                                parameters are divided for the parallelization
                                (default is about 100)
         """
-
         bag = db.from_sequence(z, npartitions=npartitions)
         bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
         return bag.compute(scheduler=self.client or "processes")

@@ -1,4 +1,5 @@
 # pylint: disable=no-member, not-callable
+from copy import deepcopy
 from typing import Optional
 
 import numpy as np
@@ -8,7 +9,12 @@ import torch.nn as nn
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device
-from swyft.utils import dict_to_tensor_unsqueeze, format_param_list, get_obs_shapes
+from swyft.utils import (
+    array_to_tensor,
+    dict_to_tensor_unsqueeze,
+    format_param_list,
+    get_obs_shapes,
+)
 
 
 class IsolatedRatio:
@@ -20,10 +26,10 @@ class IsolatedRatio:
         self._comb = comb
         self._zdim = zdim
 
-    def __call__(self, u):
+    def __call__(self, u, device=None, n_batch=10_000):
         U = np.random.rand(len(u), self._zdim)
         U[:, np.array(self._comb)] = u
-        ratios = self._rc.ratios(self._obs, U)
+        ratios = self._rc.ratios(self._obs, U, device=device, n_batch=n_batch)
         return ratios[self._comb]
 
 
@@ -34,10 +40,10 @@ class JoinedRatioCollection:
         [self.param_list.extend(rc.param_list) for rc in self._rcs]
         self.param_list = list(set(self.param_list))
 
-    def ratios(self, obs: Array, params: Array, n_batch=100):
+    def ratios(self, obs: Array, params: Array, device=None, n_batch=10_000):
         result = {}
         for rc in self._rcs:
-            ratios = rc.ratios(obs, params, n_batch=n_batch)
+            ratios = rc.ratios(obs, params, device=device, n_batch=n_batch)
             result.update(ratios)
         return result
 
@@ -136,36 +142,50 @@ class RatioCollection:
         self,
         obs,
         params,
-        n_batch=100,
+        device=None,
+        n_batch=10_000,
     ):
         """Retrieve estimated marginal posterior."""
-
+        # TODO this can be significantly improved in speed by sending the ratio estimator to the cpu (maybe)
+        # but certainly by changing the batch size.
         self.head.eval()
         self.tail.eval()
 
-        # obs = dict_to_tensor(obs, device = self.device)
-        obs = dict_to_tensor_unsqueeze(obs, device=self.device)
-        f = self.head(obs)
-
-        npar = len(params)
-
-        if npar < n_batch:
-            params = torch.tensor(params, device=self.device)
-            f = f.expand(npar, -1)
-            ratios = self.tail(f, params).detach().cpu().numpy()
+        if device is None:
+            device = torch.device(self.device)
         else:
-            ratios = []
-            for i in range(npar // n_batch + 1):
-                params_batch = torch.tensor(
-                    params[i * n_batch : (i + 1) * n_batch, :]
-                ).to(self.device)
-                n = len(params_batch)
-                f_batch = f.expand(n, -1)
-                tmp = self.tail(f_batch, params_batch).detach().cpu().numpy()
-                ratios.append(tmp)
-            ratios = np.vstack(ratios)
+            device = torch.device(device)
 
-        return {k: ratios[..., i] for i, k in enumerate(self.param_list)}
+        if device != self.device:
+            head = deepcopy(self.head).to(device=device)
+            tail = deepcopy(self.tail).to(device=device)
+        else:
+            head = self.head
+            tail = self.tail
+
+        with torch.no_grad():
+            # obs = dict_to_tensor(obs, device = device)
+            obs = dict_to_tensor_unsqueeze(obs, device=device)
+            f = head(obs)
+
+            npar = len(params)
+            if npar < n_batch:
+                params = array_to_tensor(params, device=device)
+                f = f.expand(npar, -1)
+                ratios = tail(f, params).detach().cpu().numpy()
+            else:
+                ratios = []
+                for i in range(npar // n_batch + 1):
+                    params_batch = array_to_tensor(
+                        params[i * n_batch : (i + 1) * n_batch, :], device=device
+                    )
+                    n = len(params_batch)
+                    f_batch = f.expand(n, -1)
+                    tmp = tail(f_batch, params_batch).detach().cpu().numpy()
+                    ratios.append(tmp)
+                ratios = np.vstack(ratios)
+
+            return {k: ratios[..., i] for i, k in enumerate(self.param_list)}
 
     @property
     def _tail_swyft_state_dict(self):

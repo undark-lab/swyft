@@ -6,6 +6,8 @@ from sklearn.neighbors import BallTree
 
 from swyft.inference import IsolatedRatio
 
+log = logging.getLogger(__name__)
+
 
 # FIXME: Add docstring
 class Bound:
@@ -151,7 +153,17 @@ class RectangleBound(Bound):
         return m > 0.5
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, partition=None, th=-13, n=10000):
+    def from_RatioCollection(
+        cls,
+        rc,
+        obs,
+        bound,
+        partition=None,
+        th=-13,
+        n=10000,
+        device=None,
+        n_batch=10_000,
+    ):
         """Generate new RectangleBound object based on RatioCollection.
 
         Args:
@@ -165,7 +177,7 @@ class RectangleBound(Bound):
         """
         udim = bound.udim
         u = bound.sample(n)
-        ratios = rc.ratios(obs, u)
+        ratios = rc.ratios(obs, u, device=device, n_batch=n_batch)
         res = np.zeros((udim, 2))
         res[:, 1] = 1.0
         for comb, v in ratios.items():
@@ -238,7 +250,7 @@ class BallsBound(Bound):
         out, err = vol_est.mean(), vol_est.std() / np.sqrt(N)
         rel = err / out
         if rel > 0.01:
-            logging.debug("WARNING: Rel volume uncertainty is %.4g" % rel)
+            log.debug("WARNING: Rel volume uncertainty is %.4g" % rel)
         return out
 
     def sample(self, N):
@@ -282,7 +294,6 @@ class BallsBound(Bound):
         Note: All components of the RatioCollection will be used.  Avoid overlapping ratios.
         """
         u = bound.sample(n)
-        masklist = {}
         r = ratio(u)
         mask = r.max() - r < -th
         ind_points = u[mask]

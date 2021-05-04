@@ -8,7 +8,7 @@ import swyft
 from swyft.inference.ratios import JoinedRatioCollection, RatioCollection
 from swyft.networks import DefaultHead, DefaultTail
 
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+log = logging.getLogger(__name__)
 
 
 class PosteriorCollection:
@@ -22,11 +22,11 @@ class PosteriorCollection:
         self._rc = rc
         self._prior = prior
 
-    def sample(self, N, obs0):
+    def sample(self, N, obs, device=None, n_batch=10_000):
         """Resturn weighted posterior samples for given observation.
 
         Args:
-            obs0 (dict): Observation of interest.
+            obs (dict): Observation of interest.
             N (int): Number of samples to return.
         """
         v = self._prior.sample(N)  # prior samples
@@ -35,10 +35,14 @@ class PosteriorCollection:
         # log_probs = self._prior.log_prob(v)
         u = self._prior.ptrans.u(v)
 
-        ratios = self._rc.ratios(obs0, u)  # evaluate lnL for reference observation
+        ratios = self._rc.ratios(
+            obs, u, device=device, n_batch=n_batch
+        )  # evaluate lnL for reference observation
         weights = {}
         for k, val in ratios.items():
+
             weights[k] = np.exp(val)
+
         return dict(params=v, weights=weights)
 
     def rejection_sample(
@@ -47,6 +51,8 @@ class PosteriorCollection:
         obs: dict,
         excess_factor: int = 100,
         maxiter: int = 1000,
+        device=None,
+        n_batch=10_000,
     ):
         """Samples from each marginal using rejection sampling.
 
@@ -64,7 +70,9 @@ class PosteriorCollection:
             Machine Learning: A Probabilistic Perspective
             Kevin P. Murphy
         """
-        weighted_samples = self.sample(N=10 * excess_factor * N, obs=obs)
+        weighted_samples = self.sample(
+            N=10 * excess_factor * N, obs=obs, device=None, n_batch=10_000
+        )
         maximum_log_likelihood_estimates = {
             k: np.log(np.max(v)) for k, v in weighted_samples["weights"].items()
         }
@@ -87,7 +95,7 @@ class PosteriorCollection:
 
             # Draw and determine if samples are kept
             to_keep = {
-                pt: np.less_equal(np.log(np.random.rand(excess_factor * N)), v)
+                pt: np.less_equal(np.log(np.random.rand(*v.shape)), v)
                 for pt, v in log_prob_to_keep.items()
             }
 
@@ -96,7 +104,7 @@ class PosteriorCollection:
                 collector[param_tuple].append(
                     np.stack(
                         [
-                            weighted_samples["params"][name][to_keep[param_tuple]]
+                            weighted_samples["params"][to_keep[param_tuple]]
                             for name in param_tuple
                         ],
                         axis=-1,
@@ -112,7 +120,9 @@ class PosteriorCollection:
                     remaining_param_tuples.remove(param_tuple)
 
             if len(remaining_param_tuples) > 0:
-                weighted_samples = self.sample(N=excess_factor * N, obs=obs)
+                weighted_samples = self.sample(
+                    N=excess_factor * N, obs=obs, device=device, n_batch=n_batch
+                )
             else:
                 return out
             counter += 1
@@ -187,9 +197,9 @@ class Posteriors:
         )
         self._ratios.append(re)
 
-    def sample(self, N, obs):
+    def sample(self, N, obs, device=None, n_batch=10_000):
         post = PosteriorCollection(self.ratios, self._prior)
-        samples = post.sample(N, obs)
+        samples = post.sample(N, obs, device=device, n_batch=n_batch)
         return samples
 
     def rejection_sample(
@@ -198,6 +208,8 @@ class Posteriors:
         obs: dict,
         excess_factor: int = 100,
         maxiter: int = 1000,
+        device=None,
+        n_batch=10_000,
     ):
         """Samples from each marginal using rejection sampling.
 
@@ -217,7 +229,12 @@ class Posteriors:
         """
         post = PosteriorCollection(self.ratios, self._prior)
         return post.rejection_sample(
-            N=N, obs=obs, excess_factor=excess_factor, maxiter=maxiter
+            N=N,
+            obs=obs,
+            excess_factor=excess_factor,
+            maxiter=maxiter,
+            device=device,
+            n_batch=n_batch,
         )
 
     @property
