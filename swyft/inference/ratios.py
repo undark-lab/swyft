@@ -146,8 +146,6 @@ class RatioCollection:
         n_batch=10_000,
     ):
         """Retrieve estimated marginal posterior."""
-        # TODO this can be significantly improved in speed by sending the ratio estimator to the cpu (maybe)
-        # but certainly by changing the batch size.
         self.head.eval()
         self.tail.eval()
 

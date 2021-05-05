@@ -13,7 +13,7 @@ import numpy as np
 import zarr
 
 import swyft
-from swyft.types import Array, PathType, Shape
+from swyft.types import Array, PathType
 from swyft.utils import all_finite, is_empty
 
 log = logging.getLogger(__name__)
@@ -193,14 +193,11 @@ class Store(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def sample(self, N, pdf, exactly_n: bool = False):
+    def sample(self, N, pdf):
         self._update()
 
         # Generate new points
-        if exactly_n:
-            z_prop = pdf.sample(N=N)
-        else:
-            z_prop = pdf.sample(N=np.random.poisson(N))
+        z_prop = pdf.sample(N=np.random.poisson(N))
         log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
         log_lambda_store = self.log_lambda(z_prop)
         log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
@@ -310,7 +307,7 @@ class Store(ABC):
 
         assert isinstance(x, dict), "Simulators must return a dictionary."
 
-        dict_anynone = lambda d: any(v is None for v in d.values())
+        dict_anynone = lambda d: any(v is None for v in d.values())  # noqa: E731
 
         if dict_anynone(x):
             return False
@@ -382,11 +379,11 @@ class Store(ABC):
 
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
-        return group[Store._filesystem.par].shape[1]
+        return group[Store._filesystem.pars].shape[1]
 
     @staticmethod
     def _extract_sim_shapes_from_zarr_group(group):
-        return {k: v.shape[1:] for k, v in group[Cache._filesystem.sims].items()}
+        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
 
     @staticmethod
     def _extract_params_from_zarr_group(group):
@@ -466,8 +463,18 @@ class MemoryStore(Store):
         else:
             path.mkdir(parents=True, exist_ok=True)
             zarr_store = zarr.DirectoryStore(path)
-            zarr.convenience.copy_store(source=self.store, dest=store)
+            zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
             return None
+
+    def copy(self, sync_path=None):
+        zarr_store = zarr.MemoryStore()
+        zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
+        return MemoryStore(
+            params=self.params,
+            zarr_store=zarr_store,
+            simulator=self._simulator,
+            sync_path=sync_path,
+        )
 
     @classmethod
     def load(cls, path: PathType):
@@ -479,7 +486,7 @@ class MemoryStore(Store):
         group = zarr.group(store=memory_store)
         xshape = cls._extract_xshape_from_zarr_group(group)
         zdim = cls._extract_zdim_from_zarr_group(group)
-        return MemoryStore(zdim=zdim, xshape=xshape, store=memory_store)
+        return cls(zdim=zdim, xshape=xshape, store=memory_store)
         # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
         # z = cls._extract_params_from_zarr_group(group)
         # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
@@ -502,4 +509,4 @@ class MemoryStore(Store):
 
         sim_shapes = {k: v.shape for k, v in sim.items()}
 
-        return MemoryStore(vdim, sim_shapes)
+        return cls(vdim, sim_shapes)
