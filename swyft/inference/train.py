@@ -114,6 +114,7 @@ def train(
             end="\r",
             flush=True,
         )
+    print("")
 
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 
