@@ -105,31 +105,25 @@ class Simulator:
                 dtype=np.float,
             )
 
+        sources = [is_valid, *[result_dict[k] for k in sims.keys()]]
+        targets = [sim_status.oindex, *[s.oindex for s in sims.values()]]
         if f_collect:
-            sim_status.oindex[indices.tolist()] = is_valid.compute()
-            for key, value in sims.items():
-                value.oindex[indices.tolist()] = result_dict[key].compute()
+            results = self.client.compute(sources, sync=True)
+            for result, target in zip(results, targets):
+                target[indices.tolist()] = result
         else:
-            delayed = [
-                is_valid.store(
-                    sim_status.oindex,
-                    regions=(indices.tolist(),),
-                    lock=False,
-                    compute=False,
-                )
-            ]
-
-            for key, value in sims.items():
-                task = result_dict[key].store(
-                    value.oindex, regions=(indices.tolist(),), lock=False, compute=False
-                )
-                delayed.append(task)
-
-            futures = self.client.compute(delayed)
-            fire_and_forget(futures)
+            store_delayed = da.store(
+                sources=sources,
+                targets=targets,
+                regions=(indices.tolist(),),
+                lock=False,
+                compute=False,
+            )
+            store_future = self.client.compute(store_delayed)
+            fire_and_forget(store_future)
 
             if wait_for_results:
-                wait(futures)
+                wait(store_future)
 
     @classmethod
     def from_command(
