@@ -105,14 +105,14 @@ class Store(ABC):
         root.zeros(  # noqa: F841
             self._filesystem.pars,
             shape=(0, zdim),
-            chunks=(1, zdim),
+            chunks=(100000, zdim),
             dtype="f8",
         )
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
         for name, shape in sim_shapes.items():
-            sims.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
+            sims.zeros(name, shape=(0, *shape), chunks=(100000, *shape), dtype="f8")
 
         # Random intensity weights
         root.zeros(  # noqa: F841
