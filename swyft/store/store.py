@@ -187,6 +187,9 @@ class Store(ABC):
     def sample(self, N, pdf):
         self._update()
 
+        # Lock store while adding new points
+        self.lock()
+
         # Generate new points
         z_prop = pdf.sample(N=np.random.poisson(N))
         log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
@@ -206,6 +209,9 @@ class Store(ABC):
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
+
+        # Points added, unlock store
+        self.unlock()
 
         self._update()
 
