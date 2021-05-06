@@ -366,11 +366,11 @@ class Store(ABC):
 
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
-        return group[Store._filesystem.par].shape[1]
+        return group[Store._filesystem.pars].shape[1]
 
     @staticmethod
     def _extract_sim_shapes_from_zarr_group(group):
-        return {k: v.shape[1:] for k, v in group[Cache._filesystem.sims].items()}
+        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
 
     @staticmethod
     def _extract_params_from_zarr_group(group):
