@@ -1,8 +1,8 @@
+import enum
 import os
 import shlex
 import subprocess
 import tempfile
-import enum
 from operator import getitem
 from typing import Callable, List, Mapping, Optional, Tuple, Union
 
