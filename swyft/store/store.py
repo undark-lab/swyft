@@ -4,7 +4,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import fasteners
 import numcodecs
@@ -12,9 +12,9 @@ import numpy as np
 import zarr
 
 import swyft
-from swyft.store.simulator import SimulationStatus
-from swyft.types import Array, PathType, Shape
-from swyft.utils import all_finite, is_empty
+from swyft.store.simulator import SimulationStatus, Simulator
+from swyft.types import PathType
+from swyft.utils import is_empty
 
 
 class Filesystem:
@@ -37,7 +37,7 @@ class Store(ABC):
         self,
         params: Union[int, list],
         zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
-        simulator=None,
+        simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
     ):
         """Initialize Store content dimensions.
@@ -45,7 +45,8 @@ class Store(ABC):
         Args:
             params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             zarr_store: zarr storage.
-            sync_path: path to the cache lock files. Must be accessible to all
+            simulator: simulator object.
+            sync_path: path to the store lock files. Must be accessible to all
                 processes working on the cache.
         """
         self._zarr_store = zarr_store
@@ -306,15 +307,15 @@ class Store(ABC):
         self,
         indices: Optional[List[int]] = None,
         batch_size: Optional[int] = None,
-        fail_on_non_finite: bool = True,
-        wait_for_results: bool = True,
+        wait_for_results: Optional[bool] = True,
     ) -> None:
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
         Args:
-            simulator: simulates an observation given a parameter input
             indices: list of sample indices for which a simulation is required
-            fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
+            batch_size: simulations will be submitted in batches of the specified
+                size
+            wait_for_results: if True, return only when all simulations are done
         """
         if self._simulator is None:
             logging.warning("No simulator specified.  No simulations will run.")
