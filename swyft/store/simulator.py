@@ -1,15 +1,16 @@
+import enum
 import os
 import shlex
 import subprocess
 import tempfile
-import enum
 from operator import getitem
-from typing import Callable, List, Mapping, Optional, Tuple, Union
+from typing import Callable, Mapping, Optional
 
 import dask.array as da
 import numpy as np
 from dask.distributed import Client, fire_and_forget, wait
 
+from swyft.bounds import Prior
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite
 
@@ -35,7 +36,7 @@ class Simulator:
 
         Args:
             model: simulator model function
-            sim_shapes: TODO
+            sim_shapes: map of simulator's output names to shapes
             fail_on_non_finite: whether return an invalid code if simulation
                 returns NaN or infinite, default True
             cluster: cluster address or Cluster object from dask.distributed
@@ -52,20 +53,24 @@ class Simulator:
         sims,
         sim_status,
         indices,
-        f_collect,
+        f_collect: bool = True,
         batch_size: Optional[int] = None,
         wait_for_results: bool = True,
-    ) -> Tuple:  # TODO specify tuple element tyoes
+    ):
         """Run the simulator on the input parameters.
 
         Args:
-            z: array of input parameters that need to be run by the simulator.
-                Should have shape (num. samples, num. parameters)
+            pars: Zarr array with all the input parameters. Should have shape
+                (num. samples, num. parameters)
+            sims: Zarr group where to store all the simulation output
+            sim_status: Zarr array where to store all the simulation status
+            indices: indices of the samples that need to be run by the simulator
+            f_collect: if True, collect all samples' output and pass this to the
+                Zarr store; if False, instruct Dask workers to save output directly
+                to the Zarr store
             batch_size: simulations will be submitted in batches of the specified
                 size
-
-        Returns:
-            # TODO
+            wait_for_results: if True, return only when all simulations are done
         """
         self.set_dask_cluster(self.cluster)
 
@@ -107,31 +112,25 @@ class Simulator:
                 dtype=np.float,
             )
 
+        sources = [is_valid, *[result_dict[k] for k in sims.keys()]]
+        targets = [sim_status.oindex, *[s.oindex for s in sims.values()]]
         if f_collect:
-            sim_status.oindex[indices.tolist()] = is_valid.compute()
-            for key, value in sims.items():
-                value.oindex[indices.tolist()] = result_dict[key].compute()
+            results = self.client.compute(sources, sync=True)
+            for result, target in zip(results, targets):
+                target[indices.tolist()] = result
         else:
-            delayed = [
-                is_valid.store(
-                    sim_status.oindex,
-                    regions=(indices.tolist(),),
-                    lock=False,
-                    compute=False,
-                )
-            ]
-
-            for key, value in sims.items():
-                task = result_dict[key].store(
-                    value.oindex, regions=(indices.tolist(),), lock=False, compute=False
-                )
-                delayed.append(task)
-
-            futures = self.client.compute(delayed)
-            fire_and_forget(futures)
+            store_delayed = da.store(
+                sources=sources,
+                targets=targets,
+                regions=(indices.tolist(),),
+                lock=False,
+                compute=False,
+            )
+            store_future = self.client.compute(store_delayed)
+            fire_and_forget(store_future)
 
             if wait_for_results:
-                wait(futures)
+                wait(store_future)
 
     @classmethod
     def from_command(
@@ -145,9 +144,11 @@ class Simulator:
         """Convenience function to setup a command-line simulator
 
         Args:
-           #TODO
-
-
+            command: command line simulator
+            set_input_method: method to prepare simulator input
+            get_output_method: method to retrieve results from the simulator output
+            tmpdir: temporary directory where to run the simulator instances
+                (one in each subdir). tmpdir must exist.
         """
         command_args = shlex.split(command)
 
@@ -176,14 +177,14 @@ class Simulator:
         return cls(model=model, **kwargs)
 
     @classmethod
-    def from_model(
-        cls, model: Callable, prior, fail_on_non_finite: bool = True
-    ):  # TODO define type of prior
+    def from_model(cls, model: Callable, prior: Prior, fail_on_non_finite: bool = True):
         """Convenience function to instantiate a Simulator with the correct sim_shapes.
 
         Args:
             model: simulator model.
             prior: model prior.
+            fail_on_non_finite: whether return an invalid code if simulation
+                returns NaN or infinite, default True
 
         Note:
             The simulator model is run once in order to infer observable shapes from the output.
@@ -231,7 +232,7 @@ def _run_model_chunk(
     return x, status
 
 
-def _get_sim_status(x: Mapping[str, Array], fail_on_non_finite: bool) -> bool:
+def _get_sim_status(x: Mapping[str, Array], fail_on_non_finite: bool) -> int:
     """Did the simulation fail?"""
 
     assert isinstance(x, dict), "Simulators must return a dictionary."

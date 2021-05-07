@@ -4,17 +4,17 @@ import os
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import fasteners
 import numcodecs
 import numpy as np
 import zarr
 
-from swyft.types import Array, PathType, Shape
-from swyft.utils import all_finite, is_empty
-from swyft.store.simulator import SimulationStatus
 import swyft
+from swyft.store.simulator import SimulationStatus, Simulator
+from swyft.types import PathType
+from swyft.utils import is_empty
 
 
 class Filesystem:
@@ -37,7 +37,7 @@ class Store(ABC):
         self,
         params: Union[int, list],
         zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
-        simulator=None,
+        simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
     ):
         """Initialize Store content dimensions.
@@ -45,7 +45,8 @@ class Store(ABC):
         Args:
             params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             zarr_store: zarr storage.
-            sync_path: path to the cache lock files. Must be accessible to all
+            simulator: simulator object.
+            sync_path: path to the store lock files. Must be accessible to all
                 processes working on the cache.
         """
         self._zarr_store = zarr_store
@@ -105,14 +106,14 @@ class Store(ABC):
         root.zeros(  # noqa: F841
             self._filesystem.pars,
             shape=(0, zdim),
-            chunks=(1, zdim),
+            chunks=(100000, zdim),
             dtype="f8",
         )
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
         for name, shape in sim_shapes.items():
-            sims.zeros(name, shape=(0, *shape), chunks=(1, *shape), dtype="f8")
+            sims.zeros(name, shape=(0, *shape), chunks=(100000, *shape), dtype="f8")
 
         # Random intensity weights
         root.zeros(  # noqa: F841
@@ -187,6 +188,9 @@ class Store(ABC):
     def sample(self, N, pdf):
         self._update()
 
+        # Lock store while adding new points
+        self.lock()
+
         # Generate new points
         z_prop = pdf.sample(N=np.random.poisson(N))
         log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
@@ -206,6 +210,9 @@ class Store(ABC):
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
+
+        # Points added, unlock store
+        self.unlock()
 
         self._update()
 
@@ -300,15 +307,15 @@ class Store(ABC):
         self,
         indices: Optional[List[int]] = None,
         batch_size: Optional[int] = None,
-        fail_on_non_finite: bool = True,
-        wait_for_results: bool = True,
+        wait_for_results: Optional[bool] = True,
     ) -> None:
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
         Args:
-            simulator: simulates an observation given a parameter input
             indices: list of sample indices for which a simulation is required
-            fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
+            batch_size: simulations will be submitted in batches of the specified
+                size
+            wait_for_results: if True, return only when all simulations are done
         """
         if self._simulator is None:
             logging.warning("No simulator specified.  No simulations will run.")
