@@ -359,23 +359,6 @@ class Store(ABC):
             time.sleep(1)
             status = self.get_simulation_status(indices)
 
-    # FIXME: Necessary
-    @staticmethod
-    def _extract_xshape_from_zarr_group(group):
-        return group[Store._filesystem.sims].shape[1:]
-
-    @staticmethod
-    def _extract_zdim_from_zarr_group(group):
-        return group[Store._filesystem.pars].shape[1]
-
-    @staticmethod
-    def _extract_sim_shapes_from_zarr_group(group):
-        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
-
-    @staticmethod
-    def _extract_params_from_zarr_group(group):
-        return [k for k in group[Store._filesystem.pars].keys()]
-
 
 class DirectoryStore(Store):
     def __init__(
@@ -408,9 +391,8 @@ class DirectoryStore(Store):
         """Load existing DirectoryStore."""
         zarr_store = zarr.DirectoryStore(path)
         group = zarr.group(store=zarr_store)
-        xshape = cls._extract_xshape_from_zarr_group(group)
-        zdim = cls._extract_zdim_from_zarr_group(group)
-        return DirectoryStore(zdim=zdim, xshape=xshape, path=path)
+        zdim = group[cls._filesystem.pars].shape[1]
+        return DirectoryStore(params=zdim, path=path)
 
 
 class MemoryStore(Store):
@@ -450,7 +432,7 @@ class MemoryStore(Store):
         else:
             path.mkdir(parents=True, exist_ok=True)
             zarr_store = zarr.DirectoryStore(path)
-            zarr.convenience.copy_store(source=self.store, dest=store)
+            zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
             return None
 
     @classmethod
@@ -461,16 +443,12 @@ class MemoryStore(Store):
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)
 
         group = zarr.group(store=memory_store)
-        xshape = cls._extract_xshape_from_zarr_group(group)
-        zdim = cls._extract_zdim_from_zarr_group(group)
-        return MemoryStore(zdim=zdim, xshape=xshape, store=memory_store)
-        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
-        # z = cls._extract_params_from_zarr_group(group)
-        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
+        zdim = group[cls._filesystem.pars].shape[1]
+        return MemoryStore(params=zdim, zarr_store=memory_store)
 
     @classmethod
-    def from_simulator(cls, model, prior):
-        """Convenience function to instantiate new MemoryStore with correct sim_shapes.
+    def from_model(cls, model, prior):
+        """Convenience function to instantiate new MemoryStore with given model and prior.
 
         Args:
             model (function): Simulator model.
@@ -481,9 +459,7 @@ class MemoryStore(Store):
         """
         v = prior.sample(1)[0]
         vdim = len(v)
-
         sim = model(v)
-
         sim_shapes = {k: v.shape for k, v in sim.items()}
-
-        return MemoryStore(vdim, sim_shapes)
+        simulator = swyft.Simulator(model, sim_shapes=sim_shapes)
+        return MemoryStore(vdim, simulator=simulator)
