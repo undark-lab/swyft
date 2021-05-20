@@ -1,6 +1,9 @@
 import numpy as np
+import pandas as pd
 import pylab as plt
+import seaborn as sns
 
+from swyft.utils.futils import filter_marginals_by_dim
 from swyft.utils.utils import grid_interpolate_samples
 
 
@@ -8,6 +11,55 @@ def split_corner_axes(axes):
     diag = np.diag(axes)
     offdiag = axes[np.tril(axes, -1).nonzero()]
     return diag, offdiag
+
+
+def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
+    x = x.flatten()
+    x = np.sort(x)[::-1]  # Sort backwards
+    total_mass = x.sum()
+    enclosed_mass = np.cumsum(x)
+    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
+    levels = np.array(x[idx])
+    return levels
+
+
+def create_df_from_marginal_dict(marginals, method: str):
+    marginals_1d = filter_marginals_by_dim(marginals, 1)
+    rows = []
+    for key, value in marginals_1d.items():
+        data = {}
+        data["Marginal"] = [key[0]] * len(value)
+        data["Parameter"] = value.flatten()
+        data["Method"] = [method] * len(value)
+        df = pd.DataFrame.from_dict(data)
+        rows.append(df)
+    return pd.concat(rows, ignore_index=True)
+
+
+def violin_plot(
+    reference_marginals, estimated_marginals, method: str, ax=None, palette="muted"
+):
+    data = [
+        create_df_from_marginal_dict(reference_marginals, "Reference"),
+        create_df_from_marginal_dict(estimated_marginals, method),
+    ]
+    data = pd.concat(
+        data,
+        ignore_index=True,
+    )
+    sns.set_theme(style="whitegrid")
+    ax = sns.violinplot(
+        x="Marginal",
+        y="Parameter",
+        hue="Method",
+        data=data,
+        palette=palette,
+        split=True,
+        scale="width",
+        inner="quartile",
+        ax=ax,
+    )
+    return ax
 
 
 def plot1d(
@@ -124,16 +176,6 @@ def corner(
                 if truth is not None:
                     ax.axvline(truth[params[i]], ls=":", color="r")
     return fig, axes
-
-
-def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
-    x = x.flatten()
-    x = np.sort(x)[::-1]  # Sort backwards
-    total_mass = x.sum()
-    enclosed_mass = np.cumsum(x)
-    idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
-    levels = np.array(x[idx])
-    return levels
 
 
 def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
