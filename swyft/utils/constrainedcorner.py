@@ -4,12 +4,20 @@ import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tqdm import tqdm
 
 from swyft.utils import filter_marginals_by_dim, split_corner_axes
 
 
 def get_upper_inds(d):
     return list(combinations(range(d), 2))
+
+
+def _set_weight_keyword(df):
+    if "weights" in df.columns:
+        return "weights"
+    else:
+        return None
 
 
 def corner(
@@ -19,6 +27,8 @@ def corner(
     kde=False,
     xlim=(0.0, 1.0),
     ylim_lower=(0.0, 1.0),
+    truth=None,
+    levels=3,
 ):
     marginals_1d = filter_marginals_by_dim(marginal_dfs, 1)
     marginals_2d = filter_marginals_by_dim(marginal_dfs, 2)
@@ -28,41 +38,83 @@ def corner(
 
     fig, axes = plt.subplots(nrows=d, ncols=d, sharex="col", figsize=figsize)
     _, diag, upper = split_corner_axes(axes)
+    lb = 0.125
+    tr = 0.9
+    whspace = 0.1
+    fig.subplots_adjust(
+        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+    )
+    color = "k"
 
     for ax in upper:
         ax.axis("off")
 
     for i, ax in enumerate(diag):
         ax.set_yticklabels([])
+        df = marginals_1d[(i,)]
         sns.histplot(
             marginals_1d[(i,)],
             x=i,
-            weights="weights",
-            bins=50,
+            weights=_set_weight_keyword(df),
+            bins=bins,
             ax=ax,
+            element="step",
+            fill=False,
+            color=color,
         )
+        ax.tick_params(
+            axis="both",
+            which="both",
+            bottom=False,
+            left=False,
+            direction="out",
+            labelbottom=False,
+            labelleft=False,
+        )
+        if truth is not None:
+            ax.axvline(truth[i], color="r")
 
-    for i in upper_inds:
+    for i in tqdm(upper_inds):
         x, y = i
         ax = axes[y, x]  # targets the lower left corner
+        df = marginals_2d[i]
+
+        sns.histplot(
+            data=df,
+            x=x,
+            y=y,
+            weights=_set_weight_keyword(df),
+            bins=bins,
+            ax=ax,
+            color=color,
+            pthresh=0.01,
+        )
         if kde:
             sns.kdeplot(
-                data=marginals_2d[i],
+                data=df,
                 x=x,
                 y=y,
-                weights="weights",
+                weights=_set_weight_keyword(df),
                 ax=ax,
+                palette="muted",
+                levels=levels,
             )
-        else:
-            sns.histplot(
-                data=marginals_2d[i],
-                x=x,
-                y=y,
-                weights="weights",
-                bins=bins,
-                ax=ax,
-            )
+
+        if truth is not None:
+            ax.axvline(truth[i[0]], color="r")
+            ax.axhline(truth[i[1]], color="r")
+            ax.scatter(*truth[i, ...], color="r")
+
         ax.set_ylim(*ylim_lower)
+        ax.tick_params(
+            axis="both",
+            which="both",
+            bottom=False,
+            left=False,
+            # direction="out",
+            labelbottom=False,
+            labelleft=False,
+        )
 
     for ax in axes.flatten():
         ax.set_xlabel("")
