@@ -25,10 +25,12 @@ def corner(
     figsize=None,
     bins=50,
     kde=False,
-    xlim=(0.0, 1.0),
-    ylim_lower=(0.0, 1.0),
+    xlim=None,
+    ylim_lower=None,
     truth=None,
     levels=3,
+    ticks=False,
+    ticklabels=False,
 ):
     marginals_1d = filter_marginals_by_dim(marginal_dfs, 1)
     marginals_2d = filter_marginals_by_dim(marginal_dfs, 2)
@@ -44,13 +46,13 @@ def corner(
     fig.subplots_adjust(
         left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
     )
+
     color = "k"
 
     for ax in upper:
         ax.axis("off")
 
     for i, ax in enumerate(diag):
-        ax.set_yticklabels([])
         df = marginals_1d[(i,)]
         sns.histplot(
             marginals_1d[(i,)],
@@ -96,7 +98,8 @@ def corner(
                 y=y,
                 weights=_set_weight_keyword(df),
                 ax=ax,
-                palette="muted",
+                # palette="muted",
+                color=color,
                 levels=levels,
             )
 
@@ -105,7 +108,8 @@ def corner(
             ax.axhline(truth[i[1]], color="r")
             ax.scatter(*truth[i, ...], color="r")
 
-        ax.set_ylim(*ylim_lower)
+        if ylim_lower is not None:
+            ax.set_ylim(*ylim_lower)
         ax.tick_params(
             axis="both",
             which="both",
@@ -116,10 +120,32 @@ def corner(
             labelleft=False,
         )
 
+    # bottom row
+    for ax in axes[-1, :]:
+        ax.tick_params(
+            axis="x",
+            which="major",
+            bottom=True,
+            direction="out",
+            labelbottom=True,
+            labelrotation=45,
+        )
+    # left column
+    for ax in axes[1:, 0]:
+        ax.tick_params(
+            axis="y",
+            which="major",
+            left=True,
+            direction="out",
+            labelleft=True,
+            labelrotation=45,
+        )
+
     for ax in axes.flatten():
         ax.set_xlabel("")
         ax.set_ylabel("")
-        ax.set_xlim(*xlim)
+        if xlim is not None:
+            ax.set_xlim(*xlim)
     return fig, axes
 
 
