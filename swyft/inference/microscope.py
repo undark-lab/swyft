@@ -114,8 +114,8 @@ class Microscope:
 
     @property
     def constrained_prior(self):
-        """Original (unconstrained) prior."""
-        return self._next_priors[-1]
+        """Last prior before criterion."""
+        return swyft.Posteriors.from_Microscope(self)._prior
 
     @property
     def elapsed_rounds(self):
