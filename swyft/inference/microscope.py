@@ -35,6 +35,7 @@ class Microscope:
         new_simulation_factor: float = 1.5,
         new_simulation_term: int = 0,
         convergence_ratio=0.8,
+        epsilon_threshold=-13,
         train_args: dict = {},
         head_args: dict = {},
         tail_args: dict = {},
@@ -56,6 +57,7 @@ class Microscope:
             new_simulation_factor (float >= 1)
             new_simulation_term (int >= 0)
             convergence_ratio (float > 0.): Convergence ratio between new_volume / old_volume.
+            epsilon_threshold: log ratio cutoff
         """
         assert new_simulation_factor >= 1.0
         assert new_simulation_term >= 0
@@ -82,6 +84,7 @@ class Microscope:
             convergence_ratio=convergence_ratio,
             new_simulation_factor=new_simulation_factor,
             new_simulation_term=new_simulation_term,
+            epsilon_threshold=epsilon_threshold,
         )
         self._initial_prior = prior  # Initial prior
 
@@ -206,7 +209,10 @@ class Microscope:
                 )
                 posteriors = self._posteriors[-1]
                 bound = swyft.Bound.from_Posteriors(
-                    self._partitions, posteriors, self._obs, th=-13
+                    self._partitions,
+                    posteriors,
+                    self._obs,
+                    th=self._config["epsilon_threshold"],
                 )
                 prior = self._datasets[-1].prior
                 new_prior = prior.rebounded(bound)
