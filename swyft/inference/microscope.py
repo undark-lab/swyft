@@ -1,4 +1,5 @@
 import logging
+from typing import Callable
 
 import swyft
 from swyft.inference.posteriors import Posteriors
@@ -135,6 +136,7 @@ class Microscope:
     def focus(
         self,
         max_rounds: int = 10,
+        custom_new_n: Callable = None,
     ) -> int:
         """[summary]
 
@@ -154,6 +156,8 @@ class Microscope:
                 )
                 if len(self._datasets) == 0:
                     N = self._config["Ninit"]
+                elif custom_new_n is not None:
+                    N = custom_new_n(self)
                 else:
                     N_prev = len(self._datasets[-1])
                     N = self._calculate_new_N(N_prev)
