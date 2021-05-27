@@ -33,6 +33,9 @@ def corner(
     ticks=True,
     ticklabels=True,
     ticklabelsize="x-small",
+    tickswhich="both",
+    labelrotation=45,
+    space_between_axes=0.1,
 ):
     marginals_1d = filter_marginals_by_dim(marginal_dfs, 1)
     marginals_2d = filter_marginals_by_dim(marginal_dfs, 2)
@@ -44,9 +47,13 @@ def corner(
     _, diag, upper = split_corner_axes(axes)
     lb = 0.125
     tr = 0.9
-    whspace = 0.1
     fig.subplots_adjust(
-        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+        left=lb,
+        bottom=lb,
+        right=tr,
+        top=tr,
+        wspace=space_between_axes,
+        hspace=space_between_axes,
     )
 
     color = "k"
@@ -133,11 +140,11 @@ def corner(
     for i, ax in enumerate(axes[-1, :]):
         ax.tick_params(
             axis="x",
-            which="major",
+            which=tickswhich,
             bottom=ticks,
             direction="out",
             labelbottom=ticks and ticklabels,
-            labelrotation=45,
+            labelrotation=labelrotation,
             labelsize=ticklabelsize,
         )
         if labels is not None:
@@ -147,16 +154,17 @@ def corner(
     for i, ax in enumerate(axes[1:, 0], 1):
         ax.tick_params(
             axis="y",
-            which="major",
+            which=tickswhich,
             left=ticks,
             direction="out",
             labelleft=ticks and ticklabels,
-            labelrotation=45,
+            labelrotation=labelrotation,
             labelsize=ticklabelsize,
         )
         if labels is not None:
             ax.set_ylabel(labels[i])
 
+    fig.align_labels()
     return fig, axes
 
 
