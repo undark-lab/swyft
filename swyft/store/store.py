@@ -186,10 +186,10 @@ class Store(ABC):
         return d
 
     def sample(self, N, pdf):
-        self._update()
 
         # Lock store while adding new points
         self.lock()
+        self._update()
 
         # Generate new points
         z_prop = pdf.sample(N=np.random.poisson(N))
