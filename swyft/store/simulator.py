@@ -75,15 +75,11 @@ class Simulator:
         self.set_dask_cluster(self.cluster)
 
         z = da.from_zarr(pars)
-        z = z[indices]
+        # split index array in chunks corresponding to sample subsets
+        idx = da.from_array(indices, chunks=(batch_size or len(indices),))
+        z = z[idx]
 
-        n_samples, n_parameters = z.shape
-
-        # split parameter array in chunks corresponding to sample subsets
-        z = da.rechunk(
-            z,
-            chunks=(batch_size or n_samples, n_parameters),
-        )
+        z = z.persist()  # load the parameters in the distributed memory
 
         # block-wise run the model function on the parameter array
         out = da.map_blocks(
