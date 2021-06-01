@@ -354,10 +354,12 @@ class Store(ABC):
         Args:
             indices: list of sample indices
         """
-        status = self.get_simulation_status(indices)
-        while not np.all(status == SimulationStatus.FINISHED):
+        done = False
+        while not done:
             time.sleep(1)
             status = self.get_simulation_status(indices)
+            done = np.isin(status, [SimulationStatus.FINISHED, SimulationStatus.FAILED])
+            done = np.all(done)
 
 
 class DirectoryStore(Store):
