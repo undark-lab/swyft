@@ -32,20 +32,31 @@ class Task:
             device (str): Device.
             bound (Bound): Optional bound object.
         """
-        self.bounded_prior = prior.rebounded(bound)
-        self.dataset = swyft.Dataset(N, self.bounded_prior, store, simhook = simhook)
+        truncated_prior = prior.rebounded(bound)
+        self.dataset = swyft.Dataset(N, truncated_prior, store, simhook = simhook)
         self.posteriors = Posteriors(self.dataset)
-        self._device = device
 
-    def __len__(self):
-        return len(self.dataset)
+        self._device = device
 
     def simulate(self):
         self.dataset.simulate()
     
-    def infer(self, partition):
-        self.posteriors.infer(partition)
-    
+    def infer(self,
+        partition,
+        train_args: dict = {},
+        head=DefaultHead,
+        tail=DefaultTail,
+        head_args: dict = {},
+        tail_args: dict = {},
+        device="cpu",
+        ):
+        self.posteriors.infer(partition, train_args = train_args, head = head,
+                tail = tail, head_args = head_args, tail_args = tail_args,
+                device = device)
+
     def truncate(self, partition, obs0):
         bound = swyft.Bound.from_Posteriors(partition, self.posteriors, obs0)
         return bound
+
+    def sample(self, N, obs0):
+        return self.posteriors.sample(N, obs0)
