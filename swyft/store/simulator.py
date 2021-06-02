@@ -60,17 +60,22 @@ class Simulator:
         """Run the simulator on the input parameters.
 
         Args:
-            pars: Zarr array with all the input parameters. Should have shape
+            pars: array with all the input parameters. Should have shape
                 (num. samples, num. parameters)
-            sims: Zarr group where to store all the simulation output
-            sim_status: Zarr array where to store all the simulation status
-            indices: indices of the samples that need to be run by the simulator
-            f_collect: if True, collect all samples' output and pass this to the
-                Zarr store; if False, instruct Dask workers to save output directly
-                to the Zarr store
-            batch_size: simulations will be submitted in batches of the specified
-                size
-            wait_for_results: if True, return only when all simulations are done
+            sims: dictionary of arrays where to store the simulation output.
+                All arrays should have the number of samples as the size of the
+                first dimension
+            sim_status: array where to store the simulation status (size should
+                be equal to the number of samples)
+            indices: indices of the samples that need to be run by the
+                simulator
+            f_collect: if True, collect all simulation output in memory; if
+                False, instruct Dask workers to save the output directly in the
+                output arrays
+            batch_size: simulations will be submitted in batches of the
+                specified size
+            wait_for_results: if True, return only when all simulations are
+                done
         """
         self.set_dask_cluster(self.cluster)
 
@@ -244,10 +249,15 @@ def _run_model_chunk(
     """Run the model over a set of input parameters.
 
     Args:
-        # TODO
-
+        z: array with the input parameters. Should have shape (num. samples,
+            num. parameters)
+        model: simulator model function
+        sim_shapes: map of simulator's output names to shapes
+        fail_on_non_finite: whether return an invalid code if simulation
+            returns NaN or infinite, default True
     Returns:
-        # TODO
+        x: dictionary with the output of the simulations
+        status: array with the simulation status
     """
     chunk_size = len(z)
     x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
