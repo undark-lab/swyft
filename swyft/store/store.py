@@ -374,11 +374,12 @@ class DirectoryStore(Store):
         """Instantiate an iP3 store stored in a directory.
 
         Args:
-            zdim: Number of z dimensions
-            sim_shapes: Shape of x array
+            params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             path: path to storage directory
-            sync_path: path to the cache lock files. Must be accessible to all
-                processes working on the cache and should differ from `path`.
+            sync_path: path for synchronization via file locks (files will be stored in the given path).
+                It must differ from path, it must be accessible to all processes working on the store,
+                and the underlying filesystem must support file locking.
+            simulator: simulator object.
         """
         zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
@@ -403,9 +404,10 @@ class MemoryStore(Store):
         """Instantiate an iP3 store stored in the memory.
 
         Args:
-            zdim: Number of z dimensions
+            params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             zarr_store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
                 loading.
+            simulator: simulator object.
         """
         if zarr_store is None:
             zarr_store = zarr.MemoryStore()
