@@ -74,9 +74,10 @@ class Simulator:
         """
         self.set_dask_cluster(self.cluster)
 
-        z = da.from_zarr(pars)
-        # split index array in chunks corresponding to sample subsets
-        idx = da.from_array(indices, chunks=(batch_size or len(indices),))
+        # open parameter array as Dask array
+        chunks = getattr(pars, "chunks", "auto")
+        z = da.from_array(pars, chunks=chunks)
+        idx = da.from_array(indices, chunks=(batch_size or -1,))
         z = z[idx]
 
         z = z.persist()  # load the parameters in the distributed memory
