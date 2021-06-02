@@ -68,12 +68,12 @@ class Bound:
         torch.save(sd, filename)
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, th=-13.0):
-        return CompositBound.from_RatioCollection(rc, obs, bound, th=th)
+    def from_RatioEstimator(cls, rc, obs, bound, th=-13.0):
+        return CompositBound.from_RatioEstimator(rc, obs, bound, th=th)
 
     @classmethod
     def from_Posteriors(cls, partitions, post, obs, th=-13.0):
-        return CompositBound.from_RatioCollection(
+        return CompositBound.from_RatioEstimator(
             partitions, post.ratios, obs, post.bound, th=th
         )
 
@@ -149,17 +149,17 @@ class RectangleBound(Bound):
         return m > 0.5
 
     @classmethod
-    def from_RatioCollection(cls, rc, obs, bound, partition=None, th=-13, n=10000):
-        """Generate new RectangleBound object based on RatioCollection.
+    def from_RatioEstimator(cls, rc, obs, bound, partition=None, th=-13, n=10000):
+        """Generate new RectangleBound object based on RatioEstimator.
 
         Args:
-            rc (RatioCollection): RatioCollection to evaluate.
+            rc (RatioEstimator): RatioEstimator to evaluate.
             obs (dict): Reference observation.
-            bound (Bound): Bound of RatioCollection.
+            bound (Bound): Bound of RatioEstimator.
             th (float): Threshold value, default -13
             n (int): Number of random samples from bound to determine parameter boundaries.
 
-        Note: All components of the RatioCollection will be used.  Avoid overlapping ratios.
+        Note: All components of the RatioEstimator will be used.  Avoid overlapping ratios.
         """
         udim = bound.udim
         u = bound.sample(n)
@@ -273,11 +273,11 @@ class BallsBound(Bound):
         Args:
             ratio (IsolatedRatio): Single ratio.
             obs (dict): Reference observation.
-            bound (Bound): Bound of RatioCollection.
+            bound (Bound): Bound of RatioEstimator.
             th (float): Threshold value, default -13
             n (int): Number of random samples from bound to determine parameter boundaries.
 
-        Note: All components of the RatioCollection will be used.  Avoid overlapping ratios.
+        Note: All components of the RatioEstimator will be used.  Avoid overlapping ratios.
         """
         u = bound.sample(n)
         masklist = {}
@@ -340,13 +340,13 @@ class CompositBound(Bound):
         return sum(res) == len(res)
 
     @classmethod
-    def from_RatioCollection(cls, partitions, rc, obs, bound, th=-13.0):
-        """Generate new CompositBound object based on RatioCollection.
+    def from_RatioEstimator(cls, partitions, rc, obs, bound, th=-13.0):
+        """Generate new CompositBound object based on RatioEstimator.
 
         Args:
-            rc (RatioCollection): RatioCollection to evaluate.
+            rc (RatioEstimator): RatioEstimator to evaluate.
             obs (dict): Reference observation.
-            bound (Bound): Bound of RatioCollection.
+            bound (Bound): Bound of RatioEstimator.
             th (float): Threshold value, default -13
         """
         bounds = {}
@@ -365,7 +365,7 @@ class CompositBound(Bound):
 
         if len(idx_rec) > 0:
             partition = tuple(idx_rec)
-            bounds[partition] = RectangleBound.from_RatioCollection(
+            bounds[partition] = RectangleBound.from_RatioEstimator(
                 rc, obs, bound, th=th, partition=partition
             )
 

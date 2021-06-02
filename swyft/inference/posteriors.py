@@ -4,7 +4,7 @@ from warnings import warn
 import torch
 import numpy as np
 
-from .ratios import RatioCollection, JoinedRatioCollection
+from .ratios import RatioEstimator, JoinedRatiEstimatoro
 from swyft.networks import DefaultHead, DefaultTail
 import swyft
 
@@ -17,7 +17,7 @@ class PosteriorCollection:
         """Marginal container initialization.
 
         Args:
-            rc (RatioCollection)
+            rc (RatioEstimator)
             prior (BoundPrior)
         """
         self._rc = rc
@@ -48,7 +48,7 @@ class PosteriorCollection:
     @classmethod
     def from_state_dict(cls, state_dict):
         return RatioEstimatedPosterior(
-            RatioCollection.from_state_dict(state_dict["rc"]),
+            RatioEstimator.from_state_dict(state_dict["rc"]),
             swyft.Prior.from_state_dict(state_dict["prior"]),
         )
 
@@ -123,7 +123,7 @@ class Posteriors:
 
     @property
     def ratios(self):
-        return JoinedRatioCollection(self._ratios[::-1])
+        return JoinedRatioEstimator(self._ratios[::-1])
 
     def _train(
         self, prior, param_list, N, train_args, head, tail, head_args, tail_args, device
@@ -131,7 +131,7 @@ class Posteriors:
         if param_list is None:
             param_list = prior.params()
 
-        re = RatioCollection(
+        re = RatioEstimator(
             param_list,
             device=device,
             head=head,
@@ -159,7 +159,7 @@ class Posteriors:
         obj._indices = state_dict["indices"]
         obj._N = state_dict["N"]
         obj._ratios = [
-            RatioCollection.from_state_dict(sd) for sd in state_dict["ratios"]
+            RatioEstimator.from_state_dict(sd) for sd in state_dict["ratios"]
         ]
 
         obj._dataset = dataset

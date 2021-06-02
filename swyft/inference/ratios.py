@@ -32,7 +32,7 @@ class IsolatedRatio:
         return ratios[self._comb]
 
 
-class JoinedRatioCollection:
+class JoinedRatioEstimator:
     def __init__(self, ratio_collections):
         self._rcs = ratio_collections
         self.param_list = []
@@ -47,7 +47,7 @@ class JoinedRatioCollection:
         return result
 
 
-class RatioCollection:
+class RatioEstimator:
     _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
 
     def __init__(
@@ -59,7 +59,7 @@ class RatioCollection:
         tail_args={},
         device: Device = "cpu",
     ):
-        """RatioCollection takes simulated points from the iP3 sample store and handles training and posterior calculation.
+        """RatioEstimator takes simulated points from the iP3 sample store and handles training and posterior calculation.
 
         Args:
             points: points dataset from the iP3 sample store
@@ -192,7 +192,7 @@ class RatioCollection:
 
     def state_dict(self):
         """Return state dictionary."""
-        return {attr: getattr(self, attr) for attr in RatioCollection._save_attrs}
+        return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
 
     @classmethod
     def from_state_dict(cls, state_dict, device: Device = "cpu"):
