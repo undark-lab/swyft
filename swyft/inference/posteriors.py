@@ -4,62 +4,26 @@ from warnings import warn
 import torch
 import numpy as np
 
-from .ratios import RatioEstimator, JoinedRatiEstimatoro
+from .ratios import RatioEstimator
 from swyft.networks import DefaultHead, DefaultTail
+from swyft.types import Array, Device, Sequence, Tuple
 import swyft
-
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
+class JoinedRatioEstimator:
+    def __init__(self, ratio_collections):
+        self._rcs = ratio_collections
+        self.param_list = []
+        [self.param_list.extend(rc.param_list) for rc in self._rcs]
+        self.param_list = list(set(self.param_list))
 
-class PosteriorCollection:
-    def __init__(self, rc, prior):
-        """Marginal container initialization.
-
-        Args:
-            rc (RatioEstimator)
-            prior (BoundPrior)
-        """
-        self._rc = rc
-        self._prior = prior
-
-    def sample(self, N, obs0):
-        """Resturn weighted posterior samples for given observation.
-
-        Args:
-            obs0 (dict): Observation of interest.
-            N (int): Number of samples to return.
-        """
-        v = self._prior.sample(N)  # prior samples
-
-        # Unmasked original wrongly normalized log_prob densities
-        log_probs = self._prior.log_prob(v)
-        u = self._prior.ptrans.u(v)
-
-        ratios = self._rc.ratios(obs0, u)  # evaluate lnL for reference observation
-        weights = {}
-        for k, val in ratios.items():
-            weights[k] = np.exp(val)
-        return dict(params=v, weights=weights)
-
-    def state_dict(self):
-        return dict(rc=self._rc.state_dict(), prior=self._prior.state_dict())
-
-    @classmethod
-    def from_state_dict(cls, state_dict):
-        return RatioEstimatedPosterior(
-            RatioEstimator.from_state_dict(state_dict["rc"]),
-            swyft.Prior.from_state_dict(state_dict["prior"]),
-        )
-
-    @classmethod
-    def load(cls, filename):
-        sd = torch.load(filename)
-        return cls.from_state_dict(sd)
-
-    def save(self, filename):
-        sd = self.state_dict()
-        torch.save(sd, filename)
+    def ratios(self, obs: Array, params: Array, n_batch=100):
+        result = {}
+        for rc in self._rcs:
+            ratios = rc.ratios(obs, params, n_batch=n_batch)
+            result.update(ratios)
+        return result
 
 
 class Posteriors:
@@ -108,10 +72,24 @@ class Posteriors:
         )
         self._ratios.append(re)
 
-    def sample(self, N, obs):
-        post = PosteriorCollection(self.ratios, self._prior)
-        samples = post.sample(N, obs)
-        return samples
+    def sample(self, N, obs0):
+        """Resturn weighted posterior samples for given observation.
+
+        Args:
+            obs0 (dict): Observation of interest.
+            N (int): Number of samples to return.
+        """
+        v = self._prior.sample(N)  # prior samples
+
+        # Unmasked original wrongly normalized log_prob densities
+        log_probs = self._prior.log_prob(v)
+        u = self._prior.ptrans.u(v)
+
+        ratios = self.ratios.ratios(obs0, u)  # evaluate lnL for reference observation
+        weights = {}
+        for k, val in ratios.items():
+            weights[k] = np.exp(val)
+        return dict(params=v, weights=weights)
 
     @property
     def bound(self):

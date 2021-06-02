@@ -32,19 +32,20 @@ class IsolatedRatio:
         return ratios[self._comb]
 
 
-class JoinedRatioEstimator:
-    def __init__(self, ratio_collections):
-        self._rcs = ratio_collections
-        self.param_list = []
-        [self.param_list.extend(rc.param_list) for rc in self._rcs]
-        self.param_list = list(set(self.param_list))
-
-    def ratios(self, obs: Array, params: Array, n_batch=100):
-        result = {}
-        for rc in self._rcs:
-            ratios = rc.ratios(obs, params, n_batch=n_batch)
-            result.update(ratios)
-        return result
+# Deprecated
+#class JoinedRatioEstimator:
+#    def __init__(self, ratio_collections):
+#        self._rcs = ratio_collections
+#        self.param_list = []
+#        [self.param_list.extend(rc.param_list) for rc in self._rcs]
+#        self.param_list = list(set(self.param_list))
+#
+#    def ratios(self, obs: Array, params: Array, n_batch=100):
+#        result = {}
+#        for rc in self._rcs:
+#            ratios = rc.ratios(obs, params, n_batch=n_batch)
+#            result.update(ratios)
+#        return result
 
 
 class RatioEstimator:
