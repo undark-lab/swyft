@@ -45,6 +45,7 @@ class Simulator:
         self.model = model
         self.sim_shapes = sim_shapes
         self.fail_on_non_finite = fail_on_non_finite
+        self.client = None
         self.cluster = cluster
 
     def run(
