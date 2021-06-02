@@ -95,7 +95,7 @@ class Simulator:
 
         # split result dictionary and simulation status array
         results = out.map_blocks(getitem, 0, dtype=np.object)
-        is_valid = out.map_blocks(getitem, 1, meta=np.array(()), dtype=np.int)
+        status = out.map_blocks(getitem, 1, meta=np.array(()), dtype=np.int)
 
         # unpack array of dictionaries to dictionary of arrays
         result_dict = {}
@@ -109,25 +109,57 @@ class Simulator:
                 dtype=np.float,
             )
 
-        sources = [is_valid, *[result_dict[k] for k in sims.keys()]]
-        targets = [sim_status.oindex, *[s.oindex for s in sims.values()]]
+        sources = [result_dict[k] for k in self.sim_shapes.keys()]
+        targets = [sims[k] for k in self.sim_shapes.keys()]
+
         if f_collect:
-            results = self.client.compute(sources, sync=True)
-            for result, target in zip(results, targets):
-                target[indices.tolist()] = result
+            # submit computation and collect results
+            *sources, status = self.client.compute([*sources, status], sync=True)
+
+            # update simulation results
+            for source, target in zip(sources, targets):
+                target[indices.tolist()] = source
+
+            # finally, update the simulation status
+            sim_status[indices.tolist()] = status
+
         else:
-            store_delayed = da.store(
+            sources = da.store(
                 sources=sources,
                 targets=targets,
                 regions=(indices.tolist(),),
                 lock=False,
                 compute=False,
+                return_stored=True,
             )
-            store_future = self.client.compute(store_delayed)
-            fire_and_forget(store_future)
+
+            # submit computation
+            *sources, status = self.client.persist([*sources, status])
+
+            # the following dummy array is generated after results are stored.
+            zeros_when_done = [
+                source.map_blocks(
+                    lambda x: 0,
+                    chunks=(source.chunks[0],),
+                    drop_axis=[i for i in range(1, source.ndim)],
+                    meta=np.array((), dtype=np.int),
+                    dtype=np.int,
+                )
+                for source in sources
+            ]
+            status = da.add(*zeros_when_done, status)
+            status = status.store(
+                target=sim_status,
+                regions=(indices.tolist(),),
+                lock=False,
+                compute=False,
+            )
+            # when the simulation results are stored, we can update the status
+            status_stored = self.client.compute(status)
+            fire_and_forget(status_stored)
 
             if wait_for_results:
-                wait(store_future)
+                wait(status_stored)
 
     @classmethod
     def from_command(
