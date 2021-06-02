@@ -331,7 +331,6 @@ class Store(ABC):
         # Run simulations and collect status
         if len(idx) == 0:
             logging.debug("No simulations required.")
-            return
         else:
             # TODO: Memory Zarr Array does not support distributed scheduler.
             # Is there a better way to handle this?
