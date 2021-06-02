@@ -46,8 +46,9 @@ class Store(ABC):
             params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             zarr_store: zarr storage.
             simulator: simulator object.
-            sync_path: path to the store lock files. Must be accessible to all
-                processes working on the cache.
+            sync_path: if specified, it will enable synchronization using file locks (files will be
+                stored in the given path). Must be accessible to all processes working on the store
+                and the underlying filesystem must support file locking.
         """
         self._zarr_store = zarr_store
         self._simulator = simulator
@@ -75,6 +76,7 @@ class Store(ABC):
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
             )
 
+        # a second layer of synchronization is required to grow the store
         self._lock = None
         if sync_path is not None:
             self._setup_lock(sync_path)
@@ -87,7 +89,6 @@ class Store(ABC):
         path = os.path.join(sync_path, "cache.lock")
         self._lock = fasteners.InterProcessLock(path)
 
-    # FIXME: Where is locking really required?
     def lock(self):
         if self._lock is not None:
             logging.debug("Cache locked")
@@ -398,13 +399,7 @@ class DirectoryStore(Store):
 
 
 class MemoryStore(Store):
-    def __init__(
-        self,
-        params,
-        zarr_store=None,
-        simulator=None,
-        sync_path: Optional[PathType] = None,
-    ):
+    def __init__(self, params, zarr_store=None, simulator=None):
         """Instantiate an iP3 store stored in the memory.
 
         Args:
@@ -417,12 +412,7 @@ class MemoryStore(Store):
             logging.debug("Creating new empty MemoryStore.")
         else:
             logging.debug("Creating MemoryStore from zarr_store.")
-        super().__init__(
-            params=params,
-            zarr_store=zarr_store,
-            simulator=simulator,
-            sync_path=sync_path,
-        )
+        super().__init__(params=params, zarr_store=zarr_store, simulator=simulator)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryStore to a directory."""
