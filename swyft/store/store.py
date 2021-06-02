@@ -337,8 +337,8 @@ class Store(ABC):
             f_collect = True if isinstance(self, MemoryStore) else False
             self._simulator.run(
                 self.pars,
-                self.sims,
-                self.sim_status,
+                {k: v.oindex for k, v in self.sims.items()},
+                self.sim_status.oindex,
                 idx,
                 f_collect,
                 batch_size=batch_size,
