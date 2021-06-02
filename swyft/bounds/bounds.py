@@ -73,8 +73,8 @@ class Bound:
 
     @classmethod
     def from_Posteriors(cls, partitions, post, obs, th=-13.0):
-        return CompositBound.from_RatioEstimator(
-            partitions, post.ratios, obs, post.bound, th=th
+        return CompositBound.from_Posteriors(
+            partitions, post, obs, post.bound, th=th
         )
 
 
@@ -338,6 +338,62 @@ class CompositBound(Bound):
             r = v(u[:, np.array(k)])
             res.append(r)
         return sum(res) == len(res)
+
+    # - Function: Generate sample from posterior
+    #   - Constraints are based on p(u|z)/p(u), and should be (different from what we have in the paper???)
+    #   - That means I need weights without prior corrections, can be an option to switch this on or off
+    #   - Samples should be samples from the hypercube
+    #   - Use sampled points above a threshold for generating Rec bound and BallBounds, directly based on points
+    # - Function: Return isolated ratio function & bound object from Posteriors object
+    #   - Can be used in sampling
+
+    @classmethod
+    def from_Posteriors(cls, partition, post, obs, bound, th=-13.0, N = 10000):
+        """Generate new CompositBound object based on RatioEstimator.
+
+        Args:
+            rc (RatioEstimator): RatioEstimator to evaluate.
+            obs (dict): Reference observation.
+            bound (Bound): Bound of RatioEstimator.
+            th (float): Threshold value, default -13
+        """
+        bounds = {}
+        udim = bound.udim
+        idx_rec = []
+
+        samples = post.sample(N, obs)
+        v = samples['params']
+        u = post.ptrans.u(v)
+
+        weights = samples['weights']
+
+        for part in partition:
+            if part not in weights:
+                raise KeyError
+#            if len(part) == 1:
+#                idx_rec.append(part[0])
+#            else:
+            w = weights[part]
+            mask = w-w.max() > th
+            points = u[mask][:, part]
+            b = BallsBound(points)
+            bounds[part] = b
+
+#        if len(idx_rec) > 0:
+#            res = np.zeros((len(idx_rec, 2))
+#            res[:, 1] = 1.0
+#            part = tuple(idx_rec)
+#            for i in part:
+#                w = weights[(i,)]
+#                mask = w-w.max() > th
+#                p = points[mask,i]
+#                [p.min(), p.max()]
+#            points = points[:,part]
+#            #bounds[part] = RectangleBound.from_RatioEstimator(
+#            #    rc, obs, bound, th=th, part=part
+            #)
+
+        return cls(bounds, udim)
 
     @classmethod
     def from_RatioEstimator(cls, partitions, rc, obs, bound, th=-13.0):

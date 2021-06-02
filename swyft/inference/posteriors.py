@@ -11,20 +11,11 @@ import swyft
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-class JoinedRatioEstimator:
-    def __init__(self, ratio_collections):
-        self._rcs = ratio_collections
-        self.param_list = []
-        [self.param_list.extend(rc.param_list) for rc in self._rcs]
-        self.param_list = list(set(self.param_list))
-
-    def ratios(self, obs: Array, params: Array, n_batch=100):
-        result = {}
-        for rc in self._rcs:
-            ratios = rc.ratios(obs, params, n_batch=n_batch)
-            result.update(ratios)
-        return result
-
+#    def __init__(self, ratio_collections):
+#        self._rcs = ratio_collections
+#        self.param_list = []
+#        [self.param_list.extend(rc.param_list) for rc in self._rcs]
+#        self.param_list = list(set(self.param_list))
 
 class Posteriors:
     def __init__(self, dataset, simhook=None):
@@ -82,10 +73,10 @@ class Posteriors:
         v = self._prior.sample(N)  # prior samples
 
         # Unmasked original wrongly normalized log_prob densities
-        log_probs = self._prior.log_prob(v)
+        #log_probs = self._prior.log_prob(v)
         u = self._prior.ptrans.u(v)
 
-        ratios = self.ratios.ratios(obs0, u)  # evaluate lnL for reference observation
+        ratios = self._eval_ratios(obs0, u)  # evaluate lnL for reference observation
         weights = {}
         for k, val in ratios.items():
             weights[k] = np.exp(val)
@@ -99,9 +90,12 @@ class Posteriors:
     def ptrans(self):
         return self._prior.ptrans
 
-    @property
-    def ratios(self):
-        return JoinedRatioEstimator(self._ratios[::-1])
+    def _eval_ratios(self, obs: Array, params: Array, n_batch=100):
+        result = {}
+        for rc in self._ratios:
+            ratios = rc.ratios(obs, params, n_batch=n_batch)
+            result.update(ratios)
+        return result
 
     def _train(
         self, prior, param_list, N, train_args, head, tail, head_args, tail_args, device
