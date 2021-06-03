@@ -374,7 +374,7 @@ class CompositBound(Bound):
 #                idx_rec.append(part[0])
 #            else:
             w = weights[part]
-            mask = w-w.max() > th
+            mask = w/w.max() > np.exp(th)
             points = u[mask][:, part]
             b = BallsBound(points)
             bounds[part] = b
