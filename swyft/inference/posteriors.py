@@ -7,6 +7,7 @@ import numpy as np
 from .ratios import RatioEstimator
 from swyft.networks import DefaultHead, DefaultTail
 from swyft.types import Array, Device, Sequence, Tuple
+from swyft.utils import tupelize_marginals
 import swyft
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -39,6 +40,7 @@ class Posteriors:
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
+        marginals = tupelize_marginals(marginals)
         re = RatioEstimator(
             marginals,
             device=device,
@@ -59,6 +61,7 @@ class Posteriors:
         Args:
             train_args (dict): Training keyword arguments.
         """
+        marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
         re.train(self._dataset, **train_args)
 

@@ -38,3 +38,14 @@ def format_param_list(params, all_params=None, mode="custom"):
         raise KeyError("Invalid mode argument.")
 
     return sort_param_list(param_list)
+
+def tupelize_marginals(marginals):
+    """Reformat input marginals into sorted and hashable standard form: tuples of tuples"""
+    out = list(marginals)
+    for i in range(len(out)):
+        if isinstance(out[i], int):
+            out[i] = (out[i],)
+        else:
+            out[i] = tuple(sorted(set(out[i])))
+    out = tuple(sorted(out))
+    return out

@@ -38,25 +38,11 @@ class Task:
 
         self._device = device
 
-    def simulate(self):
-        self.dataset.simulate()
-    
-    def infer(self,
-        partition,
-        train_args: dict = {},
-        head=DefaultHead,
-        tail=DefaultTail,
-        head_args: dict = {},
-        tail_args: dict = {},
-        device="cpu",
-        ):
-        self.posteriors.infer(partition, train_args = train_args, head = head,
-                tail = tail, head_args = head_args, tail_args = tail_args,
-                device = device)
+        self.simulate = self.dataset.simulate
+        self.add = self.posteriors.add
+        self.train = self.posteriors.train
+        self.sample = self.posteriors.sample
 
     def truncate(self, partition, obs0):
         bound = swyft.Bound.from_Posteriors(partition, self.posteriors, obs0)
         return bound
-
-    def sample(self, N, obs0):
-        return self.posteriors.sample(N, obs0)
