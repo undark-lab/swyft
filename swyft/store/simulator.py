@@ -231,7 +231,7 @@ class Simulator:
             model=model, sim_shapes=sim_shapes, fail_on_non_finite=fail_on_non_finite
         )
 
-    def set_dask_cluster(self, cluster=None) -> None:  # TODO type for cluster
+    def set_dask_cluster(self, cluster=None) -> None:
         """Connect to Dask cluster.
 
         Args:
