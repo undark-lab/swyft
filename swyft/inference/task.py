@@ -4,8 +4,7 @@ from warnings import warn
 import numpy as np
 
 from .posteriors import Posteriors
-from swyft.networks import DefaultHead, DefaultTail
-from swyft.utils import all_finite, format_param_list
+from swyft.utils import tupelize_marginals
 import swyft
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -44,5 +43,6 @@ class Task:
         self.sample = self.posteriors.sample
 
     def truncate(self, partition, obs0):
+        partition = tupelize_marginals(partition)
         bound = swyft.Bound.from_Posteriors(partition, self.posteriors, obs0)
         return bound
