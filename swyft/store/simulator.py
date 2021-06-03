@@ -238,7 +238,8 @@ class Simulator:
             cluster: cluster address or Cluster object from dask.distributed
                 (default is LocalCluster)
         """
-        self.client = Client(cluster)
+        if not (self.cluster is None and self.client is not None):
+            self.client = Client(cluster)
 
 
 def _run_model_chunk(
