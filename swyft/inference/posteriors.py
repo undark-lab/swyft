@@ -11,57 +11,56 @@ import swyft
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-#    def __init__(self, ratio_collections):
-#        self._rcs = ratio_collections
-#        self.param_list = []
-#        [self.param_list.extend(rc.param_list) for rc in self._rcs]
-#        self.param_list = list(set(self.param_list))
-
 class Posteriors:
     def __init__(self, dataset, simhook=None):
         # Store relevant information about dataset
         self._prior = dataset.prior
         self._indices = dataset.indices
         self._N = len(dataset)
-        self._ratios = []
+        self._ratios = {}
 
         # Temporary
         self._dataset = dataset
 
-    def infer(
+    def add(
         self,
-        partitions,
-        train_args: dict = {},
+        marginals,
         head=DefaultHead,
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
         device="cpu",
     ):
-        """Perform 1-dim marginal focus fits.
+        """Add marginals.
 
         Args:
-            train_args (dict): Training keyword arguments.
             head (swyft.Module instance or type): Head network (optional).
             tail (swyft.Module instance or type): Tail network (optional).
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
-        ntrain = self._N
-        bp = self._prior.bound
-
-        re = self._train(
-            bp,
-            partitions,
+        re = RatioEstimator(
+            marginals,
+            device=device,
             head=head,
             tail=tail,
             head_args=head_args,
             tail_args=tail_args,
-            train_args=train_args,
-            N=ntrain,
-            device=device,
         )
-        self._ratios.append(re)
+        self._ratios[marginals] = re
+
+    def train(
+        self,
+        marginals,
+        train_args: dict = {}
+    ):
+        """Train marginals.
+
+        Args:
+            train_args (dict): Training keyword arguments.
+        """
+        re = self._ratios[marginals]
+        re.train(self._dataset, **train_args)
 
     def sample(self, N, obs0):
         """Resturn weighted posterior samples for given observation.
@@ -92,28 +91,10 @@ class Posteriors:
 
     def _eval_ratios(self, obs: Array, params: Array, n_batch=100):
         result = {}
-        for rc in self._ratios:
+        for marginals, rc in self._ratios.items():
             ratios = rc.ratios(obs, params, n_batch=n_batch)
             result.update(ratios)
         return result
-
-    def _train(
-        self, prior, param_list, N, train_args, head, tail, head_args, tail_args, device
-    ):
-        if param_list is None:
-            param_list = prior.params()
-
-        re = RatioEstimator(
-            param_list,
-            device=device,
-            head=head,
-            tail=tail,
-            tail_args=tail_args,
-            head_args=head_args,
-        )
-        re.train(self._dataset, **train_args)
-
-        return re
 
     def state_dict(self):
         state_dict = dict(
