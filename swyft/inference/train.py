@@ -99,12 +99,14 @@ def train(
         head.eval()
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
+        l = validation_loss / n_validation_batches
         logging.debug(
-            "validation loss = %.4g" % (validation_loss / n_validation_batches)
+            "validation loss = %.4g" % l
         )
-        validation_losses.append(validation_loss / n_validation_batches)
-
         epoch += 1
+        print("Training: lr=%.2g, Epoch=%i, VL=%.4g"%(lr, epoch, l), end="\r")
+        validation_losses.append(l)
+
         if epoch == 0 or min_loss > validation_loss:
             fruitless_epoch = 0
             min_loss = validation_loss
@@ -113,6 +115,8 @@ def train(
             best_state_dict_tail = deepcopy(tail.state_dict())
         else:
             fruitless_epoch += 1
+
+    print("Training: lr=%.2g, Epoch=%i, VL=%.4g"%(lr, epoch, l))
 
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 

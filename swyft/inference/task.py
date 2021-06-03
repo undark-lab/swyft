@@ -45,4 +45,6 @@ class Task:
     def truncate(self, partition, obs0):
         partition = tupelize_marginals(partition)
         bound = swyft.Bound.from_Posteriors(partition, self.posteriors, obs0)
+        print("Bounds: Truncating...")
+        print("Bounds: ...done. New volue is V=%.4g"%bound.volume)
         return bound

@@ -68,10 +68,10 @@ class Store(ABC):
         logging.debug("  params = %s" % str(params))
 
         if set(["samples", "metadata"]) == set(self._root.keys()):
-            logging.info("Loading existing store.")
+            print("Loading existing store.")
             self._update()
         elif len(self._root.keys()) == 0:
-            logging.info("Creating new store.")
+            print("Creating new store.")
             self._setup_new_zarr_store(
                 len(self.params), simulator.sim_shapes, self._root
             )
@@ -207,9 +207,7 @@ class Store(ABC):
         if sum(accept_new) > 0:
             # Add new entries to store
             self._append_new_points(z_new, log_w_new)
-            logging.info(
-                "  adding %i new samples to simulator store." % sum(accept_new)
-            )
+            print("Store: Adding %i new samples to simulator store." % sum(accept_new))
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)

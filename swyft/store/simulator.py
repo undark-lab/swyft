@@ -51,9 +51,12 @@ class Simulator:
                                (default is about 100)
         """
 
+        print("Simulator: Running...")
         bag = db.from_sequence(z, npartitions=npartitions)
         bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
-        return bag.compute(scheduler=self.client or "processes")
+        result = bag.compute(scheduler=self.client or "processes")
+        print("Simulator: ...done.")
+        return result
 
     @classmethod
     def from_command(cls, command, set_input_method, get_output_method, tmpdir=None):
