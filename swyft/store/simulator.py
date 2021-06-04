@@ -145,7 +145,7 @@ class Simulator:
             # the following dummy array is generated after results are stored.
             zeros_when_done = [
                 source.map_blocks(
-                    lambda x: 0,
+                    lambda x: np.zeros(x.shape[0], dtype=np.int),
                     chunks=(source.chunks[0],),
                     drop_axis=[i for i in range(1, source.ndim)],
                     meta=np.array((), dtype=np.int),
@@ -153,19 +153,17 @@ class Simulator:
                 )
                 for source in sources
             ]
-            status = da.add(*zeros_when_done, status)
+            status = sum([*zeros_when_done, status])
             status = status.store(
                 target=sim_status,
                 regions=(indices.tolist(),),
                 lock=False,
                 compute=False,
+                return_stored=True,
             )
             # when the simulation results are stored, we can update the status
-            status_stored = self.client.compute(status)
-            fire_and_forget(status_stored)
-
-            if wait_for_results:
-                wait(status_stored)
+            status = self.client.persist(status)
+            fire_and_forget(status)
 
     @classmethod
     def from_command(
