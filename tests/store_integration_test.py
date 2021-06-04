@@ -134,15 +134,13 @@ def test_concurrent_run_without_waiting_for_results(cluster, store):
     assert n_simulations > 0.80 * N_SIMULATIONS and n_simulations < 1.20 * N_SIMULATIONS
     assert n_params == len(PARAMS)
 
-    # check shape and values of the simulation array
+    # check shape of the simulation array
     assert x.keys() == SIM_SHAPES.keys()
     for key, val in SIM_SHAPES.items():
         assert x[key].shape == (n_simulations, *val)
-        assert np.any(x[key] == 0.0)  # some simulation output is still zero
 
-    # check shape and values of the status array
+    # check shape of the status array
     assert s.shape == (n_simulations,)
-    assert np.any(s == SimulationStatus.RUNNING)  # some simulations are still running
 
     # now explicitly wait for simulations
     store.wait_for_simulations(indices=np.arange(n_simulations))
