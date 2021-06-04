@@ -39,6 +39,7 @@ class Store(ABC):
         zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
         simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
+        chunksize: int = 1000,
     ):
         """Initialize Store content dimensions.
 
@@ -49,6 +50,9 @@ class Store(ABC):
             sync_path: if specified, it will enable synchronization using file locks (files will be
                 stored in the given path). Must be accessible to all processes working on the store
                 and the underlying filesystem must support file locking.
+            chunksize: the parameters and simulation output will be stored as arrays with the
+                specified chunk size along the sample dimension (a single chunk will be used for the
+                other dimensions).
         """
         self._zarr_store = zarr_store
         self._simulator = simulator
@@ -68,7 +72,7 @@ class Store(ABC):
         elif len(self._root.keys()) == 0:
             logging.info("Creating new store.")
             self._setup_new_zarr_store(
-                len(self.params), simulator.sim_shapes, self._root
+                len(self.params), simulator.sim_shapes, self._root, chunksize=chunksize
             )
             logging.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
@@ -100,32 +104,31 @@ class Store(ABC):
             logging.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
-        self, zdim, sim_shapes, root
+        self, zdim, sim_shapes, root, chunksize=1000
     ) -> None:  # Adding observational shapes to store
         # Parameters
-        # FIXME: Optimize chuck size
-        root.zeros(  # noqa: F841
+        root.zeros(
             self._filesystem.pars,
             shape=(0, zdim),
-            chunks=(100000, zdim),
+            chunks=(chunksize, zdim),
             dtype="f8",
         )
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
         for name, shape in sim_shapes.items():
-            sims.zeros(name, shape=(0, *shape), chunks=(100000, *shape), dtype="f8")
+            sims.zeros(name, shape=(0, *shape), chunks=(chunksize, *shape), dtype="f8")
 
         # Random intensity weights
-        root.zeros(  # noqa: F841
+        root.zeros(
             self._filesystem.log_w,
             shape=(0,),
-            chunks=(100000,),
+            chunks=(chunksize,),
             dtype="f8",
         )
 
         # Pickled Intensity (prior * N) objects
-        root.create(  # noqa: F841
+        root.create(
             self._filesystem.log_lambdas,
             shape=(0,),
             dtype=object,
@@ -133,10 +136,10 @@ class Store(ABC):
         )
 
         # Simulation status code
-        root.zeros(  # noqa: F841
+        root.zeros(
             self._filesystem.simulation_status,
             shape=(0,),
-            chunks=(100000,),
+            chunks=(chunksize,),
             dtype="int",
         )
 
