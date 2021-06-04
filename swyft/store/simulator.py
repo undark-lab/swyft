@@ -54,9 +54,8 @@ class Simulator:
         sims,
         sim_status,
         indices,
-        f_collect: bool = True,
+        collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
-        wait_for_results: bool = True,
     ):
         """Run the simulator on the input parameters.
 
@@ -70,13 +69,12 @@ class Simulator:
                 be equal to the number of samples)
             indices: indices of the samples that need to be run by the
                 simulator
-            f_collect: if True, collect all simulation output in memory; if
-                False, instruct Dask workers to save the output directly in the
-                output arrays
+            collect_in_memory: if True, collect the simulation output in
+                memory; if False, instruct Dask workers to save the output to
+                the corresponding arrays. The latter option is asynchronous,
+                thus this method immediately returns.
             batch_size: simulations will be submitted in batches of the
                 specified size
-            wait_for_results: if True, return only when all simulations are
-                done
         """
         self.set_dask_cluster(self.cluster)
 
@@ -118,7 +116,7 @@ class Simulator:
         sources = [result_dict[k] for k in self.sim_shapes.keys()]
         targets = [sims[k] for k in self.sim_shapes.keys()]
 
-        if f_collect:
+        if collect_in_memory:
             # submit computation and collect results
             *sources, status = self.client.compute([*sources, status], sync=True)
 

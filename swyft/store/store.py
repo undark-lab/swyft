@@ -332,17 +332,21 @@ class Store(ABC):
         if len(idx) == 0:
             logging.debug("No simulations required.")
         else:
-            # TODO: Memory Zarr Array does not support distributed scheduler.
-            # Is there a better way to handle this?
-            f_collect = True if isinstance(self, MemoryStore) else False
+            # For the MemoryStore, we need to collect results in memory
+            collect_in_memory = True if isinstance(self, MemoryStore) else False
+
+            if collect_in_memory and not wait_for_results:
+                logging.warning(
+                    "Asynchronous collection of results is not implemented with the MemoryStore"
+                )
+
             self._simulator.run(
-                self.pars,
-                {k: v.oindex for k, v in self.sims.items()},
-                self.sim_status.oindex,
-                idx,
-                f_collect,
+                pars=self.pars,
+                sims={k: v.oindex for k, v in self.sims.items()},
+                sim_status=self.sim_status.oindex,
+                indices=idx,
+                collect_in_memory=collect_in_memory,
                 batch_size=batch_size,
-                wait_for_results=wait_for_results,
             )
 
         if wait_for_results:
