@@ -2,10 +2,10 @@
 # from .linear import LinearWithChannel
 # from .resnet import ResidualNet
 
-from .module import Module
-from .tail import DefaultTail
 from .head import DefaultHead
+from .module import Module
 from .normalization import OnlineNormalizationLayer
+from .tail import DefaultTail
 
 __all__ = [
     #    "BatchNorm1dWithChannel",

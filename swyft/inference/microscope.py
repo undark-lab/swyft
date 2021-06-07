@@ -3,11 +3,11 @@ from warnings import warn
 
 import numpy as np
 
-from .posteriors import Posteriors
+import swyft
 from swyft.networks import DefaultHead, DefaultTail
 from swyft.utils import all_finite, format_param_list
-import swyft
 
+from .posteriors import Posteriors
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 

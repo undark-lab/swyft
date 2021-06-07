@@ -2,10 +2,9 @@
 from typing import Optional
 
 import numpy as np
-import torch.nn as nn
 import torch
+import torch.nn as nn
 
-from .train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device, Sequence, Tuple
 from swyft.utils import (
@@ -14,6 +13,8 @@ from swyft.utils import (
     format_param_list,
     get_obs_shapes,
 )
+
+from .train import trainloop
 
 
 class IsolatedRatio:
@@ -64,7 +65,6 @@ class RatioEstimator:
 
         Args:
             points: points dataset from the iP3 sample store
-            combinations: which combinations of z parameters to learn
             head: initialized module which processes observations, head(x0) = y
             previous_ratio_estimator: ratio estimator from another round. if given, reuse head.
             device: default is cpu
@@ -100,22 +100,19 @@ class RatioEstimator:
     def train(
         self,
         dataset,
-        max_epochs: int = 10,
-        batch_size: int = 32,
-        lr_schedule: Sequence[float] = [1e-3, 3e-4, 1e-4],
-        early_stopping_patience: int = 1,
-        nworkers: int = 0,
+        batch_size=64,
         percent_validation=0.1,
+        early_stopping_patience=10,
+        max_epochs=50,
+        lr=1e-3,
+        reduce_lr_factor=0.1,
+        reduce_lr_patience=5,
+        nworkers=0,
     ) -> None:
         """Train higher-dimensional marginal posteriors.
 
         Args:
-            max_epochs: maximum number of training epochs
-            batch_size: minibatch size
-            lr_schedule: list of learning rates
-            early_stopping_patience: early stopping patience
             nworkers: number of Dataloader workers (0 for no dataloader parallelization)
-            percent_validation: percentage to allocate to validation set
         """
 
         if self.tail is None:
@@ -125,36 +122,28 @@ class RatioEstimator:
         self.tail.train()
 
         diagnostics = trainloop(
-            self.head,
-            self.tail,
-            dataset,
-            combinations=None,
-            device=self.device,
-            max_epochs=max_epochs,
+            head=self.head,
+            tail=self.tail,
+            dataset=dataset,
             batch_size=batch_size,
-            lr_schedule=lr_schedule,
-            early_stopping_patience=early_stopping_patience,
-            nworkers=nworkers,
             percent_validation=percent_validation,
+            early_stopping_patience=early_stopping_patience,
+            max_epochs=max_epochs,
+            lr=lr,
+            reduce_lr_factor=reduce_lr_factor,
+            reduce_lr_patience=reduce_lr_patience,
+            nworkers=nworkers,
+            device=self.device,
         )
         self._train_diagnostics.append(diagnostics)
 
-    # FIXME: Type annotations and docstring are wrong
     def ratios(
         self,
-        obs: Array,
-        params: Array,
+        obs,
+        params,
         n_batch=100,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Retrieve estimated marginal posterior.
-
-        Args:
-            x0: real observation to calculate posterior
-            combination_indices: z indices in self.combinations
-
-        Returns:
-            parameter array, posterior array
-        """
+    ):
+        """Retrieve estimated marginal posterior."""
 
         self.head.eval()
         self.tail.eval()

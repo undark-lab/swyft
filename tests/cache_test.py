@@ -1,12 +1,14 @@
 import tempfile
+import time
+from itertools import product
+from pathlib import Path
+
 import numpy as np
 import pytest
-import time
-from pathlib import Path
-from itertools import product
+
+from swyft import Prior
 from swyft.cache.cache import Cache, DirectoryCache, MemoryCache
 from swyft.utils.simulator import Simulator
-from swyft import Prior
 
 
 def model(params):

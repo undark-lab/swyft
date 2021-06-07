@@ -1,14 +1,13 @@
 import logging
 from warnings import warn
 
-import torch
 import numpy as np
+import torch
 
-from .ratios import RatioEstimator
-from swyft.networks import DefaultHead, DefaultTail
-from swyft.types import Array, Device, Sequence, Tuple
-from swyft.utils import tupelize_marginals
 import swyft
+from swyft.types import Array
+from swyft.networks import DefaultHead, DefaultTail
+from swyft.utils import tupelize_marginals
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 

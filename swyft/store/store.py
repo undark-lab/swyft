@@ -12,9 +12,9 @@ import numcodecs
 import numpy as np
 import zarr
 
+import swyft
 from swyft.types import Array, PathType, Shape
 from swyft.utils import all_finite, is_empty
-import swyft
 
 
 class SimulationStatus(enum.IntEnum):
