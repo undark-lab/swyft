@@ -34,7 +34,9 @@ def train(
     validation_loader,
     early_stopping_patience,
     max_epochs,
+    optimizer_fn,
     lr,
+    scheduler_fn,
     reduce_lr_factor,
     reduce_lr_patience,
     device="cpu",
@@ -78,8 +80,8 @@ def train(
 
     max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs
     params = list(head.parameters()) + list(tail.parameters())
-    optimizer = torch.optim.Adam(params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer = optimizer_fn(params, lr=lr)
+    scheduler = scheduler_fn(
         optimizer,
         factor=reduce_lr_factor,
         patience=reduce_lr_patience,
@@ -133,7 +135,9 @@ def trainloop(
     percent_validation=0.1,
     early_stopping_patience=10,
     max_epochs=50,
+    optimizer_fn=torch.optim.Adam,
     lr=1e-3,
+    scheduler_fn=torch.optim.lr_scheduler.ReduceLROnPlateau,
     reduce_lr_factor=0.1,
     reduce_lr_patience=5,
     nworkers=0,
@@ -144,7 +148,9 @@ def trainloop(
     logging.debug(f"{'percent_validation':>25} {percent_validation:<4}")
     logging.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
     logging.debug(f"{'max_epochs':>25} {max_epochs:<4}")
+    logging.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
     logging.debug(f"{'lr':>25} {lr:<4}")
+    logging.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
     logging.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
     logging.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
     logging.debug(f"{'nworkers':>25} {nworkers:<4}")
@@ -178,7 +184,9 @@ def trainloop(
         valid_loader,
         early_stopping_patience=early_stopping_patience,
         max_epochs=max_epochs,
+        optimizer_fn=optimizer_fn,
         lr=lr,
+        scheduler_fn=scheduler_fn,
         reduce_lr_factor=reduce_lr_factor,
         reduce_lr_patience=reduce_lr_patience,
         device=device,
