@@ -105,6 +105,8 @@ def train(
             "validation loss = %.4g" % l
         )
         epoch += 1
+        # FIXME: Not optimal when multiple parameter groups are present
+        lr = optimizer.param_groups[0]['lr']
         print("Training: lr=%.2g, Epoch=%i, VL=%.4g"%(lr, epoch, l), end="\r")
         validation_losses.append(l)
 
