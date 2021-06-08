@@ -1,4 +1,5 @@
 import logging
+from typing import Callable
 
 import swyft
 from swyft.inference.posteriors import Posteriors
@@ -35,6 +36,7 @@ class Microscope:
         new_simulation_factor: float = 1.5,
         new_simulation_term: int = 0,
         convergence_ratio=0.8,
+        epsilon_threshold=-13,
         train_args: dict = {},
         head_args: dict = {},
         tail_args: dict = {},
@@ -56,6 +58,7 @@ class Microscope:
             new_simulation_factor (float >= 1)
             new_simulation_term (int >= 0)
             convergence_ratio (float > 0.): Convergence ratio between new_volume / old_volume.
+            epsilon_threshold: log ratio cutoff
         """
         assert new_simulation_factor >= 1.0
         assert new_simulation_term >= 0
@@ -82,6 +85,7 @@ class Microscope:
             convergence_ratio=convergence_ratio,
             new_simulation_factor=new_simulation_factor,
             new_simulation_term=new_simulation_term,
+            epsilon_threshold=epsilon_threshold,
         )
         self._initial_prior = prior  # Initial prior
 
@@ -114,8 +118,8 @@ class Microscope:
 
     @property
     def constrained_prior(self):
-        """Original (unconstrained) prior."""
-        return self._next_priors[-1]
+        """Last prior before criterion."""
+        return swyft.Posteriors.from_Microscope(self)._prior
 
     @property
     def elapsed_rounds(self):
@@ -132,6 +136,7 @@ class Microscope:
     def focus(
         self,
         max_rounds: int = 10,
+        custom_new_n: Callable = None,
     ) -> int:
         """[summary]
 
@@ -151,6 +156,8 @@ class Microscope:
                 )
                 if len(self._datasets) == 0:
                     N = self._config["Ninit"]
+                elif custom_new_n is not None:
+                    N = custom_new_n(self)
                 else:
                     N_prev = len(self._datasets[-1])
                     N = self._calculate_new_N(N_prev)
@@ -206,7 +213,10 @@ class Microscope:
                 )
                 posteriors = self._posteriors[-1]
                 bound = swyft.Bound.from_Posteriors(
-                    self._partitions, posteriors, self._obs, th=-13
+                    self._partitions,
+                    posteriors,
+                    self._obs,
+                    th=self._config["epsilon_threshold"],
                 )
                 prior = self._datasets[-1].prior
                 new_prior = prior.rebounded(bound)

@@ -29,8 +29,13 @@ def corner(
     ylim_lower=None,
     truth=None,
     levels=3,
-    ticks=False,
-    ticklabels=False,
+    labels=None,
+    ticks=True,
+    ticklabels=True,
+    ticklabelsize="x-small",
+    tickswhich="both",
+    labelrotation=45,
+    space_between_axes=0.1,
 ):
     marginals_1d = filter_marginals_by_dim(marginal_dfs, 1)
     marginals_2d = filter_marginals_by_dim(marginal_dfs, 2)
@@ -42,9 +47,13 @@ def corner(
     _, diag, upper = split_corner_axes(axes)
     lb = 0.125
     tr = 0.9
-    whspace = 0.1
     fig.subplots_adjust(
-        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+        left=lb,
+        bottom=lb,
+        right=tr,
+        top=tr,
+        wspace=space_between_axes,
+        hspace=space_between_axes,
     )
 
     color = "k"
@@ -120,32 +129,42 @@ def corner(
             labelleft=False,
         )
 
-    # bottom row
-    for ax in axes[-1, :]:
-        ax.tick_params(
-            axis="x",
-            which="major",
-            bottom=True,
-            direction="out",
-            labelbottom=True,
-            labelrotation=45,
-        )
-    # left column
-    for ax in axes[1:, 0]:
-        ax.tick_params(
-            axis="y",
-            which="major",
-            left=True,
-            direction="out",
-            labelleft=True,
-            labelrotation=45,
-        )
-
+    # clear all
     for ax in axes.flatten():
         ax.set_xlabel("")
         ax.set_ylabel("")
         if xlim is not None:
             ax.set_xlim(*xlim)
+
+    # bottom row
+    for i, ax in enumerate(axes[-1, :]):
+        ax.tick_params(
+            axis="x",
+            which=tickswhich,
+            bottom=ticks,
+            direction="out",
+            labelbottom=ticks and ticklabels,
+            labelrotation=labelrotation,
+            labelsize=ticklabelsize,
+        )
+        if labels is not None:
+            ax.set_xlabel(labels[i])
+
+    # left column
+    for i, ax in enumerate(axes[1:, 0], 1):
+        ax.tick_params(
+            axis="y",
+            which=tickswhich,
+            left=ticks,
+            direction="out",
+            labelleft=ticks and ticklabels,
+            labelrotation=labelrotation,
+            labelsize=ticklabelsize,
+        )
+        if labels is not None:
+            ax.set_ylabel(labels[i])
+
+    fig.align_labels()
     return fig, axes
 
 
