@@ -31,6 +31,7 @@ class PosteriorCollection:
             obs (dict): Observation of interest.
             N (int): Number of samples to return.
         """
+
         v = self._prior.sample(N)  # prior samples
 
         # Unmasked original wrongly normalized log_prob densities
@@ -40,6 +41,7 @@ class PosteriorCollection:
         ratios = self._rc.ratios(
             obs, u, device=device, n_batch=n_batch
         )  # evaluate lnL for reference observation
+
         weights = {}
         for k, val in ratios.items():
 
@@ -55,6 +57,7 @@ class PosteriorCollection:
         maxiter: int = 1000,
         device=None,
         n_batch=10_000,
+        param_tuples=None,
     ):
         """Samples from each marginal using rejection sampling.
 
@@ -72,13 +75,20 @@ class PosteriorCollection:
             Machine Learning: A Probabilistic Perspective
             Kevin P. Murphy
         """
+
         weighted_samples = self.sample(
-            N=10 * excess_factor * N, obs=obs, device=None, n_batch=10_000
+            N=excess_factor * N, obs=obs, device=device, n_batch=10_000
         )
+
         maximum_log_likelihood_estimates = {
             k: np.log(np.max(v)) for k, v in weighted_samples["weights"].items()
         }
-        param_tuples = set(weighted_samples["weights"].keys())
+
+        param_tuples = (
+            set(weighted_samples["weights"].keys())
+            if param_tuples is None
+            else param_tuples
+        )
         collector = {k: [] for k in param_tuples}
         out = {}
 
@@ -89,6 +99,7 @@ class PosteriorCollection:
         remaining_param_tuples = param_tuples
         while counter < maxiter:
             # Calculate chance to keep a sample
+
             log_prob_to_keep = {
                 pt: np.log(weighted_samples["weights"][pt])
                 - maximum_log_likelihood_estimates[pt]
@@ -100,6 +111,7 @@ class PosteriorCollection:
                 pt: np.less_equal(np.log(np.random.rand(*v.shape)), v)
                 for pt, v in log_prob_to_keep.items()
             }
+
             # Collect samples for every tuple of parameters, if there are enough, add them to out.
             for param_tuple in remaining_param_tuples:
                 kept_all_params = weighted_samples["params"][to_keep[param_tuple]]
@@ -113,6 +125,7 @@ class PosteriorCollection:
             for param_tuple in out.keys():
                 if param_tuple in remaining_param_tuples:
                     remaining_param_tuples.remove(param_tuple)
+                    log.debug(f"{len(remaining_param_tuples)} param tuples remaining")
 
             if len(remaining_param_tuples) > 0:
                 weighted_samples = self.sample(
