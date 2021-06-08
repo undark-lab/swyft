@@ -3,14 +3,15 @@ import pandas as pd
 import pylab as plt
 import seaborn as sns
 
-from swyft.utils.futils import filter_marginals_by_dim
+from swyft.utils.mutils import filter_marginals_by_dim
 from swyft.utils.utils import grid_interpolate_samples
 
 
 def split_corner_axes(axes):
     diag = np.diag(axes)
-    offdiag = axes[np.tril(axes, -1).nonzero()]
-    return diag, offdiag
+    lower = axes[np.tril(axes, -1).nonzero()]
+    upper = axes[np.triu(axes, 1).nonzero()]
+    return lower, diag, upper
 
 
 def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
@@ -23,7 +24,7 @@ def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):
     return levels
 
 
-def create_df_from_marginal_dict(marginals, method: str):
+def create_violin_df_from_marginal_dict(marginals, method: str):
     marginals_1d = filter_marginals_by_dim(marginals, 1)
     rows = []
     for key, value in marginals_1d.items():
@@ -40,8 +41,8 @@ def violin_plot(
     reference_marginals, estimated_marginals, method: str, ax=None, palette="muted"
 ):
     data = [
-        create_df_from_marginal_dict(reference_marginals, "Reference"),
-        create_df_from_marginal_dict(estimated_marginals, method),
+        create_violin_df_from_marginal_dict(reference_marginals, "Reference"),
+        create_violin_df_from_marginal_dict(estimated_marginals, method),
     ]
     data = pd.concat(
         data,
@@ -73,6 +74,7 @@ def plot1d(
     bins=100,
     grid_interpolate=False,
     label_args={},
+    subplots_kwargs={},
 ) -> None:
 
     if ncol is None:
@@ -80,7 +82,7 @@ def plot1d(
     K = len(params)
     nrow = (K - 1) // ncol + 1
 
-    fig, axes = plt.subplots(nrow, ncol, figsize=figsize)
+    fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
     lb = 0.125
     tr = 0.9
     whspace = 0.15
