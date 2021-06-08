@@ -40,7 +40,6 @@ def main():
         obs=defs.obs0,
         device=DEVICE,
         Ninit=conf.Ninit,
-        Nmax=conf.Nmax,
         cache=cache,
     )
 

@@ -10,7 +10,141 @@ from swyft.utils import tupelize_marginals
 from .ratios import RatioEstimator
 from swyft.networks import DefaultHead, DefaultTail
 
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+log = logging.getLogger(__name__)
+
+# TODO: Deprecate!
+class PosteriorCollection:
+    def __init__(self, rc, prior):
+        """Marginal container initialization.
+
+        Args:
+            rc (RatioCollection)
+            prior (BoundPrior)
+        """
+        self._rc = rc
+        self._prior = prior
+
+    def sample(self, N, obs, device=None, n_batch=10_000):
+        """Resturn weighted posterior samples for given observation.
+
+        Args:
+            obs (dict): Observation of interest.
+            N (int): Number of samples to return.
+        """
+        v = self._prior.sample(N)  # prior samples
+
+        # Unmasked original wrongly normalized log_prob densities
+        # log_probs = self._prior.log_prob(v)
+        u = self._prior.ptrans.u(v)
+
+        ratios = self._rc.ratios(
+            obs, u, device=device, n_batch=n_batch
+        )  # evaluate lnL for reference observation
+        weights = {}
+        for k, val in ratios.items():
+
+            weights[k] = np.exp(val)
+
+        return dict(params=v, weights=weights)
+
+    def rejection_sample(
+        self,
+        N: int,
+        obs: dict,
+        excess_factor: int = 100,
+        maxiter: int = 1000,
+        device=None,
+        n_batch=10_000,
+    ):
+        """Samples from each marginal using rejection sampling.
+
+        Args:
+            N (int): number of samples in each marginal to output
+            obs (dict): target observation
+            excess_factor (int, optional): N_to_reject = excess_factor * N . Defaults to 100.
+            maxiter (int, optional): maximum loop attempts to draw N. Defaults to 1000.
+
+        Returns:
+            Dict[str, np.ndarray]: keys are marginal tuples, values are samples
+
+        Reference:
+            Section 23.3.3
+            Machine Learning: A Probabilistic Perspective
+            Kevin P. Murphy
+        """
+        weighted_samples = self.sample(
+            N=10 * excess_factor * N, obs=obs, device=None, n_batch=10_000
+        )
+        maximum_log_likelihood_estimates = {
+            k: np.log(np.max(v)) for k, v in weighted_samples["weights"].items()
+        }
+        param_tuples = set(weighted_samples["weights"].keys())
+        collector = {k: [] for k in param_tuples}
+        out = {}
+
+        # Do the rejection sampling.
+        # When a particular key hits the necessary samples, stop calculating on it to reduce cost.
+        # Send that key to out.
+        counter = 0
+        remaining_param_tuples = param_tuples
+        while counter < maxiter:
+            # Calculate chance to keep a sample
+            log_prob_to_keep = {
+                pt: np.log(weighted_samples["weights"][pt])
+                - maximum_log_likelihood_estimates[pt]
+                for pt in remaining_param_tuples
+            }
+
+            # Draw and determine if samples are kept
+            to_keep = {
+                pt: np.less_equal(np.log(np.random.rand(*v.shape)), v)
+                for pt, v in log_prob_to_keep.items()
+            }
+            # Collect samples for every tuple of parameters, if there are enough, add them to out.
+            for param_tuple in remaining_param_tuples:
+                kept_all_params = weighted_samples["params"][to_keep[param_tuple]]
+                kept_params = kept_all_params[..., param_tuple]
+                collector[param_tuple].append(kept_params)
+                concatenated = np.concatenate(collector[param_tuple])[:N]
+                if len(concatenated) == N:
+                    out[param_tuple] = concatenated
+
+            # Remove the param_tuples which we already have in out, thus not to calculate for them anymore.
+            for param_tuple in out.keys():
+                if param_tuple in remaining_param_tuples:
+                    remaining_param_tuples.remove(param_tuple)
+
+            if len(remaining_param_tuples) > 0:
+                weighted_samples = self.sample(
+                    N=excess_factor * N, obs=obs, device=device, n_batch=n_batch
+                )
+            else:
+                return out
+            counter += 1
+        warn(
+            f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}."
+        )
+        return out
+
+    def state_dict(self):
+        return dict(rc=self._rc.state_dict(), prior=self._prior.state_dict())
+
+    @classmethod
+    def from_state_dict(cls, state_dict):
+        return cls(
+            RatioCollection.from_state_dict(state_dict["rc"]),
+            swyft.Prior.from_state_dict(state_dict["prior"]),
+        )
+
+    @classmethod
+    def load(cls, filename):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)
+
 
 class Posteriors:
     def __init__(self, dataset, simhook=None):
@@ -83,6 +217,47 @@ class Posteriors:
         for k, val in ratios.items():
             weights[k] = np.exp(val)
         return dict(params=v, weights=weights)
+
+#    def sample(self, N, obs, device=None, n_batch=10_000):
+#        post = PosteriorCollection(self.ratios, self._prior)
+#        samples = post.sample(N, obs, device=device, n_batch=n_batch)
+#        return samples
+
+    # TODO: Import from PosteriorCollection
+    def rejection_sample(
+        self,
+        N: int,
+        obs: dict,
+        excess_factor: int = 100,
+        maxiter: int = 1000,
+        device=None,
+        n_batch=10_000,
+    ):
+        """Samples from each marginal using rejection sampling.
+
+        Args:
+            N (int): number of samples in each marginal to output
+            obs (dict): target observation
+            excess_factor (int, optional): N_to_reject = excess_factor * N . Defaults to 100.
+            maxiter (int, optional): maximum loop attempts to draw N. Defaults to 1000.
+
+        Returns:
+            Dict[str, np.ndarray]: keys are marginal tuples, values are samples
+
+        Reference:
+            Section 23.3.3
+            Machine Learning: A Probabilistic Perspective
+            Kevin P. Murphy
+        """
+        post = PosteriorCollection(self.ratios, self._prior)
+        return post.rejection_sample(
+            N=N,
+            obs=obs,
+            excess_factor=excess_factor,
+            maxiter=maxiter,
+            device=device,
+            n_batch=n_batch,
+        )
 
     @property
     def bound(self):

@@ -6,6 +6,8 @@ from torch.utils.data import Dataset as torch_Dataset
 
 import swyft
 
+log = logging.getLogger(__name__)
+
 
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
@@ -90,14 +92,14 @@ class Dataset(torch_Dataset):
 
         obj._store = store
         if store is None:
-            logging.warning("No store specified!")
+            log.warning("No store specified!")
         obj._simhook = simhook
         if state_dict["simhook"] and not simhook:
-            logging.warning(
+            log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."
             )
         if not state_dict["simhook"] and simhook:
-            logging.warning(
+            log.warning(
                 "A simhook was specified, but no simhook was specified when the Dataset was saved."
             )
         return obj
@@ -109,3 +111,49 @@ class Dataset(torch_Dataset):
     def load(cls, filename, store=None, simhook=None):
         sd = torch.load(filename)
         return cls.from_state_dict(sd, store=store, simhook=simhook)
+
+
+class ExactDataset(Dataset):
+    """Dataset with exactly a certain number of simulations."""
+
+    def __init__(self, N, prior, store, simhook=None, oversample_factor: float = 1.2):
+        """Initialize Dataset.
+
+        Args:
+            N (int): Number of samples.
+            prior (swyft.Prior): Parameter prior.
+            store (swyft.Store): Store reference.
+            simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
+            oversample_factor (float): how many extra samples to draw (to make sure we can subsample to get an exact length)
+        """
+        super().__init__(int(oversample_factor * N), prior, store, simhook=simhook)
+        while len(self) < N:
+            indices = store.sample(int(oversample_factor * N), prior)
+            self._indices = indices
+        self._indices = self._indices[:N]
+
+    @classmethod
+    def from_parent_dataset(
+        cls, N, parent_dataset: Dataset, oversample_factor: float = 1.2
+    ):
+        """Initialize Dataset from a parent. Story is copied and simulations are help in in oversampled memory store.
+
+        Args:
+            N (int): number of samples.
+            parent_dataset (Dataset): where to draw the prior and copy the store from.
+            oversample_factor (float): how many extra samples to draw (to make sure we can subsample to get an exact length)
+        """
+        prior = parent_dataset.prior
+        store = parent_dataset._store.copy()
+        simhook = parent_dataset._simhook
+        dataset = cls(int(oversample_factor * N), prior, store, simhook)
+
+        counter = 0
+        while len(dataset) < N:
+            dataset._indices = dataset._store.sample(int(oversample_factor * N), prior)
+            counter += 1
+
+            if counter > 10:
+                raise RuntimeError()
+        dataset._indices = dataset._indices[:N]
+        return dataset

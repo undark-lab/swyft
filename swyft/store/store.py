@@ -13,8 +13,10 @@ import numpy as np
 import zarr
 
 import swyft
-from swyft.types import Array, PathType, Shape
+from swyft.types import Array, PathType
 from swyft.utils import all_finite, is_empty
+
+log = logging.getLogger(__name__)
 
 
 class SimulationStatus(enum.IntEnum):
@@ -65,17 +67,24 @@ class Store(ABC):
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self._root = zarr.group(store=self.zarr_store, synchronizer=synchronizer)
 
-        logging.debug("  params = %s" % str(params))
+        log.debug("  params = %s" % str(params))
 
         if set(["samples", "metadata"]) == set(self._root.keys()):
             print("Loading existing store.")
             self._update()
         elif len(self._root.keys()) == 0:
             print("Creating new store.")
+
+# TODO: Remove
+#            log.debug("Loading existing store.")
+#            self._update()
+#        elif len(self._root.keys()) == 0:
+#            log.debug("Creating new store.")
+
             self._setup_new_zarr_store(
                 len(self.params), simulator.sim_shapes, self._root
             )
-            logging.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
+            log.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
             raise KeyError(
                 "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
@@ -96,13 +105,13 @@ class Store(ABC):
     # FIXME: Where is locking really required?
     def lock(self):
         if self._lock is not None:
-            logging.debug("Cache locked")
+            log.debug("Cache locked")
             self._lock.acquire(blocking=True)
 
     def unlock(self):
         if self._lock is not None:
             self._lock.release()
-            logging.debug("Cache unlocked")
+            log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
         self, zdim, sim_shapes, root
@@ -212,7 +221,7 @@ class Store(ABC):
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
             self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
 
-        logging.info(f"  total size of simulator store {len(self)}.")
+        log.debug(f"  total size of simulator store {len(self)}.")
 
         self._update()
 
@@ -252,7 +261,7 @@ class Store(ABC):
         assert status in list(SimulationStatus), f"Unknown status {status}"
         current_status = self.sim_status.oindex[indices]
         if np.any(current_status == status):
-            logging.warning(
+            log.warning(
                 f"Changing simulation status to {status}, but some simulations have already status {status}"
             )
         self.sim_status.oindex[indices] = status
@@ -305,7 +314,7 @@ class Store(ABC):
 
         assert isinstance(x, dict), "Simulators must return a dictionary."
 
-        dict_anynone = lambda d: any(v is None for v in d.values())
+        dict_anynone = lambda d: any(v is None for v in d.values())  # noqa: E731
 
         if dict_anynone(x):
             return False
@@ -316,7 +325,7 @@ class Store(ABC):
 
     def set_simulator(self, simulator):
         if self._simulator is not None:
-            logging.warning("Simulator already set!  Overwriting.")
+            log.warning("Simulator already set!  Overwriting.")
         self._simulator = simulator
 
     def simulate(
@@ -332,7 +341,7 @@ class Store(ABC):
             fail_on_non_finite: if nan / inf in simulation, considered a failed simulation
         """
         if self._simulator is None:
-            logging.warning("No simulator specified.  No simulations will run.")
+            log.warning("No simulator specified.  No simulations will run.")
             return
 
         self.lock()
@@ -342,7 +351,7 @@ class Store(ABC):
         self.unlock()
 
         if len(idx) == 0:
-            logging.debug("No simulations required.")
+            log.debug("No simulations required.")
             return
         else:
             z = [self.pars[i] for i in idx]
@@ -377,11 +386,11 @@ class Store(ABC):
 
     @staticmethod
     def _extract_zdim_from_zarr_group(group):
-        return group[Store._filesystem.par].shape[1]
+        return group[Store._filesystem.pars].shape[1]
 
     @staticmethod
     def _extract_sim_shapes_from_zarr_group(group):
-        return {k: v.shape[1:] for k, v in group[Cache._filesystem.sims].items()}
+        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
 
     @staticmethod
     def _extract_params_from_zarr_group(group):
@@ -441,9 +450,9 @@ class MemoryStore(Store):
         """
         if zarr_store is None:
             zarr_store = zarr.MemoryStore()
-            logging.debug("Creating new empty MemoryStore.")
+            log.debug("Creating new empty MemoryStore.")
         else:
-            logging.debug("Creating MemoryStore from zarr_store.")
+            log.debug("Creating MemoryStore from zarr_store.")
         super().__init__(
             params=params,
             zarr_store=zarr_store,
@@ -461,8 +470,18 @@ class MemoryStore(Store):
         else:
             path.mkdir(parents=True, exist_ok=True)
             zarr_store = zarr.DirectoryStore(path)
-            zarr.convenience.copy_store(source=self.store, dest=store)
+            zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
             return None
+
+    def copy(self, sync_path=None):
+        zarr_store = zarr.MemoryStore()
+        zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
+        return MemoryStore(
+            params=self.params,
+            zarr_store=zarr_store,
+            simulator=self._simulator,
+            sync_path=sync_path,
+        )
 
     @classmethod
     def load(cls, path: PathType):
@@ -474,7 +493,7 @@ class MemoryStore(Store):
         group = zarr.group(store=memory_store)
         xshape = cls._extract_xshape_from_zarr_group(group)
         zdim = cls._extract_zdim_from_zarr_group(group)
-        return MemoryStore(zdim=zdim, xshape=xshape, store=memory_store)
+        return cls(zdim=zdim, xshape=xshape, store=memory_store)
         # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
         # z = cls._extract_params_from_zarr_group(group)
         # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
@@ -497,4 +516,4 @@ class MemoryStore(Store):
 
         sim_shapes = {k: v.shape for k, v in sim.items()}
 
-        return MemoryStore(vdim, sim_shapes)
+        return cls(vdim, sim_shapes)
