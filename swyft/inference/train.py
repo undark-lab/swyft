@@ -116,7 +116,7 @@ def train(
             fruitless_epoch += 1
         scheduler.step(l)
 
-    print("Training: lr=%.2g, Epoch=%i, VL=%.4g"%(lr, epoch, l))
+    print("")
 
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 

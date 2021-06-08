@@ -1,7 +1,13 @@
 import numpy as np
 import pylab as plt
 
-from .utils import grid_interpolate_samples
+from swyft.utils.utils import grid_interpolate_samples
+
+
+def split_corner_axes(axes):
+    diag = np.diag(axes)
+    offdiag = axes[np.tril(axes, -1).nonzero()]
+    return diag, offdiag
 
 
 def plot1d(
@@ -52,6 +58,7 @@ def plot1d(
         ax.set_xlabel(labels[k], **label_args)
         if truth is not None:
             ax.axvline(truth[params[k]], ls=":", color="r")
+    return fig, axes
 
 
 def corner(
@@ -116,6 +123,7 @@ def corner(
                 plot_posterior(samples, params[i], ax=ax, color=color, bins=bins)
                 if truth is not None:
                     ax.axvline(truth[params[i]], ls=":", color="r")
+    return fig, axes
 
 
 def get_contour_levels(x, cred_level=[0.68268, 0.95450, 0.99730]):

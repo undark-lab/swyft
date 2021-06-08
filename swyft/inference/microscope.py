@@ -53,11 +53,11 @@ class Microscope:
             Ninit (int): Initial number of training points.
             head
             tail
-            new_simulation_factor (float > 1)
+            new_simulation_factor (float >= 1)
             new_simulation_term (int >= 0)
             convergence_ratio (float > 0.): Convergence ratio between new_volume / old_volume.
         """
-        assert new_simulation_factor > 1.0
+        assert new_simulation_factor >= 1.0
         assert new_simulation_term >= 0
         assert convergence_ratio > 0.0
         if not all_finite(obs):
