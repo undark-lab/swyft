@@ -6,9 +6,9 @@ import torch
 
 import swyft
 from swyft.types import Array
-from swyft.networks import DefaultHead, DefaultTail
 from swyft.utils import tupelize_marginals
 from .ratios import RatioEstimator
+from swyft.networks import DefaultHead, DefaultTail
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 

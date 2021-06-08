@@ -1,13 +1,9 @@
 import logging
-from warnings import warn
-
-import numpy as np
 
 import swyft
+from swyft.inference.posteriors import Posteriors
 from swyft.networks import DefaultHead, DefaultTail
 from swyft.utils import all_finite, format_param_list
-
-from .posteriors import Posteriors
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
@@ -84,6 +80,8 @@ class Microscope:
         self._datasets = []
         self._posteriors = []
         self._next_priors = []
+        self._initial_n_simulations = len(store)
+        self._n_simulations = []
 
     def status(self):
         pass
@@ -150,6 +148,7 @@ class Microscope:
                     N, prior, store=self._store, simhook=self._simhook
                 )
 
+                self._n_simulations.append(len(self._store))
                 self._datasets.append(dataset)
                 self._status = 1
 
@@ -219,6 +218,10 @@ class Microscope:
     @property
     def N(self):
         return [len(dataset) for dataset in self._datasets]
+
+    @property
+    def n_simulations(self):
+        return [ns - self._initial_n_simulations for ns in self._n_simulations]
 
     @property
     def converged(self):
