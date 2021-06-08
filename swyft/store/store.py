@@ -16,7 +16,7 @@ import swyft
 #from swyft.types import Array, PathType
 #from swyft.utils import all_finite, is_empty
 #
-#log = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 #
 #
 #class SimulationStatus(enum.IntEnum):
@@ -370,12 +370,8 @@ class Store(ABC):
 
         # Run simulations and collect status
         if len(idx) == 0:
-<<<<<<< HEAD
             log.debug("No simulations required.")
             return
-=======
-            logging.debug("No simulations required.")
->>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
         else:
             # For the MemoryStore, we need to collect results in memory
             collect_in_memory = True if isinstance(self, MemoryStore) else False
@@ -407,28 +403,25 @@ class Store(ABC):
         while not done:
             time.sleep(1)
             status = self.get_simulation_status(indices)
-<<<<<<< HEAD
-
-    # FIXME: Necessary
-    @staticmethod
-    def _extract_xshape_from_zarr_group(group):
-        return group[Store._filesystem.sims].shape[1:]
-
-    @staticmethod
-    def _extract_zdim_from_zarr_group(group):
-        return group[Store._filesystem.pars].shape[1]
-
-    @staticmethod
-    def _extract_sim_shapes_from_zarr_group(group):
-        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
-
-    @staticmethod
-    def _extract_params_from_zarr_group(group):
-        return [k for k in group[Store._filesystem.pars].keys()]
-=======
             done = np.isin(status, [SimulationStatus.FINISHED, SimulationStatus.FAILED])
             done = np.all(done)
->>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
+
+#    # FIXME: Necessary
+#    @staticmethod
+#    def _extract_xshape_from_zarr_group(group):
+#        return group[Store._filesystem.sims].shape[1:]
+#
+#    @staticmethod
+#    def _extract_zdim_from_zarr_group(group):
+#        return group[Store._filesystem.pars].shape[1]
+#
+#    @staticmethod
+#    def _extract_sim_shapes_from_zarr_group(group):
+#        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
+#
+#    @staticmethod
+#    def _extract_params_from_zarr_group(group):
+#        return [k for k in group[Store._filesystem.pars].keys()]
 
 
 class DirectoryStore(Store):
@@ -481,18 +474,14 @@ class MemoryStore(Store):
             zarr_store = zarr.MemoryStore()
             log.debug("Creating new empty MemoryStore.")
         else:
-<<<<<<< HEAD
             log.debug("Creating MemoryStore from zarr_store.")
-        super().__init__(
-            params=params,
-            zarr_store=zarr_store,
-            simulator=simulator,
-            sync_path=sync_path,
-        )
-=======
-            logging.debug("Creating MemoryStore from zarr_store.")
+#        super().__init__(
+#            params=params,
+#            zarr_store=zarr_store,
+#            simulator=simulator,
+#            sync_path=sync_path,
+#        )
         super().__init__(params=params, zarr_store=zarr_store, simulator=simulator)
->>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryStore to a directory."""
@@ -525,17 +514,17 @@ class MemoryStore(Store):
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)
 
         group = zarr.group(store=memory_store)
-<<<<<<< HEAD
-        xshape = cls._extract_xshape_from_zarr_group(group)
-        zdim = cls._extract_zdim_from_zarr_group(group)
-        return cls(zdim=zdim, xshape=xshape, store=memory_store)
-        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
-        # z = cls._extract_params_from_zarr_group(group)
-        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
-=======
+#<<<<<<< HEAD
+#        xshape = cls._extract_xshape_from_zarr_group(group)
+#        zdim = cls._extract_zdim_from_zarr_group(group)
+#        return cls(zdim=zdim, xshape=xshape, store=memory_store)
+#        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
+#        # z = cls._extract_params_from_zarr_group(group)
+#        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
+#=======
         zdim = group[cls._filesystem.pars].shape[1]
         return MemoryStore(params=zdim, zarr_store=memory_store)
->>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
+#>>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
 
     @classmethod
     def from_model(cls, model, prior):
@@ -552,10 +541,10 @@ class MemoryStore(Store):
         vdim = len(v)
         sim = model(v)
         sim_shapes = {k: v.shape for k, v in sim.items()}
-<<<<<<< HEAD
-
-        return cls(vdim, sim_shapes)
-=======
+#<<<<<<< HEAD
+#
+#        return cls(vdim, sim_shapes)
+#=======
         simulator = swyft.Simulator(model, sim_shapes=sim_shapes)
         return MemoryStore(vdim, simulator=simulator)
->>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
+#>>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
