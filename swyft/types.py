@@ -1,6 +1,6 @@
 # pylint: disable=no-member
 from pathlib import Path
-from typing import Dict, Sequence, Tuple, Union
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import torch
@@ -20,3 +20,6 @@ DictInt = Union[int, Dict[str, int]]
 DictShape = Union[Shape, Dict[str, Shape]]
 
 PriorConfig = Dict[str, Tuple[str, float, float]]
+
+MarginalKey = Union[Tuple[int], Tuple[str]]
+Marginals = Dict[MarginalKey, Array]
