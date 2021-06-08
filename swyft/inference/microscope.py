@@ -113,6 +113,11 @@ class Microscope:
         return self._initial_prior
 
     @property
+    def constrained_prior(self):
+        """Original (unconstrained) prior."""
+        return self._next_priors[-1]
+
+    @property
     def elapsed_rounds(self):
         return len(self._next_priors)
 
