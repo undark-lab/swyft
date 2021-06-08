@@ -7,9 +7,8 @@ from typing import Sequence
 import numpy as np
 import torch
 
+from swyft.inference.loss import loss_fn
 from swyft.utils import dict_to_device
-
-from .loss import loss_fn
 
 
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
@@ -87,8 +86,8 @@ def train(
         patience=reduce_lr_patience,
     )
 
-    n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
-    n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
+    n_train_batches = len(train_loader) if len(train_loader) < 0 else 1
+    n_validation_batches = len(validation_loader) if len(validation_loader) < 0 else 1
 
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
@@ -127,12 +126,35 @@ def train(
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 
 
+def _get_nvalid_ntrain(validation_size, len_dataset):
+    if isinstance(validation_size, float):
+        percent_validation = validation_size
+        percent_train = 1.0 - percent_validation
+        nvalid, ntrain = split_length_by_percentage(
+            len_dataset, (percent_validation, percent_train)
+        )
+        if nvalid % 2 != 0:
+            nvalid += 1
+            ntrain -= 1
+    elif isinstance(validation_size, int):
+        nvalid = validation_size
+        ntrain = len_dataset - nvalid
+        assert ntrain > 0
+
+        if nvalid % 2 != 0:
+            nvalid += 1
+            ntrain -= 1
+    else:
+        raise TypeError()
+    return nvalid, ntrain
+
+
 def trainloop(
     head,
     tail,
     dataset,
     batch_size=64,
-    percent_validation=0.1,
+    validation_size=0.1,
     early_stopping_patience=10,
     max_epochs=50,
     optimizer_fn=torch.optim.Adam,
@@ -145,7 +167,7 @@ def trainloop(
 ):
     logging.debug("Entering trainloop")
     logging.debug(f"{'batch_size':>25} {batch_size:<4}")
-    logging.debug(f"{'percent_validation':>25} {percent_validation:<4}")
+    logging.debug(f"{'validation_size':>25} {validation_size:<4}")
     logging.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
     logging.debug(f"{'max_epochs':>25} {max_epochs:<4}")
     logging.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
@@ -155,10 +177,9 @@ def trainloop(
     logging.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
     logging.debug(f"{'nworkers':>25} {nworkers:<4}")
 
-    percent_train = 1.0 - percent_validation
-    nvalid, ntrain = split_length_by_percentage(
-        len(dataset), (percent_validation, percent_train)
-    )
+    assert validation_size > 0
+    ntrain, nvalid = _get_nvalid_ntrain(validation_size, len(dataset))
+
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]
     )
@@ -171,12 +192,11 @@ def trainloop(
     )
     valid_loader = torch.utils.data.DataLoader(
         dataset_valid,
-        batch_size=batch_size,
+        batch_size=min(batch_size, nvalid),
         num_workers=nworkers,
         pin_memory=True,
         drop_last=True,
     )
-
     tl, vl, sd_head, sd_tail = train(
         head,
         tail,
