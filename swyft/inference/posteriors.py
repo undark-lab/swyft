@@ -160,15 +160,9 @@ class PosteriorCollection:
 
 
 class Posteriors:
-    def __init__(self, dataset, simhook=None):
-        # Store relevant information about dataset
-        self._prior = dataset.prior
-        self._indices = dataset.indices
-        self._N = len(dataset)
+    def __init__(self, prior, bound = None):
+        self._prior = prior.rebounded(bound)
         self._ratios = {}
-
-        # Temporary
-        self._dataset = dataset
 
     def add(
         self,
@@ -201,6 +195,7 @@ class Posteriors:
     def train(
         self,
         marginals,
+        dataset,
         train_args: dict = {}
     ):
         """Train marginals.
@@ -210,7 +205,7 @@ class Posteriors:
         """
         marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
-        re.train(self._dataset, **train_args)
+        re.train(dataset, **train_args)
 
     def sample(self, N, obs0):
         """Resturn weighted posterior samples for given observation.
@@ -290,36 +285,24 @@ class Posteriors:
     def state_dict(self):
         state_dict = dict(
             prior=self._prior.state_dict(),
-            indices=self._indices,
-            N=self._N,
-            ratios=[r.state_dict() for r in self._ratios],
+            ratios={k: v.state_dict() for k, v in self._ratios.items()},
         )
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict, dataset=None, device="cpu"):
+    def from_state_dict(cls, state_dict):
         obj = Posteriors.__new__(Posteriors)
         obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
-        obj._indices = state_dict["indices"]
-        obj._N = state_dict["N"]
-        obj._ratios = [
-            RatioEstimator.from_state_dict(sd) for sd in state_dict["ratios"]
-        ]
-
-        obj._dataset = dataset
-        obj._device = device
+        obj._ratios = {k: 
+            RatioEstimator.from_state_dict(v) for k, v in state_dict["ratios"].items()
+        }
         return obj
 
     @classmethod
-    def load(cls, filename, dataset=None, device="cpu"):
+    def load(cls, filename):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd, dataset=dataset, device=device)
+        return cls.from_state_dict(sd)
 
     def save(self, filename):
         sd = self.state_dict()
         torch.save(sd, filename)
-
-    @classmethod
-    def from_Microscope(cls, micro):
-        # FIXME: Return copy
-        return micro._posteriors[-1]

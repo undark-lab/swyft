@@ -85,14 +85,12 @@ class Dataset(torch_Dataset):
         )
 
     @classmethod
-    def from_state_dict(cls, state_dict, store=None, simhook=None):
+    def from_state_dict(cls, state_dict, store, simhook=None):
         obj = Dataset.__new__(Dataset)
         obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
         obj._indices = state_dict["indices"]
 
         obj._store = store
-        if store is None:
-            log.warning("No store specified!")
         obj._simhook = simhook
         if state_dict["simhook"] and not simhook:
             log.warning(
@@ -108,9 +106,9 @@ class Dataset(torch_Dataset):
         torch.save(self.state_dict(), filename)
 
     @classmethod
-    def load(cls, filename, store=None, simhook=None):
+    def load(cls, filename, store, simhook=None):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd, store=store, simhook=simhook)
+        return cls.from_state_dict(sd, store, simhook=simhook)
 
 
 class ExactDataset(Dataset):
