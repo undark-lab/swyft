@@ -10,7 +10,7 @@ class OnlineNormalizationLayer(nn.Module):
         shape,
         stable: bool = False,
         epsilon: float = 1e-10,
-        average_std: bool = False,
+        use_average_std: bool = False,
     ):
         """Accumulate mean and variance online using the "parallel algorithm" algorithm from [1].
 
@@ -18,7 +18,7 @@ class OnlineNormalizationLayer(nn.Module):
             shape (tuple): shape of mean, variance, and std array. do not include batch dimension!
             stable (bool): (optional) compute using the stable version of the algorithm [1]
             epsilon (float): (optional) added to the computation of the standard deviation for numerical stability.
-            average_std (bool): (optional) ``True`` to normalize using std averaged over the whole observation, ``False`` to normalize using std of each component of the observation.
+            use_average_std (bool): (optional) ``True`` to normalize using std averaged over the whole observation, ``False`` to normalize using std of each component of the observation.
 
         References:
             [1] https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
@@ -30,7 +30,7 @@ class OnlineNormalizationLayer(nn.Module):
         self.register_buffer("epsilon", torch.tensor(epsilon))
         self.shape = shape
         self.stable = stable
-        self.average_std = average_std
+        self.use_average_std = use_average_std
 
     def _parallel_algorithm(self, x):
         assert x.shape[1:] == self.shape
@@ -71,7 +71,7 @@ class OnlineNormalizationLayer(nn.Module):
 
     @property
     def std(self):
-        if self.average_std:
+        if self.use_average_std:
             return torch.sqrt(self.var + self.epsilon).mean()
         else:
             return torch.sqrt(self.var + self.epsilon)

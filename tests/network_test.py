@@ -76,7 +76,7 @@ class TestNormalizationLayer:
     def test_online_normalization_layer_std_average(self, bs, shape, mean, std, stable):
         torch.manual_seed(0)
 
-        onl = OnlineNormalizationLayer(shape, stable=stable, average_std=True)
+        onl = OnlineNormalizationLayer(shape, stable=stable, use_average_std=True)
         onl.train()
 
         data = torch.randn(bs, *shape) * std + mean
