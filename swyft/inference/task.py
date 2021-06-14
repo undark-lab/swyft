@@ -8,7 +8,7 @@ from .posteriors import Posteriors
 from swyft.utils import tupelize_marginals
 import swyft
 
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+#logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
 class Task:
     """Main SWYFT interface class."""
