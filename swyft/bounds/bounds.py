@@ -161,7 +161,6 @@ class RectangleBound(Bound):
         partition=None,
         th=-13,
         n=10000,
-        device=None,
         n_batch=10_000,
     ):
         """Generate new RectangleBound object based on RatioCollection.
@@ -177,7 +176,7 @@ class RectangleBound(Bound):
         """
         udim = bound.udim
         u = bound.sample(n)
-        ratios = rc.ratios(obs, u, device=device, n_batch=n_batch)
+        ratios = rc.ratios(obs, u, n_batch=n_batch)
         res = np.zeros((udim, 2))
         res[:, 1] = 1.0
         for comb, v in ratios.items():

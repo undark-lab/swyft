@@ -177,7 +177,7 @@ class Posteriors:
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        device="cpu",
+        device = 'cpu'
     ):
         """Add marginals.
 
@@ -197,6 +197,15 @@ class Posteriors:
             tail_args=tail_args,
         )
         self._ratios[marginals] = re
+
+    def to(self, device, marginals = None):
+        if marginals is not None:
+            marginals = tupelize_marginals(marginals)
+            self._ratios[marginals].to(device)
+        else:
+            for _, v in self._ratios.items():
+                v.to(device)
+        return self
 
     def train(
         self,
@@ -297,7 +306,7 @@ class Posteriors:
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict, dataset=None, device="cpu"):
+    def from_state_dict(cls, state_dict, dataset=None):
         obj = Posteriors.__new__(Posteriors)
         obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
         obj._indices = state_dict["indices"]
@@ -307,13 +316,12 @@ class Posteriors:
         ]
 
         obj._dataset = dataset
-        obj._device = device
         return obj
 
     @classmethod
-    def load(cls, filename, dataset=None, device="cpu"):
+    def load(cls, filename, dataset=None):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd, dataset=dataset, device=device)
+        return cls.from_state_dict(sd, dataset=dataset)
 
     def save(self, filename):
         sd = self.state_dict()
