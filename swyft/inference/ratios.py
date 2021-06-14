@@ -130,14 +130,14 @@ class RatioEstimator:
     def train(
         self,
         dataset,
-        batch_size=64,
+        batch_size=32,
         validation_size=0.1,
-        early_stopping_patience=10,
-        max_epochs=50,
-        lr=1e-3,
+        early_stopping_patience=5,
+        max_epochs=40,
+        lr=1e-2,
         reduce_lr_factor=0.1,
-        reduce_lr_patience=5,
-        nworkers=0,
+        reduce_lr_patience=3,
+        nworkers=4,
         **kwargs,
     ) -> None:
         """Train higher-dimensional marginal posteriors.

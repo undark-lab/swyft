@@ -52,7 +52,7 @@ class Store(ABC):
         zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
         simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
-        chunksize: int = 1000,
+        chunksize: int = 1,
     ):
         """Initialize Store content dimensions.
 
@@ -124,7 +124,7 @@ class Store(ABC):
             log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
-        self, zdim, sim_shapes, root, chunksize=1000
+        self, zdim, sim_shapes, root, chunksize=1
     ) -> None:  # Adding observational shapes to store
         # Parameters
         root.zeros(
