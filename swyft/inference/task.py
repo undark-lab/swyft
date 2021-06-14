@@ -35,26 +35,17 @@ class Task:
         posteriors = Posteriors(truncated_prior)
         self.from_dataset_and_posteriors(dataset, posteriors)
 
-        self.add = self.posteriors.add
-        self.sample = self.posteriors.sample
-
     def from_dataset_and_posteriors(self, dataset, posteriors):
         self.dataset = dataset
         self.posteriors = posteriors
+        self.add = self.posteriors.add
+        self.sample = self.posteriors.sample
 
     def simulate(self):
-        if self.dataset is not None:
-            self.dataset.simulate()
-        else:
-            print("WARNING: No dataset specified.")
-            return
+        self.dataset.simulate()
 
     def train(self, marginals, train_args = {}):
-        if self.dataset is not None:
-            self.posteriors.train(marginals, self.dataset, train_args = train_args)
-        else:
-            print("WARNING: No dataset specified. Cannot train")
-            return
+        self.posteriors.train(marginals, self.dataset, train_args = train_args)
 
     def truncate(self, partition, obs0):
         partition = tupelize_marginals(partition)
@@ -64,7 +55,7 @@ class Task:
         return bound
 
     def state_dict(self):
-        sd_dataset = None if self.dataset is None else self.dataset.state_dict()
+        sd_dataset = self.dataset.state_dict()
         state_dict = dict(
             dataset=sd_dataset,
             posteriors=self.posteriors.state_dict(),
@@ -72,20 +63,17 @@ class Task:
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict, store = None):
+    def from_state_dict(cls, state_dict, store):
         obj = Task.__new__(Task)
-        if state_dict['dataset'] is not None and store is not None:
-            dataset = swyft.Dataset.from_state_dict(state_dict['dataset'], store)
-        else:
-            dataset = None
+        dataset = swyft.Dataset.from_state_dict(state_dict['dataset'], store)
         posteriors = swyft.Posteriors.from_state_dict(state_dict['posteriors'])
         obj.from_dataset_and_posteriors(dataset, posteriors)
         return obj
 
     @classmethod
-    def load(cls, filename, store = None):
+    def load(cls, filename, store):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd, store = store)
+        return cls.from_state_dict(sd, store)
 
     def save(self, filename):
         sd = self.state_dict()
