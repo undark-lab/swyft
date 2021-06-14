@@ -40,6 +40,8 @@ class Task:
         self.posteriors = posteriors
         self.add = self.posteriors.add
         self.sample = self.posteriors.sample
+        self.to = self.posteriors.to
+        self.device = self.posteriors.device
 
     def simulate(self):
         self.dataset.simulate()
