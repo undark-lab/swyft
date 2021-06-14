@@ -68,7 +68,7 @@ class IsolatedRatio:
 #class RatioCollection:
 
 class RatioEstimator:
-    _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict"]
+    _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict", "_train_diagnostics"]
 
     def __init__(
         self,
@@ -235,11 +235,8 @@ class RatioEstimator:
     @classmethod
     def from_state_dict(cls, state_dict, device: Device = "cpu"):
         """Instantiate RatioCollectoin from state dictionary."""
-        re = cls(state_dict["param_list"], head=None, tail=None, device=device)
-        re.head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"]).to(
-            device
-        )
-        re.tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"]).to(
-            device
-        )
+        head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"])
+        tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"])
+        re = cls(state_dict["param_list"], head=head, tail=tail, device=device)
+        re._train_diagnostics = state_dict["_train_diagnostics"]
         return re

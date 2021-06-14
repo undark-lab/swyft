@@ -2,6 +2,7 @@ import logging
 from warnings import warn
 
 import numpy as np
+import torch
 
 from .posteriors import Posteriors
 from swyft.utils import tupelize_marginals
@@ -30,13 +31,23 @@ class Task:
             bound (Bound): Optional bound object.
         """
         truncated_prior = prior.rebounded(bound)
-        self.dataset = swyft.Dataset(N, truncated_prior, store, simhook = simhook)
-        self.posteriors = Posteriors(self.dataset)
+        dataset = swyft.Dataset(N, truncated_prior, store, simhook = simhook)
+        posteriors = Posteriors(truncated_prior)
+        self.from_dataset_and_posteriors(dataset, posteriors)
 
-        self.simulate = self.dataset.simulate
+    def from_dataset_and_posteriors(self, dataset, posteriors):
+        self.dataset = dataset
+        self.posteriors = posteriors
         self.add = self.posteriors.add
-        self.train = self.posteriors.train
         self.sample = self.posteriors.sample
+        self.to = self.posteriors.to
+        self.device = self.posteriors.device
+
+    def simulate(self):
+        self.dataset.simulate()
+
+    def train(self, marginals, train_args = {}):
+        self.posteriors.train(marginals, self.dataset, train_args = train_args)
 
     def truncate(self, partition, obs0):
         partition = tupelize_marginals(partition)
@@ -44,3 +55,28 @@ class Task:
         print("Bounds: Truncating...")
         print("Bounds: ...done. New volue is V=%.4g"%bound.volume)
         return bound
+
+    def state_dict(self):
+        sd_dataset = self.dataset.state_dict()
+        state_dict = dict(
+            dataset=sd_dataset,
+            posteriors=self.posteriors.state_dict(),
+        )
+        return state_dict
+
+    @classmethod
+    def from_state_dict(cls, state_dict, store):
+        obj = Task.__new__(Task)
+        dataset = swyft.Dataset.from_state_dict(state_dict['dataset'], store)
+        posteriors = swyft.Posteriors.from_state_dict(state_dict['posteriors'])
+        obj.from_dataset_and_posteriors(dataset, posteriors)
+        return obj
+
+    @classmethod
+    def load(cls, filename, store):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd, store)
+
+    def save(self, filename):
+        sd = self.state_dict()
+        torch.save(sd, filename)
