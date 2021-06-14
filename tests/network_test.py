@@ -4,7 +4,7 @@ from itertools import product
 import pytest
 import torch
 
-from swyft.nn.normalization import OnlineNormalizationLayer
+from swyft.networks.normalization import OnlineNormalizationLayer
 
 
 class TestNormalizationLayer:
@@ -69,6 +69,24 @@ class TestNormalizationLayer:
             assert torch.allclose(onl.std, replacement_std)
         else:
             assert torch.allclose(onl.std, data.std(0))
+
+    @pytest.mark.parametrize(
+        "bs, shape, mean, std, stable", product(bss, shapes, means, stds, stables)
+    )
+    def test_online_normalization_layer_std_average(self, bs, shape, mean, std, stable):
+        torch.manual_seed(0)
+
+        onl = OnlineNormalizationLayer(shape, stable=stable, use_average_std=True)
+        onl.train()
+
+        data = torch.randn(bs, *shape) * std + mean
+        _ = onl(data)
+
+        if torch.isnan(data.std(0)).all():
+            replacement_std = torch.sqrt(torch.ones_like(onl.std) * onl.epsilon)
+            assert torch.allclose(onl.std, replacement_std.mean())
+        else:
+            assert torch.allclose(onl.std, data.std(0).mean())
 
 
 if __name__ == "__main__":

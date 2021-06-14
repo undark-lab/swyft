@@ -171,7 +171,7 @@ class Posteriors:
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        device="cpu",
+        device = 'cpu'
     ):
         """Add marginals.
 
@@ -191,6 +191,15 @@ class Posteriors:
             tail_args=tail_args,
         )
         self._ratios[marginals] = re
+
+    def to(self, device, marginals = None):
+        if marginals is not None:
+            marginals = tupelize_marginals(marginals)
+            self._ratios[marginals].to(device)
+        else:
+            for _, v in self._ratios.items():
+                v.to(device)
+        return self
 
     def train(
         self,
@@ -298,7 +307,6 @@ class Posteriors:
         }
         return obj
 
-    @classmethod
     def load(cls, filename):
         sd = torch.load(filename)
         return cls.from_state_dict(sd)

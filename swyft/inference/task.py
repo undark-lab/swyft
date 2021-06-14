@@ -35,12 +35,12 @@ class Task:
         posteriors = Posteriors(truncated_prior)
         self.from_dataset_and_posteriors(dataset, posteriors)
 
+        self.add = self.posteriors.add
+        self.sample = self.posteriors.sample
+
     def from_dataset_and_posteriors(self, dataset, posteriors):
         self.dataset = dataset
         self.posteriors = posteriors
-
-        self.add = self.posteriors.add
-        self.sample = self.posteriors.sample
 
     def simulate(self):
         if self.dataset is not None:
