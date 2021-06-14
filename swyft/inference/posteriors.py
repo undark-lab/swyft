@@ -199,8 +199,8 @@ class Posteriors:
         self._ratios[marginals] = re
 
     def to(self, device, marginals = None):
-        marginals = tupelize_marginals(marginals)
         if marginals is not None:
+            marginals = tupelize_marginals(marginals)
             self._ratios[marginals].to(device)
         else:
             for _, v in self._ratios.items():
