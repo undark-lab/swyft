@@ -18,7 +18,6 @@ class Task:
         prior,
         store,
         simhook=None,
-        device="cpu",
         bound=None
     ):
         """Initialize swyft.
@@ -28,14 +27,11 @@ class Task:
             prior (Prior): Prior model.
             store (Store): Storage for simulator results.  If none, create MemoryStore.
             simhook (function): Noise model, optional.
-            device (str): Device.
             bound (Bound): Optional bound object.
         """
         truncated_prior = prior.rebounded(bound)
         self.dataset = swyft.Dataset(N, truncated_prior, store, simhook = simhook)
         self.posteriors = Posteriors(self.dataset)
-
-        self._device = device
 
         self.simulate = self.dataset.simulate
         self.add = self.posteriors.add

@@ -26,10 +26,10 @@ class IsolatedRatio:
         self._comb = comb
         self._zdim = zdim
 
-    def __call__(self, u, device=None, n_batch=10_000):
+    def __call__(self, u, n_batch=10_000):
         U = np.random.rand(len(u), self._zdim)
         U[:, np.array(self._comb)] = u
-        ratios = self._rc.ratios(self._obs, U, device=device, n_batch=n_batch)
+        ratios = self._rc.ratios(self._obs, U, n_batch=n_batch)
         return ratios[self._comb]
 
 
@@ -89,31 +89,43 @@ class RatioEstimator:
             statistics: x_mean, x_std, z_mean, z_std
         """
         self.param_list = format_param_list(param_list)
-        self.device = device
+        self._device = device
 
         if isinstance(head, type):
             self._uninitialized_head = head
             self._uninitialized_head_args = head_args
             self.head = None
         else:
-            self.head = head
+            self.head = deepcopy(head).to(device)
         if isinstance(head, type):
             self._uninitialized_tail = tail
             self._uninitialized_tail_args = tail_args
             self.tail = None
         else:
-            self.tail = tail
+            self.tail = deepcopy(tail).to(device)
 
         self._train_diagnostics = []
 
+    @property
+    def device(self):
+        return self._device
+
     def _init_networks(self, dataset):
-        obs_shapes = get_obs_shapes(dataset[0][0])
-        self.head = self._uninitialized_head(
-            obs_shapes, **self._uninitialized_head_args
-        ).to(self.device)
-        self.tail = self._uninitialized_tail(
-            self.head.n_features, self.param_list, **self._uninitialized_tail_args
-        ).to(self.device)
+        if self.head is None:
+            obs_shapes = get_obs_shapes(dataset[0][0])
+            self.head = self._uninitialized_head(
+                obs_shapes, **self._uninitialized_head_args
+            ).to(self.device)
+        if self.tail is None:
+            self.tail = self._uninitialized_tail(
+                self.head.n_features, self.param_list, **self._uninitialized_tail_args
+            ).to(self.device)
+
+    def to(self, device):
+        self.head = self.head.to(device)
+        self.tail = self.tail.to(device)
+        self._device = device
+        return self
 
     def train(
         self,
@@ -134,9 +146,7 @@ class RatioEstimator:
             nworkers: number of Dataloader workers (0 for no dataloader parallelization)
         """
 
-        if self.tail is None:
-            self._init_networks(dataset)
-
+        self._init_networks(dataset)
         self.head.train()
         self.tail.train()
 
@@ -157,6 +167,9 @@ class RatioEstimator:
         )
         self._train_diagnostics.append(diagnostics)
 
+    def train_diagnostics(self):
+        return self._train_diagnostics
+
     def ratios(
         self,
         obs,
@@ -167,6 +180,9 @@ class RatioEstimator:
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()
+
+        # FIXME: Is this device functionality really necessary?  We can use
+        # ".to()" instead
 
         if device is None:
             device = torch.device(self.device)
