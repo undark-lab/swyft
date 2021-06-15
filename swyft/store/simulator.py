@@ -23,8 +23,52 @@ class SimulationStatus(enum.IntEnum):
 
 
 class Simulator:
-    """ Setup and run the simulator engine """
+    """ Setup and run the simulator engine. """
 
+    def __init__(
+        self,
+        model: Callable,
+        sim_shapes: Mapping[str, Shape],
+    ):
+        """Initiate Simulator using a python function.
+
+        Args:
+            model: simulator model function
+            sim_shapes: map of simulator's output names to shapes
+        """
+        self.model = model
+        self.sim_shapes = sim_shapes
+
+    def run(
+        self,
+        pars,
+        sims,
+        sim_status,
+        indices,
+        **kwargs
+    ):
+        """Run the simulator on the input parameters.
+
+        Args:
+            pars: array with all the input parameters. Should have shape
+                (num. samples, num. parameters)
+            sims: dictionary of arrays where to store the simulation output.
+                All arrays should have the number of samples as the size of the
+                first dimension
+            sim_status: array where to store the simulation status (size should
+                be equal to the number of samples)
+            indices: indices of the samples that need to be run by the
+                simulator
+        """
+        for i in indices:
+            sim = self.model(pars[i])
+            for k in sims.keys():
+                sims[k][i] = sim[k]
+                sim_status[i] = SimulationStatus.FINISHED
+
+
+class DaskSimulator:
+    """ Setup and run the simulator engine, powered by dask. """
     def __init__(
         self,
         model: Callable,
@@ -215,7 +259,6 @@ class Simulator:
 
         return cls(model=model, **kwargs)
 
-    # FIXME: Needs updating
     @classmethod
     def from_model(cls, model: Callable, prior: Prior, fail_on_non_finite: bool = True):
         """Convenience function to instantiate a Simulator with the correct sim_shapes.
