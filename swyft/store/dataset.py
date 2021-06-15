@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
 
-    def __init__(self, N, prior, store, bound = None, simhook=None):
+    def __init__(self, N, prior, store, bound=None, simhook=None):
         """Initialize Dataset.
 
         Args:
@@ -30,7 +30,7 @@ class Dataset(torch_Dataset):
 
         # Initialization
         self._trunc_prior = swyft.TruncatedPrior(prior, bound)
-        self._indices = store.sample(N, prior, bound = bound)
+        self._indices = store.sample(N, prior, bound=bound)
 
         self._store = store
         self._simhook = simhook
@@ -109,7 +109,9 @@ class Dataset(torch_Dataset):
     @classmethod
     def from_state_dict(cls, state_dict, store, simhook=None):
         obj = Dataset.__new__(Dataset)
-        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(state_dict["trunc_prior"])
+        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
+            state_dict["trunc_prior"]
+        )
         obj._indices = state_dict["indices"]
 
         obj._store = store

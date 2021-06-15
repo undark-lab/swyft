@@ -160,8 +160,8 @@ class PosteriorCollection:
 
 
 class Posteriors:
-    def __init__(self, prior, bound = None):
-        self._trunc_prior = swyft.TruncatedPrior(prior, bound = bound)
+    def __init__(self, prior, bound=None):
+        self._trunc_prior = swyft.TruncatedPrior(prior, bound=bound)
         self._ratios = {}
 
     def add(
@@ -296,7 +296,9 @@ class Posteriors:
     @classmethod
     def from_state_dict(cls, state_dict):
         obj = Posteriors.__new__(Posteriors)
-        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(state_dict["trunc_prior"])
+        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
+            state_dict["trunc_prior"]
+        )
         obj._ratios = {
             k: RatioEstimator.from_state_dict(v)
             for k, v in state_dict["ratios"].items()

@@ -14,7 +14,7 @@ class TruncatedPrior:
             prior (Prior): Prior object.
             bound (Bound): Bound on hypercube.  Set 'None' for untruncated priors.
         """
-        self.prior = prior 
+        self.prior = prior
         if bound is None:
             bound = UnitCubeBound(prior.zdim)
         self.bound = bound
@@ -52,15 +52,15 @@ class TruncatedPrior:
     def state_dict(self):
         return dict(prior=self.prior.state_dict(), bound=self.bound.state_dict())
 
-#    def truncated(self, bound):
-#        if self.is_truncated():
-#            print("WARNING: Applying bound to truncated prior.")
-#        return Prior(self.prior, bound)
+    #    def truncated(self, bound):
+    #        if self.is_truncated():
+    #            print("WARNING: Applying bound to truncated prior.")
+    #        return Prior(self.prior, bound)
 
-#    @classmethod
-#    def from_uv(cls, uv, zdim, bound=None, n=10000):
-#        prior = PriorTransform(uv, zdim, n=n)
-#        return cls(prior, bound=bound)
+    #    @classmethod
+    #    def from_uv(cls, uv, zdim, bound=None, n=10000):
+    #        prior = PriorTransform(uv, zdim, n=n)
+    #        return cls(prior, bound=bound)
 
     @classmethod
     def from_state_dict(cls, state_dict):
