@@ -203,13 +203,15 @@ class Store(ABC):
         if len(self.log_lambdas) == 0:
             return d
         for i in range(len(self.log_lambdas)):
-            pdf = swyft.Prior.from_state_dict(self.log_lambdas[i]["pdf"])
+            pdf = swyft.TruncatedPrior.from_state_dict(self.log_lambdas[i]["pdf"])
             N = self.log_lambdas[i]["N"]
             r = pdf.log_prob(z) + np.log(N)
             d = np.where(r > d, r, d)
         return d
 
-    def sample(self, N, pdf):
+    def sample(self, N, prior, bound = None):
+
+        pdf = swyft.TruncatedPrior(prior, bound)
 
         # Lock store while adding new points
         self.lock()
@@ -527,6 +529,7 @@ class MemoryStore(Store):
 
     # >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
 
+# FIXME: Needs updating
     @classmethod
     def from_model(cls, model, prior):
         """Convenience function to instantiate new MemoryStore with given model and prior.

@@ -36,7 +36,7 @@ class PosteriorCollection:
 
         # Unmasked original wrongly normalized log_prob densities
         # log_probs = self._prior.log_prob(v)
-        u = self._prior.ptrans.u(v)
+        u = self._prior.prior.u(v)
 
         ratios = self._rc.ratios(
             obs, u, device=device, n_batch=n_batch
@@ -160,8 +160,8 @@ class PosteriorCollection:
 
 
 class Posteriors:
-    def __init__(self, prior):
-        self._prior = prior
+    def __init__(self, prior, bound = None):
+        self._trunc_prior = swyft.TruncatedPrior(prior, bound = bound)
         self._ratios = {}
 
     def add(
@@ -218,11 +218,11 @@ class Posteriors:
             obs0 (dict): Observation of interest.
             N (int): Number of samples to return.
         """
-        v = self._prior.sample(N)  # prior samples
+        v = self._trunc_prior.sample(N)  # prior samples
 
         # Unmasked original wrongly normalized log_prob densities
-        # log_probs = self._prior.log_prob(v)
-        u = self._prior.ptrans.u(v)
+        # log_probs = self._trunc_prior.log_prob(v)
+        u = self._trunc_prior.prior.u(v)
 
         ratios = self._eval_ratios(obs0, u)  # evaluate lnL for reference observation
         weights = {}
@@ -231,7 +231,7 @@ class Posteriors:
         return dict(params=v, weights=weights)
 
     #    def sample(self, N, obs, device=None, n_batch=10_000):
-    #        post = PosteriorCollection(self.ratios, self._prior)
+    #        post = PosteriorCollection(self.ratios, self._trunc_prior)
     #        samples = post.sample(N, obs, device=device, n_batch=n_batch)
     #        return samples
 
@@ -261,7 +261,7 @@ class Posteriors:
             Machine Learning: A Probabilistic Perspective
             Kevin P. Murphy
         """
-        post = PosteriorCollection(self.ratios, self._prior)
+        post = PosteriorCollection(self.ratios, self._trunc_prior)
         return post.rejection_sample(
             N=N,
             obs=obs,
@@ -273,11 +273,11 @@ class Posteriors:
 
     @property
     def bound(self):
-        return self._prior.bound
+        return self._trunc_prior.bound
 
     @property
-    def ptrans(self):
-        return self._prior.ptrans
+    def prior(self):
+        return self._trunc_prior.prior
 
     def _eval_ratios(self, obs: Array, params: Array, n_batch=100):
         result = {}
@@ -288,7 +288,7 @@ class Posteriors:
 
     def state_dict(self):
         state_dict = dict(
-            prior=self._prior.state_dict(),
+            trunc_prior=self._trunc_prior.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
         )
         return state_dict
@@ -296,7 +296,7 @@ class Posteriors:
     @classmethod
     def from_state_dict(cls, state_dict):
         obj = Posteriors.__new__(Posteriors)
-        obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
+        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(state_dict["trunc_prior"])
         obj._ratios = {
             k: RatioEstimator.from_state_dict(v)
             for k, v in state_dict["ratios"].items()
