@@ -4,19 +4,19 @@ import torch
 from .bounds import Bound, UnitCubeBound
 
 
-class Prior:
+class TruncatedPrior:
     """Prior with bounds."""
 
-    def __init__(self, ptrans, bound=None):
-        """Instantiate Prior.
+    def __init__(self, prior, bound):
+        """Instantiate truncated prior (combination of prior and bound).
 
         Args:
-            ptrans (PriorTransform): Map from hypercube to physical parameters.
-            bound (Bound): Bound on hypercube.
+            prior (Prior): Prior object.
+            bound (Bound): Bound on hypercube.  Set 'None' for untruncated priors.
         """
-        self.ptrans = ptrans
+        self.prior = prior 
         if bound is None:
-            bound = UnitCubeBound(ptrans.zdim)
+            bound = UnitCubeBound(prior.zdim)
         self.bound = bound
 
     def sample(self, N):
@@ -29,7 +29,7 @@ class Prior:
             Samples (np.ndarray), (N, zdim)
         """
         u = self.bound.sample(N)
-        return self.ptrans.v(u)
+        return self.prior.v(u)
 
     def log_prob(self, v):
         """Evaluate log probability of pdf.
@@ -40,34 +40,33 @@ class Prior:
         Returns:
             log_prob (np.ndarray, (N,))
         """
-        u = self.ptrans.u(v)
+        u = self.prior.u(v)
         b = np.where(u.sum(axis=-1) == np.inf, 0.0, self.bound(u))
         log_prob = np.where(
             b == 0.0,
             -np.inf,
-            self.ptrans.log_prob(v).sum(axis=-1) - np.log(self.bound.volume),
+            self.prior.log_prob(v).sum(axis=-1) - np.log(self.bound.volume),
         )
         return log_prob
 
     def state_dict(self):
-        return dict(ptrans=self.ptrans.state_dict(), bound=self.bound.state_dict())
+        return dict(prior=self.prior.state_dict(), bound=self.bound.state_dict())
 
-    def rebounded(self, bound):
-        if bound is not None:
-            return Prior(self.ptrans, bound)
-        else:
-            return self
+#    def truncated(self, bound):
+#        if self.is_truncated():
+#            print("WARNING: Applying bound to truncated prior.")
+#        return Prior(self.prior, bound)
 
-    @classmethod
-    def from_uv(cls, uv, zdim, bound=None, n=10000):
-        ptrans = PriorTransform(uv, zdim, n=n)
-        return cls(ptrans, bound=bound)
+#    @classmethod
+#    def from_uv(cls, uv, zdim, bound=None, n=10000):
+#        prior = PriorTransform(uv, zdim, n=n)
+#        return cls(prior, bound=bound)
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        ptrans = PriorTransform.from_state_dict(state_dict["ptrans"])
+        prior = Prior.from_state_dict(state_dict["prior"])
         bound = Bound.from_state_dict(state_dict["bound"])
-        return Prior(ptrans, bound)
+        return TruncatedPrior(prior, bound)
 
     @classmethod
     def load(cls, filename):
@@ -79,9 +78,9 @@ class Prior:
         torch.save(sd, filename)
 
 
-class PriorTransform:
+class Prior:
     def __init__(self, uv, zdim, n=10000):
-        """Prior transformation object.  Maps hypercube on physical parameters.
+        """Prior object.  Maps hypercube on physical parameters.
 
         Args:
             uv (callable): Function u->v

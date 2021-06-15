@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
 
-    def __init__(self, N, prior, store, simhook=None):
+    def __init__(self, N, prior, store, bound = None, simhook=None):
         """Initialize Dataset.
 
         Args:
@@ -29,10 +29,8 @@ class Dataset(torch_Dataset):
         super().__init__()
 
         # Initialization
-        indices = store.sample(N, prior)
-
-        self._prior = prior
-        self._indices = indices
+        self._trunc_prior = swyft.TruncatedPrior(prior, bound)
+        self._indices = store.sample(N, prior, bound = bound)
 
         self._store = store
         self._simhook = simhook
@@ -42,7 +40,11 @@ class Dataset(torch_Dataset):
 
     @property
     def prior(self):
-        return self._prior
+        return self._trunc_prior.prior
+
+    @property
+    def bound(self):
+        return self._trunc_prior.bound
 
     def _tensorfy(self, x):
         return {k: torch.tensor(v).float() for k, v in x.items()}
@@ -90,7 +92,7 @@ class Dataset(torch_Dataset):
         x_keys = list(self._store.sims)
         x = {k: self._store.sims[k][i] for k in x_keys}
         z = self._store.pars[i]
-        u = self._prior.ptrans.u(z.reshape(1, -1)).flatten()
+        u = self._trunc_prior.prior.u(z.reshape(1, -1)).flatten()
 
         if self._simhook is not None:
             x = self._simhook(x, z)
@@ -100,14 +102,14 @@ class Dataset(torch_Dataset):
     def state_dict(self):
         return dict(
             indices=self._indices,
-            prior=self._prior.state_dict(),
+            trunc_prior=self._trunc_prior.state_dict(),
             simhook=bool(self._simhook),
         )
 
     @classmethod
     def from_state_dict(cls, state_dict, store, simhook=None):
         obj = Dataset.__new__(Dataset)
-        obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
+        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(state_dict["trunc_prior"])
         obj._indices = state_dict["indices"]
 
         obj._store = store
@@ -131,6 +133,7 @@ class Dataset(torch_Dataset):
         return cls.from_state_dict(sd, store, simhook=simhook)
 
 
+# TODO: Needs to be updated
 class ExactDataset(Dataset):
     """Dataset with exactly a certain number of simulations."""
 

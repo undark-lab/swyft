@@ -373,7 +373,7 @@ class CompositBound(Bound):
 
         samples = post.sample(N, obs)
         v = samples["params"]
-        u = post.ptrans.u(v)
+        u = post.prior.u(v)
 
         weights = samples["weights"]
 

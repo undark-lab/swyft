@@ -24,9 +24,8 @@ class Task:
             simhook (function): Noise model, optional.
             bound (Bound): Optional bound object.
         """
-        truncated_prior = prior.rebounded(bound)
-        dataset = swyft.Dataset(N, truncated_prior, store, simhook=simhook)
-        posteriors = Posteriors(truncated_prior)
+        dataset = swyft.Dataset(N, prior, store, bound = bound, simhook=simhook)
+        posteriors = Posteriors(prior, bound = bound)
         self.from_dataset_and_posteriors(dataset, posteriors)
 
     def from_dataset_and_posteriors(self, dataset, posteriors):

@@ -215,6 +215,7 @@ class Simulator:
 
         return cls(model=model, **kwargs)
 
+    # FIXME: Needs updating
     @classmethod
     def from_model(cls, model: Callable, prior: Prior, fail_on_non_finite: bool = True):
         """Convenience function to instantiate a Simulator with the correct sim_shapes.
