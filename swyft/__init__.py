@@ -4,6 +4,7 @@ from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalization
 from swyft.store import Dataset, DirectoryStore, ExactDataset, MemoryStore, Simulator
 from swyft.utils import corner, plot1d
 
+
 def zen():
     print("  Cursed by the dimensionality of your nuisance space?")
     print("  Wasted by Markov chains that reject your simulations?")

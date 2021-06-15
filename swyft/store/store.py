@@ -13,13 +13,13 @@ import zarr
 
 import swyft
 
-#from swyft.types import Array, PathType
-#from swyft.utils import all_finite, is_empty
+# from swyft.types import Array, PathType
+# from swyft.utils import all_finite, is_empty
 #
 log = logging.getLogger(__name__)
 #
 #
-#class SimulationStatus(enum.IntEnum):
+# class SimulationStatus(enum.IntEnum):
 #    PENDING = 0
 #    RUNNING = 1
 #    FINISHED = 2
@@ -85,11 +85,11 @@ class Store(ABC):
         elif len(self._root.keys()) == 0:
             print("Creating new store.")
 
-# TODO: Remove
-#            log.debug("Loading existing store.")
-#            self._update()
-#        elif len(self._root.keys()) == 0:
-#            log.debug("Creating new store.")
+            # TODO: Remove
+            #            log.debug("Loading existing store.")
+            #            self._update()
+            #        elif len(self._root.keys()) == 0:
+            #            log.debug("Creating new store.")
 
             self._setup_new_zarr_store(
                 len(self.params), simulator.sim_shapes, self._root, chunksize=chunksize
@@ -322,22 +322,21 @@ class Store(ABC):
         self._update()
         self._set_simulation_status(i, SimulationStatus.FAILED)
 
-
-# FIXME: Deprecated
-#    @staticmethod
-#    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
-#        """Is the simulation a success?"""
-#
-#        assert isinstance(x, dict), "Simulators must return a dictionary."
-#
-#        dict_anynone = lambda d: any(v is None for v in d.values())  # noqa: E731
-#
-#        if dict_anynone(x):
-#            return False
-#        elif fail_on_non_finite and not all_finite(x):
-#            return False
-#        else:
-#            return True
+    # FIXME: Deprecated
+    #    @staticmethod
+    #    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
+    #        """Is the simulation a success?"""
+    #
+    #        assert isinstance(x, dict), "Simulators must return a dictionary."
+    #
+    #        dict_anynone = lambda d: any(v is None for v in d.values())  # noqa: E731
+    #
+    #        if dict_anynone(x):
+    #            return False
+    #        elif fail_on_non_finite and not all_finite(x):
+    #            return False
+    #        else:
+    #            return True
 
     def set_simulator(self, simulator):
         if self._simulator is not None:
@@ -405,6 +404,7 @@ class Store(ABC):
             status = self.get_simulation_status(indices)
             done = np.isin(status, [SimulationStatus.FINISHED, SimulationStatus.FAILED])
             done = np.all(done)
+
 
 #    # FIXME: Necessary
 #    @staticmethod
@@ -475,12 +475,12 @@ class MemoryStore(Store):
             log.debug("Creating new empty MemoryStore.")
         else:
             log.debug("Creating MemoryStore from zarr_store.")
-#        super().__init__(
-#            params=params,
-#            zarr_store=zarr_store,
-#            simulator=simulator,
-#            sync_path=sync_path,
-#        )
+        #        super().__init__(
+        #            params=params,
+        #            zarr_store=zarr_store,
+        #            simulator=simulator,
+        #            sync_path=sync_path,
+        #        )
         super().__init__(params=params, zarr_store=zarr_store, simulator=simulator)
 
     def save(self, path: PathType) -> None:
@@ -514,17 +514,18 @@ class MemoryStore(Store):
         zarr.convenience.copy_store(source=directory_store, dest=memory_store)
 
         group = zarr.group(store=memory_store)
-#<<<<<<< HEAD
-#        xshape = cls._extract_xshape_from_zarr_group(group)
-#        zdim = cls._extract_zdim_from_zarr_group(group)
-#        return cls(zdim=zdim, xshape=xshape, store=memory_store)
-#        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
-#        # z = cls._extract_params_from_zarr_group(group)
-#        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
-#=======
+        # <<<<<<< HEAD
+        #        xshape = cls._extract_xshape_from_zarr_group(group)
+        #        zdim = cls._extract_zdim_from_zarr_group(group)
+        #        return cls(zdim=zdim, xshape=xshape, store=memory_store)
+        #        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
+        #        # z = cls._extract_params_from_zarr_group(group)
+        #        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
+        # =======
         zdim = group[cls._filesystem.pars].shape[1]
         return MemoryStore(params=zdim, zarr_store=memory_store)
-#>>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
+
+    # >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
 
     @classmethod
     def from_model(cls, model, prior):
@@ -541,10 +542,12 @@ class MemoryStore(Store):
         vdim = len(v)
         sim = model(v)
         sim_shapes = {k: v.shape for k, v in sim.items()}
-#<<<<<<< HEAD
-#
-#        return cls(vdim, sim_shapes)
-#=======
+        # <<<<<<< HEAD
+        #
+        #        return cls(vdim, sim_shapes)
+        # =======
         simulator = swyft.Simulator(model, sim_shapes=sim_shapes)
         return MemoryStore(vdim, simulator=simulator)
-#>>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
+
+
+# >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1

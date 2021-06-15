@@ -8,19 +8,13 @@ from .posteriors import Posteriors
 from swyft.utils import tupelize_marginals
 import swyft
 
-#logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+# logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+
 
 class Task:
     """Main SWYFT interface class."""
 
-    def __init__(
-        self,
-        N,
-        prior,
-        store,
-        simhook=None,
-        bound=None
-    ):
+    def __init__(self, N, prior, store, simhook=None, bound=None):
         """Initialize swyft.
 
         Args:
@@ -31,7 +25,7 @@ class Task:
             bound (Bound): Optional bound object.
         """
         truncated_prior = prior.rebounded(bound)
-        dataset = swyft.Dataset(N, truncated_prior, store, simhook = simhook)
+        dataset = swyft.Dataset(N, truncated_prior, store, simhook=simhook)
         posteriors = Posteriors(truncated_prior)
         self.from_dataset_and_posteriors(dataset, posteriors)
 
@@ -45,14 +39,14 @@ class Task:
     def simulate(self):
         self.dataset.simulate()
 
-    def train(self, marginals, train_args = {}):
-        self.posteriors.train(marginals, self.dataset, train_args = train_args)
+    def train(self, marginals, train_args={}):
+        self.posteriors.train(marginals, self.dataset, train_args=train_args)
 
     def truncate(self, partition, obs0):
         partition = tupelize_marginals(partition)
         bound = swyft.Bound.from_Posteriors(partition, self.posteriors, obs0)
         print("Bounds: Truncating...")
-        print("Bounds: ...done. New volue is V=%.4g"%bound.volume)
+        print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
         return bound
 
     def state_dict(self):
@@ -66,8 +60,8 @@ class Task:
     @classmethod
     def from_state_dict(cls, state_dict, store):
         obj = Task.__new__(Task)
-        dataset = swyft.Dataset.from_state_dict(state_dict['dataset'], store)
-        posteriors = swyft.Posteriors.from_state_dict(state_dict['posteriors'])
+        dataset = swyft.Dataset.from_state_dict(state_dict["dataset"], store)
+        posteriors = swyft.Posteriors.from_state_dict(state_dict["posteriors"])
         obj.from_dataset_and_posteriors(dataset, posteriors)
         return obj
 

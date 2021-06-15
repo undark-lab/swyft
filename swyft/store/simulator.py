@@ -97,13 +97,13 @@ class Simulator:
             dtype=np.object,
         )
 
-# FIXME: Deprecated?
-#        print("Simulator: Running...")
-#        bag = db.from_sequence(z, npartitions=npartitions)
-#        bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
-#        result = bag.compute(scheduler=self.client or "processes")
-#        print("Simulator: ...done.")
-#        return result
+        # FIXME: Deprecated?
+        #        print("Simulator: Running...")
+        #        bag = db.from_sequence(z, npartitions=npartitions)
+        #        bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
+        #        result = bag.compute(scheduler=self.client or "processes")
+        #        print("Simulator: ...done.")
+        #        return result
 
         # split result dictionary and simulation status array
         results = out.map_blocks(getitem, 0, dtype=np.object)

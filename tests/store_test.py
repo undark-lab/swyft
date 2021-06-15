@@ -24,6 +24,7 @@ def model_multi_out(params):
     mu2 = np.reshape(p * a - b, (2, 5))
     return dict(x1=mu, x2=mu2)
 
+
 sim = Simulator(model, sim_shapes=dict(x=(10,)))
 sim_multi_out = Simulator(model_multi_out, sim_shapes=dict(x1=(10,), x2=(2, 5)))
 prior = Prior.from_uv(lambda u: u * np.array([1.0, 0.5]), 2)
@@ -37,7 +38,7 @@ class TestStoreIO:
         assert isinstance(store._simulator, Simulator)
 
     def test_init_memory_store_multi_outputs(self):
-        
+
         store = MemoryStore(2, simulator=sim_multi_out)
         assert len(store.params) == 2
         assert {k: v for k, v in store._simulator.sim_shapes.items()} == {
@@ -126,7 +127,9 @@ class TestStoreRun:
 
     def test_store_lockfile(self):
         with tempfile.TemporaryDirectory() as td:
-            store_dir = DirectoryStore(2, simulator=sim, path=td, sync_path=td + ".sync")
+            store_dir = DirectoryStore(
+                2, simulator=sim, path=td, sync_path=td + ".sync"
+            )
             assert store_dir._lock is not None
             assert store_dir._lock.lockfile is None
 

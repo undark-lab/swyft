@@ -60,8 +60,11 @@ class Dataset(torch_Dataset):
 
     def simulate(self, batch_size=None, wait_for_results=True):
         """Trigger simulations for points in the dataset."""
-        if self._no_store(): return
-        self._store.simulate(self.indices, batch_size=batch_size, wait_for_results=wait_for_results)
+        if self._no_store():
+            return
+        self._store.simulate(
+            self.indices, batch_size=batch_size, wait_for_results=wait_for_results
+        )
 
     def set_store(self, store):
         self._store = store
@@ -69,17 +72,20 @@ class Dataset(torch_Dataset):
     @property
     def requires_sim(self):
         """Check if simulations are required for points in the dataset."""
-        if self._no_store(): return
+        if self._no_store():
+            return
         return self._store.requires_sim(self.indices)
 
     @property
     def pars(self):
         """Return all parameters as npoints x zdim array."""
-        if self._no_store(): return
+        if self._no_store():
+            return
         return np.array([self._store.pars[i] for i in self._indices])
 
     def __getitem__(self, idx):
-        if self._no_store(): return
+        if self._no_store():
+            return
         i = self._indices[idx]
         x_keys = list(self._store.sims)
         x = {k: self._store.sims[k][i] for k in x_keys}

@@ -77,9 +77,7 @@ class Bound:
 
     @classmethod
     def from_Posteriors(cls, partitions, post, obs, th=-13.0):
-        return CompositBound.from_Posteriors(
-            partitions, post, obs, post.bound, th=th
-        )
+        return CompositBound.from_Posteriors(partitions, post, obs, post.bound, th=th)
 
 
 class UnitCubeBound(Bound):
@@ -360,7 +358,7 @@ class CompositBound(Bound):
     #   - Can be used in sampling
 
     @classmethod
-    def from_Posteriors(cls, partition, post, obs, bound, th=-13.0, N = 10000):
+    def from_Posteriors(cls, partition, post, obs, bound, th=-13.0, N=10000):
         """Generate new CompositBound object based on RatioEstimator.
 
         Args:
@@ -374,36 +372,36 @@ class CompositBound(Bound):
         idx_rec = []
 
         samples = post.sample(N, obs)
-        v = samples['params']
+        v = samples["params"]
         u = post.ptrans.u(v)
 
-        weights = samples['weights']
+        weights = samples["weights"]
 
         for part in partition:
             if part not in weights:
                 raise KeyError
-#            if len(part) == 1:
-#                idx_rec.append(part[0])
-#            else:
+            #            if len(part) == 1:
+            #                idx_rec.append(part[0])
+            #            else:
             w = weights[part]
-            mask = w/w.max() > np.exp(th)
+            mask = w / w.max() > np.exp(th)
             points = u[mask][:, part]
             b = BallsBound(points)
             bounds[part] = b
 
-#        if len(idx_rec) > 0:
-#            res = np.zeros((len(idx_rec, 2))
-#            res[:, 1] = 1.0
-#            part = tuple(idx_rec)
-#            for i in part:
-#                w = weights[(i,)]
-#                mask = w-w.max() > th
-#                p = points[mask,i]
-#                [p.min(), p.max()]
-#            points = points[:,part]
-#            #bounds[part] = RectangleBound.from_RatioEstimator(
-#            #    rc, obs, bound, th=th, part=part
-            #)
+        #        if len(idx_rec) > 0:
+        #            res = np.zeros((len(idx_rec, 2))
+        #            res[:, 1] = 1.0
+        #            part = tuple(idx_rec)
+        #            for i in part:
+        #                w = weights[(i,)]
+        #                mask = w-w.max() > th
+        #                p = points[mask,i]
+        #                [p.min(), p.max()]
+        #            points = points[:,part]
+        #            #bounds[part] = RectangleBound.from_RatioEstimator(
+        #            #    rc, obs, bound, th=th, part=part
+        # )
 
         return cls(bounds, udim)
 

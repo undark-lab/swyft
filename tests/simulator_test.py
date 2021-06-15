@@ -1,19 +1,19 @@
 # FIXME: Deprecated?
-#import numpy as np
-#import pytest
-#from dask.distributed import LocalCluster
+# import numpy as np
+# import pytest
+# from dask.distributed import LocalCluster
 #
-#from swyft.utils.simulator import Simulator
+# from swyft.utils.simulator import Simulator
 #
 #
 ## linear model
-#def model(params):
+# def model(params):
 #    p = np.linspace(-1, 1, 10)  # Nbin = 10
 #    mu = params["a"] + p * params["b"]
 #    return dict(x=mu)
 #
 #
-#def model_none_dict(params):
+# def model_none_dict(params):
 #    mu = None
 #    return dict(x=mu)
 

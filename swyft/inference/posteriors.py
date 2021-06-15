@@ -171,7 +171,7 @@ class Posteriors:
         tail=DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        device = 'cpu'
+        device="cpu",
     ):
         """Add marginals.
 
@@ -192,7 +192,7 @@ class Posteriors:
         )
         self._ratios[marginals] = re
 
-    def to(self, device, marginals = None):
+    def to(self, device, marginals=None):
         if marginals is not None:
             marginals = tupelize_marginals(marginals)
             self._ratios[marginals].to(device)
@@ -201,12 +201,7 @@ class Posteriors:
                 v.to(device)
         return self
 
-    def train(
-        self,
-        marginals,
-        dataset,
-        train_args: dict = {}
-    ):
+    def train(self, marginals, dataset, train_args: dict = {}):
         """Train marginals.
 
         Args:
@@ -226,7 +221,7 @@ class Posteriors:
         v = self._prior.sample(N)  # prior samples
 
         # Unmasked original wrongly normalized log_prob densities
-        #log_probs = self._prior.log_prob(v)
+        # log_probs = self._prior.log_prob(v)
         u = self._prior.ptrans.u(v)
 
         ratios = self._eval_ratios(obs0, u)  # evaluate lnL for reference observation
@@ -235,10 +230,10 @@ class Posteriors:
             weights[k] = np.exp(val)
         return dict(params=v, weights=weights)
 
-#    def sample(self, N, obs, device=None, n_batch=10_000):
-#        post = PosteriorCollection(self.ratios, self._prior)
-#        samples = post.sample(N, obs, device=device, n_batch=n_batch)
-#        return samples
+    #    def sample(self, N, obs, device=None, n_batch=10_000):
+    #        post = PosteriorCollection(self.ratios, self._prior)
+    #        samples = post.sample(N, obs, device=device, n_batch=n_batch)
+    #        return samples
 
     # TODO: Import from PosteriorCollection
     def rejection_sample(
@@ -302,8 +297,9 @@ class Posteriors:
     def from_state_dict(cls, state_dict):
         obj = Posteriors.__new__(Posteriors)
         obj._prior = swyft.Prior.from_state_dict(state_dict["prior"])
-        obj._ratios = {k: 
-            RatioEstimator.from_state_dict(v) for k, v in state_dict["ratios"].items()
+        obj._ratios = {
+            k: RatioEstimator.from_state_dict(v)
+            for k, v in state_dict["ratios"].items()
         }
         return obj
 

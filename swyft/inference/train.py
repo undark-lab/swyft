@@ -97,13 +97,15 @@ def train(
         tail.eval()
         validation_loss = do_epoch(validation_loader, False)
         l = validation_loss / n_validation_batches
-        logging.debug(
-            "validation loss = %.4g" % l
-        )
+        logging.debug("validation loss = %.4g" % l)
         epoch += 1
         # FIXME: Not optimal when multiple parameter groups are present
-        lr = optimizer.param_groups[0]['lr']
-        print("Training: lr=%.2g, Epoch=%i, VL=%.4g"%(lr, epoch, l), end="\r", flush=True)
+        lr = optimizer.param_groups[0]["lr"]
+        print(
+            "Training: lr=%.2g, Epoch=%i, VL=%.4g" % (lr, epoch, l),
+            end="\r",
+            flush=True,
+        )
         validation_losses.append(l)
 
         if epoch == 0 or min_loss > validation_loss:

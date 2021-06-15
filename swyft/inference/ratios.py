@@ -34,7 +34,7 @@ class IsolatedRatio:
 
 
 # Deprecated
-#class JoinedRatioEstimator:
+# class JoinedRatioEstimator:
 #    def __init__(self, ratio_collections):
 #        self._rcs = ratio_collections
 #        self.param_list = []
@@ -49,9 +49,8 @@ class IsolatedRatio:
 #        return result
 
 
-
 # Deprecated
-#class JoinedRatioCollection:
+# class JoinedRatioCollection:
 #    def __init__(self, ratio_collections):
 #        self._rcs = ratio_collections
 #        self.param_list = []
@@ -65,10 +64,16 @@ class IsolatedRatio:
 #            result.update(ratios)
 #        return result
 
-#class RatioCollection:
+# class RatioCollection:
+
 
 class RatioEstimator:
-    _save_attrs = ["param_list", "_head_swyft_state_dict", "_tail_swyft_state_dict", "_train_diagnostics"]
+    _save_attrs = [
+        "param_list",
+        "_head_swyft_state_dict",
+        "_tail_swyft_state_dict",
+        "_train_diagnostics",
+    ]
 
     def __init__(
         self,

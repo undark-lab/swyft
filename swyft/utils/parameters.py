@@ -39,6 +39,7 @@ def format_param_list(params, all_params=None, mode="custom"):
 
     return sort_param_list(param_list)
 
+
 def tupelize_marginals(marginals):
     """Reformat input marginals into sorted and hashable standard form: tuples of tuples"""
     out = list(marginals)
