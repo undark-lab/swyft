@@ -160,8 +160,8 @@ class PosteriorCollection:
 
 
 class Posteriors:
-    def __init__(self, prior, bound = None):
-        self._prior = prior.rebounded(bound)
+    def __init__(self, prior):
+        self._prior = prior
         self._ratios = {}
 
     def add(
