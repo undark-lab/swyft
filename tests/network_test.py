@@ -9,16 +9,7 @@ from swyft.networks.normalization import OnlineNormalizationLayer
 
 class TestNormalizationLayer:
     bss = [1, 128]
-    shapes = [
-        (1,),
-        (5,),
-        (10, 5, 2, 1),
-        (
-            1,
-            1,
-            1,
-        ),
-    ]
+    shapes = [(1,), (5,), (10, 5, 2, 1), (1, 1, 1)]
     means = [2, 139]
     stds = [1, 80]
     stables = [True, False]

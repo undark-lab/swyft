@@ -70,9 +70,7 @@ def test_concurrent_runs_waiting_for_results(cluster, store):
         for i in range(MAX_WORKERS):
             # each process grows and sample the same cache
             future = executor.submit(
-                simulate,
-                cluster=cluster.scheduler_address,
-                path=path,
+                simulate, cluster=cluster.scheduler_address, path=path
             )
             futures.append(future)
 

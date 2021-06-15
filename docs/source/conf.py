@@ -176,7 +176,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "swyft.tex", u"swyft Documentation", u"Christoph Weniger", "manual"),
+    (master_doc, "swyft.tex", u"swyft Documentation", u"Christoph Weniger", "manual")
 ]
 
 
@@ -201,5 +201,5 @@ texinfo_documents = [
         "swyft",
         "One line description of project.",
         "Miscellaneous",
-    ),
+    )
 ]

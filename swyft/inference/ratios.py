@@ -175,13 +175,7 @@ class RatioEstimator:
     def train_diagnostics(self):
         return self._train_diagnostics
 
-    def ratios(
-        self,
-        obs,
-        params,
-        device=None,
-        n_batch=10_000,
-    ):
+    def ratios(self, obs, params, device=None, n_batch=10_000):
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()

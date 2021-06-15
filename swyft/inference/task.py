@@ -51,10 +51,7 @@ class Task:
 
     def state_dict(self):
         sd_dataset = self.dataset.state_dict()
-        state_dict = dict(
-            dataset=sd_dataset,
-            posteriors=self.posteriors.state_dict(),
-        )
+        state_dict = dict(dataset=sd_dataset, posteriors=self.posteriors.state_dict())
         return state_dict
 
     @classmethod

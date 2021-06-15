@@ -16,14 +16,7 @@ from swyft.utils.array import (
 
 
 class TestArrayToTensor:
-    shapes = [
-        (0,),
-        (0, 0),
-        (1, 0),
-        (0, 1),
-        (10, 10),
-        (15, 3, 2, 1, 6),
-    ]
+    shapes = [(0,), (0, 0), (1, 0), (0, 1), (10, 10), (15, 3, 2, 1, 6)]
 
     @pytest.mark.parametrize(
         "shape, dtype",

@@ -209,10 +209,7 @@ def mask_outside_polygon(poly_verts, ax, facecolor=None, edgecolor=None, alpha=0
     # Plot the masking patch
     path = mpath.Path(bound_verts + poly_verts, bound_codes + poly_codes)
     patch = mpatches.PathPatch(
-        path,
-        facecolor=facecolor,
-        edgecolor=edgecolor,
-        alpha=alpha,
+        path, facecolor=facecolor, edgecolor=edgecolor, alpha=alpha
     )
     patch = ax.add_patch(patch)
 

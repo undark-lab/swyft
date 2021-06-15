@@ -25,11 +25,7 @@ class SimulationStatus(enum.IntEnum):
 class Simulator:
     """ Setup and run the simulator engine. """
 
-    def __init__(
-        self,
-        model: Callable,
-        sim_shapes: Mapping[str, Shape],
-    ):
+    def __init__(self, model: Callable, sim_shapes: Mapping[str, Shape]):
         """Initiate Simulator using a python function.
 
         Args:
@@ -39,14 +35,7 @@ class Simulator:
         self.model = model
         self.sim_shapes = sim_shapes
 
-    def run(
-        self,
-        pars,
-        sims,
-        sim_status,
-        indices,
-        **kwargs
-    ):
+    def run(self, pars, sims, sim_status, indices, **kwargs):
         """Run the simulator on the input parameters.
 
         Args:
@@ -69,6 +58,7 @@ class Simulator:
 
 class DaskSimulator:
     """ Setup and run the simulator engine, powered by dask. """
+
     def __init__(
         self,
         model: Callable,

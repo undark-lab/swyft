@@ -76,9 +76,7 @@ def train(
     params = list(head.parameters()) + list(tail.parameters())
     optimizer = optimizer_fn(params, lr=lr)
     scheduler = scheduler_fn(
-        optimizer,
-        factor=reduce_lr_factor,
-        patience=reduce_lr_patience,
+        optimizer, factor=reduce_lr_factor, patience=reduce_lr_patience
     )
 
     n_train_batches = len(train_loader) if len(train_loader) != 0 else 1

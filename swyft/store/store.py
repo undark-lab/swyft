@@ -128,10 +128,7 @@ class Store(ABC):
     ) -> None:  # Adding observational shapes to store
         # Parameters
         root.zeros(
-            self._filesystem.pars,
-            shape=(0, zdim),
-            chunks=(chunksize, zdim),
-            dtype="f8",
+            self._filesystem.pars, shape=(0, zdim), chunks=(chunksize, zdim), dtype="f8"
         )
 
         # Simulations
@@ -140,12 +137,7 @@ class Store(ABC):
             sims.zeros(name, shape=(0, *shape), chunks=(chunksize, *shape), dtype="f8")
 
         # Random intensity weights
-        root.zeros(
-            self._filesystem.log_w,
-            shape=(0,),
-            chunks=(chunksize,),
-            dtype="f8",
-        )
+        root.zeros(self._filesystem.log_w, shape=(0,), chunks=(chunksize,), dtype="f8")
 
         # Pickled Intensity (prior * N) objects
         root.create(

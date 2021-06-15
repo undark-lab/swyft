@@ -133,11 +133,7 @@ class Microscope:
     def _convergence_criterion(self, v_old, v_new):
         return v_new / v_old > self._config["convergence_ratio"]
 
-    def focus(
-        self,
-        max_rounds: int = 10,
-        custom_new_n: Callable = None,
-    ) -> int:
+    def focus(self, max_rounds: int = 10, custom_new_n: Callable = None) -> int:
         """[summary]
 
         Args:

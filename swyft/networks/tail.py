@@ -195,8 +195,7 @@ class GenericTail(Module):
         ).shape
 
         self.ratio_estimator = get_ratio_estimator(
-            num_channels,
-            dim_observation_embedding + dim_parameter_embedding,
+            num_channels, dim_observation_embedding + dim_parameter_embedding
         )
 
     def _channelize_observation(self, observation):

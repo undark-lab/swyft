@@ -152,14 +152,7 @@ class RectangleBound(Bound):
 
     @classmethod
     def from_RatioCollection(
-        cls,
-        rc,
-        obs,
-        bound,
-        partition=None,
-        th=-13,
-        n=10000,
-        n_batch=10_000,
+        cls, rc, obs, bound, partition=None, th=-13, n=10000, n_batch=10_000
     ):
         """Generate new RectangleBound object based on RatioCollection.
 
