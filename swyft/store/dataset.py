@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
 
-    def __init__(self, N, prior, store, bound=None, simhook=None):
+    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys = None):
         """Initialize Dataset.
 
         Args:
@@ -20,6 +20,8 @@ class Dataset(torch_Dataset):
             prior (swyft.Prior): Parameter prior.
             store (swyft.Store): Store reference.
             simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
+            simkeys (list of strings): List of simulation keys that should be exposed 
+                                        (None means that all store sims are exposed).
 
         Notes:
             Due to the statistical nature of the Store, the returned number of
@@ -34,6 +36,7 @@ class Dataset(torch_Dataset):
 
         self._store = store
         self._simhook = simhook
+        self._simkeys = simkeys if simkeys else list(self._store.sims)
 
     def __len__(self):
         return len(self._indices)
@@ -89,7 +92,7 @@ class Dataset(torch_Dataset):
         if self._no_store():
             return
         i = self._indices[idx]
-        x_keys = list(self._store.sims)
+        x_keys = self._simkeys
         x = {k: self._store.sims[k][i] for k in x_keys}
         z = self._store.pars[i]
         u = self._trunc_prior.prior.u(z.reshape(1, -1)).flatten()
@@ -104,6 +107,7 @@ class Dataset(torch_Dataset):
             indices=self._indices,
             trunc_prior=self._trunc_prior.state_dict(),
             simhook=bool(self._simhook),
+            simkeys=self._simkeys
         )
 
     @classmethod
@@ -116,6 +120,7 @@ class Dataset(torch_Dataset):
 
         obj._store = store
         obj._simhook = simhook
+        obj._simkeys = state_dict['simkeys']
         if state_dict["simhook"] and not simhook:
             log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."

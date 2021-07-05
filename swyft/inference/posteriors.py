@@ -308,6 +308,7 @@ class Posteriors:
         }
         return obj
 
+    @classmethod
     def load(cls, filename):
         sd = torch.load(filename)
         return cls.from_state_dict(sd)
