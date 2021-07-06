@@ -21,9 +21,6 @@ chains that reject your simulations? Exhausted from messing with
 simplistic models, because your inference algorithm cannot handle the
 truth? Try swyft for some pain relief.*
 
-For a quickstart guide, documentation, and more see
-[readthedocs](https://swyft.readthedocs.io/en/latest/).  
-
 A simple example is avaliable on [google colab](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb).
 
 Our repository applying swyft to benchmarks and example inference problems is available at [tmnre](https://github.com/bkmi/tmnre).
