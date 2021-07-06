@@ -26,6 +26,8 @@ For a quickstart guide, documentation, and more see
 
 A simple example is avaliable on [google colab](https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb).
 
+Our repository applying swyft to benchmarks and example inference problems is available at [tmnre](https://github.com/bkmi/tmnre).
+
 ## Installation
 
 **After installing [pytorch](https://pytorch.org/get-started/locally/)**, please run the command:
@@ -41,4 +43,6 @@ swyft exists in an ecosystem of posterior estimators. The project [sbi](https://
 
 If you use *swyft* in scientific publications, please cite:
 
-*Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time*, Benjamin Kurt Miller, Alex Cole, Gilles Louppe, Christoph Weniger, https://arxiv.org/abs/2011.13951
+*Truncated Marginal Neural Ratio Estimation*. Benjamin Kurt Miller, Alex Cole, Patrick Forré, Gilles Louppe, Christoph Weniger. https://arxiv.org/abs/2107.01214
+
+*Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time*. Benjamin Kurt Miller, Alex Cole, Gilles Louppe, Christoph Weniger. https://arxiv.org/abs/2011.13951
