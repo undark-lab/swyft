@@ -28,7 +28,7 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
 
 # We have the posterior exactly because our proir is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
-def train(
+def do_training(
     head,
     tail,
     train_loader,
@@ -36,12 +36,11 @@ def train(
     early_stopping_patience,
     max_epochs,
     optimizer_fn,
-    lr,
+    optimizer_args,
     scheduler_fn,
-    reduce_lr_factor,
-    reduce_lr_patience,
-    device="cpu",
-    non_blocking=True,
+    scheduler_args,
+    device,
+    non_blocking
 ):
     """Network training loop.
 
@@ -74,10 +73,8 @@ def train(
 
     max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs
     params = list(head.parameters()) + list(tail.parameters())
-    optimizer = optimizer_fn(params, lr=lr)
-    scheduler = scheduler_fn(
-        optimizer, factor=reduce_lr_factor, patience=reduce_lr_patience
-    )
+    optimizer = optimizer_fn(params, **optimizer_args)
+    scheduler = scheduler_fn(optimizer, **scheduler_args)
 
     n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
     n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
@@ -152,13 +149,13 @@ def trainloop(
     validation_size=0.1,
     early_stopping_patience=10,
     max_epochs=50,
-    optimizer_fn=torch.optim.Adam,
-    lr=1e-3,
-    scheduler_fn=torch.optim.lr_scheduler.ReduceLROnPlateau,
-    reduce_lr_factor=0.1,
-    reduce_lr_patience=5,
-    nworkers=0,
+    optimizer=torch.optim.Adam,
+    optimizer_args=dict(lr=1e-3),
+    scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
+    scheduler_args=dict(reduce_lr_factor=0.1, reduce_lr_patience=5),
+    nworkers=2,
     device="cpu",
+    non_blocking=True,
 ):
     log.debug("Entering trainloop")
     log.debug(f"{'batch_size':>25} {batch_size:<4}")
@@ -166,10 +163,11 @@ def trainloop(
     log.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
     log.debug(f"{'max_epochs':>25} {max_epochs:<4}")
     log.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
-    log.debug(f"{'lr':>25} {lr:<4}")
+    # TODO: How to log dictionary content?
+    #log.debug(f"{'lr':>25} {lr:<4}")
     log.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
-    log.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
-    log.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
+    #log.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
+    #log.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
     log.debug(f"{'nworkers':>25} {nworkers:<4}")
 
     assert validation_size > 0
@@ -192,19 +190,19 @@ def trainloop(
         pin_memory=True,
         drop_last=True,
     )
-    tl, vl, sd_head, sd_tail = train(
+    tl, vl, sd_head, sd_tail = do_training(
         head,
         tail,
         train_loader,
         valid_loader,
-        early_stopping_patience=early_stopping_patience,
-        max_epochs=max_epochs,
-        optimizer_fn=optimizer_fn,
-        lr=lr,
-        scheduler_fn=scheduler_fn,
-        reduce_lr_factor=reduce_lr_factor,
-        reduce_lr_patience=reduce_lr_patience,
-        device=device,
+        early_stopping_patience,
+        max_epochs,
+        optimizer,
+        optimizer_args,
+        scheduler,
+        scheduler_args,
+        device,
+        non_blocking
     )
     vl_minimum = min(vl)
     vl_min_idx = vl.index(vl_minimum)

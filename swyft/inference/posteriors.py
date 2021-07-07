@@ -201,7 +201,18 @@ class Posteriors:
                 v.to(device)
         return self
 
-    def train(self, marginals, dataset, train_args: dict = {}):
+    def train(self, marginals, dataset, 
+        batch_size=64,
+        validation_size=0.1,
+        early_stopping_patience=5,
+        max_epochs=30,
+        optimizer=torch.optim.Adam,
+        optimizer_args=dict(lr=1e-3),
+        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
+        scheduler_args=dict(reduce_lr_factor=0.1, reduce_lr_patience=5),
+        nworkers=2,
+        non_blocking=True,
+        )
         """Train marginals.
 
         Args:
@@ -209,7 +220,17 @@ class Posteriors:
         """
         marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
-        re.train(dataset, **train_args)
+        re.train(dataset, 
+                batch_size=batch_size,
+                validation_size=validation_size,
+                early_stopping_patience=early_stopping_patience,
+                max_epochs=max_epochs,
+                optimizer=optimizer,
+                optimizer_args=optimizer_args,
+                scheduler=scheduler,
+                scheduler_args=scheduler_args,
+                nworkers=nworkers,
+                non_blocking=non_blocking)
 
     def train_diagnostics(self, marginals):
         return self._ratios[marginals].train_diagnostics()
