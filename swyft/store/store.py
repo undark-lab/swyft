@@ -53,6 +53,7 @@ class Store(ABC):
         simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
         chunksize: int = 1,
+        pickle_protocol: int = 4,
     ):
         """Initialize Store content dimensions.
 
@@ -66,9 +67,11 @@ class Store(ABC):
             chunksize: the parameters and simulation output will be stored as arrays with the
                 specified chunk size along the sample dimension (a single chunk will be used for the
                 other dimensions).
+            pickle_protocol: pickle protocol number used for storing intensity functions.
         """
         self._zarr_store = zarr_store
         self._simulator = simulator
+        self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
 
         if isinstance(params, int):
             params = ["z%i" % i for i in range(params)]
@@ -144,7 +147,7 @@ class Store(ABC):
             self._filesystem.log_lambdas,
             shape=(0,),
             dtype=object,
-            object_codec=numcodecs.Pickle(),
+            object_codec=numcodecs.Pickle(protocol=self._pickle_protocol),
         )
 
         # Simulation status code
