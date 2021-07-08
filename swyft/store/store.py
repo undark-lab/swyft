@@ -196,8 +196,22 @@ class Store(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def sample(self, N, prior, bound=None):
+    def coverage(self, N, prior, bound=None):
+        """Returns fraction of already stored data points."""
+        pdf = swyft.TruncatedPrior(prior, bound)
+        Nsamples = max(N, 1000) # At least 1000 test samples
+        self._update()
 
+        # Generate new points
+        z_prop = pdf.sample(N=np.random.poisson(Nsamples))
+        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(z_prop)
+        frac = np.where(log_lambda_target > log_lambda_store, 
+                np.exp(-log_lambda_target+log_lambda_store), 1.).mean()
+        return frac
+
+    def add(self, N, prior, bound=None):
+        """Adds data points."""
         pdf = swyft.TruncatedPrior(prior, bound)
 
         # Lock store while adding new points
@@ -226,14 +240,22 @@ class Store(ABC):
 
         # Points added, unlock store
         self.unlock()
+        self._update()
+
+    def sample(self, N, prior, bound=None, check_coverage = True):
+        if check_coverage:
+            if self.coverage(N, prior, bound = bound) < 1.:
+                print("WARNING: Store does not contain enough samples.")
+                return []
+        pdf = swyft.TruncatedPrior(prior, bound)
 
         self._update()
 
         # Select points from cache
-        z_store = self.pars
-        log_w_store = self.log_w
+        z_store = self.pars[:]
+        log_w_store = self.log_w[:]
         log_lambda_target = pdf.log_prob(z_store) + np.log(N)
-        accept_stored = log_w_store < log_lambda_target
+        accept_stored = log_w_store <= log_lambda_target
         indices = np.array(range(len(accept_stored)))[accept_stored]
 
         return indices

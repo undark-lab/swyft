@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import tempfile
 from operator import getitem
-from typing import Callable, Mapping, Optional, List
+from typing import Callable, Mapping, Optional, List, Union
 
 import dask.array as da
 import numpy as np
