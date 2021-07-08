@@ -139,11 +139,12 @@ class RatioEstimator:
         validation_size=0.1,
         early_stopping_patience=5,
         max_epochs=30,
-        lr=1e-3,
-        reduce_lr_factor=0.1,
-        reduce_lr_patience=3,
-        nworkers=4,
-        **kwargs,
+        optimizer=torch.optim.Adam,
+        optimizer_args=dict(lr=1e-3),
+        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
+        scheduler_args=dict(reduce_lr_factor=0.1, reduce_lr_patience=5),
+        nworkers=2,
+        non_blocking=True,
     ) -> None:
         """Train higher-dimensional marginal posteriors.
 
@@ -163,12 +164,13 @@ class RatioEstimator:
             validation_size=validation_size,
             early_stopping_patience=early_stopping_patience,
             max_epochs=max_epochs,
-            lr=lr,
-            reduce_lr_factor=reduce_lr_factor,
-            reduce_lr_patience=reduce_lr_patience,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            scheduler=scheduler,
+            scheduler_args=scheduler_args,
             nworkers=nworkers,
             device=self.device,
-            **kwargs,
+            non_blocking=non_blocking
         )
         self._train_diagnostics.append(diagnostics)
 
