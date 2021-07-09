@@ -303,6 +303,14 @@ class Posteriors:
     def prior(self):
         return self._trunc_prior.prior
 
+    def truncate(self, partition, obs0):
+        """Generate and return new bound object."""
+        partition = tupelize_marginals(partition)
+        bound = swyft.Bound.from_Posteriors(partition, self, obs0)
+        print("Bounds: Truncating...")
+        print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
+        return bound
+
     def _eval_ratios(self, obs: Array, params: Array, n_batch=100):
         result = {}
         for marginals, rc in self._ratios.items():

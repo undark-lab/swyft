@@ -1,6 +1,6 @@
-from .microscope import Microscope
 from .posteriors import Posteriors
 from .ratios import IsolatedRatio
-from .task import Task
+#from .microscope import Microscope
+#from .task import Task
 
-__all__ = ["Posteriors", "Microscope", "IsolatedRatio", "Task"]
+__all__ = ["Posteriors", "IsolatedRatio"]

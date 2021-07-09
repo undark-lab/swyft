@@ -8,6 +8,7 @@ from swyft.utils import all_finite, format_param_list
 
 log = logging.getLogger(__name__)
 
+# TODO: Deprecate Miscrope, automatization can come later
 
 class RoundStatus:
     Initialized = 0
