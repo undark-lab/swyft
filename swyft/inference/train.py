@@ -162,10 +162,10 @@ def trainloop(
     log.debug(f"{'validation_size':>25} {validation_size:<4}")
     log.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
     log.debug(f"{'max_epochs':>25} {max_epochs:<4}")
-    log.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
+    log.debug(f"{'optimizer_fn':>25} {repr(optimizer):<4}")
     # TODO: How to log dictionary content?
     #log.debug(f"{'lr':>25} {lr:<4}")
-    log.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
+    log.debug(f"{'scheduler_fn':>25} {repr(scheduler):<4}")
     #log.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
     #log.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
     log.debug(f"{'nworkers':>25} {nworkers:<4}")

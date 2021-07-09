@@ -209,10 +209,10 @@ class Posteriors:
         optimizer=torch.optim.Adam,
         optimizer_args=dict(lr=1e-3),
         scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
-        scheduler_args=dict(reduce_lr_factor=0.1, reduce_lr_patience=5),
+        scheduler_args=dict(factor=0.1, patience=5),
         nworkers=2,
         non_blocking=True,
-        )
+        ):
         """Train marginals.
 
         Args:
