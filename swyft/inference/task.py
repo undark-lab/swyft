@@ -10,6 +10,7 @@ import swyft
 
 # logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
+# TODO: Deprecate task - for now it seems to be too opaque
 
 class Task:
     """Main SWYFT interface class."""
