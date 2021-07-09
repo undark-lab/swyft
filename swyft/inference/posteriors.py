@@ -218,6 +218,9 @@ class Posteriors:
         Args:
             train_args (dict): Training keyword arguments.
         """
+        if dataset.requires_sim:
+            print("ERROR: Not all points in the dataset are simulated yet.")
+            return
         marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
         re.train(dataset, 

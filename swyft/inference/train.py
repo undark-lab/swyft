@@ -56,7 +56,7 @@ def do_training(
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
-                sim, z = batch
+                sim, z, _ = batch
 
                 obs = dict_to_device(sim, device=device, non_blocking=non_blocking)
                 params = z.to(device, non_blocking=non_blocking)

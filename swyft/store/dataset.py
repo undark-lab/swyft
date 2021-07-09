@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
 
-    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys = None):
+    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys = None, add = False):
         """Initialize Dataset.
 
         Args:
@@ -22,6 +22,7 @@ class Dataset(torch_Dataset):
             simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
             simkeys (list of strings): List of simulation keys that should be exposed 
                                         (None means that all store sims are exposed).
+            add (bool): If necessary, automatically add new points to the store.
 
         Notes:
             Due to the statistical nature of the Store, the returned number of
@@ -32,11 +33,14 @@ class Dataset(torch_Dataset):
 
         # Initialization
         self._trunc_prior = swyft.TruncatedPrior(prior, bound)
-        self._indices = store.sample(N, prior, bound=bound)
+        self._indices = store.sample(N, prior, bound=bound, add = add)
 
         self._store = store
         self._simhook = simhook
         self._simkeys = simkeys if simkeys else list(self._store.sims)
+
+        if self.requires_sim:
+            print("WARNING: Some points require simulation.")
 
     def __len__(self):
         return len(self._indices)
@@ -94,13 +98,12 @@ class Dataset(torch_Dataset):
         i = self._indices[idx]
         x_keys = self._simkeys
         x = {k: self._store.sims[k][i] for k in x_keys}
-        z = self._store.pars[i]
-        u = self._trunc_prior.prior.u(z.reshape(1, -1)).flatten()
-
+        v = self._store.pars[i]
         if self._simhook is not None:
-            x = self._simhook(x, z)
+            x = self._simhook(x, v)
+        u = self._trunc_prior.prior.u(v.reshape(1,-1)).flatten()
 
-        return (self._tensorfy(x), torch.tensor(u).float())
+        return (self._tensorfy(x), torch.tensor(u).float(), torch.tensor(v).float())
 
     def state_dict(self):
         return dict(

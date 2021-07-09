@@ -245,7 +245,10 @@ class Store(ABC):
         self.unlock()
         self._update()
 
-    def sample(self, N, prior, bound=None, check_coverage = True):
+    def sample(self, N, prior, bound=None, check_coverage = True, add = False):
+        if add:
+            if self.coverage(N, prior, bound = bound) < 1:
+                self.add(N, prior, bound = bound)
         if check_coverage:
             if self.coverage(N, prior, bound = bound) < 1.:
                 print("WARNING: Store does not contain enough samples.")
