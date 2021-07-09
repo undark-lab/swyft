@@ -38,6 +38,7 @@ class Dataset(torch_Dataset):
         self._store = store
         self._simhook = simhook
         self._simkeys = simkeys if simkeys else list(self._store.sims)
+        self._pnames = self._store.pnames
 
         if self.requires_sim:
             print("WARNING: Some points require simulation.")
@@ -86,11 +87,15 @@ class Dataset(torch_Dataset):
         return self._store.requires_sim(self.indices)
 
     @property
-    def pars(self):
+    def v(self):
         """Return all parameters as npoints x zdim array."""
         if self._no_store():
             return
-        return np.array([self._store.pars[i] for i in self._indices])
+        return np.array([self._store.v[i] for i in self._indices])
+
+    @property
+    def pnames(self):
+        return self._pnames
 
     def __getitem__(self, idx):
         if self._no_store():
@@ -98,7 +103,7 @@ class Dataset(torch_Dataset):
         i = self._indices[idx]
         x_keys = self._simkeys
         x = {k: self._store.sims[k][i] for k in x_keys}
-        v = self._store.pars[i]
+        v = self._store.v[i]
         if self._simhook is not None:
             x = self._simhook(x, v)
         u = self._trunc_prior.prior.u(v.reshape(1,-1)).flatten()

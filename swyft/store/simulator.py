@@ -25,25 +25,25 @@ class SimulationStatus(enum.IntEnum):
 class Simulator:
     """ Setup and run the simulator engine. """
 
-    def __init__(self, model: Callable, params: Union[List[str], int], sim_shapes: Mapping[str, Shape]):
+    def __init__(self, model: Callable, pnames: Union[List[str], int], sim_shapes: Mapping[str, Shape]):
         """Initiate Simulator using a python function.
 
         Args:
             model: simulator model function
-            params: Number of model parameters ('z0', 'z1', ...) or list of parameter names.
+            pnames: List of parameter names.  Int will be interpreted as ('z0', 'z1', ...).
             sim_shapes: map of simulator's output names to shapes
         """
         self.model = model
-        if isinstance(params, int):
-            params = ["z%i" % i for i in range(params)]
-        self.params = params
+        if isinstance(pnames, int):
+            pnames = ["z%i" % i for i in range(pnames)]
+        self.pnames = pnames
         self.sim_shapes = sim_shapes
 
-    def run(self, pars, sims, sim_status, indices, **kwargs):
+    def run(self, v, sims, sim_status, indices, **kwargs):
         """Run the simulator on the input parameters.
 
         Args:
-            pars: array with all the input parameters. Should have shape
+            v: array with all the input parameters. Should have shape
                 (num. samples, num. parameters)
             sims: dictionary of arrays where to store the simulation output.
                 All arrays should have the number of samples as the size of the
@@ -54,7 +54,7 @@ class Simulator:
                 simulator
         """
         for i in indices:
-            sim = self.model(pars[i])
+            sim = self.model(v[i])
             for k in sims.keys():
                 sims[k][i] = sim[k]
                 sim_status[i] = SimulationStatus.FINISHED
@@ -88,7 +88,7 @@ class DaskSimulator:
 
     def run(
         self,
-        pars,
+        v,
         sims,
         sim_status,
         indices,
@@ -98,7 +98,7 @@ class DaskSimulator:
         """Run the simulator on the input parameters.
 
         Args:
-            pars: array with all the input parameters. Should have shape
+            v: array with all the input parameters. Should have shape
                 (num. samples, num. parameters)
             sims: dictionary of arrays where to store the simulation output.
                 All arrays should have the number of samples as the size of the
@@ -117,8 +117,8 @@ class DaskSimulator:
         self.set_dask_cluster(self.cluster)
 
         # open parameter array as Dask array
-        chunks = getattr(pars, "chunks", "auto")
-        z = da.from_array(pars, chunks=chunks)
+        chunks = getattr(v, "chunks", "auto")
+        z = da.from_array(v, chunks=chunks)
         idx = da.from_array(indices, chunks=(batch_size or -1,))
         z = z[idx]
 

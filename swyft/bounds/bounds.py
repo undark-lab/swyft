@@ -365,7 +365,7 @@ class CompositBound(Bound):
         idx_rec = []
 
         samples = post.sample(N, obs)
-        v = samples["params"]
+        v = samples["v"]
         u = post.prior.u(v)
 
         weights = samples["weights"]

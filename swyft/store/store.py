@@ -35,7 +35,7 @@ class Filesystem:
     log_lambdas = "metadata/log_lambdas"
     samples = "samples"
     sims = "samples/sims"
-    pars = "samples/pars"
+    v = "samples/v"
     log_w = "samples/log_w"
     simulation_status = "samples/simulation_status"
 
@@ -87,7 +87,7 @@ class Store(ABC):
             #            log.debug("Creating new store.")
 
             self._setup_new_zarr_store(
-                simulator.params, simulator.sim_shapes, self._root, chunksize=chunksize
+                simulator.pnames, simulator.sim_shapes, self._root, chunksize=chunksize
             )
             log.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
@@ -119,14 +119,14 @@ class Store(ABC):
             log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
-        self, params, sim_shapes, root, chunksize=1
+        self, pnames, sim_shapes, root, chunksize=1
     ) -> None:  # Adding observational shapes to store
         # Parameters
-        zdim = len(params)
-        pars = root.zeros(
-            self._filesystem.pars, shape=(0, zdim), chunks=(chunksize, zdim), dtype="f8"
+        zdim = len(pnames)
+        v = root.zeros(
+            self._filesystem.v, shape=(0, zdim), chunks=(chunksize, zdim), dtype="f8"
         )
-        pars.attrs['params'] = params
+        v.attrs['pnames'] = pnames
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
@@ -154,35 +154,35 @@ class Store(ABC):
 
     def _update(self):
         self.sims = self._root[self._filesystem.sims]
-        self.pars = self._root[self._filesystem.pars]
+        self.v = self._root[self._filesystem.v]
         self.log_w = self._root[self._filesystem.log_w]
         self.log_lambdas = self._root[self._filesystem.log_lambdas]
         self.sim_status = self._root[self._filesystem.simulation_status]
-        self.params = self._root[self._filesystem.pars].attrs['params']
+        self.pnames = self._root[self._filesystem.v].attrs['pnames']
 
     def __len__(self):
         """Returns number of samples in the store."""
         self._update()
-        return len(self.pars)
+        return len(self.v)
 
     def __getitem__(self, i):
         self._update()
         sim = {}
         for key, value in self.sims.items():
             sim[key] = value[i]
-        par = self.pars[i]
+        par = self.v[i]
         return (sim, par)
 
-    def _append_new_points(self, pars, log_w):
+    def _append_new_points(self, v, log_w):
         """Append z to zarr_store content and generate new slots for x."""
         self._update()
-        n = len(pars)
+        n = len(v)
         for key, value in self.sims.items():
             shape = list(value.shape)
             shape[0] += n
             value.resize(*shape)
 
-        self._root[self._filesystem.pars].append(pars)
+        self._root[self._filesystem.v].append(v)
         self._root[self._filesystem.log_w].append(log_w)
         m = np.full(n, SimulationStatus.PENDING, dtype="int")
         self.sim_status.append(m)
@@ -258,7 +258,7 @@ class Store(ABC):
         self._update()
 
         # Select points from cache
-        z_store = self.pars[:]
+        z_store = self.v[:]
         log_w_store = self.log_w[:]
         log_lambda_target = pdf.log_prob(z_store) + np.log(N)
         accept_stored = log_w_store <= log_lambda_target
@@ -398,7 +398,7 @@ class Store(ABC):
                 )
 
             self._simulator.run(
-                pars=self.pars,
+                v=self.v,
                 sims={k: v.oindex for k, v in self.sims.items()},
                 sim_status=self.sim_status.oindex,
                 indices=idx,
@@ -510,15 +510,15 @@ class MemoryStore(Store):
             zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
             return None
 
-    def copy(self, sync_path=None):
-        zarr_store = zarr.MemoryStore()
-        zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
-        return MemoryStore(
-            params=self.params,
-            zarr_store=zarr_store,
-            simulator=self._simulator,
-            sync_path=sync_path,
-        )
+#    def copy(self, sync_path=None):
+#        zarr_store = zarr.MemoryStore()
+#        zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
+#        return MemoryStore(
+#            params=self.params,
+#            zarr_store=zarr_store,
+#            simulator=self._simulator,
+#            sync_path=sync_path,
+#        )
 
     @classmethod
     def load(cls, path: PathType):

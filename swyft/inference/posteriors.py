@@ -47,7 +47,7 @@ class PosteriorCollection:
 
             weights[k] = np.exp(val)
 
-        return dict(params=v, weights=weights)
+        return dict(v=v, weights=weights)
 
     def rejection_sample(
         self,
@@ -160,9 +160,15 @@ class PosteriorCollection:
 
 
 class Posteriors:
-    def __init__(self, prior, bound=None):
-        self._trunc_prior = swyft.TruncatedPrior(prior, bound=bound)
+    def __init__(self, dataset):
+        self._pnames = dataset.pnames
+        self._trunc_prior = swyft.TruncatedPrior(dataset.prior, bound=dataset.bound)
         self._ratios = {}
+        self._dataset = dataset
+
+    @property
+    def pnames(self):
+        return self._pnames
 
     def add(
         self,
@@ -201,7 +207,15 @@ class Posteriors:
                 v.to(device)
         return self
 
-    def train(self, marginals, dataset, 
+    @property
+    def dataset(self):
+        return self._dataset
+
+    def set_dataset(self, dataset):
+        self._dataset = dataset
+
+    def train(self, marginals,
+        alt_dataset = None,
         batch_size=64,
         validation_size=0.1,
         early_stopping_patience=5,
@@ -218,6 +232,10 @@ class Posteriors:
         Args:
             train_args (dict): Training keyword arguments.
         """
+        dataset = alt_dataset if alt_dataset else self._dataset
+        if dataset is None:
+            print("ERROR: No dataset specified.")
+            return
         if dataset.requires_sim:
             print("ERROR: Not all points in the dataset are simulated yet.")
             return
@@ -255,7 +273,7 @@ class Posteriors:
         weights = {}
         for k, val in ratios.items():
             weights[k] = np.exp(val)
-        return dict(params=v, weights=weights)
+        return dict(v=v, weights=weights, pnames=self.pnames)
 
     #    def sample(self, N, obs, device=None, n_batch=10_000):
     #        post = PosteriorCollection(self.ratios, self._trunc_prior)
@@ -314,10 +332,10 @@ class Posteriors:
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
         return bound
 
-    def _eval_ratios(self, obs: Array, params: Array, n_batch=100):
+    def _eval_ratios(self, obs: Array, v: Array, n_batch=100):
         result = {}
         for marginals, rc in self._ratios.items():
-            ratios = rc.ratios(obs, params, n_batch=n_batch)
+            ratios = rc.ratios(obs, v, n_batch=n_batch)
             result.update(ratios)
         return result
 
@@ -325,11 +343,12 @@ class Posteriors:
         state_dict = dict(
             trunc_prior=self._trunc_prior.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
+            names=self._pnames
         )
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict):
+    def from_state_dict(cls, state_dict, dataset = None):
         obj = Posteriors.__new__(Posteriors)
         obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
             state_dict["trunc_prior"]
@@ -338,12 +357,14 @@ class Posteriors:
             k: RatioEstimator.from_state_dict(v)
             for k, v in state_dict["ratios"].items()
         }
+        obj._pnames = state_dict["pnames"]
+        self._dataset = dataset
         return obj
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename, dataset = None):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd)
+        return cls.from_state_dict(sd, dataset = dataset)
 
     def save(self, filename):
         sd = self.state_dict()
