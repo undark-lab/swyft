@@ -254,6 +254,7 @@ class Posteriors:
                 non_blocking=non_blocking)
 
     def train_diagnostics(self, marginals):
+        marginals = tupelize_marginals(marginals)
         return self._ratios[marginals].train_diagnostics()
 
     def sample(self, N, obs0):
