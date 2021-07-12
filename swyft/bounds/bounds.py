@@ -8,12 +8,14 @@ from swyft.inference import IsolatedRatio
 
 log = logging.getLogger(__name__)
 
+
 class Bound:
     """A bound on the hypercube.
 
     The bound can be generated 
 
     """
+
     def __init__(self):
         pass
 

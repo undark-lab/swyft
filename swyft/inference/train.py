@@ -33,22 +33,22 @@ class TrainOptions:
 
     # NOTE: Defaults are specified in swyft.Posteriors.train
 
-    batch_size: int # = 64
-    validation_size: float # = 0.1
-    early_stopping_patience: int # = 10
-    max_epochs: int # = 50
-    optimizer: Callable # = torch.optim.Adam
-    optimizer_args: dict # = field(default_factory=lambda: dict(lr=1e-3))
-    scheduler: Callable # = torch.optim.lr_scheduler.ReduceLROnPlateau
-    scheduler_args: Callable # = field(default_factory=lambda: dict(factor=0.1, patience=5))
-    nworkers: int # = 2
-    non_blocking: bool # = True
+    batch_size: int  # = 64
+    validation_size: float  # = 0.1
+    early_stopping_patience: int  # = 10
+    max_epochs: int  # = 50
+    optimizer: Callable  # = torch.optim.Adam
+    optimizer_args: dict  # = field(default_factory=lambda: dict(lr=1e-3))
+    scheduler: Callable  # = torch.optim.lr_scheduler.ReduceLROnPlateau
+    scheduler_args: Callable  # = field(default_factory=lambda: dict(factor=0.1, patience=5))
+    nworkers: int  # = 2
+    non_blocking: bool  # = True
 
 
 # We have the posterior exactly because our prior is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def do_training(
-    head, tail, train_loader, validation_loader, trainoptions: TrainOptions, device,
+    head, tail, train_loader, validation_loader, trainoptions: TrainOptions, device
 ):
     """Network training loop.
 
@@ -67,13 +67,9 @@ def do_training(
                 sim, z, _ = batch
 
                 obs = dict_to_device(
-                    sim,
-                    device=device,
-                    non_blocking=trainoptions.non_blocking,
+                    sim, device=device, non_blocking=trainoptions.non_blocking
                 )
-                params = z.to(
-                    device=device, non_blocking=trainoptions.non_blocking
-                )
+                params = z.to(device=device, non_blocking=trainoptions.non_blocking)
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
 
@@ -157,9 +153,7 @@ def _get_ntrain_nvalid(validation_size, len_dataset):
     return ntrain, nvalid
 
 
-def trainloop(
-    head, tail, dataset, trainoptions, device = 'cpu',
-):
+def trainloop(head, tail, dataset, trainoptions, device="cpu"):
     log.debug("Entering trainloop")
     log.debug(f"{'batch_size':>25} {trainoptions.batch_size:<4}")
     log.debug(f"{'validation_size':>25} {trainoptions.validation_size:<4}")
@@ -193,7 +187,7 @@ def trainloop(
     )
     tl, vl, sd_head, sd_tail = do_training(
         head, tail, train_loader, valid_loader, trainoptions, device
-)
+    )
     vl_minimum = min(vl)
     vl_min_idx = vl.index(vl_minimum)
     train_loss = tl[: vl_min_idx + 1]

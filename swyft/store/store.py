@@ -58,7 +58,9 @@ class Store(ABC):
     ):
         self._zarr_store = zarr_store
         self._simulator = simulator
-        self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
+        self._pickle_protocol = (
+            pickle_protocol
+        )  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
 
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self._root = zarr.group(store=self._zarr_store, synchronizer=synchronizer)
@@ -132,10 +134,10 @@ class Store(ABC):
         self.unlock()
         self._update()
 
-#    @property
-#    def zarr_store(self):
-#        """Return ZarrStore object."""
-#        return self._zarr_store
+    #    @property
+    #    def zarr_store(self):
+    #        """Return ZarrStore object."""
+    #        return self._zarr_store
 
     def _setup_lock(self, sync_path):
         path = os.path.join(sync_path, "cache.lock")
@@ -159,7 +161,7 @@ class Store(ABC):
         v = root.zeros(
             self._filesystem.v, shape=(0, zdim), chunks=(chunksize, zdim), dtype="f8"
         )
-        v.attrs['pnames'] = pnames
+        v.attrs["pnames"] = pnames
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
@@ -191,7 +193,7 @@ class Store(ABC):
         self.log_w = self._root[self._filesystem.log_w]
         self.log_lambdas = self._root[self._filesystem.log_lambdas]
         self.sim_status = self._root[self._filesystem.simulation_status]
-        self.pnames = self._root[self._filesystem.v].attrs['pnames']
+        self.pnames = self._root[self._filesystem.v].attrs["pnames"]
 
     def __len__(self):
         """Returns number of samples in the store."""
@@ -252,19 +254,21 @@ class Store(ABC):
             available for this (truncated) prior.
         """
         pdf = swyft.TruncatedPrior(prior, bound)
-        Nsamples = max(N, 1000) # At least 1000 test samples
+        Nsamples = max(N, 1000)  # At least 1000 test samples
         self._update()
 
         # Generate new points
         z_prop = pdf.sample(N=np.random.poisson(Nsamples))
         log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
         log_lambda_store = self.log_lambda(z_prop)
-        frac = np.where(log_lambda_target > log_lambda_store, 
-                np.exp(-log_lambda_target+log_lambda_store), 1.).mean()
+        frac = np.where(
+            log_lambda_target > log_lambda_store,
+            np.exp(-log_lambda_target + log_lambda_store),
+            1.0,
+        ).mean()
         return frac
 
-
-    def sample(self, N, prior, bound=None, check_coverage = True, add = False):
+    def sample(self, N, prior, bound=None, check_coverage=True, add=False):
         """Return samples from store.
 
         Args:
@@ -278,10 +282,10 @@ class Store(ABC):
             Indices (list): Index list pointing to the relevant store entries.
         """
         if add:
-            if self.coverage(N, prior, bound = bound) < 1:
-                self.add(N, prior, bound = bound)
+            if self.coverage(N, prior, bound=bound) < 1:
+                self.add(N, prior, bound=bound)
         if check_coverage:
-            if self.coverage(N, prior, bound = bound) < 1.:
+            if self.coverage(N, prior, bound=bound) < 1.0:
                 print("WARNING: Store does not contain enough samples.")
                 return []
         pdf = swyft.TruncatedPrior(prior, bound)
@@ -474,18 +478,14 @@ class DirectoryStore(Store):
         >>> store = swyft.DirectoryStore(PATH_TO_STORE)
         >>> print("Number of simulations in store:", len(store))
     """
+
     def __init__(
-        self,
-        path: PathType,
-        simulator=None,
-        sync_path: Optional[PathType] = None,
+        self, path: PathType, simulator=None, sync_path: Optional[PathType] = None
     ):
         zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
-            zarr_store=zarr_store,
-            simulator=simulator,
-            sync_path=sync_path,
+            zarr_store=zarr_store, simulator=simulator, sync_path=sync_path
         )
 
 
@@ -504,6 +504,7 @@ class MemoryStore(Store):
 
         >>> store = swyft.MemoryStore(simulator)
     """
+
     def __init__(self, simulator):
         zarr_store = zarr.MemoryStore()
         super().__init__(zarr_store=zarr_store, simulator=simulator)
@@ -538,6 +539,7 @@ class MemoryStore(Store):
         obj = MemoryStore.__new__(MemoryStore)
         super(MemoryStore, obj).__init__(zarr_store=memory_store, simulator=None)
         return obj
+
 
 #    def copy(self, sync_path=None):
 #        zarr_store = zarr.MemoryStore()

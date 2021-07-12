@@ -88,7 +88,7 @@ def plot1d(
     )
 
     if labels is None:
-        labels = [samples['pnames'][pois[i]] for i in range(K)]
+        labels = [samples["pnames"][pois[i]] for i in range(K)]
 
     for k in range(K):
         if nrow == 1 and ncol > 1:
@@ -132,7 +132,7 @@ def corner(
     )
 
     if labels is None:
-        labels = [samples['pnames'][pois[i]] for i in range(K)]
+        labels = [samples["pnames"][pois[i]] for i in range(K)]
     for i in range(K):
         for j in range(K):
             ax = axes[i, j]

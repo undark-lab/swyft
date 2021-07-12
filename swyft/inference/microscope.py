@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 # TODO: Deprecate Miscrope, automatization can come later
 
+
 class RoundStatus:
     Initialized = 0
     Simulated = 1

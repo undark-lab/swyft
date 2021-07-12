@@ -172,6 +172,7 @@ class Posteriors:
         prior and its bound. It will be then set as default dataset for
         training.
     """
+
     def __init__(self, dataset):
         self._pnames = dataset.pnames
         self._trunc_prior = swyft.TruncatedPrior(dataset.prior, bound=dataset.bound)
@@ -235,7 +236,9 @@ class Posteriors:
         """Set default training dataset."""
         self._dataset = dataset
 
-    def train(self, marginals,
+    def train(
+        self,
+        marginals,
         batch_size=64,
         validation_size=0.1,
         early_stopping_patience=5,
@@ -246,8 +249,8 @@ class Posteriors:
         scheduler_args=dict(factor=0.1, patience=5),
         nworkers=2,
         non_blocking=True,
-        alt_dataset = None,
-        ):
+        alt_dataset=None,
+    ):
         """Train marginals.
 
         Args:
@@ -266,17 +269,17 @@ class Posteriors:
         re = self._ratios[marginals]
 
         trainoptions = TrainOptions(
-                batch_size=batch_size,
-                validation_size=validation_size,
-                early_stopping_patience=early_stopping_patience,
-                max_epochs=max_epochs,
-                optimizer=optimizer,
-                optimizer_args=optimizer_args,
-                scheduler=scheduler,
-                scheduler_args=scheduler_args,
-                nworkers=nworkers,
-                non_blocking=non_blocking
-                )
+            batch_size=batch_size,
+            validation_size=validation_size,
+            early_stopping_patience=early_stopping_patience,
+            max_epochs=max_epochs,
+            optimizer=optimizer,
+            optimizer_args=optimizer_args,
+            scheduler=scheduler,
+            scheduler_args=scheduler_args,
+            nworkers=nworkers,
+            non_blocking=non_blocking,
+        )
 
         re.train(dataset, trainoptions)
 
@@ -371,12 +374,12 @@ class Posteriors:
         state_dict = dict(
             trunc_prior=self._trunc_prior.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
-            names=self._pnames
+            names=self._pnames,
         )
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict, dataset = None):
+    def from_state_dict(cls, state_dict, dataset=None):
         obj = Posteriors.__new__(Posteriors)
         obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
             state_dict["trunc_prior"]
@@ -390,9 +393,9 @@ class Posteriors:
         return obj
 
     @classmethod
-    def load(cls, filename, dataset = None):
+    def load(cls, filename, dataset=None):
         sd = torch.load(filename)
-        return cls.from_state_dict(sd, dataset = dataset)
+        return cls.from_state_dict(sd, dataset=dataset)
 
     def save(self, filename):
         sd = self.state_dict()

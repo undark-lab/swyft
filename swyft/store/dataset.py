@@ -67,12 +67,12 @@ class Dataset(torch_Dataset):
         """Return indices of the dataset that indicate positions in the store."""
         return self._indices
 
-#    def _no_store(self):
-#        if self._store is None:
-#            print("WARNING: No store defined.")
-#            return True
-#        else:
-#            return False
+    #    def _no_store(self):
+    #        if self._store is None:
+    #            print("WARNING: No store defined.")
+    #            return True
+    #        else:
+    #            return False
 
     def simulate(self, batch_size=None, wait_for_results=True):
         """Trigger simulations for points in the dataset.
@@ -81,27 +81,27 @@ class Dataset(torch_Dataset):
             batch_size (int): Number of batched simulations.
             wait_for_results (bool): What for simulations to complete before returning.
         """
-#        if self._no_store():
-#            return
+        #        if self._no_store():
+        #            return
         self._store.simulate(
             self.indices, batch_size=batch_size, wait_for_results=wait_for_results
         )
 
-#    def set_store(self, store):
-#        self._store = store
+    #    def set_store(self, store):
+    #        self._store = store
 
     @property
     def requires_sim(self):
         """Check if simulations are required for points in the dataset."""
-#        if self._no_store():
-#            return
+        #        if self._no_store():
+        #            return
         return self._store.requires_sim(self.indices)
 
     @property
     def v(self):
         """Return all parameters as npoints x zdim array."""
-#        if self._no_store():
-#            return
+        #        if self._no_store():
+        #            return
         return np.array([self._store.v[i] for i in self._indices])
 
     @property
@@ -111,15 +111,15 @@ class Dataset(torch_Dataset):
 
     def __getitem__(self, idx):
         """Return datastore entry."""
-#        if self._no_store():
-#            return
+        #        if self._no_store():
+        #            return
         i = self._indices[idx]
         x_keys = self._simkeys
         x = {k: self._store.sims[k][i] for k in x_keys}
         v = self._store.v[i]
         if self._simhook is not None:
             x = self._simhook(x, v)
-        u = self._trunc_prior.prior.u(v.reshape(1,-1)).flatten()
+        u = self._trunc_prior.prior.u(v.reshape(1, -1)).flatten()
 
         return (self._tensorfy(x), torch.tensor(u).float(), torch.tensor(v).float())
 

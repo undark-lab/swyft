@@ -145,8 +145,11 @@ class RatioEstimator:
         self.tail.train()
 
         diagnostics = trainloop(
-            head=self.head, tail=self.tail, dataset=dataset, trainoptions=trainoptions,
-            device = self.device
+            head=self.head,
+            tail=self.tail,
+            dataset=dataset,
+            trainoptions=trainoptions,
+            device=self.device,
         )
         self._train_diagnostics.append(diagnostics)
 
@@ -158,18 +161,18 @@ class RatioEstimator:
         self.head.eval()
         self.tail.eval()
 
-#        # FIXME: Is this device functionality really necessary?  We can use
-#        # ".to()" instead
-#
-#        if device is None:
-#            device = torch.device(self.device)
-#        else:
-#            device = torch.device(device)
-#
-#        if device != self.device:
-#            head = deepcopy(self.head).to(device=device)
-#            tail = deepcopy(self.tail).to(device=device)
-#        else:
+        #        # FIXME: Is this device functionality really necessary?  We can use
+        #        # ".to()" instead
+        #
+        #        if device is None:
+        #            device = torch.device(self.device)
+        #        else:
+        #            device = torch.device(device)
+        #
+        #        if device != self.device:
+        #            head = deepcopy(self.head).to(device=device)
+        #            tail = deepcopy(self.tail).to(device=device)
+        #        else:
 
         head = self.head
         tail = self.tail

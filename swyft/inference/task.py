@@ -14,6 +14,7 @@ from .posteriors import Posteriors
 
 # TODO: Deprecate task - for now it seems to be too opaque
 
+
 class Task:
     """Main SWYFT interface class."""
 
