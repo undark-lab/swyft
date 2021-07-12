@@ -1,8 +1,9 @@
 # pylint: disable=no-member, not-callable
 import logging
+from dataclasses import dataclass
 from contextlib import suppress
 from copy import deepcopy
-from typing import Sequence
+from typing import Callable, Optional, Sequence
 
 import numpy as np
 import torch
@@ -26,21 +27,30 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
     return lengths
 
 
-# We have the posterior exactly because our proir is known and flat. Flip bayes theorem, we have the likelihood ratio.
+@dataclass
+class TrainOptions:
+    """Settings for the trainloop function."""
+    batch_size: int = 64
+    validation_size: float = 0.1
+    early_stopping_patience: int = 10
+    max_epochs: int = 50 
+    optimizer: Callable = torch.optim.Adam
+    optimizer_args: dict = dict(lr=1e-3)
+    scheduler: Callable = torch.optim.lr_scheduler.ReduceLROnPlateau
+    scheduler_args: Callable = dict(reduce_lr_factor=0.1, reduce_lr_patience=5)
+    nworkers: int =2
+    device: str = "cpu"
+    non_blocking: bool = True
+
+
+# We have the posterior exactly because our prior is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def do_training(
     head,
     tail,
     train_loader,
     validation_loader,
-    early_stopping_patience,
-    max_epochs,
-    optimizer_fn,
-    optimizer_args,
-    scheduler_fn,
-    scheduler_args,
-    device,
-    non_blocking
+    trainoptions: TrainOptions,
 ):
     """Network training loop.
 
@@ -58,8 +68,15 @@ def do_training(
                 optimizer.zero_grad()
                 sim, z = batch
 
-                obs = dict_to_device(sim, device=device, non_blocking=non_blocking)
-                params = z.to(device, non_blocking=non_blocking)
+                obs = dict_to_device(
+                    sim, 
+                    device=trainoptions.device, 
+                    non_blocking=trainoptions.non_blocking
+                )
+                params = z.to(
+                    device=trainoptions.device, 
+                    non_blocking=trainoptions.non_blocking
+                )
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
 
@@ -71,17 +88,17 @@ def do_training(
 
         return accumulated_loss
 
-    max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs
+    max_epochs = 2 ** 31 - 1 if trainoptions.max_epochs is None else trainoptions.max_epochs
     params = list(head.parameters()) + list(tail.parameters())
-    optimizer = optimizer_fn(params, **optimizer_args)
-    scheduler = scheduler_fn(optimizer, **scheduler_args)
+    optimizer = trainoptions.optimizer_fn(params, **trainoptions.optimizer_args)
+    scheduler = trainoptions.scheduler_fn(optimizer, **trainoptions.scheduler_args)
 
     n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
     n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
 
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
-    while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
+    while epoch < max_epochs and fruitless_epoch < trainoptions.early_stopping_patience:
         head.train()
         tail.train()
         train_loss = do_epoch(train_loader, True)
@@ -145,48 +162,41 @@ def trainloop(
     head,
     tail,
     dataset,
-    batch_size=64,
-    validation_size=0.1,
-    early_stopping_patience=10,
-    max_epochs=50,
-    optimizer=torch.optim.Adam,
-    optimizer_args=dict(lr=1e-3),
-    scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
-    scheduler_args=dict(reduce_lr_factor=0.1, reduce_lr_patience=5),
-    nworkers=2,
-    device="cpu",
-    non_blocking=True,
+    trainoptions: Optional[TrainOptions] = None,
 ):
+    if trainoptions is None:
+            trainoptions = TrainOptions()
+
     log.debug("Entering trainloop")
-    log.debug(f"{'batch_size':>25} {batch_size:<4}")
-    log.debug(f"{'validation_size':>25} {validation_size:<4}")
-    log.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
-    log.debug(f"{'max_epochs':>25} {max_epochs:<4}")
-    log.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
+    log.debug(f"{'batch_size':>25} {trainoptions.batch_size:<4}")
+    log.debug(f"{'validation_size':>25} {trainoptions.validation_size:<4}")
+    log.debug(f"{'early_stopping_patience':>25} {trainoptions.early_stopping_patience:<4}")
+    log.debug(f"{'max_epochs':>25} {trainoptions.max_epochs:<4}")
+    log.debug(f"{'optimizer_fn':>25} {repr(trainoptions.optimizer_fn):<4}")
     # TODO: How to log dictionary content?
     #log.debug(f"{'lr':>25} {lr:<4}")
-    log.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
+    log.debug(f"{'scheduler_fn':>25} {repr(trainoptions.scheduler_fn):<4}")
     #log.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
     #log.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
-    log.debug(f"{'nworkers':>25} {nworkers:<4}")
+    log.debug(f"{'nworkers':>25} {trainoptions.nworkers:<4}")
 
-    assert validation_size > 0
-    ntrain, nvalid = _get_ntrain_nvalid(validation_size, len(dataset))
+    assert trainoptions.validation_size > 0
+    ntrain, nvalid = _get_ntrain_nvalid(trainoptions.validation_size, len(dataset))
 
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]
     )
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
-        batch_size=batch_size,
-        num_workers=nworkers,
+        batch_size=trainoptions.batch_size,
+        num_workers=trainoptions.nworkers,
         pin_memory=True,
         drop_last=True,
     )
     valid_loader = torch.utils.data.DataLoader(
         dataset_valid,
-        batch_size=min(batch_size, nvalid),
-        num_workers=nworkers,
+        batch_size=min(trainoptions.batch_size, nvalid),
+        num_workers=trainoptions.nworkers,
         pin_memory=True,
         drop_last=True,
     )
@@ -195,14 +205,7 @@ def trainloop(
         tail,
         train_loader,
         valid_loader,
-        early_stopping_patience,
-        max_epochs,
-        optimizer,
-        optimizer_args,
-        scheduler,
-        scheduler_args,
-        device,
-        non_blocking
+        trainoptions,
     )
     vl_minimum = min(vl)
     vl_min_idx = vl.index(vl_minimum)

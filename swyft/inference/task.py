@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 from warnings import warn
 
 import numpy as np
@@ -39,8 +40,8 @@ class Task:
     def simulate(self):
         self.dataset.simulate()
 
-    def train(self, marginals, train_args={}):
-        self.posteriors.train(marginals, self.dataset, train_args=train_args)
+    def train(self, marginals, trainoptions: Optional[swyft.TrainOptions] = None):
+        self.posteriors.train(marginals, self.dataset, trainoptions=trainoptions)
 
     def truncate(self, partition, obs0):
         partition = tupelize_marginals(partition)

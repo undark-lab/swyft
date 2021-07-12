@@ -1,5 +1,5 @@
 from swyft.bounds import Bound, Prior, TruncatedPrior
-from swyft.inference import Microscope, Posteriors, Task
+from swyft.inference import Microscope, Posteriors, Task, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
 from swyft.store import (
     Dataset,
@@ -21,6 +21,7 @@ def zen():
 
 
 __all__ = [
+    "TrainOptions",
     "TruncatedPrior",
     "Microscope",
     "Task",
