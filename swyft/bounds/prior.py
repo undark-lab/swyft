@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from typing import Callable
 from .bounds import Bound, UnitCubeBound
 
 
@@ -62,7 +63,10 @@ class Prior:
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        ptrans = PriorTransform.from_state_dict(state_dict["ptrans"])
+        if "grid" in state_dict["ptrans"]:
+            ptrans = PriorTransform.from_state_dict(state_dict["ptrans"])
+        else:
+            ptrans = CustomTransform.from_state_dict(state_dict["ptrans"])
         bound = Bound.from_state_dict(state_dict["bound"])
         return Prior(ptrans, bound)
 
@@ -74,6 +78,40 @@ class Prior:
     def save(self, filename):
         sd = self.state_dict()
         torch.save(sd, filename)
+
+
+class CustomTransform:
+    def __init__(self, u: Callable, v: Callable, log_prob: Callable, zdim: int) -> None:
+        """Specify the forward transform (cdf, u), backward transform (ppf, c), and the logpdf(v)."""
+        self._u = u
+        self._v = v
+        self._log_prob = log_prob
+        self.zdim = zdim
+
+    def u(self, v):
+        """The cumulative distribution function."""
+        return self._u(v)
+
+    def v(self, u):
+        """The percent point function, inverse cdf, or quantile function."""
+        return self._v(u)
+    
+    def log_prob(self, v):
+        """log pdf"""
+        return self._log_prob(v)
+    
+    def state_dict(self):
+        return dict(u=self._u, v=self._v, log_prob=self._log_prob, zdim=self.zdim)
+    
+    @classmethod
+    def from_state_dict(cls, state_dict):
+        obj = cls.__new__(cls)
+        obj._u = state_dict["u"]
+        obj._v = state_dict["v"]
+        obj._log_prob = state_dict["log_prob"]
+        obj.zdim = state_dict["zdim"]
+        return obj
+
 
 
 class PriorTransform:
