@@ -160,6 +160,16 @@ class PosteriorCollection:
 
 
 class Posteriors:
+    """Main inference class.
+
+    Args:
+        dataset (swyft.Dataset): Dataset for which we want to perform inference.
+
+    .. note::
+        The dataset will be used to extract parameter names (`pnames`), the
+        prior and its bound. It will be then set as default dataset for
+        training.
+    """
     def __init__(self, dataset):
         self._pnames = dataset.pnames
         self._trunc_prior = swyft.TruncatedPrior(dataset.prior, bound=dataset.bound)
@@ -168,6 +178,7 @@ class Posteriors:
 
     @property
     def pnames(self):
+        """Parameter names. Inherited from dataset."""
         return self._pnames
 
     def add(
@@ -199,6 +210,12 @@ class Posteriors:
         self._ratios[marginals] = re
 
     def to(self, device, marginals=None):
+        """Move networks to device.
+
+        Args:
+            device (str): Targeted device.
+            marginals (list): Optional, only move networks related to specific marginals.
+        """
         if marginals is not None:
             marginals = tupelize_marginals(marginals)
             self._ratios[marginals].to(device)
@@ -209,9 +226,11 @@ class Posteriors:
 
     @property
     def dataset(self):
+        """Default training dataset."""
         return self._dataset
 
     def set_dataset(self, dataset):
+        """Set default training dataset."""
         self._dataset = dataset
 
     def train(self, marginals,
@@ -230,7 +249,8 @@ class Posteriors:
         """Train marginals.
 
         Args:
-            train_args (dict): Training keyword arguments.
+            batch_size (int): Batch size...
+            TODO
         """
         dataset = alt_dataset if alt_dataset else self._dataset
         if dataset is None:
