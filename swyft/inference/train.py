@@ -2,7 +2,7 @@
 import logging
 from contextlib import suppress
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
 import numpy as np
@@ -36,9 +36,9 @@ class TrainOptions:
     early_stopping_patience: int = 10
     max_epochs: int = 50
     optimizer: Callable = torch.optim.Adam
-    #optimizer_args: dict = dict(lr=1e-3)
+    optimizer_args: dict = field(default_factory=lambda: dict(lr=1e-3))
     scheduler: Callable = torch.optim.lr_scheduler.ReduceLROnPlateau
-    #scheduler_args: Callable = dict(reduce_lr_factor=0.1, reduce_lr_patience=5)
+    scheduler_args: Callable = field(default_factory=lambda: dict(reduce_lr_factor=0.1, reduce_lr_patience=5))
     nworkers: int = 2
     device: str = "cpu"
     non_blocking: bool = True
