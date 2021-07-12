@@ -235,7 +235,7 @@ class Posteriors:
         self._dataset = dataset
 
     def train(self, marginals,
-         trainoptions = None
+         trainoptions = None,
 #        batch_size=64,
 #        validation_size=0.1,
 #        early_stopping_patience=5,
@@ -246,7 +246,7 @@ class Posteriors:
 #        scheduler_args=dict(factor=0.1, patience=5),
 #        nworkers=2,
 #        non_blocking=True,
-        alt_dataset = None,
+         alt_dataset = None,
         ):
         """Train marginals.
 
