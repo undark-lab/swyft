@@ -23,16 +23,29 @@ class SimulationStatus(enum.IntEnum):
 
 
 class Simulator:
-    """ Setup and run the simulator engine. """
-
-    def __init__(self, model: Callable, pnames: Union[List[str], int], sim_shapes: Mapping[str, Shape]):
-        """Initiate Simulator using a python function.
-
+    """ Wrapper class for simulator.
+    
         Args:
-            model: simulator model function
-            pnames: List of parameter names.  Int will be interpreted as ('z0', 'z1', ...).
-            sim_shapes: map of simulator's output names to shapes
-        """
+            model (callable): Model function
+            pnames (int or list): List of parameter names, or number of
+                parameters (interpreted as 'z0', 'z1', ...)
+            sim_shapes (dict): Dict describing model function output shapes.
+
+        Examples::
+            
+            >>> def model(v):
+            >>>     mu = sum(v)  # mu = x + y + z
+            >>>     nu = np.array([v[1], 2*v[2]])  # nu = [y, 2*z]
+            >>>     return dict(mu=mu, nu=nu)
+            >>> simulator = swyft.Simulator(model, ["x", "y", "z"], sim_shapes=dict(mu=(1,), nu=(2,))
+    """
+
+    def __init__(
+        self,
+        model: Callable,
+        pnames: Union[List[str], int],
+        sim_shapes: Mapping[str, Shape],
+    ) -> None:
         self.model = model
         if isinstance(pnames, int):
             pnames = ["z%i" % i for i in range(pnames)]
