@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from swyft.inference.train import trainloop
+from swyft.inference.train import TrainOptions, trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device
 from swyft.utils import (
@@ -132,45 +132,27 @@ class RatioEstimator:
         self._device = device
         return self
 
-    def train(
-        self,
-        dataset,
-        batch_size=64,
-        validation_size=0.1,
-        early_stopping_patience=5,
-        max_epochs=30,
-        optimizer=torch.optim.Adam,
-        optimizer_args=dict(lr=1e-3),
-        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
-        scheduler_args=dict(reduce_lr_factor=0.1, reduce_lr_patience=5),
-        nworkers=2,
-        non_blocking=True,
-    ) -> None:
+    def train(self, dataset, trainoptions: Optional[TrainOptions] = None,) -> None:
         """Train higher-dimensional marginal posteriors.
 
         Args:
-            nworkers: number of Dataloader workers (0 for no dataloader parallelization)
+            TrainOptions: swyft TrainOptions dataclass.
         """
 
         self._init_networks(dataset)
         self.head.train()
         self.tail.train()
 
+        if trainoptions is None:
+            trainoptions = TrainOptions(device=self.device)
+
+        if trainoptions.device != self.device:
+            print(f"Training on {self.device}, despite {trainoptions.device=}.")
+            trainoptions = deepcopy(trainoptions)
+            trainoptions.device = self.device
+
         diagnostics = trainloop(
-            head=self.head,
-            tail=self.tail,
-            dataset=dataset,
-            batch_size=batch_size,
-            validation_size=validation_size,
-            early_stopping_patience=early_stopping_patience,
-            max_epochs=max_epochs,
-            optimizer=optimizer,
-            optimizer_args=optimizer_args,
-            scheduler=scheduler,
-            scheduler_args=scheduler_args,
-            nworkers=nworkers,
-            device=self.device,
-            non_blocking=non_blocking
+            head=self.head, tail=self.tail, dataset=dataset, trainoptions=trainoptions,
         )
         self._train_diagnostics.append(diagnostics)
 

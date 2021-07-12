@@ -1,14 +1,15 @@
 import logging
+from typing import Optional
 from warnings import warn
 
 import numpy as np
 import torch
 
 import swyft
+from swyft.inference.ratios import RatioEstimator
+from swyft.networks import DefaultHead, DefaultTail
 from swyft.types import Array
 from swyft.utils import tupelize_marginals
-from .ratios import RatioEstimator
-from swyft.networks import DefaultHead, DefaultTail
 
 log = logging.getLogger(__name__)
 
@@ -234,17 +235,18 @@ class Posteriors:
         self._dataset = dataset
 
     def train(self, marginals,
+         trainoptions = None
+#        batch_size=64,
+#        validation_size=0.1,
+#        early_stopping_patience=5,
+#        max_epochs=30,
+#        optimizer=torch.optim.Adam,
+#        optimizer_args=dict(lr=1e-3),
+#        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
+#        scheduler_args=dict(factor=0.1, patience=5),
+#        nworkers=2,
+#        non_blocking=True,
         alt_dataset = None,
-        batch_size=64,
-        validation_size=0.1,
-        early_stopping_patience=5,
-        max_epochs=30,
-        optimizer=torch.optim.Adam,
-        optimizer_args=dict(lr=1e-3),
-        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
-        scheduler_args=dict(factor=0.1, patience=5),
-        nworkers=2,
-        non_blocking=True,
         ):
         """Train marginals.
 
@@ -252,26 +254,21 @@ class Posteriors:
             batch_size (int): Batch size...
             TODO
         """
-        dataset = alt_dataset if alt_dataset else self._dataset
+        dataset = alt_dataset or self._dataset
         if dataset is None:
             print("ERROR: No dataset specified.")
             return
         if dataset.requires_sim:
             print("ERROR: Not all points in the dataset are simulated yet.")
             return
+
         marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
-        re.train(dataset, 
-                batch_size=batch_size,
-                validation_size=validation_size,
-                early_stopping_patience=early_stopping_patience,
-                max_epochs=max_epochs,
-                optimizer=optimizer,
-                optimizer_args=optimizer_args,
-                scheduler=scheduler,
-                scheduler_args=scheduler_args,
-                nworkers=nworkers,
-                non_blocking=non_blocking)
+
+        if trainoptions is None:
+            trainoptions = swyft.TrainOptions(device=self.device)
+
+        re.train(dataset, trainoptions)
 
     def train_diagnostics(self, marginals):
         marginals = tupelize_marginals(marginals)

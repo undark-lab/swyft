@@ -19,7 +19,6 @@ class Dataset(torch_Dataset):
         simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
         simkeys (list of strings): List of simulation keys that should be exposed 
                                     (None means that all store sims are exposed).
-        add (bool): If necessary, automatically add new points to the store.
 
     .. note::
         swyft.Dataset is essentially a list of indices that point to
@@ -29,12 +28,12 @@ class Dataset(torch_Dataset):
         is effectively drawn from a Poisson distribution with mean N.  
     """
 
-    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys = None, add = False):
+    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys=None):
         super().__init__()
 
         # Initialization
         self._trunc_prior = swyft.TruncatedPrior(prior, bound)
-        self._indices = store.sample(N, prior, bound=bound, add = add)
+        self._indices = store.sample(N, prior, bound=bound)
 
         self._store = store
         self._simhook = simhook
@@ -127,7 +126,7 @@ class Dataset(torch_Dataset):
             indices=self._indices,
             trunc_prior=self._trunc_prior.state_dict(),
             simhook=bool(self._simhook),
-            simkeys=self._simkeys
+            simkeys=self._simkeys,
         )
 
     @classmethod
@@ -140,7 +139,7 @@ class Dataset(torch_Dataset):
 
         obj._store = store
         obj._simhook = simhook
-        obj._simkeys = state_dict['simkeys']
+        obj._simkeys = state_dict["simkeys"]
         if state_dict["simhook"] and not simhook:
             log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."

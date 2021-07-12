@@ -1,13 +1,13 @@
 from swyft.bounds import Bound, Prior, TruncatedPrior
-from swyft.inference import Posteriors #, Microscope, Task
+from swyft.inference import Posteriors, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
 from swyft.store import (
+    DaskSimulator,
     Dataset,
     DirectoryStore,
     ExactDataset,
     MemoryStore,
     Simulator,
-    DaskSimulator,
 )
 from swyft.utils import corner, plot1d
 
@@ -21,9 +21,8 @@ def zen():
 
 
 __all__ = [
+    "TrainOptions",
     "TruncatedPrior",
-    #"Microscope",
-    #"Task",
     "Posteriors",
     "Prior",
     "Bound",
