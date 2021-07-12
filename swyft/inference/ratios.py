@@ -132,68 +132,63 @@ class RatioEstimator:
         self._device = device
         return self
 
-    def train(self, dataset, trainoptions: Optional[TrainOptions] = None,) -> None:
+    def train(self, dataset, trainoptions) -> None:
         """Train higher-dimensional marginal posteriors.
 
         Args:
-            TrainOptions: swyft TrainOptions dataclass.
+            dataset (swyft.Dataset): Training dataset
+            trainoptions (swyft.TrainOptions): swyft TrainOptions dataclass
         """
 
         self._init_networks(dataset)
         self.head.train()
         self.tail.train()
 
-        if trainoptions is None:
-            trainoptions = TrainOptions(device=self.device)
-
-        if trainoptions.device != self.device:
-            print(f"Training on {self.device}, despite {trainoptions.device=}.")
-            trainoptions = deepcopy(trainoptions)
-            trainoptions.device = self.device
-
         diagnostics = trainloop(
             head=self.head, tail=self.tail, dataset=dataset, trainoptions=trainoptions,
+            device = self.device
         )
         self._train_diagnostics.append(diagnostics)
 
     def train_diagnostics(self):
         return self._train_diagnostics
 
-    def ratios(self, obs, params, device=None, n_batch=10_000):
+    def ratios(self, obs, params, n_batch=10_000):
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()
 
-        # FIXME: Is this device functionality really necessary?  We can use
-        # ".to()" instead
+#        # FIXME: Is this device functionality really necessary?  We can use
+#        # ".to()" instead
+#
+#        if device is None:
+#            device = torch.device(self.device)
+#        else:
+#            device = torch.device(device)
+#
+#        if device != self.device:
+#            head = deepcopy(self.head).to(device=device)
+#            tail = deepcopy(self.tail).to(device=device)
+#        else:
 
-        if device is None:
-            device = torch.device(self.device)
-        else:
-            device = torch.device(device)
-
-        if device != self.device:
-            head = deepcopy(self.head).to(device=device)
-            tail = deepcopy(self.tail).to(device=device)
-        else:
-            head = self.head
-            tail = self.tail
+        head = self.head
+        tail = self.tail
 
         with torch.no_grad():
-            # obs = dict_to_tensor(obs, device = device)
-            obs = dict_to_tensor_unsqueeze(obs, device=device)
+            # obs = dict_to_tensor(obs, device = self.device)
+            obs = dict_to_tensor_unsqueeze(obs, device=self.device)
             f = head(obs)
 
             npar = len(params)
             if npar < n_batch:
-                params = array_to_tensor(params, device=device)
+                params = array_to_tensor(params, device=self.device)
                 f = f.expand(npar, -1)
                 ratios = tail(f, params).detach().cpu().numpy()
             else:
                 ratios = []
                 for i in range(npar // n_batch + 1):
                     params_batch = array_to_tensor(
-                        params[i * n_batch : (i + 1) * n_batch, :], device=device
+                        params[i * n_batch : (i + 1) * n_batch, :], device=self.device
                     )
                     n = len(params_batch)
                     f_batch = f.expand(n, -1)

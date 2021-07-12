@@ -34,6 +34,8 @@ class Dataset(torch_Dataset):
         # Initialization
         self._trunc_prior = swyft.TruncatedPrior(prior, bound)
         self._indices = store.sample(N, prior, bound=bound)
+        if len(self._indices) == 0:
+            raise RuntimeError("Not enough simulations in store")
 
         self._store = store
         self._simhook = simhook

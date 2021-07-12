@@ -31,23 +31,24 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
 class TrainOptions:
     """Settings for the trainloop function."""
 
-    batch_size: int = 64
-    validation_size: float = 0.1
-    early_stopping_patience: int = 10
-    max_epochs: int = 50
-    optimizer: Callable = torch.optim.Adam
-    optimizer_args: dict = field(default_factory=lambda: dict(lr=1e-3))
-    scheduler: Callable = torch.optim.lr_scheduler.ReduceLROnPlateau
-    scheduler_args: Callable = field(default_factory=lambda: dict(reduce_lr_factor=0.1, reduce_lr_patience=5))
-    nworkers: int = 2
-    device: str = "cpu"
-    non_blocking: bool = True
+    # NOTE: Defaults are specified in swyft.Posteriors.train
+
+    batch_size: int # = 64
+    validation_size: float # = 0.1
+    early_stopping_patience: int # = 10
+    max_epochs: int # = 50
+    optimizer: Callable # = torch.optim.Adam
+    optimizer_args: dict # = field(default_factory=lambda: dict(lr=1e-3))
+    scheduler: Callable # = torch.optim.lr_scheduler.ReduceLROnPlateau
+    scheduler_args: Callable # = field(default_factory=lambda: dict(factor=0.1, patience=5))
+    nworkers: int # = 2
+    non_blocking: bool # = True
 
 
 # We have the posterior exactly because our prior is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def do_training(
-    head, tail, train_loader, validation_loader, trainoptions: TrainOptions,
+    head, tail, train_loader, validation_loader, trainoptions: TrainOptions, device,
 ):
     """Network training loop.
 
@@ -67,11 +68,11 @@ def do_training(
 
                 obs = dict_to_device(
                     sim,
-                    device=trainoptions.device,
+                    device=device,
                     non_blocking=trainoptions.non_blocking,
                 )
                 params = z.to(
-                    device=trainoptions.device, non_blocking=trainoptions.non_blocking
+                    device=device, non_blocking=trainoptions.non_blocking
                 )
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
@@ -88,8 +89,8 @@ def do_training(
         2 ** 31 - 1 if trainoptions.max_epochs is None else trainoptions.max_epochs
     )
     params = list(head.parameters()) + list(tail.parameters())
-    optimizer = trainoptions.optimizer_fn(params, **trainoptions.optimizer_args)
-    scheduler = trainoptions.scheduler_fn(optimizer, **trainoptions.scheduler_args)
+    optimizer = trainoptions.optimizer(params, **trainoptions.optimizer_args)
+    scheduler = trainoptions.scheduler(optimizer, **trainoptions.scheduler_args)
 
     n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
     n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
@@ -157,11 +158,8 @@ def _get_ntrain_nvalid(validation_size, len_dataset):
 
 
 def trainloop(
-    head, tail, dataset, trainoptions: Optional[TrainOptions] = None,
+    head, tail, dataset, trainoptions, device = 'cpu',
 ):
-    if trainoptions is None:
-        trainoptions = TrainOptions()
-
     log.debug("Entering trainloop")
     log.debug(f"{'batch_size':>25} {trainoptions.batch_size:<4}")
     log.debug(f"{'validation_size':>25} {trainoptions.validation_size:<4}")
@@ -169,8 +167,8 @@ def trainloop(
         f"{'early_stopping_patience':>25} {trainoptions.early_stopping_patience:<4}"
     )
     log.debug(f"{'max_epochs':>25} {trainoptions.max_epochs:<4}")
-    log.debug(f"{'optimizer_fn':>25} {repr(trainoptions.optimizer_fn):<4}")
-    log.debug(f"{'scheduler_fn':>25} {repr(trainoptions.scheduler_fn):<4}")
+    log.debug(f"{'optimizer_fn':>25} {repr(trainoptions.optimizer):<4}")
+    log.debug(f"{'scheduler_fn':>25} {repr(trainoptions.scheduler):<4}")
     log.debug(f"{'nworkers':>25} {trainoptions.nworkers:<4}")
 
     assert trainoptions.validation_size > 0
@@ -194,7 +192,7 @@ def trainloop(
         drop_last=True,
     )
     tl, vl, sd_head, sd_tail = do_training(
-        head, tail, train_loader, valid_loader, trainoptions,
+        head, tail, train_loader, valid_loader, trainoptions, device
 )
     vl_minimum = min(vl)
     vl_min_idx = vl.index(vl_minimum)

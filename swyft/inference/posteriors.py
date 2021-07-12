@@ -7,6 +7,7 @@ import torch
 
 import swyft
 from swyft.inference.ratios import RatioEstimator
+from swyft.inference.train import TrainOptions
 from swyft.networks import DefaultHead, DefaultTail
 from swyft.types import Array
 from swyft.utils import tupelize_marginals
@@ -235,18 +236,17 @@ class Posteriors:
         self._dataset = dataset
 
     def train(self, marginals,
-         trainoptions = None,
-#        batch_size=64,
-#        validation_size=0.1,
-#        early_stopping_patience=5,
-#        max_epochs=30,
-#        optimizer=torch.optim.Adam,
-#        optimizer_args=dict(lr=1e-3),
-#        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
-#        scheduler_args=dict(factor=0.1, patience=5),
-#        nworkers=2,
-#        non_blocking=True,
-         alt_dataset = None,
+        batch_size=64,
+        validation_size=0.1,
+        early_stopping_patience=5,
+        max_epochs=30,
+        optimizer=torch.optim.Adam,
+        optimizer_args=dict(lr=1e-3),
+        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
+        scheduler_args=dict(factor=0.1, patience=5),
+        nworkers=2,
+        non_blocking=True,
+        alt_dataset = None,
         ):
         """Train marginals.
 
@@ -265,8 +265,18 @@ class Posteriors:
         marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
 
-        if trainoptions is None:
-            trainoptions = swyft.TrainOptions(device=self.device)
+        trainoptions = TrainOptions(
+                batch_size=batch_size,
+                validation_size=validation_size,
+                early_stopping_patience=early_stopping_patience,
+                max_epochs=max_epochs,
+                optimizer=optimizer,
+                optimizer_args=optimizer_args,
+                scheduler=scheduler,
+                scheduler_args=scheduler_args,
+                nworkers=nworkers,
+                non_blocking=non_blocking
+                )
 
         re.train(dataset, trainoptions)
 
