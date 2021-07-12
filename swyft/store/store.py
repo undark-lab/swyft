@@ -13,17 +13,7 @@ import zarr
 
 import swyft
 
-# from swyft.types import Array, PathType
-# from swyft.utils import all_finite, is_empty
-#
 log = logging.getLogger(__name__)
-#
-#
-# class SimulationStatus(enum.IntEnum):
-#    PENDING = 0
-#    RUNNING = 1
-#    FINISHED = 2
-#    FAILED = 3
 
 from swyft.store.simulator import SimulationStatus, Simulator
 from swyft.types import PathType
@@ -41,7 +31,19 @@ class Filesystem:
 
 
 class Store(ABC):
-    """Abstract base class for various stores."""
+    """Abstract base class for various stores.
+
+    Args:
+        zarr_store: zarr storage.
+        simulator: simulator object.
+        sync_path: if specified, it will enable synchronization using file locks (files will be
+            stored in the given path). Must be accessible to all processes working on the store
+            and the underlying filesystem must support file locking.
+        chunksize: the parameters and simulation output will be stored as arrays with the
+            specified chunk size along the sample dimension (a single chunk will be used for the
+            other dimensions).
+        pickle_protocol: pickle protocol number used for storing intensity functions.
+    """
 
     _filesystem = Filesystem
 
@@ -54,25 +56,12 @@ class Store(ABC):
         chunksize: int = 1,
         pickle_protocol: int = 4,
     ):
-        """Initialize Store content dimensions.
-
-        Args:
-            zarr_store: zarr storage.
-            simulator: simulator object.
-            sync_path: if specified, it will enable synchronization using file locks (files will be
-                stored in the given path). Must be accessible to all processes working on the store
-                and the underlying filesystem must support file locking.
-            chunksize: the parameters and simulation output will be stored as arrays with the
-                specified chunk size along the sample dimension (a single chunk will be used for the
-                other dimensions).
-            pickle_protocol: pickle protocol number used for storing intensity functions.
-        """
         self._zarr_store = zarr_store
         self._simulator = simulator
         self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
 
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
-        self._root = zarr.group(store=self.zarr_store, synchronizer=synchronizer)
+        self._root = zarr.group(store=self._zarr_store, synchronizer=synchronizer)
 
         if set(["samples", "metadata"]) == set(self._root.keys()):
             print("Loading existing store.")
@@ -100,9 +89,53 @@ class Store(ABC):
         if sync_path is not None:
             self._setup_lock(sync_path)
 
-    @property
-    def zarr_store(self):
-        return self._zarr_store
+    def add(self, N, prior, bound=None):
+        """Adds points to the store.
+
+        Args:
+            N (int): Number of samples
+            prior (swyft.Prior): Prior
+            bound (swyft.Bound): Bound object for prior truncation
+
+        .. warning::
+            Calling this method will alter the content of the store by adding
+            additional points. Currently this cannot be reverted, so use with
+            care when applying it to the DirectoryStore.
+        """
+        pdf = swyft.TruncatedPrior(prior, bound)
+
+        # Lock store while adding new points
+        self.lock()
+        self._update()
+
+        # Generate new points
+        z_prop = pdf.sample(N=np.random.poisson(N))
+        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(z_prop)
+        log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
+        accept_new = log_w > log_lambda_store
+        z_new = z_prop[accept_new]
+        log_w_new = log_w[accept_new]
+
+        # Anything new?
+        if sum(accept_new) > 0:
+            # Add new entries to store
+            self._append_new_points(z_new, log_w_new)
+            print("Store: Adding %i new samples to simulator store." % sum(accept_new))
+            # Update intensity function
+            self.log_lambdas.resize(len(self.log_lambdas) + 1)
+            self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
+
+        log.debug(f"  total size of simulator store {len(self)}.")
+
+        # Points added, unlock store
+        self.unlock()
+        self._update()
+
+#    @property
+#    def zarr_store(self):
+#        """Return ZarrStore object."""
+#        return self._zarr_store
 
     def _setup_lock(self, sync_path):
         path = os.path.join(sync_path, "cache.lock")
@@ -166,6 +199,7 @@ class Store(ABC):
         return len(self.v)
 
     def __getitem__(self, i):
+        """Returns data store entry with index :math:`i`."""
         self._update()
         sim = {}
         for key, value in self.sims.items():
@@ -188,6 +222,7 @@ class Store(ABC):
         self.sim_status.append(m)
 
     def log_lambda(self, z: np.ndarray) -> np.ndarray:
+        """Intensity function of the store."""
         self._update()
         d = -np.inf * np.ones_like(z[:, 0])
         if len(self.log_lambdas) == 0:
@@ -200,7 +235,22 @@ class Store(ABC):
         return d
 
     def coverage(self, N, prior, bound=None):
-        """Returns fraction of already stored data points."""
+        """Returns fraction of already stored data points.
+
+        Args:
+            N (int): Number of samples
+            prior (swyft.Prior): Prior
+            bound (swyft.Bound): Bound object for prior truncation
+
+
+        Returns:
+            Fraction of samples that is already covered by content of the store.
+
+        .. note::
+            A coverage of zero means that all points need to be newly
+            simulated. A coverage of 1.0 means that all points are already
+            available for this (truncated) prior.
+        """
         pdf = swyft.TruncatedPrior(prior, bound)
         Nsamples = max(N, 1000) # At least 1000 test samples
         self._update()
@@ -213,39 +263,20 @@ class Store(ABC):
                 np.exp(-log_lambda_target+log_lambda_store), 1.).mean()
         return frac
 
-    def add(self, N, prior, bound=None):
-        """Adds data points."""
-        pdf = swyft.TruncatedPrior(prior, bound)
-
-        # Lock store while adding new points
-        self.lock()
-        self._update()
-
-        # Generate new points
-        z_prop = pdf.sample(N=np.random.poisson(N))
-        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
-        log_lambda_store = self.log_lambda(z_prop)
-        log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
-        accept_new = log_w > log_lambda_store
-        z_new = z_prop[accept_new]
-        log_w_new = log_w[accept_new]
-
-        # Anything new?
-        if sum(accept_new) > 0:
-            # Add new entries to store
-            self._append_new_points(z_new, log_w_new)
-            print("Store: Adding %i new samples to simulator store." % sum(accept_new))
-            # Update intensity function
-            self.log_lambdas.resize(len(self.log_lambdas) + 1)
-            self.log_lambdas[-1] = dict(pdf=pdf.state_dict(), N=N)
-
-        log.debug(f"  total size of simulator store {len(self)}.")
-
-        # Points added, unlock store
-        self.unlock()
-        self._update()
 
     def sample(self, N, prior, bound=None, check_coverage = True, add = False):
+        """Return samples from store.
+
+        Args:
+            N (int): Number of samples
+            prior (swyft.Prior): Prior
+            bound (swyft.Bound): Bound object for prior truncation
+            check_coverage (bool): Check whether requested points are contained in the store.
+            add (bool): If necessary, add requested points to the store.
+
+        Returns:
+            Indices (list): Index list pointing to the relevant store entries.
+        """
         if add:
             if self.coverage(N, prior, bound = bound) < 1:
                 self.add(N, prior, bound = bound)
@@ -299,11 +330,11 @@ class Store(ABC):
         self.sim_status.oindex[indices] = status
 
     def get_simulation_status(self, indices=None):
-        """
-        Determine the status of sample simulations.
+        """Determine the status of sample simulations.
 
         Args:
-            indices: list of indices. If None, check the status of all samples
+            indices (list): List of indices. If None, check the status of all
+                samples
 
         Returns:
             list of simulation statuses
@@ -316,7 +347,7 @@ class Store(ABC):
         )
 
     def requires_sim(self, indices=None) -> bool:
-        """Check whether there are parameters which require a matching simulation."""
+        """Check whether there are parameters which require simulation."""
         self._update()
         return self._get_indices_to_simulate(indices).size > 0
 
@@ -339,7 +370,7 @@ class Store(ABC):
         self._update()
         self._set_simulation_status(i, SimulationStatus.FAILED)
 
-    # FIXME: Deprecated
+    # NOTE: Deprecated
     #    @staticmethod
     #    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
     #        """Is the simulation a success?"""
@@ -356,6 +387,11 @@ class Store(ABC):
     #            return True
 
     def set_simulator(self, simulator):
+        """(Re)set simulator.
+
+        Args:
+            simulator (swyft.Simulator): Simulator.
+        """
         if self._simulator is not None:
             log.warning("Simulator already set!  Overwriting.")
         self._simulator = simulator
@@ -369,10 +405,10 @@ class Store(ABC):
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
         Args:
-            indices: list of sample indices for which a simulation is required
-            batch_size: simulations will be submitted in batches of the specified
+            indices (list): list of sample indices for which a simulation is required
+            batch_size (int): simulations will be submitted in batches of the specified
                 size
-            wait_for_results: if True, return only when all simulations are done
+            wait_for_results (bool): if True, return only when all simulations are done
         """
         if self._simulator is None:
             log.warning("No simulator specified.  No simulations will run.")
@@ -410,10 +446,10 @@ class Store(ABC):
             self.wait_for_simulations(indices)
 
     def wait_for_simulations(self, indices):
-        """
-        Wait for a set of sample simulations to be finished.
+        """Wait for a set of sample simulations to be finished.
+
         Args:
-            indices: list of sample indices
+            indices (list): list of sample indices
         """
         done = False
         while not done:
@@ -423,82 +459,61 @@ class Store(ABC):
             done = np.all(done)
 
 
-#    # FIXME: Necessary
-#    @staticmethod
-#    def _extract_xshape_from_zarr_group(group):
-#        return group[Store._filesystem.sims].shape[1:]
-#
-#    @staticmethod
-#    def _extract_zdim_from_zarr_group(group):
-#        return group[Store._filesystem.pars].shape[1]
-#
-#    @staticmethod
-#    def _extract_sim_shapes_from_zarr_group(group):
-#        return {k: v.shape[1:] for k, v in group[Store._filesystem.sims].items()}
-#
-#    @staticmethod
-#    def _extract_params_from_zarr_group(group):
-#        return [k for k in group[Store._filesystem.pars].keys()]
-
-
 class DirectoryStore(Store):
+    """Instantiate DirectoryStore.
+
+    Args:
+        path (PathType): path to storage directory
+        simulator (swyft.Simulator): simulator object
+        sync_path: path for synchronization via file locks (files will be stored in the given path).
+            It must differ from path, it must be accessible to all processes working on the store,
+            and the underlying filesystem must support file locking.
+
+    Example::
+
+        >>> store = swyft.DirectoryStore(PATH_TO_STORE)
+        >>> print("Number of simulations in store:", len(store))
+    """
     def __init__(
         self,
         path: PathType,
-        sync_path: Optional[PathType] = None,
         simulator=None,
+        sync_path: Optional[PathType] = None,
     ):
-        """Instantiate an iP3 store stored in a directory.
-
-        Args:
-            path: path to storage directory
-            sync_path: path for synchronization via file locks (files will be stored in the given path).
-                It must differ from path, it must be accessible to all processes working on the store,
-                and the underlying filesystem must support file locking.
-            simulator: simulator object.
-        """
         zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
             zarr_store=zarr_store,
-            sync_path=sync_path,
             simulator=simulator,
+            sync_path=sync_path,
         )
-
-# FIXME: Why do we need this?
-#    @classmethod
-#    def load(cls, path: PathType):
-#        """Load existing DirectoryStore."""
-#        zarr_store = zarr.DirectoryStore(path)
-#        group = zarr.group(store=zarr_store)
-#        zdim = group[cls._filesystem.pars].shape[1]
-#        return DirectoryStore(params=zdim, path=path)
 
 
 class MemoryStore(Store):
-    def __init__(self, zarr_store=None, simulator=None):
-        """Instantiate an iP3 store stored in the memory.
+    """Instantiate a new memory store for a given simulator.
 
-        Args:
-            zarr_store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
-                loading.
-            simulator: simulator object.
-        """
-        if zarr_store is None:
-            zarr_store = zarr.MemoryStore()
-            log.debug("Creating new empty MemoryStore.")
-        else:
-            log.debug("Creating MemoryStore from zarr_store.")
-        #        super().__init__(
-        #            params=params,
-        #            zarr_store=zarr_store,
-        #            simulator=simulator,
-        #            sync_path=sync_path,
-        #        )
+    Args:
+        simulator (swyft.Simulator): Simulator object
+
+    .. note::
+        The swyft.MemoryStore is in general expected to be faster than
+        swyft.DirectoryStore, and useful for quick explorations, or for
+        loading training data into memory before training.
+
+    Example::
+
+        >>> store = swyft.MemoryStore(simulator)
+    """
+    def __init__(self, simulator):
+        zarr_store = zarr.MemoryStore()
         super().__init__(zarr_store=zarr_store, simulator=simulator)
 
     def save(self, path: PathType) -> None:
-        """Save the current state of the MemoryStore to a directory."""
+        """Save the MemoryStore to a DirectoryStore.
+
+        Args:
+            path (PathType): Path to DirectoryStore.
+        """
         path = Path(path)
         if path.exists() and not path.is_dir():
             raise NotADirectoryError(f"{path} should be a directory")
@@ -507,61 +522,31 @@ class MemoryStore(Store):
         else:
             path.mkdir(parents=True, exist_ok=True)
             zarr_store = zarr.DirectoryStore(path)
-            zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
+            zarr.convenience.copy_store(source=self._zarr_store, dest=zarr_store)
             return None
+
+    @classmethod
+    def load(cls, path: PathType):
+        """Load existing DirectoryStore into a MemoryStore.
+
+        Args:
+            path (PathType): path to DirectoryStore
+        """
+        memory_store = zarr.MemoryStore()
+        directory_store = zarr.DirectoryStore(path)
+        zarr.convenience.copy_store(source=directory_store, dest=memory_store)
+        obj = MemoryStore.__new__(MemoryStore)
+        super(MemoryStore, obj).__init__(zarr_store=memory_store, simulator=None)
+        return obj
 
 #    def copy(self, sync_path=None):
 #        zarr_store = zarr.MemoryStore()
-#        zarr.convenience.copy_store(source=self.zarr_store, dest=zarr_store)
+#        zarr.convenience.copy_store(source=self._zarr_store, dest=zarr_store)
 #        return MemoryStore(
 #            params=self.params,
 #            zarr_store=zarr_store,
 #            simulator=self._simulator,
 #            sync_path=sync_path,
 #        )
-
-    @classmethod
-    def load(cls, path: PathType):
-        """Load existing DirectoryStore state into a MemoryStore object."""
-        memory_store = zarr.MemoryStore()
-        directory_store = zarr.DirectoryStore(path)
-        zarr.convenience.copy_store(source=directory_store, dest=memory_store)
-
-        group = zarr.group(store=memory_store)
-        # <<<<<<< HEAD
-        #        xshape = cls._extract_xshape_from_zarr_group(group)
-        #        zdim = cls._extract_zdim_from_zarr_group(group)
-        #        return cls(zdim=zdim, xshape=xshape, store=memory_store)
-        #        # sim_shapes = cls._extract_sim_shapes_from_zarr_group(group)
-        #        # z = cls._extract_params_from_zarr_group(group)
-        #        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
-        # =======
-        return MemoryStore(zarr_store=memory_store)
-
-    # >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
-
-#    # FIXME: Needs updating
-#    @classmethod
-#    def from_model(cls, model, prior):
-#        """Convenience function to instantiate new MemoryStore with given model and prior.
-#
-#        Args:
-#            model (function): Simulator model.
-#            prior (Prior): Model prior.
-#
-#        Note:
-#            The simulator model is run once in order to infer observable shapes from the output.
-#        """
-#        v = prior.sample(1)[0]
-#        vdim = len(v)
-#        sim = model(v)
-#        sim_shapes = {k: v.shape for k, v in sim.items()}
-#        # <<<<<<< HEAD
-#        #
-#        #        return cls(vdim, sim_shapes)
-#        # =======
-#        simulator = swyft.Simulator(model, sim_shapes=sim_shapes)
-#        return MemoryStore(vdim, simulator=simulator)
-#
-#
-# >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
+#            zarr_store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
+#                loading.
