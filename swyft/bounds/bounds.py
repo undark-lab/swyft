@@ -8,9 +8,12 @@ from swyft.inference import IsolatedRatio
 
 log = logging.getLogger(__name__)
 
-
-# FIXME: Add docstring
 class Bound:
+    """A bound on the hypercube.
+
+    The bound can be generated 
+
+    """
     def __init__(self):
         pass
 
@@ -94,16 +97,31 @@ class UnitCubeBound(Bound):
 
     @property
     def volume(self):
+        """The volume of the constrained region."""
         return self._volume
 
     @property
     def udim(self):
+        """Dimensionality of the constrained region."""
         return self._udim
 
     def sample(self, N):
+        """Generate samples from the bound region.
+
+        Args:
+            N (int): Number of samples
+        """
         return np.random.rand(N, self.udim)
 
     def __call__(self, u):
+        """Evaluate bound.
+
+        Args:
+            u (array): Input array.
+
+        Returns:
+            Ones and zeros
+        """
         b = np.where(u <= 1.0, np.where(u >= 0.0, 1.0, 0.0), 0.0)
         return b.prod(axis=-1)
 
