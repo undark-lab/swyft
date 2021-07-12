@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store."""
 
-    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys = None):
+    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys=None):
         """Initialize Dataset.
 
         Args:
@@ -107,7 +107,7 @@ class Dataset(torch_Dataset):
             indices=self._indices,
             trunc_prior=self._trunc_prior.state_dict(),
             simhook=bool(self._simhook),
-            simkeys=self._simkeys
+            simkeys=self._simkeys,
         )
 
     @classmethod
@@ -120,7 +120,7 @@ class Dataset(torch_Dataset):
 
         obj._store = store
         obj._simhook = simhook
-        obj._simkeys = state_dict['simkeys']
+        obj._simkeys = state_dict["simkeys"]
         if state_dict["simhook"] and not simhook:
             log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."

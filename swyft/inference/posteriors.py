@@ -6,10 +6,10 @@ import numpy as np
 import torch
 
 import swyft
-from swyft.types import Array
-from swyft.utils import tupelize_marginals
 from swyft.inference.ratios import RatioEstimator
 from swyft.networks import DefaultHead, DefaultTail
+from swyft.types import Array
+from swyft.utils import tupelize_marginals
 
 log = logging.getLogger(__name__)
 
@@ -203,11 +203,8 @@ class Posteriors(object):
         return self
 
     def train(
-        self, 
-        marginals, 
-        dataset, 
-        trainoptions: Optional[swyft.TrainOptions] = None,
-    ):            
+        self, marginals, dataset, trainoptions: Optional[swyft.TrainOptions] = None,
+    ):
         marginals = tupelize_marginals(marginals)
         re = self._ratios[marginals]
 

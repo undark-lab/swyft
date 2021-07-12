@@ -5,9 +5,10 @@ from warnings import warn
 import numpy as np
 import torch
 
-from .posteriors import Posteriors
-from swyft.utils import tupelize_marginals
 import swyft
+from swyft.utils import tupelize_marginals
+
+from .posteriors import Posteriors
 
 # logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 

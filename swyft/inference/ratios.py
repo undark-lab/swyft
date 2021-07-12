@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from swyft.inference.train import trainloop, TrainOptions
+from swyft.inference.train import TrainOptions, trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device
 from swyft.utils import (
@@ -132,11 +132,7 @@ class RatioEstimator:
         self._device = device
         return self
 
-    def train(
-        self,
-        dataset,
-        trainoptions: Optional[TrainOptions] = None,
-    ) -> None:
+    def train(self, dataset, trainoptions: Optional[TrainOptions] = None,) -> None:
         """Train higher-dimensional marginal posteriors.
 
         Args:
@@ -149,17 +145,14 @@ class RatioEstimator:
 
         if trainoptions is None:
             trainoptions = TrainOptions(device=self.device)
-        
+
         if trainoptions.device != self.device:
             print(f"Training on {self.device}, despite {trainoptions.device=}.")
             trainoptions = deepcopy(trainoptions)
             trainoptions.device = self.device
 
         diagnostics = trainloop(
-            head=self.head,
-            tail=self.tail,
-            dataset=dataset,
-            trainoptions=trainoptions,
+            head=self.head, tail=self.tail, dataset=dataset, trainoptions=trainoptions,
         )
         self._train_diagnostics.append(diagnostics)
 
