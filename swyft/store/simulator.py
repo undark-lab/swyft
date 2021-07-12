@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import tempfile
 from operator import getitem
-from typing import Callable, Mapping, Optional
+from typing import Callable, Mapping, Optional, List, Union
 
 import dask.array as da
 import numpy as np
@@ -25,14 +25,18 @@ class SimulationStatus(enum.IntEnum):
 class Simulator:
     """ Setup and run the simulator engine. """
 
-    def __init__(self, model: Callable, sim_shapes: Mapping[str, Shape]):
+    def __init__(self, model: Callable, params: Union[List[str], int], sim_shapes: Mapping[str, Shape]):
         """Initiate Simulator using a python function.
 
         Args:
             model: simulator model function
+            params: Number of model parameters ('z0', 'z1', ...) or list of parameter names.
             sim_shapes: map of simulator's output names to shapes
         """
         self.model = model
+        if isinstance(params, int):
+            params = ["z%i" % i for i in range(params)]
+        self.params = params
         self.sim_shapes = sim_shapes
 
     def run(self, pars, sims, sim_status, indices, **kwargs):

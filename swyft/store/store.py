@@ -48,7 +48,6 @@ class Store(ABC):
     @abstractmethod
     def __init__(
         self,
-        params: Union[int, list],
         zarr_store: Union[zarr.MemoryStore, zarr.DirectoryStore],
         simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
@@ -58,7 +57,6 @@ class Store(ABC):
         """Initialize Store content dimensions.
 
         Args:
-            params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             zarr_store: zarr storage.
             simulator: simulator object.
             sync_path: if specified, it will enable synchronization using file locks (files will be
@@ -73,14 +71,8 @@ class Store(ABC):
         self._simulator = simulator
         self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
 
-        if isinstance(params, int):
-            params = ["z%i" % i for i in range(params)]
-        self.params = params
-
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self._root = zarr.group(store=self.zarr_store, synchronizer=synchronizer)
-
-        log.debug("  params = %s" % str(params))
 
         if set(["samples", "metadata"]) == set(self._root.keys()):
             print("Loading existing store.")
@@ -95,7 +87,7 @@ class Store(ABC):
             #            log.debug("Creating new store.")
 
             self._setup_new_zarr_store(
-                len(self.params), simulator.sim_shapes, self._root, chunksize=chunksize
+                simulator.params, simulator.sim_shapes, self._root, chunksize=chunksize
             )
             log.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
@@ -127,12 +119,14 @@ class Store(ABC):
             log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
-        self, zdim, sim_shapes, root, chunksize=1
+        self, params, sim_shapes, root, chunksize=1
     ) -> None:  # Adding observational shapes to store
         # Parameters
-        root.zeros(
+        zdim = len(params)
+        pars = root.zeros(
             self._filesystem.pars, shape=(0, zdim), chunks=(chunksize, zdim), dtype="f8"
         )
+        pars.attrs['params'] = params
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
@@ -164,6 +158,7 @@ class Store(ABC):
         self.log_w = self._root[self._filesystem.log_w]
         self.log_lambdas = self._root[self._filesystem.log_lambdas]
         self.sim_status = self._root[self._filesystem.simulation_status]
+        self.params = self._root[self._filesystem.pars].attrs['params']
 
     def __len__(self):
         """Returns number of samples in the store."""
@@ -204,8 +199,22 @@ class Store(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def sample(self, N, prior, bound=None):
+    def coverage(self, N, prior, bound=None):
+        """Returns fraction of already stored data points."""
+        pdf = swyft.TruncatedPrior(prior, bound)
+        Nsamples = max(N, 1000) # At least 1000 test samples
+        self._update()
 
+        # Generate new points
+        z_prop = pdf.sample(N=np.random.poisson(Nsamples))
+        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(z_prop)
+        frac = np.where(log_lambda_target > log_lambda_store, 
+                np.exp(-log_lambda_target+log_lambda_store), 1.).mean()
+        return frac
+
+    def add(self, N, prior, bound=None):
+        """Adds data points."""
         pdf = swyft.TruncatedPrior(prior, bound)
 
         # Lock store while adding new points
@@ -234,14 +243,22 @@ class Store(ABC):
 
         # Points added, unlock store
         self.unlock()
+        self._update()
+
+    def sample(self, N, prior, bound=None, check_coverage = True):
+        if check_coverage:
+            if self.coverage(N, prior, bound = bound) < 1.:
+                print("WARNING: Store does not contain enough samples.")
+                return []
+        pdf = swyft.TruncatedPrior(prior, bound)
 
         self._update()
 
         # Select points from cache
-        z_store = self.pars
-        log_w_store = self.log_w
+        z_store = self.pars[:]
+        log_w_store = self.log_w[:]
         log_lambda_target = pdf.log_prob(z_store) + np.log(N)
-        accept_stored = log_w_store < log_lambda_target
+        accept_stored = log_w_store <= log_lambda_target
         indices = np.array(range(len(accept_stored)))[accept_stored]
 
         return indices
@@ -424,7 +441,6 @@ class Store(ABC):
 class DirectoryStore(Store):
     def __init__(
         self,
-        params,
         path: PathType,
         sync_path: Optional[PathType] = None,
         simulator=None,
@@ -432,7 +448,6 @@ class DirectoryStore(Store):
         """Instantiate an iP3 store stored in a directory.
 
         Args:
-            params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             path: path to storage directory
             sync_path: path for synchronization via file locks (files will be stored in the given path).
                 It must differ from path, it must be accessible to all processes working on the store,
@@ -442,27 +457,26 @@ class DirectoryStore(Store):
         zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
-            params=params,
             zarr_store=zarr_store,
             sync_path=sync_path,
             simulator=simulator,
         )
 
-    @classmethod
-    def load(cls, path: PathType):
-        """Load existing DirectoryStore."""
-        zarr_store = zarr.DirectoryStore(path)
-        group = zarr.group(store=zarr_store)
-        zdim = group[cls._filesystem.pars].shape[1]
-        return DirectoryStore(params=zdim, path=path)
+# FIXME: Why do we need this?
+#    @classmethod
+#    def load(cls, path: PathType):
+#        """Load existing DirectoryStore."""
+#        zarr_store = zarr.DirectoryStore(path)
+#        group = zarr.group(store=zarr_store)
+#        zdim = group[cls._filesystem.pars].shape[1]
+#        return DirectoryStore(params=zdim, path=path)
 
 
 class MemoryStore(Store):
-    def __init__(self, params, zarr_store=None, simulator=None):
+    def __init__(self, zarr_store=None, simulator=None):
         """Instantiate an iP3 store stored in the memory.
 
         Args:
-            params (list of strings or int): List of paramater names.  If int use ['z0', 'z1', ...].
             zarr_store (zarr.MemoryStore, zarr.DirectoryStore): optional, used in
                 loading.
             simulator: simulator object.
@@ -478,7 +492,7 @@ class MemoryStore(Store):
         #            simulator=simulator,
         #            sync_path=sync_path,
         #        )
-        super().__init__(params=params, zarr_store=zarr_store, simulator=simulator)
+        super().__init__(zarr_store=zarr_store, simulator=simulator)
 
     def save(self, path: PathType) -> None:
         """Save the current state of the MemoryStore to a directory."""
@@ -519,33 +533,32 @@ class MemoryStore(Store):
         #        # z = cls._extract_params_from_zarr_group(group)
         #        # return MemoryCache(params=z, sim_shapes=sim_shapes, store=memory_store)
         # =======
-        zdim = group[cls._filesystem.pars].shape[1]
-        return MemoryStore(params=zdim, zarr_store=memory_store)
+        return MemoryStore(zarr_store=memory_store)
 
     # >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
 
-    # FIXME: Needs updating
-    @classmethod
-    def from_model(cls, model, prior):
-        """Convenience function to instantiate new MemoryStore with given model and prior.
-
-        Args:
-            model (function): Simulator model.
-            prior (Prior): Model prior.
-
-        Note:
-            The simulator model is run once in order to infer observable shapes from the output.
-        """
-        v = prior.sample(1)[0]
-        vdim = len(v)
-        sim = model(v)
-        sim_shapes = {k: v.shape for k, v in sim.items()}
-        # <<<<<<< HEAD
-        #
-        #        return cls(vdim, sim_shapes)
-        # =======
-        simulator = swyft.Simulator(model, sim_shapes=sim_shapes)
-        return MemoryStore(vdim, simulator=simulator)
-
-
+#    # FIXME: Needs updating
+#    @classmethod
+#    def from_model(cls, model, prior):
+#        """Convenience function to instantiate new MemoryStore with given model and prior.
+#
+#        Args:
+#            model (function): Simulator model.
+#            prior (Prior): Model prior.
+#
+#        Note:
+#            The simulator model is run once in order to infer observable shapes from the output.
+#        """
+#        v = prior.sample(1)[0]
+#        vdim = len(v)
+#        sim = model(v)
+#        sim_shapes = {k: v.shape for k, v in sim.items()}
+#        # <<<<<<< HEAD
+#        #
+#        #        return cls(vdim, sim_shapes)
+#        # =======
+#        simulator = swyft.Simulator(model, sim_shapes=sim_shapes)
+#        return MemoryStore(vdim, simulator=simulator)
+#
+#
 # >>>>>>> 00d1071e4f51a590fdfafad6d77cd90050ed08d1
