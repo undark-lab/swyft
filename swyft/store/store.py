@@ -58,9 +58,7 @@ class Store(ABC):
     ):
         self._zarr_store = zarr_store
         self._simulator = simulator
-        self._pickle_protocol = (
-            pickle_protocol
-        )  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
+        self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
 
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self._root = zarr.group(store=self._zarr_store, synchronizer=synchronizer)

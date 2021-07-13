@@ -5,21 +5,13 @@ from typing import Dict, Tuple, Union
 import numpy as np
 import torch
 
+# If you add a type, don't forget to update autodoc_type_aliases in /docs/source/config.py
+
 PathType = Union[str, Path]
-
 Device = Union[torch.device, str]
-Dataset = torch.utils.data.Dataset
-
 Tensor = torch.Tensor
 Array = Union[np.ndarray, torch.Tensor]
-
-WeightsType = Dict[Tuple[int], np.ndarray]
-
 Shape = Union[torch.Size, Tuple[int, ...]]
-DictInt = Union[int, Dict[str, int]]
-DictShape = Union[Shape, Dict[str, Shape]]
 
-PriorConfig = Dict[str, Tuple[str, float, float]]
-
-MarginalKey = Union[Tuple[int], Tuple[str]]
-Marginals = Dict[MarginalKey, Array]
+PoIType = Tuple[int, ...]
+MarginalType = Dict[PoIType, Array]

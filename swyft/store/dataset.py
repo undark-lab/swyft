@@ -17,7 +17,7 @@ class Dataset(torch_Dataset):
         prior (swyft.Prior): Parameter prior.
         store (swyft.Store): Store reference.
         simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
-        simkeys (list of strings): List of simulation keys that should be exposed 
+        simkeys (list of strings): List of simulation keys that should be exposed
                                     (None means that all store sims are exposed).
 
     .. note::
@@ -25,7 +25,7 @@ class Dataset(torch_Dataset):
         corresponding entries in the swyft.Store.  It is a daugther class of
         torch.utils.data.Dataset, and can be used directly for training.  Due
         to the statistical nature of the Store, the returned number of samples
-        is effectively drawn from a Poisson distribution with mean N.  
+        is effectively drawn from a Poisson distribution with mean N.
     """
 
     def __init__(self, N, prior, store, bound=None, simhook=None, simkeys=None):
@@ -58,9 +58,6 @@ class Dataset(torch_Dataset):
     def bound(self):
         """Return bound of truncated prior of dataset (swyft.Bound)."""
         return self._trunc_prior.bound
-
-    def _tensorfy(self, x):
-        return {k: torch.tensor(v).float() for k, v in x.items()}
 
     @property
     def indices(self):
@@ -121,7 +118,7 @@ class Dataset(torch_Dataset):
             x = self._simhook(x, v)
         u = self._trunc_prior.prior.u(v.reshape(1, -1)).flatten()
 
-        return (self._tensorfy(x), torch.tensor(u).float(), torch.tensor(v).float())
+        return (array_to_tensor(x), torch.tensor(u).float(), torch.tensor(v).float())
 
     def state_dict(self):
         return dict(

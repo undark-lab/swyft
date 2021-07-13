@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import tempfile
 from operator import getitem
-from typing import Callable, Mapping, Optional, List, Union
+from typing import Callable, List, Mapping, Optional, Union
 
 import dask.array as da
 import numpy as np
@@ -23,21 +23,21 @@ class SimulationStatus(enum.IntEnum):
 
 
 class Simulator:
-    """ Wrapper class for simulator.
-    
-        Args:
-            model (callable): Model function
-            pnames (int or list): List of parameter names, or number of
-                parameters (interpreted as 'z0', 'z1', ...)
-            sim_shapes (dict): Dict describing model function output shapes.
+    """Wrapper class for simulator.
 
-        Examples::
-            
-            >>> def model(v):
-            >>>     mu = sum(v)  # mu = x + y + z
-            >>>     nu = np.array([v[1], 2*v[2]])  # nu = [y, 2*z]
-            >>>     return dict(mu=mu, nu=nu)
-            >>> simulator = swyft.Simulator(model, ["x", "y", "z"], sim_shapes=dict(mu=(1,), nu=(2,))
+    Args:
+        model (callable): Model function
+        pnames (int or list): List of parameter names, or number of
+            parameters (interpreted as 'z0', 'z1', ...)
+        sim_shapes (dict): Dict describing model function output shapes.
+
+    Examples::
+
+        >>> def model(v):
+        >>>     mu = sum(v)  # mu = x + y + z
+        >>>     nu = np.array([v[1], 2*v[2]])  # nu = [y, 2*z]
+        >>>     return dict(mu=mu, nu=nu)
+        >>> simulator = swyft.Simulator(model, ["x", "y", "z"], sim_shapes=dict(mu=(1,), nu=(2,))
     """
 
     def __init__(
@@ -74,7 +74,7 @@ class Simulator:
 
 
 class DaskSimulator:
-    """ Setup and run the simulator engine, powered by dask. """
+    """Setup and run the simulator engine, powered by dask."""
 
     def __init__(
         self,

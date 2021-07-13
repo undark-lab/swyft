@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Bound:
     """A bound on the hypercube.
 
-    The bound can be generated 
+    The bound can be generated
 
     """
 

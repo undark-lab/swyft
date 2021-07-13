@@ -13,7 +13,7 @@ Do you have a change you'd like to see made? We recommend first making an issue 
 
 ### Setup Envrionment
 
-Create the envrionment, including pre-commit hooks.
+Create the environment, including pre-commit hooks.
 
 ```bash
 git clone https://github.com/undark-lab/swyft.git
@@ -38,7 +38,8 @@ Use type annotations rather than putting the type in the docstring.
 When there is a default argument, do not write that default in the argument documentation line. The exception is when the default is `None`, then it needs an explanation.  
 
 ### Naming
-Use `pnames` for parameters names, `v` for the actual parameter vectors, `u` for the hypercube projection, `pois` for "parameters of interest".
+Consider the naming conventions when you introduce or modify functions. The relevant types are defined within `swyft/types.py`.  
+For quick reference, use `pnames` for parameters names; `v` for the actual parameter vectors; `u` for the hypercube projection; `PoI` for "parameters of interest" in tuple form, e.g. `(0,)` or `(0, 1)`; `marginals` for a dictionary mapping of `PoI` to another value, e.g. weights.
 
 ### Converting between arrays and tensors
 Please use the functions `array_to_tensor` and `tensor_to_array` when converting between arbitrary array data and pytorch tensors.

@@ -20,7 +20,7 @@ MAX_WORKERS = 4  # number of simultaneous processes acting on the store
 
 
 def model(_):
-    """ Model with dummy parameters. Return random numbers in (0; 1]. """
+    """Model with dummy parameters. Return random numbers in (0; 1]."""
     return dict(x=-np.random.random(OUTPUT_SHAPE) + 1)
 
 
@@ -50,7 +50,7 @@ def simulate(cluster, path="./cache", wait_for_results=True):
 
 
 def read_from_store(path):
-    """ Extract data from the Zarr Directory store """
+    """Extract data from the Zarr Directory store"""
     z = zarr.open(f"{path}/samples/pars")
     x = zarr.open_group(f"{path}/samples/sims")
     s = zarr.open_array(f"{path}/samples/simulation_status")
