@@ -63,16 +63,31 @@ def violin_plot(
 def plot1d(
     samples,
     pois,
+    truth=None,
+    bins=100,
     figsize=(15, 10),
     color="k",
     labels=None,
-    ncol=None,
-    truth=None,
-    bins=100,
-    grid_interpolate=False,
     label_args={},
+    ncol=None,
     subplots_kwargs={},
 ) -> None:
+    """Make beautiful 1-dim posteriors.
+
+    Args:
+        samples: Samples from `swyft.Posteriors.sample`
+        pois: List of parameters of interest
+        truth: Ground truth vector
+        bins: Number of bins used for histograms.
+        figsize: Size of figure
+        color: Color
+        labels: Custom labels (default is parameter names)
+        label_args: Custom label arguments
+        ncol: Number of panel columns
+        subplot_kwargs: Subplot kwargs
+    """
+
+    grid_interpolate = (False,)
 
     if ncol is None:
         ncol = len(pois)
@@ -115,13 +130,25 @@ def plot1d(
 def corner(
     samples,
     pois,
+    bins=100,
+    truth=None,
     figsize=(10, 10),
     color="k",
     labels=None,
     label_args={},
-    truth=None,
-    bins=100,
 ) -> None:
+    """Make a beautiful corner plot.
+
+    Args:
+        samples: Samples from `swyft.Posteriors.sample`
+        pois: List of parameters of interest
+        truth: Ground truth vector
+        bins: Number of bins used for histograms.
+        figsize: Size of figure
+        color: Color
+        labels: Custom labels (default is parameter names)
+        label_args: Custom label arguments
+    """
     K = len(pois)
     fig, axes = plt.subplots(K, K, figsize=figsize)
     lb = 0.125
