@@ -9,25 +9,24 @@ from .module import Module
 from .normalization import OnlineNormalizationLayer
 
 
-def _get_z_shape(param_list):
-    return (len(param_list), max([len(c) for c in param_list]))
+def _get_z_shape(marginals):
+    return (len(marginals), max([len(c) for c in marginals]))
 
 
-# TODO: Remove redundant combine functions
-def _combine(params, param_list):
+def _combine(params, marginals):
     """Combine parameters according to parameter list. Supports one batch dimension."""
     shape = params.shape
     device = params.device
-    z_shape = _get_z_shape(param_list)
+    z_shape = _get_z_shape(marginals)
     if len(shape) == 0:  # No batching
         z = torch.zeros(z_shape).to(device)
-        for i, c in enumerate(param_list):
+        for i, c in enumerate(marginals):
             pars = torch.stack([params[k] for k in c]).T
             z[i, : pars.shape[0]] = pars
     else:  # Batching
         n = shape[0]
         z = torch.zeros((n,) + z_shape).to(device)
-        for i, c in enumerate(param_list):
+        for i, c in enumerate(marginals):
             pars = torch.stack([params[:, k] for k in c]).T
             z[:, i, :] = pars
     return z
@@ -37,17 +36,34 @@ class DefaultTail(Module):
     def __init__(
         self,
         n_features,
-        param_list,
-        n_tail_features=2,
+        marginals,
+        hidden_layers: list = [256, 256, 256],
         p=0.0,
-        hidden_layers=[256, 256, 256],
-        online_norm=True,
+        online_norm: bool = True,
         param_transform=None,
-        tail_features=False,
+        tail_features: bool = False,
+        n_tail_features: int = 2,
     ):
+        """Default tail network.
+
+        Args:
+            n_features: Length of feature vector.
+            marginals: List of marginals to learn.
+            hidden_layers: Hidden layer size
+            p: Dropout
+            online_norm: Online normalization of parameters.
+            param_transform: Perform optional parameter transform.
+            tail_features: Use tail features.
+            n_tail_features: Additional feature extractor network, number of features.
+
+        .. note::
+            We find that the default settings for the tail network typically
+            give reasonable results, and are almost always enough.  Tuning
+            makes only sense when the head network is already close-to optimal.
+        """
         super().__init__(
             n_features,
-            param_list,
+            marginals,
             n_tail_features=n_tail_features,
             p=p,
             hidden_layers=hidden_layers,
@@ -55,9 +71,9 @@ class DefaultTail(Module):
             param_transform=param_transform,
             tail_features=tail_features,
         )
-        self.param_list = param_list
+        self.marginals = marginals
 
-        n_channels, pdim = _get_z_shape(param_list)
+        n_channels, pdim = _get_z_shape(marginals)
         self.n_channels = n_channels
         self.tail_features = tail_features
 
@@ -106,7 +122,7 @@ class DefaultTail(Module):
             params (dict): parameter dictionary, with parameter shape (n_batch,)
 
         Returns:
-            lnL (tensor): lnL ratio with shape (n_batch, len(param_list))
+            lnL (tensor): lnL ratio with shape (n_batch, len(marginals))
         """
         # Parameter transform hook
         if self.param_transform is not None:
@@ -122,7 +138,7 @@ class DefaultTail(Module):
             f = self.fcC(f)
 
         # Channeled density estimator
-        z = _combine(params, self.param_list)
+        z = _combine(params, self.marginals)
         z = self.onl_z(z)
 
         x = torch.cat([f, z], -1)
