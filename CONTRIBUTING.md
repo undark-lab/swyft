@@ -3,12 +3,13 @@
 If you are a `swyft` user, please tell us about your use experience.
 In particular, please provide details about your simulator, the setup that you used, and importantly the version of `swyft`.
 
-Bug reports, feature requests, etc. are available on [issues on GitHub](https://github.com/mackelab/sbi/issues).
+Bug reports, feature requests, etc. are available on [issues on GitHub](https://github.com/undark-lab/swyft/issues).
 
 ## Would you like to contribute code?
 
-Although our git history doesn't show it at this point, we try to use pull requests when we change `swyft`.
+We try to use pull requests when we change `swyft`.
 Ideally those pull requests are answering a git issue of some kind.
+Do you have a change you'd like to see made? We recommend first making an issue then addressing it with a pull request.
 
 ### Setup Envrionment
 
@@ -25,8 +26,23 @@ pre-commit will enforce **[black](https://github.com/psf/black)**,
 and a few other code format rules before every commit.
 It is a good idea to run `pytest` before making commits you intend to pull into the master branch.
 
-Please use [Google Style](http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for docstrings and comments.
+### Linting
 We also highly recommend the use of the **[flake8](https://flake8.pycqa.org/en/latest/)** linter, although we do not have a CLI for it right now.
+
+## Standards
+
+### Docstrings
+Please use [Google Style](http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for docstrings and comments.  
+When we create a class, we put the docstring in the class rather than the `__init__` function, where appropriate.  
+Use type annotations rather than putting the type in the docstring.  
+When there is a default argument, do not write that default in the argument documentation line. The exception is when the default is `None`, then it needs an explanation.  
+
+### Naming
+Use `pnames` for parameters names, `v` for the actual parameter vectors, `u` for the hypercube projection, `pois` for "parameters of interest".
+
+### Converting between arrays and tensors
+Please use the functions `array_to_tensor` and `tensor_to_array` when converting between arbitrary array data and pytorch tensors.
+
 
 ## Online documentation
 
