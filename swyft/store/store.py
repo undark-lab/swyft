@@ -250,6 +250,9 @@ class Store(ABC):
             A coverage of zero means that all points need to be newly
             simulated. A coverage of 1.0 means that all points are already
             available for this (truncated) prior.
+
+        .. warning::
+            Results are Monte Carlo estimated and subject to sampling noise.
         """
         pdf = swyft.TruncatedPrior(prior, bound)
         Nsamples = max(N, 1000)  # At least 1000 test samples
