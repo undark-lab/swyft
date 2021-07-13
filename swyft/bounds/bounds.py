@@ -10,10 +10,12 @@ log = logging.getLogger(__name__)
 
 
 class Bound:
-    """A bound on the hypercube.
+    """A bound region on the hypercube.
 
-    The bound can be generated
-
+    .. note::
+        The Bound object provides methods to sample from subregions of the
+        hypercube, to evaluate the volume of the constrained region, and to
+        evaluate the bound.
     """
 
     def __init__(self):

@@ -8,7 +8,17 @@ from swyft.types import PathType
 
 
 class TruncatedPrior:
-    """Prior with bounds."""
+    """Truncated prior.
+
+    Args:
+        prior: Parameter prior
+        bound: Bound object
+
+    .. note::
+        The truncated prior is defined through a swyft.Bound object, which
+        sample from (subregions of) the hypercube, with swyft.Prior, which maps
+        the samples onto parameters of interest.
+    """
 
     def __init__(
         self,
@@ -92,12 +102,20 @@ class Prior:
         zdim: int,
         n: int = 10000,
     ) -> None:
-        """Prior object.  Maps hypercube on physical parameters.
+        r"""1-dim parameter prior.
 
         Args:
             uv: Function u->v
             zdim: Number of parameters
             n: Number of discretization points.
+
+        .. note::
+            The prior is defined through the mapping :math:`u\to v`, from the
+            Uniform distribution, :math:`u\sim \text{Unif}(0, 1)` onto the
+            parameters of interest, :math:`v`.  This mapping corresponds to the
+            inverse cummulative distribution function, and is internally used
+            to perform inverse transform sampling.  Sampling happens in the
+            swyft.Bound object.
 
         .. warning::
             Internally the mapping u -> v is tabulated on a linear grid on the
