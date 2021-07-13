@@ -315,5 +315,15 @@ class Posteriors:
         return cls.from_state_dict(sd, dataset=dataset)
 
     def save(self, filename: PathType) -> None:
+        """Save a posterior.
+
+        Args:
+            filename: Filename
+
+        .. note::
+            What will be saved are: parameter names, the prior and the bound,
+            as well as all networks.  We will NOT save the dataset, which can
+            be however specified during `load` if necessary.
+        """
         sd = self.state_dict()
         torch.save(sd, filename)
