@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset as torch_Dataset
 
 import swyft
+from swyft.utils.array import array_to_tensor
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ class Dataset(torch_Dataset):
     def bound(self):
         """Return bound of truncated prior of dataset (swyft.Bound)."""
         return self._trunc_prior.bound
+
+    def _tensorfy(self, x):
+        return {k: array_to_tensor(v) for k, v in x.items()}
 
     @property
     def indices(self):
@@ -118,7 +122,11 @@ class Dataset(torch_Dataset):
             x = self._simhook(x, v)
         u = self._trunc_prior.prior.u(v.reshape(1, -1)).flatten()
 
-        return (array_to_tensor(x), torch.tensor(u).float(), torch.tensor(v).float())
+        return (
+            self._tensorfy(x),
+            array_to_tensor(u),
+            array_to_tensor(v),
+        )
 
     def state_dict(self):
         return dict(

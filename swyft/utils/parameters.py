@@ -1,5 +1,7 @@
 from typing import Sequence
 
+from swyft.types import PoIType, StrictPoIType
+
 
 def _corner_params(params):
     out = []
@@ -40,7 +42,7 @@ def format_param_list(params, all_params=None, mode="custom"):
     return sort_param_list(param_list)
 
 
-def tupelize_marginals(marginals):
+def tupleize_marginals(marginals: PoIType) -> StrictPoIType:
     """Reformat input marginals into sorted and hashable standard form: tuples of tuples"""
     out = list(marginals)
     for i in range(len(out)):

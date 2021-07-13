@@ -46,8 +46,11 @@ autodoc_type_aliases = {
     "Tensor": "swyft.typing.Tensor",
     "Array": "swyft.typing.Array",
     "Shape": "swyft.typing.Shape",
+    "StrictPoIType": "swyft.typing.StrictPoIType",
     "PoIType": "swyft.typing.PoIType",
     "MarginalType": "swyft.typing.MarginalType",
+    "PNamesType": "swyft.typing.PNamesType",
+    "ObsType": "swyft.typing.ObsType",
 }
 
 

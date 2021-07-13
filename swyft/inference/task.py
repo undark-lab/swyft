@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 import swyft
-from swyft.utils import tupelize_marginals
+from swyft.utils import tupleize_marginals
 
 from .posteriors import Posteriors
 
@@ -47,7 +47,7 @@ class Task:
         self.posteriors.train(marginals, self.dataset, trainoptions=trainoptions)
 
     def truncate(self, partition, obs0):
-        partition = tupelize_marginals(partition)
+        partition = tupleize_marginals(partition)
         bound = swyft.Bound.from_Posteriors(partition, self.posteriors, obs0)
         print("Bounds: Truncating...")
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)

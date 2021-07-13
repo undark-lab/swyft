@@ -1,44 +1,51 @@
+from typing import Callable
+
 import numpy as np
 import torch
 
-from .bounds import Bound, UnitCubeBound
+from swyft.bounds.bounds import Bound, UnitCubeBound
+from swyft.types import PathType
 
 
 class TruncatedPrior:
     """Prior with bounds."""
 
-    def __init__(self, prior, bound):
+    def __init__(
+        self,
+        prior: "Prior",
+        bound: Bound,
+    ) -> None:
         """Instantiate truncated prior (combination of prior and bound).
 
         Args:
-            prior (Prior): Prior object.
-            bound (Bound): Bound on hypercube.  Set 'None' for untruncated priors.
+            prior: Prior object.
+            bound: Bound on hypercube.  Set 'None' for untruncated priors.
         """
         self.prior = prior
         if bound is None:
             bound = UnitCubeBound(prior.zdim)
         self.bound = bound
 
-    def sample(self, N):
+    def sample(self, N: int) -> np.ndarray:
         """Sample from bounded prior.
 
         Args:
-            N (int): Number of samples to return
+            N: Number of samples to return
 
         Returns:
-            Samples (np.ndarray), (N, zdim)
+            Samples: (N, zdim)
         """
         u = self.bound.sample(N)
         return self.prior.v(u)
 
-    def log_prob(self, v):
+    def log_prob(self, v: np.ndarray) -> np.ndarray:
         """Evaluate log probability of pdf.
 
         Args:
-            v (2-dim np.ndarray): (N, zdim) parameter points.
+            v: (N, zdim) parameter points.
 
         Returns:
-            log_prob (np.ndarray, (N,))
+            log_prob: (N,)
         """
         u = self.prior.u(v)
         b = np.where(u.sum(axis=-1) == np.inf, 0.0, self.bound(u))
@@ -49,7 +56,7 @@ class TruncatedPrior:
         )
         return log_prob
 
-    def state_dict(self):
+    def state_dict(self) -> dict:
         return dict(prior=self.prior.state_dict(), bound=self.bound.state_dict())
 
     #    def truncated(self, bound):
@@ -63,54 +70,59 @@ class TruncatedPrior:
     #        return cls(prior, bound=bound)
 
     @classmethod
-    def from_state_dict(cls, state_dict):
+    def from_state_dict(cls, state_dict: dict):
         prior = Prior.from_state_dict(state_dict["prior"])
         bound = Bound.from_state_dict(state_dict["bound"])
-        return TruncatedPrior(prior, bound)
+        return cls(prior, bound)
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename: PathType):
         sd = torch.load(filename)
         return cls.from_state_dict(sd)
 
-    def save(self, filename):
+    def save(self, filename: PathType) -> None:
         sd = self.state_dict()
         torch.save(sd, filename)
 
 
 class Prior:
-    def __init__(self, uv, zdim, n=10000):
+    def __init__(
+        self,
+        uv: Callable,
+        zdim: int,
+        n: int = 10000,
+    ) -> None:
         """Prior object.  Maps hypercube on physical parameters.
 
         Args:
-            uv (callable): Function u->v
-            zdim (int): Number of parameters
-            n (int): Number of discretization points.
+            uv: Function u->v
+            zdim: Number of parameters
+            n: Number of discretization points.
         """
         self._zdim = zdim
         self._grid = np.linspace(0, 1.0, n)
-        self._table = self._generate_table(uv, self._grid, zdim, n)
+        self._table = self._generate_table(uv, self._grid, zdim)
 
     @staticmethod
-    def _generate_table(uv, grid, zdim, n):
+    def _generate_table(uv: Callable, grid: np.ndarray, zdim: int) -> np.ndarray:
         table = []
         for x in grid:
             table.append(uv(np.ones(zdim) * x))
         return np.array(table).T
 
     @property
-    def zdim(self):
+    def zdim(self) -> int:
         """Number of parameters."""
         return self._zdim
 
-    def u(self, v):
+    def u(self, v: np.ndarray) -> np.ndarray:
         """Map onto hypercube: v -> u
 
         Args:
-            v (np.array): (N, zdim) physical parameter array
+            v: (N, zdim) physical parameter array
 
         Returns:
-            u (np.array): (N, zdim) hypercube parameter array
+            u: (N, zdim) hypercube parameter array
         """
         u = np.empty_like(v)
         for i in range(self._zdim):
@@ -119,14 +131,14 @@ class Prior:
             )
         return u
 
-    def v(self, u):
+    def v(self, u: np.ndarray) -> np.ndarray:
         """Map from hypercube: u -> v
 
         Args:
-            u (np.array): (N, zdim) hypercube parameter array
+            u: (N, zdim) hypercube parameter array
 
         Returns:
-            v (np.array): (N, zdim) physical parameter array
+            v: (N, zdim) physical parameter array
         """
         v = np.empty_like(u)
         for i in range(self._zdim):
@@ -135,15 +147,15 @@ class Prior:
             )
         return v
 
-    def log_prob(self, v, du=1e-6):
+    def log_prob(self, v: np.ndarray, du: float = 1e-6) -> np.ndarray:
         """Log probability.
 
         Args:
-            v (np.array): (N, zdim) physical parameter array
-            du (float): Step-size of numerical derivatives
+            v: (N, zdim) physical parameter array
+            du: Step-size of numerical derivatives
 
         Returns:
-            log_prob (np.array): (N, zdim) factors of pdf
+            log_prob: (N, zdim) factors of pdf
         """
         dv = np.empty_like(v)
         u = self.u(v)
@@ -157,11 +169,11 @@ class Prior:
         log_prob = np.where(u == np.inf, -np.inf, np.log(du) - np.log(dv + 1e-300))
         return log_prob
 
-    def state_dict(self):
+    def state_dict(self) -> dict:
         return dict(table=self._table, grid=self._grid, zdim=self._zdim)
 
     @classmethod
-    def from_state_dict(cls, state_dict):
+    def from_state_dict(cls, state_dict: dict):
         obj = cls.__new__(cls)
         obj._zdim = state_dict["zdim"]
         obj._grid = state_dict["grid"]
@@ -169,10 +181,10 @@ class Prior:
         return obj
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename: PathType):
         sd = torch.load(filename)
         return cls.from_state_dict(sd)
 
-    def save(self, filename):
+    def save(self, filename: PathType) -> None:
         sd = self.state_dict()
         torch.save(sd, filename)

@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence
+from typing import Callable, Dict, Optional, Sequence, Union
 from warnings import warn
 
 import numpy as np
@@ -9,8 +9,16 @@ import swyft
 from swyft.inference.ratios import RatioEstimator
 from swyft.inference.train import TrainOptions
 from swyft.networks import DefaultHead, DefaultTail
-from swyft.types import Array, MarginalType, PoIType
-from swyft.utils import tupelize_marginals
+from swyft.types import (
+    Array,
+    Device,
+    MarginalType,
+    ObsType,
+    PathType,
+    PNamesType,
+    PoIType,
+)
+from swyft.utils import tupleize_marginals
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +27,7 @@ class Posteriors:
     """Main inference class.
 
     Args:
-        dataset (swyft.Dataset): Dataset for which we want to perform inference.
+        dataset: Dataset for which we want to perform inference.
 
     .. note::
         The dataset will be used to extract parameter names (`pnames`), the
@@ -27,35 +35,36 @@ class Posteriors:
         training.
     """
 
-    def __init__(self, dataset):
+    def __init__(self, dataset: "swyft.Dataset") -> None:
         self._pnames = dataset.pnames
         self._trunc_prior = swyft.TruncatedPrior(dataset.prior, bound=dataset.bound)
         self._ratios = {}
         self._dataset = dataset
 
     @property
-    def pnames(self):
+    def pnames(self) -> PNamesType:
         """Parameter names. Inherited from dataset."""
         return self._pnames
 
     def add(
         self,
-        marginals,
-        head=DefaultHead,
-        tail=DefaultTail,
+        marginals: PoIType,
+        head: Callable[..., "swyft.Module"] = DefaultHead,
+        tail: Callable[..., "swyft.Module"] = DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
-        device="cpu",
-    ):
+        device: Device = "cpu",
+    ) -> None:
         """Add marginals.
 
         Args:
+            marginals
             head (swyft.Module instance or type): Head network (optional).
             tail (swyft.Module instance or type): Tail network (optional).
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
-        marginals = tupelize_marginals(marginals)
+        marginals = tupleize_marginals(marginals)
         re = RatioEstimator(
             marginals,
             device=device,
@@ -66,15 +75,15 @@ class Posteriors:
         )
         self._ratios[marginals] = re
 
-    def to(self, device, marginals=None):
+    def to(self, device: Device, marginals: Optional[PoIType] = None) -> "Posteriors":
         """Move networks to device.
 
         Args:
-            device (str): Targeted device.
-            marginals (list): Optional, only move networks related to specific marginals.
+            device: Targeted device.
+            marginals: Optional, only move networks related to specific marginals.
         """
         if marginals is not None:
-            marginals = tupelize_marginals(marginals)
+            marginals = tupleize_marginals(marginals)
             self._ratios[marginals].to(device)
         else:
             for _, v in self._ratios.items():
@@ -82,44 +91,44 @@ class Posteriors:
         return self
 
     @property
-    def dataset(self):
+    def dataset(self) -> "swyft.Dataset":
         """Default training dataset."""
         return self._dataset
 
-    def set_dataset(self, dataset):
+    def set_dataset(self, dataset: "swyft.Dataset") -> None:
         """Set default training dataset."""
         self._dataset = dataset
 
     def train(
         self,
-        marginals,
-        batch_size=64,
-        validation_size=0.1,
-        early_stopping_patience=5,
-        max_epochs=30,
-        optimizer=torch.optim.Adam,
-        optimizer_args=dict(lr=1e-3),
-        scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau,
-        scheduler_args=dict(factor=0.1, patience=5),
-        nworkers=2,
-        non_blocking=True,
-        alt_dataset=None,
-    ):
+        marginals: PoIType,
+        batch_size: int = 64,
+        validation_size: float = 0.1,
+        early_stopping_patience: int = 5,
+        max_epochs: int = 30,
+        optimizer: Callable[..., torch.optim.Optimizer] = torch.optim.Adam,
+        optimizer_args: dict = dict(lr=1e-3),
+        scheduler: Callable[
+            ..., torch.optim.lr_scheduler._LRScheduler
+        ] = torch.optim.lr_scheduler.ReduceLROnPlateau,
+        scheduler_args: dict = dict(factor=0.1, patience=5),
+        nworkers: int = 2,
+        non_blocking: bool = True,
+    ) -> None:
         """Train marginals.
 
         Args:
             batch_size (int): Batch size...
             TODO
         """
-        dataset = alt_dataset or self._dataset
-        if dataset is None:
+        if self._dataset is None:
             print("ERROR: No dataset specified.")
             return
-        if dataset.requires_sim:
+        if self._dataset.requires_sim:
             print("ERROR: Not all points in the dataset are simulated yet.")
             return
 
-        marginals = tupelize_marginals(marginals)
+        marginals = tupleize_marginals(marginals)
         re = self._ratios[marginals]
 
         trainoptions = TrainOptions(
@@ -135,18 +144,21 @@ class Posteriors:
             non_blocking=non_blocking,
         )
 
-        re.train(dataset, trainoptions)
+        re.train(self._dataset, trainoptions)
 
-    def train_diagnostics(self, marginals):
-        marginals = tupelize_marginals(marginals)
+    def train_diagnostics(self, marginals: PoIType):
+        marginals = tupleize_marginals(marginals)
         return self._ratios[marginals].train_diagnostics()
 
-    def sample(self, N, obs0, n_batch=100):
+    def sample(
+        self, N: int, obs0: ObsType, n_batch: int = 100
+    ) -> Dict[str, Union[np.ndarray, MarginalType, PNamesType]]:
         """Resturn weighted posterior samples for given observation.
 
         Args:
-            obs0 (dict): Observation of interest.
-            N (int): Number of samples to return.
+            N: Number of samples to return
+            obs0: Observation of interest
+            n_batch: number of samples to produce in each batch
         """
         v = self._trunc_prior.sample(N)  # prior samples
 
@@ -170,7 +182,7 @@ class Posteriors:
     def rejection_sample(
         self,
         N: int,
-        obs0: dict,
+        obs0: ObsType,
         excess_factor: int = 10,
         maxiter: int = 1000,
         n_batch: int = 10_000,
@@ -253,29 +265,29 @@ class Posteriors:
         return out
 
     @property
-    def bound(self):
+    def bound(self) -> "swyft.bounds.Bound":
         return self._trunc_prior.bound
 
     @property
-    def prior(self):
+    def prior(self) -> "swyft.bounds.Prior":
         return self._trunc_prior.prior
 
-    def truncate(self, partition, obs0):
+    def truncate(self, marginals: PoIType, obs0: ObsType) -> "swyft.bounds.Bound":
         """Generate and return new bound object."""
-        partition = tupelize_marginals(partition)
-        bound = swyft.Bound.from_Posteriors(partition, self, obs0)
+        marginals = tupleize_marginals(marginals)
+        bound = swyft.Bound.from_Posteriors(marginals, self, obs0)
         print("Bounds: Truncating...")
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
         return bound
 
-    def _eval_ratios(self, obs: Array, v: Array, n_batch=100):
+    def _eval_ratios(self, obs: ObsType, v: Array, n_batch: int = 100) -> MarginalType:
         result = {}
-        for marginals, rc in self._ratios.items():
+        for _, rc in self._ratios.items():
             ratios = rc.ratios(obs, v, n_batch=n_batch)
             result.update(ratios)
         return result
 
-    def state_dict(self):
+    def state_dict(self) -> dict:
         state_dict = dict(
             trunc_prior=self._trunc_prior.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
@@ -284,7 +296,7 @@ class Posteriors:
         return state_dict
 
     @classmethod
-    def from_state_dict(cls, state_dict, dataset=None):
+    def from_state_dict(cls, state_dict: dict, dataset: "swyft.Dataset" = None):
         obj = Posteriors.__new__(Posteriors)
         obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
             state_dict["trunc_prior"]
@@ -298,10 +310,10 @@ class Posteriors:
         return obj
 
     @classmethod
-    def load(cls, filename, dataset=None):
+    def load(cls, filename: PathType, dataset: "swyft.Dataset" = None):
         sd = torch.load(filename)
         return cls.from_state_dict(sd, dataset=dataset)
 
-    def save(self, filename):
+    def save(self, filename: PathType) -> None:
         sd = self.state_dict()
         torch.save(sd, filename)

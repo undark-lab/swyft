@@ -2,13 +2,14 @@
 import logging
 from contextlib import suppress
 from copy import deepcopy
-from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence
+from dataclasses import dataclass
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 import torch
 
 from swyft.inference.loss import loss_fn
+from swyft.types import Device
 from swyft.utils import dict_to_device
 
 log = logging.getLogger(__name__)
@@ -29,18 +30,18 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
 
 @dataclass
 class TrainOptions:
-    """Settings for the trainloop function."""
-
-    # NOTE: Defaults are specified in swyft.Posteriors.train
+    """Settings for the trainloop function. Defaults are specified in swyft.Posteriors.train."""
 
     batch_size: int  # = 64
     validation_size: float  # = 0.1
     early_stopping_patience: int  # = 10
     max_epochs: int  # = 50
-    optimizer: Callable  # = torch.optim.Adam
+    optimizer: Callable[..., "torch.optim.Optimizer"]  # = torch.optim.Adam
     optimizer_args: dict  # = field(default_factory=lambda: dict(lr=1e-3))
-    scheduler: Callable  # = torch.optim.lr_scheduler.ReduceLROnPlateau
-    scheduler_args: Callable  # = field(default_factory=lambda: dict(factor=0.1, patience=5))
+    scheduler: Callable[
+        ..., "torch.optim.lr_scheduler._LRScheduler"
+    ]  # = torch.optim.lr_scheduler.ReduceLROnPlateau
+    scheduler_args: dict  # = field(default_factory=lambda: dict(factor=0.1, patience=5))
     nworkers: int  # = 2
     non_blocking: bool  # = True
 
@@ -48,11 +49,22 @@ class TrainOptions:
 # We have the posterior exactly because our prior is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
 def do_training(
-    head, tail, train_loader, validation_loader, trainoptions: TrainOptions, device
-):
+    head: torch.nn.Module,
+    tail: torch.nn.Module,
+    train_loader: torch.utils.data.dataloader.DataLoader,
+    validation_loader: torch.utils.data.dataloader.DataLoader,
+    trainoptions: TrainOptions,
+    device: Device,
+) -> Tuple:
     """Network training loop.
 
     Args:
+        head:
+        tail:
+        train_loader:
+        validation_loader:
+        trainoptions:
+        device:
 
     Returns:
         train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
@@ -153,7 +165,13 @@ def _get_ntrain_nvalid(validation_size, len_dataset):
     return ntrain, nvalid
 
 
-def trainloop(head, tail, dataset, trainoptions, device="cpu"):
+def trainloop(
+    head: torch.nn.Module,
+    tail: torch.nn.Module,
+    dataset: torch.utils.data.Dataset,
+    trainoptions: TrainOptions,
+    device: Device = "cpu",
+) -> dict:
     log.debug("Entering trainloop")
     log.debug(f"{'batch_size':>25} {trainoptions.batch_size:<4}")
     log.debug(f"{'validation_size':>25} {trainoptions.validation_size:<4}")
