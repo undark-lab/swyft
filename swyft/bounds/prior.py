@@ -98,6 +98,12 @@ class Prior:
             uv: Function u->v
             zdim: Number of parameters
             n: Number of discretization points.
+
+        .. warning::
+            Internally the mapping u -> v is tabulated on a linear grid on the
+            interval [0, 1], with `n` grid points. In extreme cases, this can
+            lead to approximation errors that can be mitigated by increasing
+            `n`.
         """
         self._zdim = zdim
         self._grid = np.linspace(0, 1.0, n)
