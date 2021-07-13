@@ -52,7 +52,7 @@ class Simulator:
         self.pnames = pnames
         self.sim_shapes = sim_shapes
 
-    def run(self, v, sims, sim_status, indices, **kwargs):
+    def _run(self, v, sims, sim_status, indices):
         """Run the simulator on the input parameters.
 
         Args:
@@ -99,7 +99,7 @@ class DaskSimulator:
         self.client = None
         self.cluster = cluster
 
-    def run(
+    def _run(
         self,
         v,
         sims,

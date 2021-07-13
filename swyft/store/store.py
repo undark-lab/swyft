@@ -435,7 +435,7 @@ class Store(ABC):
                     "Asynchronous collection of results is not implemented with the MemoryStore"
                 )
 
-            self._simulator.run(
+            self._simulator._run(
                 v=self.v,
                 sims={k: v.oindex for k, v in self.sims.items()},
                 sim_status=self.sim_status.oindex,
