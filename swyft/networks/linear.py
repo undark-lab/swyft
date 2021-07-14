@@ -1,31 +1,25 @@
 import math
 
 import torch
-import torch.nn as nn
 
 
-# From: https://github.com/pytorch/pytorch/issues/36591
-class LinearWithChannel(nn.Module):
-    def __init__(self, channel_size, input_size, output_size):
+# Inspired by: https://github.com/pytorch/pytorch/issues/36591
+class LinearWithChannel(torch.nn.Module):
+    def __init__(self, channels: int, in_features: int, out_features: int) -> None:
         super(LinearWithChannel, self).__init__()
-
-        # initialize weights
-        self.weight = torch.nn.Parameter(
-            torch.zeros(channel_size, output_size, input_size)
+        self.weights = torch.nn.Parameter(
+            torch.empty((channels, out_features, in_features))
         )
-        self.bias = torch.nn.Parameter(torch.zeros(channel_size, output_size))
+        self.bias = torch.nn.Parameter(torch.empty(channels, out_features))
 
-        # change weights to kaiming
-        self.reset_parameters(self.weight, self.bias)
+        # Initialize weights
+        torch.nn.init.kaiming_uniform_(self.weights, a=math.sqrt(5))
+        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weights)
+        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        torch.nn.init.uniform_(self.bias, -bound, bound)
 
-    def reset_parameters(self, weights, bias):
-        torch.nn.init.kaiming_uniform_(weights, a=math.sqrt(3))
-        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(weights)
-        bound = 1 / math.sqrt(fan_in)
-        torch.nn.init.uniform_(bias, -bound, bound)
-
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert x.ndim >= 2, "Requires (..., channel, features) shape."
         x = x.unsqueeze(-1)
-        result = torch.matmul(self.weight, x).squeeze(-1) + self.bias
+        result = torch.matmul(self.weights, x).squeeze(-1) + self.bias
         return result

@@ -1,11 +1,12 @@
 from typing import Callable
 
+import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn import init
 
-from .batchnorm import BatchNorm1dWithChannel
-from .linear import LinearWithChannel
+from swyft.networks.batchnorm import BatchNorm1dWithChannel
+from swyft.networks.linear import LinearWithChannel
 
 
 class ResidualBlockWithChannel(nn.Module):
@@ -19,7 +20,7 @@ class ResidualBlockWithChannel(nn.Module):
         dropout_probability: float = 0.0,
         use_batch_norm: bool = False,
         zero_initialization: bool = True,
-    ):
+    ) -> None:
         super().__init__()
         self.activation = activation
 
@@ -36,7 +37,7 @@ class ResidualBlockWithChannel(nn.Module):
             init.uniform_(self.linear_layers[-1].weight, -1e-3, 1e-3)
             init.uniform_(self.linear_layers[-1].bias, -1e-3, 1e-3)
 
-    def forward(self, inputs):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         temps = inputs
         if self.use_batch_norm:
             temps = self.batch_norm_layers[0](temps)
@@ -63,7 +64,7 @@ class ResidualNet(nn.Module):
         activation: Callable = F.relu,
         dropout_probability: float = 0.0,
         use_batch_norm: bool = False,
-    ):
+    ) -> None:
         super().__init__()
         self.hidden_features = hidden_features
         self.initial_layer = LinearWithChannel(channels, in_features, hidden_features)
@@ -81,7 +82,7 @@ class ResidualNet(nn.Module):
         )
         self.final_layer = LinearWithChannel(channels, hidden_features, out_features)
 
-    def forward(self, inputs):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         temps = self.initial_layer(inputs)
         for block in self.blocks:
             temps = block(temps)

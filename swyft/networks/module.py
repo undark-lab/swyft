@@ -6,7 +6,25 @@ log = logging.getLogger(__name__)
 
 
 class Module(nn.Module):
-    """Thin wrapper around pytorch modules that enables automatic reloading of network classes with correct arguments."""
+    """swyft.Module, a wrapper around torch.nn.Module which enables to store
+    and load swyft posteriors with custom networks.
+
+    .. note::
+        This is a thin wrapper around pytorch modules that enables automatic
+        reloading of network classes with correct arguments.
+
+    .. warning::
+        Please use `swyft.Module` rather then `torch.nn.Module` when defining
+        custom tail or head networks. Otherwise posteriors cannot be properly
+        saved.  Note thta uou MUST call the super-class `__init__` function
+        with all arguments, which will take care of storage.
+
+    Example::
+        >>> class MyHead(swyft.Module):
+        >>>     def __init__(self, sim_shapes, custom_parameter):
+        >>>         super().__init__(sim_shapes = sim_shapes, custom_parameters = cumstom_parameters)
+        >>>         # ...
+    """
 
     registry = {}
 

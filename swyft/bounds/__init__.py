@@ -1,5 +1,4 @@
-from .bounds import Bound
-from .prior import Prior
-from .prior import TruncatedPrior
+from swyft.bounds.bounds import Bound
+from swyft.bounds.prior import Prior, TruncatedPrior
 
-__all__ = ["Prior", "TruncatedPrior", "Bound"]
+__all__ = ["Prior", "Bound", "TruncatedPrior"]

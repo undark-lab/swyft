@@ -2,12 +2,14 @@
 import logging
 from contextlib import suppress
 from copy import deepcopy
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 import torch
 
 from swyft.inference.loss import loss_fn
+from swyft.types import Device
 from swyft.utils import dict_to_device
 
 log = logging.getLogger(__name__)
@@ -26,26 +28,43 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
     return lengths
 
 
-# We have the posterior exactly because our proir is known and flat. Flip bayes theorem, we have the likelihood ratio.
+@dataclass
+class TrainOptions:
+    """Settings for the trainloop function. Defaults are specified in swyft.Posteriors.train."""
+
+    batch_size: int  # = 64
+    validation_size: float  # = 0.1
+    early_stopping_patience: int  # = 10
+    max_epochs: int  # = 50
+    optimizer: Callable[..., "torch.optim.Optimizer"]  # = torch.optim.Adam
+    optimizer_args: dict  # = field(default_factory=lambda: dict(lr=1e-3))
+    scheduler: Callable[
+        ..., "torch.optim.lr_scheduler._LRScheduler"
+    ]  # = torch.optim.lr_scheduler.ReduceLROnPlateau
+    scheduler_args: dict  # = field(default_factory=lambda: dict(factor=0.1, patience=5))
+    nworkers: int  # = 2
+    non_blocking: bool  # = True
+
+
+# We have the posterior exactly because our prior is known and flat. Flip bayes theorem, we have the likelihood ratio.
 # Consider that the variance of the loss from different legs causes some losses to have high coefficients in front of them.
-def train(
-    head,
-    tail,
-    train_loader,
-    validation_loader,
-    early_stopping_patience,
-    max_epochs,
-    optimizer_fn,
-    lr,
-    scheduler_fn,
-    reduce_lr_factor,
-    reduce_lr_patience,
-    device="cpu",
-    non_blocking=True,
-):
+def do_training(
+    head: torch.nn.Module,
+    tail: torch.nn.Module,
+    train_loader: torch.utils.data.dataloader.DataLoader,
+    validation_loader: torch.utils.data.dataloader.DataLoader,
+    trainoptions: TrainOptions,
+    device: Device,
+) -> Tuple:
     """Network training loop.
 
     Args:
+        head:
+        tail:
+        train_loader:
+        validation_loader:
+        trainoptions:
+        device:
 
     Returns:
         train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
@@ -57,10 +76,12 @@ def train(
         with training_context:
             for batch in loader:
                 optimizer.zero_grad()
-                sim, z = batch
+                sim, z, _ = batch
 
-                obs = dict_to_device(sim, device=device, non_blocking=non_blocking)
-                params = z.to(device, non_blocking=non_blocking)
+                obs = dict_to_device(
+                    sim, device=device, non_blocking=trainoptions.non_blocking
+                )
+                params = z.to(device=device, non_blocking=trainoptions.non_blocking)
                 losses = loss_fn(head, tail, obs, params)
                 loss = sum(losses)
 
@@ -72,19 +93,19 @@ def train(
 
         return accumulated_loss
 
-    max_epochs = 2 ** 31 - 1 if max_epochs is None else max_epochs
-    params = list(head.parameters()) + list(tail.parameters())
-    optimizer = optimizer_fn(params, lr=lr)
-    scheduler = scheduler_fn(
-        optimizer, factor=reduce_lr_factor, patience=reduce_lr_patience
+    max_epochs = (
+        2 ** 31 - 1 if trainoptions.max_epochs is None else trainoptions.max_epochs
     )
+    params = list(head.parameters()) + list(tail.parameters())
+    optimizer = trainoptions.optimizer(params, **trainoptions.optimizer_args)
+    scheduler = trainoptions.scheduler(optimizer, **trainoptions.scheduler_args)
 
     n_train_batches = len(train_loader) if len(train_loader) != 0 else 1
     n_validation_batches = len(validation_loader) if len(validation_loader) != 0 else 1
 
     train_losses, validation_losses = [], []
     epoch, fruitless_epoch, min_loss = 0, 0, float("Inf")
-    while epoch < max_epochs and fruitless_epoch < early_stopping_patience:
+    while epoch < max_epochs and fruitless_epoch < trainoptions.early_stopping_patience:
         head.train()
         tail.train()
         train_loss = do_epoch(train_loader, True)
@@ -145,66 +166,45 @@ def _get_ntrain_nvalid(validation_size, len_dataset):
 
 
 def trainloop(
-    head,
-    tail,
-    dataset,
-    batch_size=64,
-    validation_size=0.1,
-    early_stopping_patience=10,
-    max_epochs=50,
-    optimizer_fn=torch.optim.Adam,
-    lr=1e-3,
-    scheduler_fn=torch.optim.lr_scheduler.ReduceLROnPlateau,
-    reduce_lr_factor=0.1,
-    reduce_lr_patience=5,
-    nworkers=0,
-    device="cpu",
-):
+    head: torch.nn.Module,
+    tail: torch.nn.Module,
+    dataset: torch.utils.data.Dataset,
+    trainoptions: TrainOptions,
+    device: Device = "cpu",
+) -> dict:
     log.debug("Entering trainloop")
-    log.debug(f"{'batch_size':>25} {batch_size:<4}")
-    log.debug(f"{'validation_size':>25} {validation_size:<4}")
-    log.debug(f"{'early_stopping_patience':>25} {early_stopping_patience:<4}")
-    log.debug(f"{'max_epochs':>25} {max_epochs:<4}")
-    log.debug(f"{'optimizer_fn':>25} {repr(optimizer_fn):<4}")
-    log.debug(f"{'lr':>25} {lr:<4}")
-    log.debug(f"{'scheduler_fn':>25} {repr(scheduler_fn):<4}")
-    log.debug(f"{'reduce_lr_factor':>25} {reduce_lr_factor:<4}")
-    log.debug(f"{'reduce_lr_patience':>25} {reduce_lr_patience:<4}")
-    log.debug(f"{'nworkers':>25} {nworkers:<4}")
+    log.debug(f"{'batch_size':>25} {trainoptions.batch_size:<4}")
+    log.debug(f"{'validation_size':>25} {trainoptions.validation_size:<4}")
+    log.debug(
+        f"{'early_stopping_patience':>25} {trainoptions.early_stopping_patience:<4}"
+    )
+    log.debug(f"{'max_epochs':>25} {trainoptions.max_epochs:<4}")
+    log.debug(f"{'optimizer_fn':>25} {repr(trainoptions.optimizer):<4}")
+    log.debug(f"{'scheduler_fn':>25} {repr(trainoptions.scheduler):<4}")
+    log.debug(f"{'nworkers':>25} {trainoptions.nworkers:<4}")
 
-    assert validation_size > 0
-    ntrain, nvalid = _get_ntrain_nvalid(validation_size, len(dataset))
+    assert trainoptions.validation_size > 0
+    ntrain, nvalid = _get_ntrain_nvalid(trainoptions.validation_size, len(dataset))
 
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]
     )
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
-        batch_size=batch_size,
-        num_workers=nworkers,
+        batch_size=trainoptions.batch_size,
+        num_workers=trainoptions.nworkers,
         pin_memory=True,
         drop_last=True,
     )
     valid_loader = torch.utils.data.DataLoader(
         dataset_valid,
-        batch_size=min(batch_size, nvalid),
-        num_workers=nworkers,
+        batch_size=min(trainoptions.batch_size, nvalid),
+        num_workers=trainoptions.nworkers,
         pin_memory=True,
         drop_last=True,
     )
-    tl, vl, sd_head, sd_tail = train(
-        head,
-        tail,
-        train_loader,
-        valid_loader,
-        early_stopping_patience=early_stopping_patience,
-        max_epochs=max_epochs,
-        optimizer_fn=optimizer_fn,
-        lr=lr,
-        scheduler_fn=scheduler_fn,
-        reduce_lr_factor=reduce_lr_factor,
-        reduce_lr_patience=reduce_lr_patience,
-        device=device,
+    tl, vl, sd_head, sd_tail = do_training(
+        head, tail, train_loader, valid_loader, trainoptions, device
     )
     vl_minimum = min(vl)
     vl_min_idx = vl.index(vl_minimum)

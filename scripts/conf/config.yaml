@@ -1,7 +1,0 @@
-train_args:
-  lr_schedule: [1e-3,1e-4,1e-5]
-tail_args: {}
-head_args: {}
-Ninit: 3000
-max_rounds: 3
-cache: cache.zarr
