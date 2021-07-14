@@ -1,27 +1,21 @@
 import math
 
 import torch
-import torch.nn as nn
 
 
-# From: https://github.com/pytorch/pytorch/issues/36591
-class LinearWithChannel(nn.Module):
-    def __init__(self, channel_size, input_size, output_size):
-        super(LinearWithChannel, self).__init__()
-
-        # initialize weights
+# Inspired by: https://github.com/pytorch/pytorch/issues/36591
+class LinearWithChannels(torch.nn.Module):
+    def __init__(self, channels, in_features, out_features):
+        super(LinearWithChannels, self).__init__()
         self.weight = torch.nn.Parameter(
-            torch.zeros(channel_size, output_size, input_size)
+            torch.empty((channels, out_features, in_features))
         )
-        self.bias = torch.nn.Parameter(torch.zeros(channel_size, output_size))
+        self.bias = torch.nn.Parameter(torch.empty(channels, out_features))
 
-        # change weights to kaiming
-        self.reset_parameters(self.weight, self.bias)
-
-    def reset_parameters(self, weights, bias):
-        torch.nn.init.kaiming_uniform_(weights, a=math.sqrt(3))
+        # Initialize weights
+        torch.nn.init.kaiming_uniform_(weights, a=math.sqrt(5))
         fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(weights)
-        bound = 1 / math.sqrt(fan_in)
+        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
         torch.nn.init.uniform_(bias, -bound, bound)
 
     def forward(self, x):
