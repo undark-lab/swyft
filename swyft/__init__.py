@@ -1,14 +1,7 @@
 from swyft.bounds import Bound, Prior, TruncatedPrior
 from swyft.inference import Posteriors, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
-from swyft.store import (
-    DaskSimulator,
-    Dataset,
-    DirectoryStore,
-    ExactDataset,
-    MemoryStore,
-    Simulator,
-)
+from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator
 from swyft.utils import corner, plot1d
 
 
@@ -33,7 +26,6 @@ __all__ = [
     "DefaultTail",
     "OnlineNormalizationLayer",
     "Dataset",
-    "ExactDataset",
     "Simulator",
     "DaskSimulator",
     "corner",

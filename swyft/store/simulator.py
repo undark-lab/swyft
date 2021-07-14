@@ -52,7 +52,7 @@ class Simulator:
         self.pnames = pnames
         self.sim_shapes = sim_shapes
 
-    def _run(self, v, sims, sim_status, indices) -> None:
+    def _run(self, v, sims, sim_status, indices, **kwargs) -> None:
         """Run the simulator on the input parameters.
 
         Args:

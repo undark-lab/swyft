@@ -87,7 +87,7 @@ def plot1d(
         subplot_kwargs: Subplot kwargs
     """
 
-    grid_interpolate = (False,)
+    grid_interpolate = False
 
     if ncol is None:
         ncol = len(pois)

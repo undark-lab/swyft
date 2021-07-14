@@ -134,6 +134,7 @@ class Dataset(torch_Dataset):
             trunc_prior=self._trunc_prior.state_dict(),
             simhook=bool(self._simhook),
             simkeys=self._simkeys,
+            pnames=self._pnames,
         )
 
     @classmethod
@@ -147,6 +148,7 @@ class Dataset(torch_Dataset):
         obj._store = store
         obj._simhook = simhook
         obj._simkeys = state_dict["simkeys"]
+        obj._pnames = state_dict["pnames"]
         if state_dict["simhook"] and not simhook:
             log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."
