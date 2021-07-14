@@ -177,11 +177,6 @@ class Posteriors:
             weights[k] = np.exp(val)
         return dict(v=v, weights=weights, pnames=self.pnames)
 
-    #    def sample(self, N, obs, device=None, n_batch=10_000):
-    #        post = PosteriorCollection(self.ratios, self._trunc_prior)
-    #        samples = post.sample(N, obs, device=device, n_batch=n_batch)
-    #        return samples
-
     #    # TODO: Still needs to be fixed?
     #    def _rejection_sample(
     #        self,

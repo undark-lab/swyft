@@ -15,21 +15,6 @@ from swyft.utils import (
     tupleize_marginals,
 )
 
-# class IsolatedRatio:
-#    """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
-#
-#    def __init__(self, rc, obs, comb, zdim):
-#        self._rc = rc
-#        self._obs = obs
-#        self._comb = comb
-#        self._zdim = zdim
-#
-#    def __call__(self, u: np.array, n_batch: int=10_000):
-#        U = np.random.rand(len(u), self._zdim)
-#        U[:, np.array(self._comb)] = u
-#        ratios = self._rc.ratios(self._obs, U, n_batch=n_batch)
-#        return ratios[self._comb]
-
 
 class RatioEstimator:
     """RatioEstimator takes simulated points from the iP3 sample store and handles training and posterior calculation.
@@ -127,19 +112,6 @@ class RatioEstimator:
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()
-
-        #        # FIXME: Is this device functionality really necessary?  We can use
-        #        # ".to()" instead
-        #
-        #        if device is None:
-        #            device = torch.device(self.device)
-        #        else:
-        #            device = torch.device(device)
-        #
-        #        if device != self.device:
-        #            head = deepcopy(self.head).to(device=device)
-        #            tail = deepcopy(self.tail).to(device=device)
-        #        else:
 
         head = self.head
         tail = self.tail

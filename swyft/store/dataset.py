@@ -78,13 +78,6 @@ class Dataset(torch_Dataset):
         """Return indices of the dataset that indicate positions in the store."""
         return self._indices
 
-    #    def _no_store(self):
-    #        if self._store is None:
-    #            print("WARNING: No store defined.")
-    #            return True
-    #        else:
-    #            return False
-
     def simulate(
         self, batch_size: Optional[int] = None, wait_for_results: bool = True
     ) -> None:
@@ -99,9 +92,6 @@ class Dataset(torch_Dataset):
         self._store.simulate(
             self.indices, batch_size=batch_size, wait_for_results=wait_for_results
         )
-
-    #    def set_store(self, store):
-    #        self._store = store
 
     @property
     def requires_sim(self) -> bool:
