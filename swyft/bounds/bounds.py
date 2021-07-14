@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from sklearn.neighbors import BallTree
 
-from swyft.inference import IsolatedRatio
+# from swyft.inference import IsolatedRatio
 
 log = logging.getLogger(__name__)
 
@@ -78,9 +78,9 @@ class Bound:
         sd = self.state_dict()
         torch.save(sd, filename)
 
-    @classmethod
-    def from_RatioEstimator(cls, rc, obs, bound, th=-13.0):
-        return CompositBound.from_RatioEstimator(rc, obs, bound, th=th)
+    #    @classmethod
+    #    def from_RatioEstimator(cls, rc, obs, bound, th=-13.0):
+    #        return CompositBound.from_RatioEstimator(rc, obs, bound, th=th)
 
     @classmethod
     def from_Posteriors(cls, partitions, post, obs, th=-13.0):
@@ -172,36 +172,36 @@ class RectangleBound(Bound):
             m *= np.where(u[:, i] >= v[0], np.where(u[:, i] <= v[1], 1.0, 0.0), 0.0)
         return m > 0.5
 
-    @classmethod
-    def from_RatioCollection(
-        cls, rc, obs, bound, partition=None, th=-13, n=10000, n_batch=10_000
-    ):
-        """Generate new RectangleBound object based on RatioCollection.
-
-        Args:
-            rc (RatioEstimator): RatioEstimator to evaluate.
-            obs (dict): Reference observation.
-            bound (Bound): Bound of RatioEstimator.
-            th (float): Threshold value, default -13
-            n (int): Number of random samples from bound to determine parameter boundaries.
-
-        Note: All components of the RatioEstimator will be used.  Avoid overlapping ratios.
-        """
-        udim = bound.udim
-        u = bound.sample(n)
-        ratios = rc.ratios(obs, u, n_batch=n_batch)
-        res = np.zeros((udim, 2))
-        res[:, 1] = 1.0
-        for comb, v in ratios.items():
-            for i in comb:
-                us = u[:, i][v - v.max() > th]
-                res[i, 0] = us.min()
-                res[i, 1] = us.max()
-
-        if partition is not None:
-            res = res[np.array(partition)]
-
-        return cls(res)
+    #    @classmethod
+    #    def from_RatioCollection(
+    #        cls, rc, obs, bound, partition=None, th=-13, n=10000, n_batch=10_000
+    #    ):
+    #        """Generate new RectangleBound object based on RatioCollection.
+    #
+    #        Args:
+    #            rc (RatioEstimator): RatioEstimator to evaluate.
+    #            obs (dict): Reference observation.
+    #            bound (Bound): Bound of RatioEstimator.
+    #            th (float): Threshold value, default -13
+    #            n (int): Number of random samples from bound to determine parameter boundaries.
+    #
+    #        Note: All components of the RatioEstimator will be used.  Avoid overlapping ratios.
+    #        """
+    #        udim = bound.udim
+    #        u = bound.sample(n)
+    #        ratios = rc.ratios(obs, u, n_batch=n_batch)
+    #        res = np.zeros((udim, 2))
+    #        res[:, 1] = 1.0
+    #        for comb, v in ratios.items():
+    #            for i in comb:
+    #                us = u[:, i][v - v.max() > th]
+    #                res[i, 0] = us.min()
+    #                res[i, 1] = us.max()
+    #
+    #        if partition is not None:
+    #            res = res[np.array(partition)]
+    #
+    #        return cls(res)
 
     def state_dict(self):
         return dict(tag="RectangleBound", rec_bounds=self._rec_bounds)
@@ -292,24 +292,24 @@ class BallsBound(Bound):
         dist, ind = self.bt.query(u, k=1)
         return (dist < self.epsilon)[:, 0]
 
-    @classmethod
-    def from_IsolatedRatio(cls, ratio, obs, bound, n=10000, th=-13):
-        """Generate new BallsBound object based on IsolatedRatio.
-
-        Args:
-            ratio (IsolatedRatio): Single ratio.
-            obs (dict): Reference observation.
-            bound (Bound): Bound of RatioEstimator.
-            th (float): Threshold value, default -13
-            n (int): Number of random samples from bound to determine parameter boundaries.
-
-        Note: All components of the RatioEstimator will be used.  Avoid overlapping ratios.
-        """
-        u = bound.sample(n)
-        r = ratio(u)
-        mask = r.max() - r < -th
-        ind_points = u[mask]
-        return cls(ind_points)
+    #    @classmethod
+    #    def from_IsolatedRatio(cls, ratio, obs, bound, n=10000, th=-13):
+    #        """Generate new BallsBound object based on IsolatedRatio.
+    #
+    #        Args:
+    #            ratio (IsolatedRatio): Single ratio.
+    #            obs (dict): Reference observation.
+    #            bound (Bound): Bound of RatioEstimator.
+    #            th (float): Threshold value, default -13
+    #            n (int): Number of random samples from bound to determine parameter boundaries.
+    #
+    #        Note: All components of the RatioEstimator will be used.  Avoid overlapping ratios.
+    #        """
+    #        u = bound.sample(n)
+    #        r = ratio(u)
+    #        mask = r.max() - r < -th
+    #        ind_points = u[mask]
+    #        return cls(ind_points)
 
     def state_dict(self):
         return dict(
@@ -420,37 +420,37 @@ class CompositBound(Bound):
 
         return cls(bounds, udim)
 
-    @classmethod
-    def from_RatioEstimator(cls, partitions, rc, obs, bound, th=-13.0):
-        """Generate new CompositBound object based on RatioEstimator.
-
-        Args:
-            rc (RatioEstimator): RatioEstimator to evaluate.
-            obs (dict): Reference observation.
-            bound (Bound): Bound of RatioEstimator.
-            th (float): Threshold value, default -13
-        """
-        bounds = {}
-        udim = bound.udim
-        idx_rec = []
-
-        for partition in partitions:
-            if len(partition) == 1:
-                idx_rec.append(partition[0])
-            else:
-                # FIXME: Use actual current bound
-                subbound = UnitCubeBound(len(partition))
-                ratio = IsolatedRatio(rc, obs, partition, udim)
-                b = BallsBound.from_IsolatedRatio(ratio, obs, subbound)
-                bounds[partition] = b
-
-        if len(idx_rec) > 0:
-            partition = tuple(idx_rec)
-            bounds[partition] = RectangleBound.from_RatioEstimator(
-                rc, obs, bound, th=th, partition=partition
-            )
-
-        return cls(bounds, udim)
+    #    @classmethod
+    #    def from_RatioEstimator(cls, partitions, rc, obs, bound, th=-13.0):
+    #        """Generate new CompositBound object based on RatioEstimator.
+    #
+    #        Args:
+    #            rc (RatioEstimator): RatioEstimator to evaluate.
+    #            obs (dict): Reference observation.
+    #            bound (Bound): Bound of RatioEstimator.
+    #            th (float): Threshold value, default -13
+    #        """
+    #        bounds = {}
+    #        udim = bound.udim
+    #        idx_rec = []
+    #
+    #        for partition in partitions:
+    #            if len(partition) == 1:
+    #                idx_rec.append(partition[0])
+    #            else:
+    #                # FIXME: Use actual current bound
+    #                subbound = UnitCubeBound(len(partition))
+    #                ratio = IsolatedRatio(rc, obs, partition, udim)
+    #                b = BallsBound.from_IsolatedRatio(ratio, obs, subbound)
+    #                bounds[partition] = b
+    #
+    #        if len(idx_rec) > 0:
+    #            partition = tuple(idx_rec)
+    #            bounds[partition] = RectangleBound.from_RatioEstimator(
+    #                rc, obs, bound, th=th, partition=partition
+    #            )
+    #
+    #        return cls(bounds, udim)
 
     def state_dict(self):
         state_dict = dict(

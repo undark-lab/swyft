@@ -3,7 +3,7 @@ from typing import Optional
 import pandas as pd
 from toolz import keyfilter
 
-from swyft.types import Array, MarginalType
+from swyft.types import Array, RatiosType
 from swyft.utils.array import tensor_to_array
 
 
@@ -15,11 +15,11 @@ def get_marginal_dim_by_value(value: Array) -> int:
     return value.shape[-1]
 
 
-def filter_marginals_by_dim(marginals: MarginalType, dim: int) -> MarginalType:
+def filter_marginals_by_dim(ratios: RatiosType, dim: int) -> RatiosType:
     assert all(
-        isinstance(k, tuple) for k in marginals.keys()
+        isinstance(k, tuple) for k in ratios.keys()
     ), "This function works on tuples of parameters."
-    return keyfilter(lambda x: get_marginal_dim_by_key(x) == dim, marginals)
+    return keyfilter(lambda x: get_marginal_dim_by_key(x) == dim, ratios)
 
 
 def get_df_from_params(params: Array, columns: Optional[tuple] = None) -> pd.DataFrame:

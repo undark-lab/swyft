@@ -12,11 +12,12 @@ from swyft.networks import DefaultHead, DefaultTail
 from swyft.types import (
     Array,
     Device,
-    MarginalType,
+    MarginalsType,
     ObsType,
     PathType,
     PNamesType,
     PoIType,
+    RatiosType,
 )
 from swyft.utils import tupleize_marginals
 
@@ -48,7 +49,7 @@ class Posteriors:
 
     def add(
         self,
-        marginals: PoIType,
+        marginals: MarginalsType,
         head: Callable[..., "swyft.Module"] = DefaultHead,
         tail: Callable[..., "swyft.Module"] = DefaultTail,
         head_args: dict = {},
@@ -75,7 +76,9 @@ class Posteriors:
         )
         self._ratios[marginals] = re
 
-    def to(self, device: Device, marginals: Optional[PoIType] = None) -> "Posteriors":
+    def to(
+        self, device: Device, marginals: Optional[MarginalsType] = None
+    ) -> "Posteriors":
         """Move networks to device.
 
         Args:
@@ -101,7 +104,7 @@ class Posteriors:
 
     def train(
         self,
-        marginals: PoIType,
+        marginals: MarginalsType,
         batch_size: int = 64,
         validation_size: float = 0.1,
         early_stopping_patience: int = 5,
@@ -146,13 +149,13 @@ class Posteriors:
 
         re.train(self._dataset, trainoptions)
 
-    def train_diagnostics(self, marginals: PoIType):
+    def train_diagnostics(self, marginals: MarginalsType):
         marginals = tupleize_marginals(marginals)
         return self._ratios[marginals].train_diagnostics()
 
     def sample(
         self, N: int, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Union[np.ndarray, MarginalType, PNamesType]]:
+    ) -> Dict[str, Union[np.ndarray, RatiosType, PNamesType]]:
         """Resturn weighted posterior samples for given observation.
 
         Args:
@@ -179,90 +182,91 @@ class Posteriors:
     #        samples = post.sample(N, obs, device=device, n_batch=n_batch)
     #        return samples
 
-    def rejection_sample(
-        self,
-        N: int,
-        obs0: ObsType,
-        excess_factor: int = 10,
-        maxiter: int = 1000,
-        n_batch: int = 10_000,
-        PoI: Sequence[PoIType] = None,
-    ) -> MarginalType:
-        """Samples from each marginal using rejection sampling.
-
-        Args:
-            N: number of samples in each marginal to output
-            obs0: target observation
-            excess_factor: N_to_reject = excess_factor * N
-            maxiter: maximum loop attempts to draw N
-            n_batch: how many proposed samples are drawn at once
-            PoI: selection of parameters of interest
-
-        Returns:
-            Marginal posterior samples. keys are marginal tuples, values are samples/
-
-        Reference:
-            Section 23.3.3
-            Machine Learning: A Probabilistic Perspective
-            Kevin P. Murphy
-        """
-
-        weighted_samples = self.sample(N=excess_factor * N, obs0=obs0, n_batch=10_000)
-
-        maximum_log_likelihood_estimates = {
-            k: np.log(np.max(v)) for k, v in weighted_samples["weights"].items()
-        }
-
-        PoI = set(weighted_samples["weights"].keys()) if PoI is None else PoI
-        collector = {k: [] for k in PoI}
-        out = {}
-
-        # Do the rejection sampling.
-        # When a particular key hits the necessary samples, stop calculating on it to reduce cost.
-        # Send that key to out.
-        counter = 0
-        remaining_param_tuples = PoI
-        while counter < maxiter:
-            # Calculate chance to keep a sample
-
-            log_prob_to_keep = {
-                pt: np.log(weighted_samples["weights"][pt])
-                - maximum_log_likelihood_estimates[pt]
-                for pt in remaining_param_tuples
-            }
-
-            # Draw and determine if samples are kept
-            to_keep = {
-                pt: np.less_equal(np.log(np.random.rand(*v.shape)), v)
-                for pt, v in log_prob_to_keep.items()
-            }
-
-            # Collect samples for every tuple of parameters, if there are enough, add them to out.
-            for param_tuple in remaining_param_tuples:
-                kept_all_params = weighted_samples["v"][to_keep[param_tuple]]
-                kept_params = kept_all_params[..., param_tuple]
-                collector[param_tuple].append(kept_params)
-                concatenated = np.concatenate(collector[param_tuple])[:N]
-                if len(concatenated) == N:
-                    out[param_tuple] = concatenated
-
-            # Remove the param_tuples which we already have in out, thus not to calculate for them anymore.
-            for param_tuple in out.keys():
-                if param_tuple in remaining_param_tuples:
-                    remaining_param_tuples.remove(param_tuple)
-                    log.debug(f"{len(remaining_param_tuples)} param tuples remaining")
-
-            if len(remaining_param_tuples) > 0:
-                weighted_samples = self.sample(
-                    N=excess_factor * N, obs0=obs0, n_batch=n_batch
-                )
-            else:
-                return out
-            counter += 1
-        warn(
-            f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}."
-        )
-        return out
+    #    # TODO: Still needs to be fixed?
+    #    def _rejection_sample(
+    #        self,
+    #        N: int,
+    #        obs0: ObsType,
+    #        excess_factor: int = 10,
+    #        maxiter: int = 1000,
+    #        n_batch: int = 10_000,
+    #        PoI: Sequence[PoIType] = None,
+    #    ) -> MarginalType:
+    #        """Samples from each marginal using rejection sampling.
+    #
+    #        Args:
+    #            N: number of samples in each marginal to output
+    #            obs0: target observation
+    #            excess_factor: N_to_reject = excess_factor * N
+    #            maxiter: maximum loop attempts to draw N
+    #            n_batch: how many proposed samples are drawn at once
+    #            PoI: selection of parameters of interest
+    #
+    #        Returns:
+    #            Marginal posterior samples. keys are marginal tuples, values are samples/
+    #
+    #        Reference:
+    #            Section 23.3.3
+    #            Machine Learning: A Probabilistic Perspective
+    #            Kevin P. Murphy
+    #        """
+    #
+    #        weighted_samples = self.sample(N=excess_factor * N, obs0=obs0, n_batch=10_000)
+    #
+    #        maximum_log_likelihood_estimates = {
+    #            k: np.log(np.max(v)) for k, v in weighted_samples["weights"].items()
+    #        }
+    #
+    #        PoI = set(weighted_samples["weights"].keys()) if PoI is None else PoI
+    #        collector = {k: [] for k in PoI}
+    #        out = {}
+    #
+    #        # Do the rejection sampling.
+    #        # When a particular key hits the necessary samples, stop calculating on it to reduce cost.
+    #        # Send that key to out.
+    #        counter = 0
+    #        remaining_param_tuples = PoI
+    #        while counter < maxiter:
+    #            # Calculate chance to keep a sample
+    #
+    #            log_prob_to_keep = {
+    #                pt: np.log(weighted_samples["weights"][pt])
+    #                - maximum_log_likelihood_estimates[pt]
+    #                for pt in remaining_param_tuples
+    #            }
+    #
+    #            # Draw and determine if samples are kept
+    #            to_keep = {
+    #                pt: np.less_equal(np.log(np.random.rand(*v.shape)), v)
+    #                for pt, v in log_prob_to_keep.items()
+    #            }
+    #
+    #            # Collect samples for every tuple of parameters, if there are enough, add them to out.
+    #            for param_tuple in remaining_param_tuples:
+    #                kept_all_params = weighted_samples["v"][to_keep[param_tuple]]
+    #                kept_params = kept_all_params[..., param_tuple]
+    #                collector[param_tuple].append(kept_params)
+    #                concatenated = np.concatenate(collector[param_tuple])[:N]
+    #                if len(concatenated) == N:
+    #                    out[param_tuple] = concatenated
+    #
+    #            # Remove the param_tuples which we already have in out, thus not to calculate for them anymore.
+    #            for param_tuple in out.keys():
+    #                if param_tuple in remaining_param_tuples:
+    #                    remaining_param_tuples.remove(param_tuple)
+    #                    log.debug(f"{len(remaining_param_tuples)} param tuples remaining")
+    #
+    #            if len(remaining_param_tuples) > 0:
+    #                weighted_samples = self.sample(
+    #                    N=excess_factor * N, obs0=obs0, n_batch=n_batch
+    #                )
+    #            else:
+    #                return out
+    #            counter += 1
+    #        warn(
+    #            f"Max iterations {maxiter} reached there were not enough samples produced in {remaining_param_tuples}."
+    #        )
+    #        return out
 
     @property
     def bound(self) -> "swyft.bounds.Bound":
@@ -272,7 +276,7 @@ class Posteriors:
     def prior(self) -> "swyft.bounds.Prior":
         return self._trunc_prior.prior
 
-    def truncate(self, marginals: PoIType, obs0: ObsType) -> "swyft.bounds.Bound":
+    def truncate(self, marginals: MarginalsType, obs0: ObsType) -> "swyft.bounds.Bound":
         """Generate and return new bound object."""
         marginals = tupleize_marginals(marginals)
         bound = swyft.Bound.from_Posteriors(marginals, self, obs0)
@@ -280,7 +284,7 @@ class Posteriors:
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
         return bound
 
-    def _eval_ratios(self, obs: ObsType, v: Array, n_batch: int = 100) -> MarginalType:
+    def _eval_ratios(self, obs: ObsType, v: Array, n_batch: int = 100) -> RatiosType:
         result = {}
         for _, rc in self._ratios.items():
             ratios = rc.ratios(obs, v, n_batch=n_batch)

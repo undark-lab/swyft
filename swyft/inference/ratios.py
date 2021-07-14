@@ -7,29 +7,28 @@ import torch
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
-from swyft.types import Array, Device, MarginalType, ObsType
+from swyft.types import Array, Device, MarginalsType, ObsType, RatiosType
 from swyft.utils import (
     array_to_tensor,
     dict_to_tensor_unsqueeze,
-    format_param_list,
     get_obs_shapes,
+    tupleize_marginals,
 )
 
-
-class IsolatedRatio:
-    """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
-
-    def __init__(self, rc, obs, comb, zdim):  # TODO Christoph typing
-        self._rc = rc
-        self._obs = obs
-        self._comb = comb
-        self._zdim = zdim
-
-    def __call__(self, u, n_batch=10_000):  # TODO Christoph typing
-        U = np.random.rand(len(u), self._zdim)
-        U[:, np.array(self._comb)] = u
-        ratios = self._rc.ratios(self._obs, U, n_batch=n_batch)
-        return ratios[self._comb]
+# class IsolatedRatio:
+#    """Single ratio as function of hypercube parameters u.  Input for bound calculations."""
+#
+#    def __init__(self, rc, obs, comb, zdim):
+#        self._rc = rc
+#        self._obs = obs
+#        self._comb = comb
+#        self._zdim = zdim
+#
+#    def __call__(self, u: np.array, n_batch: int=10_000):
+#        U = np.random.rand(len(u), self._zdim)
+#        U[:, np.array(self._comb)] = u
+#        ratios = self._rc.ratios(self._obs, U, n_batch=n_batch)
+#        return ratios[self._comb]
 
 
 class RatioEstimator:
@@ -44,7 +43,7 @@ class RatioEstimator:
     """
 
     _save_attrs = [
-        "param_list",
+        "marginals",
         "_head_swyft_state_dict",
         "_tail_swyft_state_dict",
         "_train_diagnostics",
@@ -52,14 +51,14 @@ class RatioEstimator:
 
     def __init__(
         self,
-        param_list,  # TODO Christoph typing
+        marginals: MarginalsType,
         head: Callable[..., "swyft.Module"] = DefaultHead,
         tail: Callable[..., "swyft.Module"] = DefaultTail,
         head_args: dict = {},
         tail_args: dict = {},
         device: Device = "cpu",
     ) -> None:
-        self.param_list = format_param_list(param_list)
+        self.marginals = tupleize_marginals(marginals)
         self._device = device
 
         if isinstance(head, type):
@@ -89,7 +88,7 @@ class RatioEstimator:
             ).to(self.device)
         if self.tail is None:
             self.tail = self._uninitialized_tail(
-                self.head.n_features, self.param_list, **self._uninitialized_tail_args
+                self.head.n_features, self.marginals, **self._uninitialized_tail_args
             ).to(self.device)
 
     def to(self, device: Device) -> "RatioEstimator":
@@ -121,12 +120,10 @@ class RatioEstimator:
         )
         self._train_diagnostics.append(diagnostics)
 
-    def train_diagnostics(self):  # TODO Christoph typing
+    def train_diagnostics(self):  # TODO add type annotation
         return self._train_diagnostics
 
-    def ratios(
-        self, obs: ObsType, params: Array, n_batch: int = 10_000
-    ) -> MarginalType:
+    def ratios(self, obs: ObsType, params: Array, n_batch: int = 10_000) -> RatiosType:
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()
@@ -169,7 +166,7 @@ class RatioEstimator:
                     ratios.append(tmp)
                 ratios = np.vstack(ratios)
 
-            return {k: ratios[..., i] for i, k in enumerate(self.param_list)}
+            return {k: ratios[..., i] for i, k in enumerate(self.marginals)}
 
     @property
     def _tail_swyft_state_dict(self) -> dict:
@@ -190,6 +187,6 @@ class RatioEstimator:
         """Instantiate RatioCollection from state dictionary."""
         head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"])
         tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"])
-        re = cls(state_dict["param_list"], head=head, tail=tail, device=device)
+        re = cls(state_dict["marginals"], head=head, tail=tail, device=device)
         re._train_diagnostics = state_dict["_train_diagnostics"]
         return re

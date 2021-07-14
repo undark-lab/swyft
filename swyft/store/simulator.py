@@ -114,7 +114,7 @@ class DaskSimulator:
         indices,
         collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
-    ) -> None:  # TODO Christoph typing
+    ) -> None:  # TODO typing
         """Run the simulator on the input parameters.
 
         Args:
@@ -237,7 +237,7 @@ class DaskSimulator:
         get_output_method: Callable,
         tmpdir: PathType = None,
         **kwargs,
-    ):  # TODO Christoph typing
+    ):  # TODO typing
         """Convenience function to setup a command-line simulator
 
         Args:

@@ -4,7 +4,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Sequence, Union
 
 import fasteners
 import numcodecs
@@ -313,7 +313,7 @@ class Store(ABC):
 
         return indices
 
-    def _get_indices_to_simulate(self, indices=None):  # TODO Christoph typing
+    def _get_indices_to_simulate(self, indices: Optional[Sequence[int]] = None):
         """
         Determine which samples need to be simulated.
 
@@ -329,7 +329,7 @@ class Store(ABC):
         idx = np.flatnonzero(require_simulation)
         return indices[idx] if indices is not None else idx
 
-    def _set_simulation_status(self, indices, status):  # TODO Christoph typing
+    def _set_simulation_status(self, indices: Sequence[int], status: SimulationStatus):
         """
         Flag the specified samples with the simulation status.
 
@@ -345,7 +345,7 @@ class Store(ABC):
             )
         self.sim_status.oindex[indices] = status
 
-    def get_simulation_status(self, indices=None):  # TODO Christoph typing
+    def get_simulation_status(self, indices: Optional[Sequence[int]] = None):
         """Determine the status of sample simulations.
 
         Args:
@@ -362,7 +362,7 @@ class Store(ABC):
             else self.sim_status[:]
         )
 
-    def requires_sim(self, indices=None) -> bool:  # TODO Christoph typing
+    def requires_sim(self, indices: Optional[Sequence[int]] = None) -> bool:
         """Check whether there are parameters which require simulation."""
         self._update()
         return self._get_indices_to_simulate(indices).size > 0
@@ -414,10 +414,10 @@ class Store(ABC):
 
     def simulate(
         self,
-        indices: Optional[List[int]] = None,
+        indices: Optional[Sequence[int]] = None,
         batch_size: Optional[int] = None,
         wait_for_results: Optional[bool] = True,
-    ) -> None:  # TODO Christoph typing (are you sure these are list and not np.ndarray or Sequence?)
+    ) -> None:
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
         Args:
@@ -461,7 +461,7 @@ class Store(ABC):
         if wait_for_results:
             self.wait_for_simulations(indices)
 
-    def wait_for_simulations(self, indices):  # TODO Christoph typing
+    def wait_for_simulations(self, indices: Sequence[int]):
         """Wait for a set of sample simulations to be finished.
 
         Args:

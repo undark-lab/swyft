@@ -1,5 +1,5 @@
 # pylint: disable=no-member,
-from typing import Callable, Dict, Optional, Sequence
+from typing import Callable, Dict, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
@@ -7,13 +7,14 @@ import torch.nn as nn
 from swyft.networks.linear import LinearWithChannel
 from swyft.networks.module import Module
 from swyft.networks.normalization import OnlineNormalizationLayer
+from swyft.types import Array, MarginalsType, ObsType
 
 
-def _get_z_shape(marginals):  # TODO Christoph typing
+def _get_z_shape(marginals: MarginalsType) -> Tuple[int, int]:
     return (len(marginals), max([len(c) for c in marginals]))
 
 
-def _combine(params, marginals):  # TODO Christoph typing
+def _combine(params: Array, marginals: MarginalsType) -> Array:
     """Combine parameters according to parameter list. Supports one batch dimension."""
     shape = params.shape
     device = params.device
@@ -220,9 +221,7 @@ class GenericTail(Module):
             *shape[:-1], self.num_channels, shape[-1]
         )
 
-    def forward(
-        self, observation: torch.Tensor, parameters
-    ) -> torch.Tensor:  # TODO Christoph typing
+    def forward(self, observation: ObsType, parameters: Array) -> torch.Tensor:
         obs = self._channelize_observation(observation)
         par = _combine(parameters, self.parameter_list)
 
