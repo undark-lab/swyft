@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 
@@ -7,11 +9,11 @@ import torch.nn as nn
 class OnlineNormalizationLayer(nn.Module):
     def __init__(
         self,
-        shape,
+        shape: Tuple[int, ...],
         stable: bool = False,
         epsilon: float = 1e-10,
         use_average_std: bool = False,
-    ):
+    ) -> None:
         """Accumulate mean and variance online using the "parallel algorithm" algorithm from [1].
 
         Args:
@@ -32,7 +34,9 @@ class OnlineNormalizationLayer(nn.Module):
         self.stable = stable
         self.use_average_std = use_average_std
 
-    def _parallel_algorithm(self, x):
+    def _parallel_algorithm(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert x.shape[1:] == self.shape
         na = self.n.clone()
         nb = x.shape[0]
@@ -53,24 +57,24 @@ class OnlineNormalizationLayer(nn.Module):
         m2ab = m2a + m2b + delta ** 2 * na * nb / nab
         return nab, xab, m2ab
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.training:
             self.n, self._mean, self._M2 = self._parallel_algorithm(x)
         return (x - self.mean) / self.std
 
     @property
-    def mean(self):
+    def mean(self) -> torch.Tensor:
         return self._mean
 
     @property
-    def var(self):
+    def var(self) -> torch.Tensor:
         if self.n > 1:
             return self._M2 / (self.n - 1)
         else:
             return torch.zeros_like(self._M2)
 
     @property
-    def std(self):
+    def std(self) -> torch.Tensor:
         if self.use_average_std:
             return torch.sqrt(self.var + self.epsilon).mean()
         else:

@@ -62,21 +62,36 @@ def violin_plot(
 
 def plot1d(
     samples,
-    params,
+    pois,
+    truth=None,
+    bins=100,
     figsize=(15, 10),
     color="k",
     labels=None,
-    ncol=None,
-    truth=None,
-    bins=100,
-    grid_interpolate=False,
     label_args={},
+    ncol=None,
     subplots_kwargs={},
 ) -> None:
+    """Make beautiful 1-dim posteriors.
+
+    Args:
+        samples: Samples from `swyft.Posteriors.sample`
+        pois: List of parameters of interest
+        truth: Ground truth vector
+        bins: Number of bins used for histograms.
+        figsize: Size of figure
+        color: Color
+        labels: Custom labels (default is parameter names)
+        label_args: Custom label arguments
+        ncol: Number of panel columns
+        subplot_kwargs: Subplot kwargs
+    """
+
+    grid_interpolate = False
 
     if ncol is None:
-        ncol = len(params)
-    K = len(params)
+        ncol = len(pois)
+    K = len(pois)
     nrow = (K - 1) // ncol + 1
 
     fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
@@ -88,7 +103,7 @@ def plot1d(
     )
 
     if labels is None:
-        labels = [params[i] for i in range(K)]
+        labels = [samples["pnames"][pois[i]] for i in range(K)]
 
     for k in range(K):
         if nrow == 1 and ncol > 1:
@@ -100,7 +115,7 @@ def plot1d(
             ax = axes[j, i]
         plot_posterior(
             samples,
-            params[k],
+            pois[k],
             ax=ax,
             grid_interpolate=grid_interpolate,
             color=color,
@@ -108,21 +123,33 @@ def plot1d(
         )
         ax.set_xlabel(labels[k], **label_args)
         if truth is not None:
-            ax.axvline(truth[params[k]], ls=":", color="r")
+            ax.axvline(truth[pois[k]], ls=":", color="r")
     return fig, axes
 
 
 def corner(
     samples,
-    params,
+    pois,
+    bins=100,
+    truth=None,
     figsize=(10, 10),
     color="k",
     labels=None,
     label_args={},
-    truth=None,
-    bins=100,
 ) -> None:
-    K = len(params)
+    """Make a beautiful corner plot.
+
+    Args:
+        samples: Samples from `swyft.Posteriors.sample`
+        pois: List of parameters of interest
+        truth: Ground truth vector
+        bins: Number of bins used for histograms.
+        figsize: Size of figure
+        color: Color
+        labels: Custom labels (default is parameter names)
+        label_args: Custom label arguments
+    """
+    K = len(pois)
     fig, axes = plt.subplots(K, K, figsize=figsize)
     lb = 0.125
     tr = 0.9
@@ -132,7 +159,7 @@ def corner(
     )
 
     if labels is None:
-        labels = [params[i] for i in range(K)]
+        labels = [samples["pnames"][pois[i]] for i in range(K)]
     for i in range(K):
         for j in range(K):
             ax = axes[i, j]
@@ -165,15 +192,15 @@ def corner(
             # 2-dim plots
             if j < i:
                 plot_posterior(
-                    samples, [params[j], params[i]], ax=ax, color=color, bins=bins
+                    samples, [pois[j], pois[i]], ax=ax, color=color, bins=bins
                 )
                 if truth is not None:
-                    ax.axvline(truth[params[j]], color="r")
-                    ax.axhline(truth[params[i]], color="r")
+                    ax.axvline(truth[pois[j]], color="r")
+                    ax.axhline(truth[pois[i]], color="r")
             if j == i:
-                plot_posterior(samples, params[i], ax=ax, color=color, bins=bins)
+                plot_posterior(samples, pois[i], ax=ax, color=color, bins=bins)
                 if truth is not None:
-                    ax.axvline(truth[params[i]], ls=":", color="r")
+                    ax.axvline(truth[pois[i]], ls=":", color="r")
     return fig, axes
 
 
@@ -193,7 +220,7 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 
 def plot_posterior(
     samples,
-    params,
+    pois,
     weights_key=None,
     ax=plt,
     grid_interpolate=False,
@@ -201,14 +228,14 @@ def plot_posterior(
     color="k",
     **kwargs
 ):
-    if isinstance(params, int):
-        params = (params,)
+    if isinstance(pois, int):
+        pois = (pois,)
 
     w = None
 
     # FIXME: Clean up ad hoc code
     if weights_key is None:
-        weights_key = tuple(sorted(params))
+        weights_key = tuple(sorted(pois))
     try:
         w = samples["weights"][tuple(weights_key)]
     except KeyError:
@@ -226,12 +253,12 @@ def plot_posterior(
     if w is None:
         return
 
-    if len(params) == 1:
-        x = samples["params"][:, params[0]]
+    if len(pois) == 1:
+        x = samples["v"][:, pois[0]]
 
         if grid_interpolate:
             # Grid interpolate samples
-            log_prior = samples["log_priors"][params[0]]
+            log_prior = samples["log_priors"][pois[0]]
             w_eff = np.exp(np.log(w) + log_prior)  # p(z|x) = r(x, z) p(z)
             zm, v = grid_interpolate_samples(x, w_eff)
         else:
@@ -243,10 +270,10 @@ def plot_posterior(
         ax.plot(zm, v, color=color, **kwargs)
         ax.set_xlim([x.min(), x.max()])
         ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
-    elif len(params) == 2:
+    elif len(pois) == 2:
         # FIXME: use interpolation when grid_interpolate == True
-        x = samples["params"][:, params[0]]
-        y = samples["params"][:, params[1]]
+        x = samples["v"][:, pois[0]]
+        y = samples["v"][:, pois[1]]
         counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap="gray_r")
         levels = sorted(get_contour_levels(counts))
         try:

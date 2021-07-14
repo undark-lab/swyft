@@ -11,7 +11,7 @@ class BatchNorm1dWithChannel(nn.BatchNorm1d):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-    ):
+    ) -> None:
         """BatchNorm1d over the batch, N. Requires shape (N, C, L).
 
         Otherwise, same as torch.nn.BatchNorm1d with extra num_channel. Cannot do the temporal batch norm case.

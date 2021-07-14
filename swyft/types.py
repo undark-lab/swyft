@@ -1,25 +1,34 @@
 # pylint: disable=no-member
 from pathlib import Path
-from typing import Dict, Tuple, Union
+from typing import Callable, Dict, Hashable, Iterable, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 import torch
 
+# If you add a type, don't forget to update autodoc_type_aliases in /docs/source/config.py
+
+# General defintions
 PathType = Union[str, Path]
-
 Device = Union[torch.device, str]
-Dataset = torch.utils.data.Dataset
-
 Tensor = torch.Tensor
 Array = Union[np.ndarray, torch.Tensor]
-
-WeightsType = Dict[Tuple[int], np.ndarray]
-
 Shape = Union[torch.Size, Tuple[int, ...]]
-DictInt = Union[int, Dict[str, int]]
-DictShape = Union[Shape, Dict[str, Shape]]
 
-PriorConfig = Dict[str, Tuple[str, float, float]]
+# A list of marginals, e.g., [0, (3, 4), [3, 2]]
+MarginalsType = Iterable[Union[int, Iterable[int]]]
 
-MarginalKey = Union[Tuple[int], Tuple[str]]
-Marginals = Dict[MarginalKey, Array]
+# Strict version of that type used internally, ((0,), (2, 3), (3, 4))
+StrictMarginalsType = Tuple[Tuple[int, ...], ...]
+
+# Map from (3, 4) --> ratio array
+RatiosType = Dict[Tuple[int, ...], Array]
+
+PNamesType = Sequence[str]
+ObsType = Dict[Hashable, Array]
+ForwardModelType = Callable[..., ObsType]
+SimShapeType = Mapping[Hashable, Shape]
+
+# Maybe obsolete?
+StrictPoIType = Tuple[int, ...]
+PoIType = Union[Sequence[int], Sequence[StrictPoIType]]
+MarginalType = Dict[PoIType, Array]

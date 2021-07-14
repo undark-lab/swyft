@@ -40,7 +40,7 @@ def array_to_tensor(
     When dtype is None, unsafe casts all float-type arrays to torch.float32 and all int-type arrays to torch.int64
     """
     if not isinstance(array, (np.ndarray, torch.Tensor)):
-        np.asarray(array)
+        array = np.asarray(array)
 
     input_dtype = array.dtype
     if isinstance(input_dtype, np.dtype):
