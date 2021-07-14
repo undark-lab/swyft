@@ -184,7 +184,9 @@ class RatioEstimator:
         return {attr: getattr(self, attr) for attr in RatioEstimator._save_attrs}
 
     @classmethod
-    def from_state_dict(cls, state_dict: dict, device: Device = "cpu") -> "RatioEstimator":
+    def from_state_dict(
+        cls, state_dict: dict, device: Device = "cpu"
+    ) -> "RatioEstimator":
         """Instantiate RatioCollection from state dictionary."""
         head = Module.from_swyft_state_dict(state_dict["_head_swyft_state_dict"])
         tail = Module.from_swyft_state_dict(state_dict["_tail_swyft_state_dict"])

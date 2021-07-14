@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 
-from .module import Module
-from .normalization import OnlineNormalizationLayer
+from swyft.networks.module import Module
+from swyft.networks.normalization import OnlineNormalizationLayer
+from swyft.types import ObsType, SimShapeType
 
 
 class DefaultHead(Module):
@@ -20,7 +21,7 @@ class DefaultHead(Module):
         to better results.
     """
 
-    def __init__(self, sim_shapes, online_norm: bool = True):
+    def __init__(self, sim_shapes: SimShapeType, online_norm: bool = True) -> None:
         super().__init__(sim_shapes=sim_shapes, online_norm=online_norm)
         if not all(np.array([len(v) for v in sim_shapes.values()]) == 1):
             raise ValueError(
@@ -34,14 +35,14 @@ class DefaultHead(Module):
         else:
             self.onl_f = lambda f: f
 
-    def forward(self, sim):
+    def forward(self, sim: ObsType) -> torch.Tensor:
         """Forward pass default head network. Concatenate.
 
         Args:
-            sim (dict): Dictionary of tensors with shape (n_batch, m_i)
+            sim: Dictionary of tensors with shape (n_batch, m_i)
 
         Returns:
-            f (tensor): Feature vectors with shape (n_batch, M), with M = sum_i m_i
+            f: Feature vectors with shape (n_batch, M), with M = sum_i m_i
         """
         f = []
         for key, value in sorted(sim.items()):

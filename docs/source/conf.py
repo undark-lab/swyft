@@ -51,6 +51,8 @@ autodoc_type_aliases = {
     "MarginalType": "swyft.typing.MarginalType",
     "PNamesType": "swyft.typing.PNamesType",
     "ObsType": "swyft.typing.ObsType",
+    "ForwardModelType": "swyft.typing.ForwardModelType",
+    "SimShapeType": "swyft.typing.SimShapeType",
 }
 
 

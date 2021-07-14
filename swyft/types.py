@@ -1,6 +1,6 @@
 # pylint: disable=no-member
 from pathlib import Path
-from typing import Dict, Hashable, Sequence, Tuple, Union
+from typing import Callable, Dict, Hashable, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -19,3 +19,5 @@ MarginalType = Dict[PoIType, Array]
 
 PNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]
+ForwardModelType = Callable[..., ObsType]
+SimShapeType = Mapping[Hashable, Shape]

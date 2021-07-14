@@ -4,14 +4,14 @@ import shlex
 import subprocess
 import tempfile
 from operator import getitem
-from typing import Callable, List, Mapping, Optional, Union
+from typing import Callable, Hashable, List, Mapping, Optional, Union
 
 import dask.array as da
 import numpy as np
 from dask.distributed import Client, fire_and_forget, wait
 
 from swyft.bounds import Prior
-from swyft.types import Array, PathType, Shape
+from swyft.types import Array, ForwardModelType, PathType, PNamesType, Shape
 from swyft.utils import all_finite
 
 
@@ -42,9 +42,9 @@ class Simulator:
 
     def __init__(
         self,
-        model: Callable,
-        pnames: Union[List[str], int],
-        sim_shapes: Mapping[str, Shape],
+        model: ForwardModelType,
+        pnames: Union[PNamesType, int],
+        sim_shapes: SimShapeType,
     ) -> None:
         self.model = model
         if isinstance(pnames, int):
@@ -52,7 +52,7 @@ class Simulator:
         self.pnames = pnames
         self.sim_shapes = sim_shapes
 
-    def _run(self, v, sims, sim_status, indices):
+    def _run(self, v, sims, sim_status, indices) -> None:
         """Run the simulator on the input parameters.
 
         Args:
@@ -79,10 +79,10 @@ class DaskSimulator:
     def __init__(
         self,
         model: Callable,
-        sim_shapes: Mapping[str, Shape],
+        sim_shapes: SimShapeType,
         fail_on_non_finite: bool = True,
         cluster=None,
-    ):
+    ) -> None:
         """Initiate Simulator using a python function.
 
         Args:
@@ -107,7 +107,7 @@ class DaskSimulator:
         indices,
         collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
-    ):
+    ) -> None:  # TODO Christoph typing
         """Run the simulator on the input parameters.
 
         Args:
@@ -230,7 +230,7 @@ class DaskSimulator:
         get_output_method: Callable,
         tmpdir: PathType = None,
         **kwargs,
-    ):
+    ):  # TODO Christoph typing
         """Convenience function to setup a command-line simulator
 
         Args:
@@ -267,7 +267,9 @@ class DaskSimulator:
         return cls(model=model, **kwargs)
 
     @classmethod
-    def from_model(cls, model: Callable, prior: Prior, fail_on_non_finite: bool = True):
+    def from_model(
+        cls, model: ForwardModelType, prior: Prior, fail_on_non_finite: bool = True
+    ):
         """Convenience function to instantiate a Simulator with the correct sim_shapes.
 
         Args:
@@ -300,7 +302,7 @@ class DaskSimulator:
 def _run_model_chunk(
     z: np.ndarray,
     model: Callable,
-    sim_shapes: Mapping[str, Shape],
+    sim_shapes: SimShapeType,
     fail_on_non_finite: bool,
 ):
     """Run the model over a set of input parameters.

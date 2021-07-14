@@ -4,7 +4,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import fasteners
 import numcodecs
@@ -55,7 +55,7 @@ class Store(ABC):
         sync_path: Optional[PathType] = None,
         chunksize: int = 1,
         pickle_protocol: int = 4,
-    ):
+    ) -> None:
         self._zarr_store = zarr_store
         self._simulator = simulator
         self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
@@ -89,13 +89,15 @@ class Store(ABC):
         if sync_path is not None:
             self._setup_lock(sync_path)
 
-    def add(self, N, prior, bound=None):
+    def add(
+        self, N: int, prior: "swyft.Prior", bound: Optional["swyft.Bound"] = None
+    ) -> None:
         """Adds points to the store.
 
         Args:
-            N (int): Number of samples
-            prior (swyft.Prior): Prior
-            bound (swyft.Bound): Bound object for prior truncation
+            N: Number of samples
+            prior: Prior
+            bound: Bound object for prior truncation
 
         .. warning::
             Calling this method will alter the content of the store by adding
@@ -141,12 +143,12 @@ class Store(ABC):
         path = os.path.join(sync_path, "cache.lock")
         self._lock = fasteners.InterProcessLock(path)
 
-    def lock(self):
+    def lock(self) -> None:
         if self._lock is not None:
             log.debug("Cache locked")
             self._lock.acquire(blocking=True)
 
-    def unlock(self):
+    def unlock(self) -> None:
         if self._lock is not None:
             self._lock.release()
             log.debug("Cache unlocked")
@@ -185,7 +187,7 @@ class Store(ABC):
             dtype="int",
         )
 
-    def _update(self):
+    def _update(self) -> None:
         self.sims = self._root[self._filesystem.sims]
         self.v = self._root[self._filesystem.v]
         self.log_w = self._root[self._filesystem.log_w]
@@ -234,13 +236,15 @@ class Store(ABC):
             d = np.where(r > d, r, d)
         return d
 
-    def coverage(self, N, prior, bound=None):
+    def coverage(
+        self, N: int, prior: "swyft.Prior", bound: Optional["swyft.Bound"] = None
+    ) -> float:
         """Returns fraction of already stored data points.
 
         Args:
-            N (int): Number of samples
-            prior (swyft.Prior): Prior
-            bound (swyft.Bound): Bound object for prior truncation
+            N: Number of samples
+            prior: Prior
+            bound: Bound object for prior truncation
 
 
         Returns:
@@ -269,7 +273,14 @@ class Store(ABC):
         ).mean()
         return frac
 
-    def sample(self, N, prior, bound=None, check_coverage=True, add=False):
+    def sample(
+        self,
+        N: int,
+        prior: "swyft.Prior",
+        bound: Optional["swyft.Bound"] = None,
+        check_coverage: bool = True,
+        add: bool = False,
+    ) -> np.ndarray:
         """Return samples from store.
 
         Args:
@@ -302,12 +313,12 @@ class Store(ABC):
 
         return indices
 
-    def _get_indices_to_simulate(self, indices=None):
+    def _get_indices_to_simulate(self, indices=None):  # TODO Christoph typing
         """
         Determine which samples need to be simulated.
 
         Args:
-            indices: (optional) array with the indices of the samples to
+            indices: array with the indices of the samples to
             consider. If None, consider all samples.
 
         Returns:
@@ -318,7 +329,7 @@ class Store(ABC):
         idx = np.flatnonzero(require_simulation)
         return indices[idx] if indices is not None else idx
 
-    def _set_simulation_status(self, indices, status):
+    def _set_simulation_status(self, indices, status):  # TODO Christoph typing
         """
         Flag the specified samples with the simulation status.
 
@@ -334,11 +345,11 @@ class Store(ABC):
             )
         self.sim_status.oindex[indices] = status
 
-    def get_simulation_status(self, indices=None):
+    def get_simulation_status(self, indices=None):  # TODO Christoph typing
         """Determine the status of sample simulations.
 
         Args:
-            indices (list): List of indices. If None, check the status of all
+            indices: List of indices. If None, check the status of all
                 samples
 
         Returns:
@@ -351,7 +362,7 @@ class Store(ABC):
             else self.sim_status[:]
         )
 
-    def requires_sim(self, indices=None) -> bool:
+    def requires_sim(self, indices=None) -> bool:  # TODO Christoph typing
         """Check whether there are parameters which require simulation."""
         self._update()
         return self._get_indices_to_simulate(indices).size > 0
@@ -391,11 +402,11 @@ class Store(ABC):
     #        else:
     #            return True
 
-    def set_simulator(self, simulator):
+    def set_simulator(self, simulator: "swyft.Simulator") -> None:
         """(Re)set simulator.
 
         Args:
-            simulator (swyft.Simulator): Simulator.
+            simulator: Simulator.
         """
         if self._simulator is not None:
             log.warning("Simulator already set!  Overwriting.")
@@ -406,7 +417,7 @@ class Store(ABC):
         indices: Optional[List[int]] = None,
         batch_size: Optional[int] = None,
         wait_for_results: Optional[bool] = True,
-    ) -> None:
+    ) -> None:  # TODO Christoph typing (are you sure these are list and not np.ndarray or Sequence?)
         """Run simulator sequentially on parameter store with missing corresponding simulations.
 
         Args:
@@ -450,7 +461,7 @@ class Store(ABC):
         if wait_for_results:
             self.wait_for_simulations(indices)
 
-    def wait_for_simulations(self, indices):
+    def wait_for_simulations(self, indices):  # TODO Christoph typing
         """Wait for a set of sample simulations to be finished.
 
         Args:
@@ -481,8 +492,11 @@ class DirectoryStore(Store):
     """
 
     def __init__(
-        self, path: PathType, simulator=None, sync_path: Optional[PathType] = None
-    ):
+        self,
+        path: PathType,
+        simulator: Optional[Simulator] = None,
+        sync_path: Optional[PathType] = None,
+    ) -> None:
         zarr_store = zarr.DirectoryStore(path)
         sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
         super().__init__(
@@ -506,7 +520,7 @@ class MemoryStore(Store):
         >>> store = swyft.MemoryStore(simulator)
     """
 
-    def __init__(self, simulator):
+    def __init__(self, simulator: Simulator) -> None:
         zarr_store = zarr.MemoryStore()
         super().__init__(zarr_store=zarr_store, simulator=simulator)
 
