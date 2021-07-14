@@ -1,19 +1,19 @@
 # pylint: disable=no-member,
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Sequence
 
 import torch
 import torch.nn as nn
 
-from .linear import LinearWithChannel
-from .module import Module
-from .normalization import OnlineNormalizationLayer
+from swyft.networks.linear import LinearWithChannel
+from swyft.networks.module import Module
+from swyft.networks.normalization import OnlineNormalizationLayer
 
 
-def _get_z_shape(marginals):
+def _get_z_shape(marginals):  # TODO Christoph typing
     return (len(marginals), max([len(c) for c in marginals]))
 
 
-def _combine(params, marginals):
+def _combine(params, marginals):  # TODO Christoph typing
     """Combine parameters according to parameter list. Supports one batch dimension."""
     shape = params.shape
     device = params.device
@@ -35,10 +35,10 @@ def _combine(params, marginals):
 class DefaultTail(Module):
     def __init__(
         self,
-        n_features,
+        n_features: int,
         marginals,
-        hidden_layers: list = [256, 256, 256],
-        p=0.0,
+        hidden_layers: Sequence[int] = [256, 256, 256],
+        p: float = 0.0,
         online_norm: bool = True,
         param_transform=None,
         tail_features: bool = False,
@@ -97,7 +97,7 @@ class DefaultTail(Module):
 
         # Ratio estimator
         if isinstance(p, float):
-            p = [p for i in range(len(hidden_layers))]
+            p = [p for _ in range(len(hidden_layers))]
         ratio_estimator_config = [
             LinearWithChannel(n_channels, pdim + n_tail_features, hidden_layers[0]),
             nn.ReLU(),
@@ -114,7 +114,7 @@ class DefaultTail(Module):
 
         self.af = nn.ReLU()
 
-    def forward(self, f, params):
+    def forward(self, f: torch.Tensor, params) -> torch.Tensor:  # TODO Christoph typing
         """Forward pass tail network.  Can handle one batch dimension.
 
         Args:
@@ -157,7 +157,7 @@ class GenericTail(Module):
         get_parameter_embedding: Optional[Callable[[int, int], nn.Module]] = None,
         online_z_score_obs: bool = True,
         online_z_score_par: bool = True,
-    ):
+    ) -> None:
         """Returns an object suitable for use as a tail in NestedRatios.
 
         For the various get_* callables, we recommend use of the functools.partial function.
@@ -214,13 +214,15 @@ class GenericTail(Module):
             num_channels, dim_observation_embedding + dim_parameter_embedding
         )
 
-    def _channelize_observation(self, observation):
+    def _channelize_observation(self, observation: torch.Tensor) -> torch.Tensor:
         shape = observation.shape
         return observation.unsqueeze(-2).expand(
             *shape[:-1], self.num_channels, shape[-1]
         )
 
-    def forward(self, observation: torch.Tensor, parameters: Dict[str, torch.Tensor]):
+    def forward(
+        self, observation: torch.Tensor, parameters
+    ) -> torch.Tensor:  # TODO Christoph typing
         obs = self._channelize_observation(observation)
         par = _combine(parameters, self.parameter_list)
 

@@ -1,10 +1,12 @@
 import logging
+from typing import Callable, Dict, Hashable, Optional, Sequence
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset as torch_Dataset
 
 import swyft
+from swyft.types import Array, ObsType, PathType, PNamesType
 from swyft.utils.array import array_to_tensor
 
 log = logging.getLogger(__name__)
@@ -14,12 +16,12 @@ class Dataset(torch_Dataset):
     """Dataset for access to swyft.Store.
 
     Args:
-        N (int): Number of samples.
-        prior (swyft.Prior): Parameter prior.
-        store (swyft.Store): Store reference.
-        simhook (Callable): Posthook for simulations. Applied on-the-fly to each point.
-        simkeys (list of strings): List of simulation keys that should be exposed
-                                    (None means that all store sims are exposed).
+        N: Number of samples.
+        prior: Parameter prior.
+        store: Store reference.
+        simhook : Posthook for simulations. Applied on-the-fly to each point.
+        simkeys: List of simulation keys that should be exposed
+                    (None means that all store sims are exposed).
 
     .. note::
         swyft.Dataset is essentially a list of indices that point to
@@ -29,7 +31,15 @@ class Dataset(torch_Dataset):
         is effectively drawn from a Poisson distribution with mean N.
     """
 
-    def __init__(self, N, prior, store, bound=None, simhook=None, simkeys=None):
+    def __init__(
+        self,
+        N: int,
+        prior: swyft.Prior,
+        store: "swyft.store.store.Store",
+        bound: Optional[swyft.Bound] = None,
+        simhook: Optional[Callable[..., ObsType]] = None,
+        simkeys: Optional[Sequence[Hashable]] = None,
+    ) -> None:
         super().__init__()
 
         # Initialization
@@ -51,20 +61,20 @@ class Dataset(torch_Dataset):
         return len(self._indices)
 
     @property
-    def prior(self):
-        """Return prior of dataset (swyft.Prior)."""
+    def prior(self) -> swyft.Prior:
+        """Return prior of dataset."""
         return self._trunc_prior.prior
 
     @property
-    def bound(self):
+    def bound(self) -> swyft.Bound:
         """Return bound of truncated prior of dataset (swyft.Bound)."""
         return self._trunc_prior.bound
 
-    def _tensorfy(self, x):
+    def _tensorfy(self, x: Dict[Hashable, Array]) -> Dict[Hashable, torch.Tensor]:
         return {k: array_to_tensor(v) for k, v in x.items()}
 
     @property
-    def indices(self):
+    def indices(self) -> np.ndarray:
         """Return indices of the dataset that indicate positions in the store."""
         return self._indices
 
@@ -75,12 +85,14 @@ class Dataset(torch_Dataset):
     #        else:
     #            return False
 
-    def simulate(self, batch_size=None, wait_for_results=True):
+    def simulate(
+        self, batch_size: Optional[int] = None, wait_for_results: bool = True
+    ) -> None:
         """Trigger simulations for points in the dataset.
 
         Args:
-            batch_size (int): Number of batched simulations.
-            wait_for_results (bool): What for simulations to complete before returning.
+            batch_size: Number of batched simulations.
+            wait_for_results: What for simulations to complete before returning.
         """
         #        if self._no_store():
         #            return
@@ -92,21 +104,21 @@ class Dataset(torch_Dataset):
     #        self._store = store
 
     @property
-    def requires_sim(self):
+    def requires_sim(self) -> bool:
         """Check if simulations are required for points in the dataset."""
         #        if self._no_store():
         #            return
         return self._store.requires_sim(self.indices)
 
     @property
-    def v(self):
+    def v(self) -> np.ndarray:
         """Return all parameters as npoints x zdim array."""
         #        if self._no_store():
         #            return
         return np.array([self._store.v[i] for i in self._indices])
 
     @property
-    def pnames(self):
+    def pnames(self) -> PNamesType:
         """Return parameter names (inherited from store and simulator)."""
         return self._pnames
 
@@ -128,7 +140,7 @@ class Dataset(torch_Dataset):
             array_to_tensor(v),
         )
 
-    def state_dict(self):
+    def state_dict(self) -> dict:
         return dict(
             indices=self._indices,
             trunc_prior=self._trunc_prior.state_dict(),
@@ -159,22 +171,27 @@ class Dataset(torch_Dataset):
             )
         return obj
 
-    def save(self, filename):
+    def save(self, filename: PathType) -> None:
         """Save dataset (including indices).
 
         Args:
-            filename (str): Output filename
+            filename: Output filename
         """
         torch.save(self.state_dict(), filename)
 
     @classmethod
-    def load(cls, filename, store, simhook=None):
+    def load(
+        cls,
+        filename: PathType,
+        store: "swyft.Store",
+        simhook: Callable[..., ObsType] = None,
+    ):
         """Load dataset.
 
         Args:
-            filename (str)
-            store (swyft.Store): Corresponding datastore.
-            simhook (callable): Simulation hook.
+            filename
+            store: Corresponding datastore.
+            simhook: Simulation hook.
 
         .. warning::
             Make sure that the store is the same that was originally used for
