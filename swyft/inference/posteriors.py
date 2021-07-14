@@ -291,7 +291,7 @@ class Posteriors:
         state_dict = dict(
             trunc_prior=self._trunc_prior.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
-            names=self._pnames,
+            pnames=self._pnames,
         )
         return state_dict
 
