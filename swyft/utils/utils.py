@@ -103,26 +103,28 @@ def get_entropy_1d(x, y, y_true=None, x_true=None, bins=1000):
     return result
 
 
+# TODO: Deprecated - remove?
 def sample_diagnostics(samples, true_posteriors={}, true_params={}):
-   result = {}
-   for params in samples["weights"].keys():
-       if len(params) > 1:
-           continue
-       else:  # 1-dim case
-           x = samples["v"][params[0]]
-           y = samples["weights"][params]
-           if params in true_posteriors.keys():
-               y_true = true_posteriors[params]
-           else:
-               y_true = None
-           if params[0] in true_params.keys():
-               x_true = true_params[params[0]]
-           else:
-               x_true = None
-           result[params] = get_entropy_1d(x, y, y_true=y_true, x_true=x_true)
-   return result
+    result = {}
+    for params in samples["weights"].keys():
+        if len(params) > 1:
+            continue
+        else:  # 1-dim case
+            x = samples["v"][params[0]]
+            y = samples["weights"][params]
+            if params in true_posteriors.keys():
+                y_true = true_posteriors[params]
+            else:
+                y_true = None
+            if params[0] in true_params.keys():
+                x_true = true_params[params[0]]
+            else:
+                x_true = None
+            result[params] = get_entropy_1d(x, y, y_true=y_true, x_true=x_true)
+    return result
 
 
+# TODO: Remove?  Deprecated
 def estimate_coverage(
     post,
     dataset,
