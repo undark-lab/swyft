@@ -4,6 +4,7 @@ from typing import Sequence
 import numpy as np
 import scipy
 from scipy.integrate import simps
+from toolz import valmap
 
 from swyft.types import Array, PathType
 
@@ -103,58 +104,79 @@ def get_entropy_1d(x, y, y_true=None, x_true=None, bins=1000):
     return result
 
 
-def sample_diagnostics(samples, true_posteriors={}, true_params={}):
-    result = {}
-    for params in samples["weights"].keys():
-        if len(params) > 1:
-            continue
-        else:  # 1-dim case
-            x = samples["params"][params[0]]
-            y = samples["weights"][params]
-            if params in true_posteriors.keys():
-                y_true = true_posteriors[params]
-            else:
-                y_true = None
-            if params[0] in true_params.keys():
-                x_true = true_params[params[0]]
-            else:
-                x_true = None
-            result[params] = get_entropy_1d(x, y, y_true=y_true, x_true=x_true)
-    return result
+# def sample_diagnostics(samples, true_posteriors={}, true_params={}):
+#    result = {}
+#    for params in samples["weights"].keys():
+#        if len(params) > 1:
+#            continue
+#        else:  # 1-dim case
+#            x = samples["v"][params[0]]
+#            y = samples["weights"][params]
+#            if params in true_posteriors.keys():
+#                y_true = true_posteriors[params]
+#            else:
+#                y_true = None
+#            if params[0] in true_params.keys():
+#                x_true = true_params[params[0]]
+#            else:
+#                x_true = None
+#            result[params] = get_entropy_1d(x, y, y_true=y_true, x_true=x_true)
+#    return result
 
 
-def estimate_coverage(
-    marginals,
-    dataset,
-    nrounds=10,
-    nsamples=1000,
-    cred_level=[0.68268, 0.95450, 0.99730],
-):
-    """Estimate coverage of amortized marginals for dataset.
+# def estimate_coverage(
+#     post,
+#     dataset,
+#     nrounds=10,
+#     nsamples=1000,
+#     cred_level=[0.68268, 0.95450, 0.99730],
+# ):
+#     """Estimate coverage of amortized marginals for dataset.
 
-    Args:
-        marginals (RatioEstimatedPosterior): Marginals of interest.
-        dataset (Dataset): Test dataset within the support of the marginals constrained prior.
-        nrounds (int): Noise realizations for each test point.
-        nsamples (int): Number of marginal samples used for the calculations.
-        cred_level (list): Credible levels.
+#     Args:
+#         marginals (RatioEstimatedPosterior): Marginals of interest.
+#         dataset (Dataset): Test dataset within the support of the marginals constrained prior.
+#         nrounds (int): Noise realizations for each test point.
+#         nsamples (int): Number of marginal samples used for the calculations.
+#         cred_level (list): Credible levels.
 
-    NOTE: This algorithm assumes factorized indicator functions of the constrained priors, to accelerate posterior calculations.
-    NOTE: Only works for 1-dim marginals right now.
-    """
-    diags = []
-    for _ in range(nrounds):
-        for point in dataset:
-            samples = marginals(point["obs"], nsamples)
-            diag = sample_diagnostics(samples, true_params=point["par"])
-            diags.append(diag)
-    cont_mass = {key[0]: [v[key]["cont_mass"] for v in diags] for key in diag.keys()}
-    params = list(cont_mass.keys())
-    cont_fraction = {
-        k: [sum(np.array(cont_mass[k]) < c) / len(cont_mass[k]) for c in cred_level]
-        for k in params
+#     NOTE: This algorithm assumes factorized indicator functions of the constrained priors, to accelerate posterior calculations.
+#     NOTE: Only works for 1-dim marginals right now.
+#     """
+#     diags = []
+#     for _ in range(nrounds):
+#         for point in dataset:
+#             samples = post.sample(nsamples, point[0])
+#             diag = sample_diagnostics(samples, true_params=point[2])
+#             # print(diag)
+#             diags.append(diag)
+#     cont_mass = {key[0]: [v[key]["cont_mass"] for v in diags] for key in diag.keys()}
+#     params = list(cont_mass.keys())
+#     cont_fraction = {
+#         k: [sum(np.array(cont_mass[k]) < c) / len(cont_mass[k]) for c in cred_level]
+#         for k in params
+#     }
+#     return cont_fraction
+
+
+def estimate_empirical_mass(dataset, post, nobs, npost):
+    obs0, _, v0 = dataset[0]
+    w0 = post.eval(v0.unsqueeze(0).numpy(), obs0)["weights"]
+    mass = {
+        k: dict(nominal=[], empirical=np.linspace(1 / nobs, 1, nobs)) for k in w0.keys()
     }
-    return cont_fraction
+    for _ in range(nobs):
+        j = np.random.randint(len(dataset))
+        obs0, _, v0 = dataset[j]
+        w0 = post.eval(v0.unsqueeze(0).numpy(), obs0)["weights"]
+        wS = post.sample(npost, obs0)["weights"]
+        for k, v in w0.items():
+            f = wS[k][wS[k] >= v].sum() / wS[k].sum()
+            mass[k]["nominal"].append(f)
+    for k in mass.keys():
+        mass[k]["nominal"] = np.asarray(sorted(mass[k]["nominal"]))
+
+    return mass
 
 
 if __name__ == "__main__":

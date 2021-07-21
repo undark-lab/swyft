@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, Dict, Optional, Sequence, Union
+from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 from warnings import warn
 
 import numpy as np
@@ -20,6 +20,7 @@ from swyft.types import (
     RatiosType,
 )
 from swyft.utils import tupleize_marginals
+from swyft.utils.utils import estimate_empirical_mass
 
 log = logging.getLogger(__name__)
 
@@ -153,18 +154,16 @@ class Posteriors:
         marginals = tupleize_marginals(marginals)
         return self._ratios[marginals].train_diagnostics()
 
-    def sample(
-        self, N: int, obs0: ObsType, n_batch: int = 100
+    def eval(
+        self, v: Array, obs0: ObsType, n_batch: int = 100
     ) -> Dict[str, Union[np.ndarray, RatiosType, PNamesType]]:
-        """Resturn weighted posterior samples for given observation.
+        """Returns weighted posterior.
 
         Args:
-            N: Number of samples to return
+            v: Parameter array
             obs0: Observation of interest
             n_batch: number of samples to produce in each batch
         """
-        v = self._trunc_prior.sample(N)  # prior samples
-
         # Unmasked original wrongly normalized log_prob densities
         # log_probs = self._trunc_prior.log_prob(v)
         u = self._trunc_prior.prior.u(v)
@@ -176,6 +175,19 @@ class Posteriors:
         for k, val in ratios.items():
             weights[k] = np.exp(val)
         return dict(v=v, weights=weights, pnames=self.pnames)
+
+    def sample(
+        self, N: int, obs0: ObsType, n_batch: int = 100
+    ) -> Dict[str, Union[np.ndarray, RatiosType, PNamesType]]:
+        """Returns weighted posterior samples for given observation.
+
+        Args:
+            N: Number of samples to return
+            obs0: Observation of interest
+            n_batch: number of samples to produce in each batch
+        """
+        v = self._trunc_prior.sample(N)  # prior samples
+        return self.eval(v, obs0, n_batch=n_batch)
 
     #    # TODO: Still needs to be fixed?
     #    def _rejection_sample(
@@ -293,6 +305,20 @@ class Posteriors:
             pnames=self._pnames,
         )
         return state_dict
+
+    def empirical_mass(
+        self, nobs: int = 1000, npost: int = 1000
+    ) -> Dict[Tuple[int, ...], Dict[str, Array]]:
+        """Estimate empirical vs nominal mass.
+
+        Args:
+            nobs: Number of mock observations for empirical mass estimate (taken randomly from dataset)
+            npost: Number of posterior samples to estimate nominal mass
+
+        Returns:
+            Nominal and empirical masses.
+        """
+        return estimate_empirical_mass(self.dataset, self, nobs, npost)
 
     @classmethod
     def from_state_dict(cls, state_dict: dict, dataset: "swyft.Dataset" = None):

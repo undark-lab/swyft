@@ -124,11 +124,7 @@ class Dataset(torch_Dataset):
             x = self._simhook(x, v)
         u = self._trunc_prior.prior.u(v.reshape(1, -1)).flatten()
 
-        return (
-            self._tensorfy(x),
-            array_to_tensor(u),
-            array_to_tensor(v),
-        )
+        return (self._tensorfy(x), array_to_tensor(u), array_to_tensor(v))
 
     def state_dict(self) -> dict:
         return dict(
