@@ -20,11 +20,7 @@ class TruncatedPrior:
         the samples onto parameters of interest.
     """
 
-    def __init__(
-        self,
-        prior: "Prior",
-        bound: Bound,
-    ) -> None:
+    def __init__(self, prior: "Prior", bound: Bound) -> None:
         """Instantiate truncated prior (combination of prior and bound).
 
         Args:
@@ -86,12 +82,7 @@ class TruncatedPrior:
 
 
 class Prior:
-    def __init__(
-        self,
-        uv: Callable,
-        zdim: int,
-        n: int = 10000,
-    ) -> None:
+    def __init__(self, uv: Callable, zdim: int, n: int = 10000) -> None:
         r"""1-dim parameter prior.
 
         Args:
