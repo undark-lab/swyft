@@ -307,10 +307,7 @@ class DaskSimulator:
 
 
 def _run_model_chunk(
-    z: np.ndarray,
-    model: Callable,
-    sim_shapes: SimShapeType,
-    fail_on_non_finite: bool,
+    z: np.ndarray, model: Callable, sim_shapes: SimShapeType, fail_on_non_finite: bool
 ):
     """Run the model over a set of input parameters.
 

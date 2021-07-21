@@ -2,7 +2,7 @@ from swyft.bounds import Bound, Prior, TruncatedPrior
 from swyft.inference import Posteriors, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
 from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator
-from swyft.utils import corner, plot1d
+from swyft.utils import plot_1d, plot_corner, plot_empirical_mass
 
 
 def zen():
@@ -28,6 +28,7 @@ __all__ = [
     "Dataset",
     "Simulator",
     "DaskSimulator",
-    "corner",
-    "plot1d",
+    "plot_corner",
+    "plot_1d",
+    "plot_empirical_mass",
 ]
