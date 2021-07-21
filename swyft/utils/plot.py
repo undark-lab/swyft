@@ -3,6 +3,8 @@ import pandas as pd
 import pylab as plt
 import seaborn as sns
 from scipy.integrate import simps
+from typing import Dict
+from swyft.types import Array
 
 from swyft.utils.mutils import filter_marginals_by_dim
 from swyft.utils.utils import grid_interpolate_samples
@@ -156,7 +158,7 @@ def plot_posterior(
         return dict(mean=mean, mode=None, HDI1=None, HDI2=None, HDI3=None, entropy=None)
 
 
-def plot1d(
+def plot_1d(
     samples,
     pois,
     truth=None,
@@ -231,7 +233,7 @@ def plot1d(
     return fig, diags
 
 
-def corner(
+def plot_corner(
     samples,
     pois,
     bins=100,
@@ -339,6 +341,31 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
     #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
     #    for c in z[zero_crossings]:
     #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
+
+
+def plot_empirical_mass(masses: Dict[str, Array]) -> None:
+    """Plot empirical vs nominal mass.
+
+    Args:
+        masses: Result from `swyft.Posteriors.empirical_mass()`
+
+    Example::
+
+        >>> masses = posteriors.empirical_mass()
+        >>> swyft.plot_empirical_mass(mass[(0,)])  # Plot empirical mass for 1-dim posterior for parameter 0
+    """
+    plt.plot(1-masses['nominal'], 1-masses['empirical'])
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.gca().invert_xaxis()
+    plt.gca().invert_yaxis()
+    plt.plot([0, 1], [0, 1], 'k:')
+    plt.xlabel("1-Cn, Nominal HDI level")
+    plt.xlabel("Nominal HDI credible level")
+    plt.ylabel("Empirical HDI credible level")
+    cred = [0.683, 0.954, 0.997]
+    plt.xticks(1-np.array(cred), cred)
+    plt.yticks(1-np.array(cred), cred)
 
 
 if __name__ == "__main__":
