@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 import tempfile
+import traceback
 from operator import getitem
 from typing import Callable, Hashable, List, Mapping, Optional, Union
 
@@ -330,11 +331,17 @@ def _run_model_chunk(
     x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
     status = np.zeros(len(z), dtype=np.int)
     for i, z_i in enumerate(z):
-        out = model(z_i)
-        _sim_stat = _get_sim_status(out, fail_on_non_finite)
-        for obs, val in out.items():
-            x[obs][i] = val
-        status[i] = _sim_stat
+        try:
+            out = model(z_i)
+            _sim_stat = _get_sim_status(out, fail_on_non_finite)
+        except:
+            out = {}
+            _sim_stat = SimulationStatus.FAILED
+            traceback.print_exc()
+        finally:
+            for obs, val in out.items():
+                x[obs][i] = val
+            status[i] = _sim_stat
     return x, status
 
 
