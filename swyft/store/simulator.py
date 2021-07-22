@@ -85,7 +85,8 @@ class DaskSimulator:
 
     def __init__(
         self,
-        model: Callable,
+        model: ForwardModelType,
+        pnames: Union[PNamesType, int],
         sim_shapes: SimShapeType,
         fail_on_non_finite: bool = True,
         cluster=None,
@@ -101,6 +102,9 @@ class DaskSimulator:
                 (default is LocalCluster)
         """
         self.model = model
+        if isinstance(pnames, int):
+            pnames = ["z%i" % i for i in range(pnames)]
+        self.pnames = pnames
         self.sim_shapes = sim_shapes
         self.fail_on_non_finite = fail_on_non_finite
         self.client = None
