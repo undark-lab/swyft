@@ -26,6 +26,11 @@ Truncated marginal neural ratio estimation
 
 Detailed documentation can be found on [readthedocs](https://swyft.readthedocs.io/en/latest/).
 
+## Instruction videos
+
+- [1 - Linear regression with swyft](https://www.loom.com/share/cefac9e4e84d482c89c5281b90121974)
+- ...more to come...
+
 ## Related tools and repositories
 
 - Our repository applying swyft to benchmarks and example inference problems is available at [tmnre](https://github.com/bkmi/tmnre).
