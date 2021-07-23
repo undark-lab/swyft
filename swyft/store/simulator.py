@@ -75,10 +75,15 @@ class Simulator:
                 simulator
         """
         for i in indices:
-            sim = self.model(v[i])
-            for k in sims.keys():
-                sims[k][i] = sim[k]
+            try:
+                sim = self.model(v[i])
+                for k in sims.keys():
+                    sims[k][i] = sim[k]
                 sim_status[i] = SimulationStatus.FINISHED
+            except:
+                for k in sims.keys():
+                    sims[k][i] = np.nan
+                sim_status[i] = SimulationStatus.FAILED
 
 
 class DaskSimulator:
