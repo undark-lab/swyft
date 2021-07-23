@@ -164,7 +164,5 @@ class TestStoreRun:
 
 
 if __name__ == "__main__":
-    # pass
-    tt = TestStoreRun()
-    tt.test_interupted_simulator_failed()
+    pass
 
