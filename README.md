@@ -32,6 +32,10 @@ Detailed documentation can be found on [readthedocs](https://swyft.readthedocs.i
 - [2 - ConvNets, parameter regression and swyft](https://www.loom.com/share/1fc4785159bf4f0081e59693133a5ad3)
 - ...more to come...
 
+### Academic videos
+
+- [Truncated Marginal Neural Ratio Estimation](https://www.youtube.com/watch?v=euUxDdB5XY8)
+
 ## Related tools and repositories
 
 - Our repository applying swyft to benchmarks and example inference problems is available at [tmnre](https://github.com/bkmi/tmnre).
