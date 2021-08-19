@@ -117,8 +117,17 @@ def corner(
             ax.axhline(truth[i[1]], color="r")
             ax.scatter(*truth[i, ...], color="r")
 
-        if ylim_lower is not None:
+        if ylim_lower is None:
+            pass
+        elif isinstance(ylim_lower[0], (int, float)):
             ax.set_ylim(*ylim_lower)
+        elif isinstance(ylim_lower[0], (tuple, list)):
+            ax.set_ylim(*ylim_lower[y])
+        else:
+            raise NotImplementedError(
+                "ylim should be a tuple or a list of tuples. Rows are different, columns have the same ylim."
+            )
+
         ax.tick_params(
             axis="both",
             which="both",
@@ -130,11 +139,18 @@ def corner(
         )
 
     # clear all
-    for ax in axes.flatten():
-        ax.set_xlabel("")
-        ax.set_ylabel("")
-        if xlim is not None:
-            ax.set_xlim(*xlim)
+    for i, axrow in enumerate(axes):
+        for j, ax in enumerate(axrow):
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            if xlim is None:
+                pass
+            elif isinstance(xlim[0], (int, float)):
+                ax.set_xlim(*xlim)
+            elif isinstance(xlim[0], (tuple, list)):
+                ax.set_xlim(*xlim[j])
+            else:
+                raise NotImplementedError("xlim should be a tuple or a list of tuples.")
 
     # bottom row
     for i, ax in enumerate(axes[-1, :]):
