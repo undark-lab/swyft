@@ -1,13 +1,15 @@
 import tempfile
+import time
+from itertools import product
+from pathlib import Path
+
 import numpy as np
 import pytest
-import time
 import zarr
-from pathlib import Path
-from itertools import product
-from swyft.store.store import DirectoryStore, MemoryStore
-from swyft.store.simulator import Simulator
+
 from swyft import Prior
+from swyft.store.simulator import Simulator
+from swyft.store.store import DirectoryStore, MemoryStore
 
 
 def model(params):

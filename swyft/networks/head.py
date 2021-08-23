@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from toolz import identity
 
 from swyft.networks.module import Module
 from swyft.networks.normalization import OnlineNormalizationLayer
@@ -33,7 +34,7 @@ class DefaultHead(Module):
         if online_norm:
             self.onl_f = OnlineNormalizationLayer(torch.Size([self.n_features]))
         else:
-            self.onl_f = lambda f: f
+            self.onl_f = identity
 
     def forward(self, sim: ObsType) -> torch.Tensor:
         """Forward pass default head network. Concatenate.
@@ -44,9 +45,6 @@ class DefaultHead(Module):
         Returns:
             f: Feature vectors with shape (n_batch, M), with M = sum_i m_i
         """
-        f = []
-        for key, value in sorted(sim.items()):
-            f.append(value)
-        f = torch.cat(f, dim=-1)
+        f = torch.cat([value for _, value in sorted(sim.items())], dim=-1)
         f = self.onl_f(f)
         return f

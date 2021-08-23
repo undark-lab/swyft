@@ -542,7 +542,9 @@ class MemoryStore(Store):
             return None
 
     @classmethod
-    def load(cls, path: PathType, simulator: Optional[Callable] = None) -> "swyft.MemoryStore":
+    def load(
+        cls, path: PathType, simulator: Optional[Callable] = None
+    ) -> "swyft.MemoryStore":
         """Load existing DirectoryStore into a MemoryStore.
 
         Args:
@@ -554,7 +556,9 @@ class MemoryStore(Store):
             directory_store = zarr.DirectoryStore(path)
             zarr.convenience.copy_store(source=directory_store, dest=memory_store)
             obj = MemoryStore.__new__(MemoryStore)
-            super(MemoryStore, obj).__init__(zarr_store=memory_store, simulator=simulator)
+            super(MemoryStore, obj).__init__(
+                zarr_store=memory_store, simulator=simulator
+            )
             return obj
         else:
             raise FileNotFoundError(f"There is no directory store at {path=}.")
