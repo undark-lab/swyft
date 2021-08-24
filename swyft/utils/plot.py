@@ -263,7 +263,6 @@ def plot_corner(
     K = len(pois)
     if fig is None:
         fig, axes = plt.subplots(K, K, figsize=figsize)
-        print(axes)
     else:
         axes = np.array(fig.get_axes()).reshape((K, K))
     lb = 0.125

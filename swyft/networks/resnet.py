@@ -34,7 +34,7 @@ class ResidualBlockWithChannel(nn.Module):
         )
         self.dropout = nn.Dropout(p=dropout_probability)
         if zero_initialization:
-            init.uniform_(self.linear_layers[-1].weight, -1e-3, 1e-3)
+            init.uniform_(self.linear_layers[-1].weights, -1e-3, 1e-3)
             init.uniform_(self.linear_layers[-1].bias, -1e-3, 1e-3)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
