@@ -76,7 +76,11 @@ class Store(ABC):
             #            log.debug("Creating new store.")
 
             self._setup_new_zarr_store(
-                simulator.pnames, simulator.sim_shapes, self._root, chunksize=chunksize
+                simulator.pnames,
+                simulator.sim_shapes,
+                self._root,
+                chunksize=chunksize,
+                sim_dtype=simulator.sim_dtype,
             )
             log.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
         else:
@@ -154,7 +158,7 @@ class Store(ABC):
             log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
-        self, pnames, sim_shapes, root, chunksize=1
+        self, pnames, sim_shapes, root, chunksize=1, sim_dtype="f8"
     ) -> None:  # Adding observational shapes to store
         # Parameters
         zdim = len(pnames)
@@ -166,7 +170,9 @@ class Store(ABC):
         # Simulations
         sims = root.create_group(self._filesystem.sims)
         for name, shape in sim_shapes.items():
-            sims.zeros(name, shape=(0, *shape), chunks=(chunksize, *shape), dtype="f8")
+            sims.zeros(
+                name, shape=(0, *shape), chunks=(chunksize, *shape), dtype=sim_dtype
+            )
 
         # Random intensity weights
         root.zeros(self._filesystem.log_w, shape=(0,), chunks=(chunksize,), dtype="f8")

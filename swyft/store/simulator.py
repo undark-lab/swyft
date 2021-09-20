@@ -52,12 +52,14 @@ class Simulator:
         model: ForwardModelType,
         pnames: Union[PNamesType, int],
         sim_shapes: SimShapeType,
+        sim_dtype: str = "f8",
     ) -> None:
         self.model = model
         if isinstance(pnames, int):
             pnames = ["z%i" % i for i in range(pnames)]
         self.pnames = pnames
         self.sim_shapes = sim_shapes
+        self.sim_dtype = sim_dtype
 
     def _run(self, v, sims, sim_status, indices, **kwargs) -> None:
         """Run the simulator on the input parameters.

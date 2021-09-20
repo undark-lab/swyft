@@ -28,9 +28,11 @@ def dict_to_tensor_unsqueeze(
 np_bool_types = [np.bool]
 np_int_types = [np.int8, np.int16, np.int32, np.int64]
 np_float_types = [np.float32, np.float64]
+np_complex_types = [np.complex64, np.complex128]
 torch_bool_types = [torch.bool]
 torch_int_types = [torch.int8, torch.int16, torch.int32, torch.int64]
 torch_float_types = [torch.float32, torch.float64]
+torch_complex_types = [torch.complex64, torch.complex128]
 
 
 def array_to_tensor(
@@ -51,9 +53,11 @@ def array_to_tensor(
                 dtype = torch.int64
             elif input_dtype in np_bool_types:
                 dtype = torch.bool
+            elif input_dtype in np_complex_types:
+                dtype = torch.complex64
             else:
                 raise TypeError(
-                    f"{input_dtype} was not a supported numpy int, float, or bool."
+                    f"{input_dtype} was not a supported numpy int, float, bool, or complex."
                 )
         return torch.from_numpy(array).to(dtype=dtype, device=device)
     elif isinstance(input_dtype, torch.dtype):
@@ -64,9 +68,11 @@ def array_to_tensor(
                 dtype = torch.int64
             elif input_dtype in torch_bool_types:
                 dtype = torch.bool
+            elif input_dtype in torch_complex_types:
+                dtype = torch.complex64
             else:
                 raise TypeError(
-                    f"{input_dtype} was not a supported torch int, float, or bool."
+                    f"{input_dtype} was not a supported torch int, float, bool, or complex."
                 )
         return array.to(dtype=dtype, device=device)
     else:
