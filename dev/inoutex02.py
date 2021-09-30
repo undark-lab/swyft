@@ -247,10 +247,10 @@ class MarginalRatioEstimator:
         ), "The observation batch_size must agree with the parameter batch_size."
 
         # Repeat interleave
-        o_doubled = valmap(double_features, observation)
-        p_doubled = double_params(parameters)
+        observation_doubled = valmap(double_features, observation)
+        parameters_doubled = double_params(parameters)
 
-        lnL = self.network(o_doubled, p_doubled)
+        lnL = self.network(observation_doubled, parameters_doubled)
         lnL = lnL.view(-1, 4, lnL.shape[-1])
 
         loss = -torch.nn.functional.logsigmoid(lnL[:, 0])
