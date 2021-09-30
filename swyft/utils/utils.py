@@ -3,6 +3,7 @@ from typing import Sequence
 
 import numpy as np
 import scipy
+import torch
 from scipy.integrate import simps
 from toolz import valmap
 
@@ -14,7 +15,9 @@ def get_obs_shapes(obs):
 
 
 def depth(seq: Sequence):
-    if seq and isinstance(seq, str):
+    if isinstance(seq, (np.ndarray, torch.Tensor)):
+        return seq.ndim
+    elif seq and isinstance(seq, str):
         return 0
     elif seq and isinstance(seq, Sequence):
         return 1 + max(depth(item) for item in seq)

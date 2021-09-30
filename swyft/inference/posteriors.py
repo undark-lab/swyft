@@ -16,7 +16,6 @@ from swyft.types import (
     ObsType,
     PathType,
     PNamesType,
-    PoIType,
     RatiosType,
 )
 from swyft.utils import tupleize_marginals

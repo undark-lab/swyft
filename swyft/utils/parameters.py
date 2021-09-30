@@ -1,6 +1,4 @@
-from typing import Sequence
-
-from swyft.types import MarginalsType, StrictMarginalsType
+from swyft.types import MarginalIndex, StrictMarginalIndex
 
 
 def _corner_params(params):
@@ -42,9 +40,13 @@ def _corner_params(params):
 #    return sort_param_list(param_list)
 
 
-def tupleize_marginals(marginals: MarginalsType) -> StrictMarginalsType:
+def tupleize_marginals(marginals: MarginalIndex) -> StrictMarginalIndex:
     """Reformat input marginals into sorted and hashable standard form: tuples of tuples"""
-    out = list(marginals)
+    if isinstance(marginals, int):
+        out = [marginals]
+    else:
+        out = list(marginals)
+
     for i in range(len(out)):
         if isinstance(out[i], int):
             out[i] = (out[i],)

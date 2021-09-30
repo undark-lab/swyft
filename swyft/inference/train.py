@@ -28,6 +28,30 @@ def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequen
     return lengths
 
 
+def get_ntrain_nvalid(validation_amount, len_dataset):
+    assert validation_amount > 0
+    if isinstance(validation_amount, float):
+        percent_validation = validation_amount
+        percent_train = 1.0 - percent_validation
+        ntrain, nvalid = split_length_by_percentage(
+            len_dataset, (percent_train, percent_validation)
+        )
+        if nvalid % 2 != 0:
+            nvalid += 1
+            ntrain -= 1
+    elif isinstance(validation_amount, int):
+        nvalid = validation_amount
+        ntrain = len_dataset - nvalid
+        assert ntrain > 0
+
+        if nvalid % 2 != 0:
+            nvalid += 1
+            ntrain -= 1
+    else:
+        raise TypeError()
+    return ntrain, nvalid
+
+
 @dataclass
 class TrainOptions:
     """Settings for the trainloop function. Defaults are specified in swyft.Posteriors.train."""
@@ -142,29 +166,6 @@ def do_training(
     return train_losses, validation_losses, best_state_dict_head, best_state_dict_tail
 
 
-def _get_ntrain_nvalid(validation_size, len_dataset):
-    if isinstance(validation_size, float):
-        percent_validation = validation_size
-        percent_train = 1.0 - percent_validation
-        ntrain, nvalid = split_length_by_percentage(
-            len_dataset, (percent_train, percent_validation)
-        )
-        if nvalid % 2 != 0:
-            nvalid += 1
-            ntrain -= 1
-    elif isinstance(validation_size, int):
-        nvalid = validation_size
-        ntrain = len_dataset - nvalid
-        assert ntrain > 0
-
-        if nvalid % 2 != 0:
-            nvalid += 1
-            ntrain -= 1
-    else:
-        raise TypeError()
-    return ntrain, nvalid
-
-
 def trainloop(
     head: torch.nn.Module,
     tail: torch.nn.Module,
@@ -184,7 +185,7 @@ def trainloop(
     log.debug(f"{'nworkers':>25} {trainoptions.nworkers:<4}")
 
     assert trainoptions.validation_size > 0
-    ntrain, nvalid = _get_ntrain_nvalid(trainoptions.validation_size, len(dataset))
+    ntrain, nvalid = get_ntrain_nvalid(trainoptions.validation_size, len(dataset))
 
     dataset_train, dataset_valid = torch.utils.data.random_split(
         dataset, [ntrain, nvalid]

@@ -1,5 +1,7 @@
 # conda
 envs/
+env/
+.envrc
 
 # Generated versions
 swyft/__version__.py

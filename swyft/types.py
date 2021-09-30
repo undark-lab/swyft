@@ -14,6 +14,9 @@ Tensor = torch.Tensor
 Array = Union[np.ndarray, torch.Tensor]
 Shape = Union[torch.Size, Tuple[int, ...]]
 
+MarginalIndex = Union[int, Sequence[int], Sequence[Sequence[int]]]
+StrictMarginalIndex = Tuple[Tuple[int, ...], ...]
+
 # A list of marginals, e.g., [0, (3, 4), [3, 2]]
 MarginalsType = Iterable[Union[int, Iterable[int]]]
 
