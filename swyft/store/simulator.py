@@ -165,11 +165,13 @@ class DaskSimulator:
             fail_on_non_finite=self.fail_on_non_finite,
             drop_axis=1,
             dtype=object,
-            meta=np.array((), dtype=object)
+            meta=np.array((), dtype=object),
         )
 
         # split result dictionary and simulation status array
-        results = out.map_blocks(getitem, 0, meta=np.array((), dtype=object), dtype=object)
+        results = out.map_blocks(
+            getitem, 0, meta=np.array((), dtype=object), dtype=object
+        )
         status = out.map_blocks(getitem, 1, meta=np.array((), dtype=int), dtype=int)
 
         # unpack array of dictionaries to dictionary of arrays
