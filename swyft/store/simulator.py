@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 import tempfile
+import traceback
 from operator import getitem
 from typing import Callable, Hashable, List, Mapping, Optional, Union
 
@@ -76,10 +77,15 @@ class Simulator:
                 simulator
         """
         for i in indices:
-            sim = self.model(v[i])
-            for k in sims.keys():
-                sims[k][i] = sim[k]
+            try:
+                sim = self.model(v[i])
+                for k in sims.keys():
+                    sims[k][i] = sim[k]
                 sim_status[i] = SimulationStatus.FINISHED
+            except:
+                for k in sims.keys():
+                    sims[k][i] = np.nan
+                sim_status[i] = SimulationStatus.FAILED
 
 
 class DaskSimulator:
@@ -158,20 +164,13 @@ class DaskSimulator:
             sim_shapes=self.sim_shapes,
             fail_on_non_finite=self.fail_on_non_finite,
             drop_axis=1,
-            dtype=np.object,
+            dtype=object,
+            meta=np.array((), dtype=object)
         )
 
-        # FIXME: Deprecated?
-        #        print("Simulator: Running...")
-        #        bag = db.from_sequence(z, npartitions=npartitions)
-        #        bag = bag.map(_run_one_sample, self.model, self.fail_on_non_finite)
-        #        result = bag.compute(scheduler=self.client or "processes")
-        #        print("Simulator: ...done.")
-        #        return result
-
         # split result dictionary and simulation status array
-        results = out.map_blocks(getitem, 0, dtype=np.object)
-        status = out.map_blocks(getitem, 1, meta=np.array(()), dtype=np.int)
+        results = out.map_blocks(getitem, 0, meta=np.array((), dtype=object), dtype=object)
+        status = out.map_blocks(getitem, 1, meta=np.array((), dtype=int), dtype=int)
 
         # unpack array of dictionaries to dictionary of arrays
         result_dict = {}
@@ -182,7 +181,7 @@ class DaskSimulator:
                 new_axis=[i + 1 for i in range(len(shape))],
                 chunks=(z.chunks[0], *shape),
                 meta=np.array(()),
-                dtype=np.float,
+                dtype=float,
             )
 
         sources = [result_dict[k] for k in self.sim_shapes.keys()]
@@ -215,11 +214,11 @@ class DaskSimulator:
             # the following dummy array is generated after results are stored.
             zeros_when_done = [
                 source.map_blocks(
-                    lambda x: np.zeros(x.shape[0], dtype=np.int),
+                    lambda x: np.zeros(x.shape[0], dtype=int),
                     chunks=(source.chunks[0],),
                     drop_axis=[i for i in range(1, source.ndim)],
-                    meta=np.array((), dtype=np.int),
-                    dtype=np.int,
+                    meta=np.array((), dtype=int),
+                    dtype=int,
                 )
                 for source in sources
             ]
@@ -330,13 +329,19 @@ def _run_model_chunk(
     """
     chunk_size = len(z)
     x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
-    status = np.zeros(len(z), dtype=np.int)
+    status = np.zeros(len(z), dtype=int)
     for i, z_i in enumerate(z):
-        out = model(z_i)
-        _sim_stat = _get_sim_status(out, fail_on_non_finite)
-        for obs, val in out.items():
-            x[obs][i] = val
-        status[i] = _sim_stat
+        try:
+            out = model(z_i)
+            _sim_stat = _get_sim_status(out, fail_on_non_finite)
+        except:
+            out = {}
+            _sim_stat = SimulationStatus.FAILED
+            traceback.print_exc()
+        finally:
+            for obs, val in out.items():
+                x[obs][i] = val
+            status[i] = _sim_stat
     return x, status
 
 

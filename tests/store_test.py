@@ -8,7 +8,7 @@ import pytest
 import zarr
 
 from swyft import Prior
-from swyft.store.simulator import Simulator
+from swyft.store.simulator import Simulator, DaskSimulator, SimulationStatus
 from swyft.store.store import DirectoryStore, MemoryStore
 
 
@@ -19,6 +19,10 @@ def model(params):
     return dict(x=mu)
 
 
+def broken_model(params):
+    raise ValueError("oops!")
+
+
 def model_multi_out(params):
     p = np.linspace(-1, 1, 10)
     a, b = params
@@ -27,9 +31,11 @@ def model_multi_out(params):
     return dict(x1=mu, x2=mu2)
 
 
-sim = Simulator(model, sim_shapes=dict(x=(10,)))
-sim_multi_out = Simulator(model_multi_out, sim_shapes=dict(x1=(10,), x2=(2, 5)))
-prior = Prior.from_uv(lambda u: u * np.array([1.0, 0.5]), 2)
+sim = Simulator(model, pnames=["a", "b"], sim_shapes=dict(x=(10,)))
+sim_multi_out = Simulator(
+    model_multi_out, pnames=["a", "b"], sim_shapes=dict(x1=(10,), x2=(2, 5))
+)
+prior = Prior(lambda u: u * np.array([1.0, 0.5]), zdim=2)
 
 
 class TestStoreIO:
@@ -140,6 +146,23 @@ class TestStoreRun:
 
             store_dir.unlock()
             assert store_dir._lock.lockfile is None
+
+    def test_interupted_simulator_failed(self):
+        sim_fail = Simulator(broken_model, pnames=["a", "b"], sim_shapes={"obs": (2,)})
+        store = MemoryStore(simulator=sim_fail)
+        store.add(10, prior)
+        store.simulate()
+        assert all(store.sim_status[:] == SimulationStatus.FAILED)
+
+    def test_interupted_dasksimulator_failed(self):
+        sim_fail = DaskSimulator(
+            broken_model, pnames=["a", "b"], sim_shapes={"obs": (2,)}
+        )
+        store = MemoryStore(simulator=sim_fail)
+        # store = DirectoryStore(path="test.zarr", simulator=sim)
+        store.add(10, prior)
+        store.simulate()
+        assert all(store.sim_status[:] == SimulationStatus.FAILED)
 
 
 if __name__ == "__main__":
