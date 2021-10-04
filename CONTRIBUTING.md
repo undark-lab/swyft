@@ -32,10 +32,10 @@ We also highly recommend the use of the **[flake8](https://flake8.pycqa.org/en/l
 ## Standards
 
 ### Docstrings
-Please use [Google Style](http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for docstrings and comments.  
-When we create a class, we put the docstring in the class rather than the `__init__` function, where appropriate.  
-Use type annotations rather than putting the type in the docstring.  
-When there is a default argument, do not write that default in the argument documentation line. The exception is when the default is `None`, then it needs an explanation.  
+- Please use [Google Style](http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for docstrings and comments.  
+- When we create a class, we put the docstring in the class rather than the `__init__` function, where appropriate.  
+- Use type annotations rather than putting the type in the docstring.  
+- When there is a default argument, do not repeat the default argument within the docstring since it is already visible when the user calls help on the function. The exception to this rule is when the default is `None`, then it needs an explanation which may include a default argument.
 
 ### Naming
 Consider the naming conventions when you introduce or modify functions. The relevant types are defined within `swyft/types.py`.  
