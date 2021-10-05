@@ -25,7 +25,7 @@ def dict_to_tensor_unsqueeze(
     }
 
 
-np_bool_types = [np.bool]
+np_bool_types = [bool]
 np_int_types = [np.int8, np.int16, np.int32, np.int64]
 np_float_types = [np.float32, np.float64]
 np_complex_types = [np.complex64, np.complex128]

@@ -1,4 +1,5 @@
-from swyft.bounds import Bound, Prior, TruncatedPrior
+from swyft.bounds import Bound
+from swyft.prior import Prior, TruncatedPrior
 from swyft.inference import Posteriors, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
 from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator

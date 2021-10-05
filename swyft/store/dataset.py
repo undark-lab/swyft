@@ -99,7 +99,7 @@ class Dataset(torch_Dataset):
 
     @property
     def v(self) -> np.ndarray:
-        """Return all parameters as npoints x zdim array."""
+        """Return all parameters as n_points x n_parameters array."""
         #        if self._no_store():
         #            return
         return np.array([self._store.v[i] for i in self._indices])

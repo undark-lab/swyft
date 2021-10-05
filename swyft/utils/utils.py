@@ -58,8 +58,8 @@ def cred1d(re, x0: Array):
         re (RatioEstimator): ratio estimators
         x0: true observation
     """
-    zdim = re.zdim
-    for i in range(zdim):
+    n_parameters = re.n_parameters
+    for i in range(n_parameters):
         z, p = re.posterior(x0, i)
         res = get_stats(z, p)
         print("z%i = %.5f +- %.5f" % (i, res["median"], res["err68"]))

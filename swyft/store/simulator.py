@@ -5,19 +5,18 @@ import subprocess
 import tempfile
 import traceback
 from operator import getitem
-from typing import Callable, Hashable, List, Mapping, Optional, Union
+from typing import Callable, Mapping, Optional, Union
 
 import dask.array as da
 import numpy as np
 from dask.distributed import Client, fire_and_forget, wait
 
-from swyft.bounds import Prior
+from swyft.prior import Prior
 from swyft.types import (
     Array,
     ForwardModelType,
     PathType,
     PNamesType,
-    Shape,
     SimShapeType,
 )
 from swyft.utils import all_finite
