@@ -13,6 +13,7 @@ from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
 from swyft.types import (
+    Array,
     ForwardModelType,
     PathType,
     PNamesType,
@@ -65,7 +66,14 @@ class Simulator:
         self.sim_dtype = sim_dtype
         self.fail_on_non_finite = fail_on_non_finite
 
-    def _run(self, v, sims, sim_status, indices, **kwargs) -> None:  # TODO typing
+    def _run(
+        self,
+        v: Array,
+        sims: Mapping[str, Array],
+        sim_status: Array,
+        indices: np.ndarray,
+        **kwargs
+    ) -> None:
         """Run the simulator on the input parameters.
 
         Args:
@@ -181,13 +189,13 @@ class DaskSimulator(Simulator):
 
     def _run(
         self,
-        v,
-        sims,
-        sim_status,
-        indices,
+        v: Array,
+        sims: Mapping[str, Array],
+        sim_status: Array,
+        indices: np.ndarray,
         collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
-    ) -> None:  # TODO typing
+    ) -> None:
         """Run the simulator on the input parameters.
 
         Args:
