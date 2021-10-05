@@ -1,14 +1,14 @@
-from typing import Callable
+from typing import Callable, TypeVar
 
 import numpy as np
 import torch
-from torch import distributions
+from toolz import compose
 
 from swyft.bounds import Bound, UnitCubeBound
 from swyft.types import PathType
-from typing import TypeVar
+from swyft.utils import array_to_tensor, tensor_to_array
 
-PriorType = TypeVar('PriorType', bound='Prior')
+PriorType = TypeVar("PriorType", bound="Prior")
 
 
 class TruncatedPrior:
@@ -105,7 +105,9 @@ class InterpolatedTabulatedDistribution:
         self._table = self._generate_table(icdf, self._grid, n_parameters)
 
     @staticmethod
-    def _generate_table(uv: Callable, grid: np.ndarray, n_parameters: int) -> np.ndarray:
+    def _generate_table(
+        uv: Callable, grid: np.ndarray, n_parameters: int
+    ) -> np.ndarray:
         table = []
         for x in grid:
             table.append(uv(np.ones(n_parameters) * x))
@@ -167,14 +169,16 @@ class InterpolatedTabulatedDistribution:
 
 
 class Prior:
-    def __init__(self, cdf: Callable, icdf: Callable, log_prob: Callable, n_parameters: int) -> None:
+    def __init__(
+        self, cdf: Callable, icdf: Callable, log_prob: Callable, n_parameters: int
+    ) -> None:
         r"""Fully factorizable prior.
 
         Args:
             cdf: cumulative density function, aka vu
             icdf: inverse cumulative density function, aka ppf and uv
             log_prob: log density function
-            n_parameters: number of parameters, dimensionality of the prior
+            n_parameters: number of parameters / dimensionality of the prior
 
         .. note::
             The prior is defined through the mapping :math:`u\to v`, from the
@@ -200,7 +204,7 @@ class Prior:
             u: (N, n_parameters) batched hypercube parameter array
         """
         return self.cdf(v)
-    
+
     def v(self, u: np.ndarray) -> np.ndarray:
         """Map from hypercube: u -> v. inverse cumulative density function (icdf)
 
@@ -211,32 +215,40 @@ class Prior:
             v: (N, n_parameters) batched physical parameter array
         """
         return self.icdf(u)
-    
+
     @classmethod
-    def from_torch_distribution(cls, distribution: torch.distributions.Distribution) -> PriorType:
+    def from_torch_distribution(
+        cls, distribution: torch.distributions.Distribution
+    ) -> PriorType:
         r"""Create a prior from a batched pytorch distribution.
 
         For example, ``distribution = torch.distributions.Uniform(-1 * torch.ones(5), 1 * torch.ones(5))``.
-        
+
         Args:
             distribution: pytorch distribution
 
         Returns:
             Prior
         """
-        assert len(distribution.batch_shape) == 1, f"{distribution.batch_shape=} must be one dimensional"
-        assert len(distribution.event_shape) == 0, f"{distribution} must be factorizable and report the log_prob of every dimension (i.e. all dims are in batch_shape)"
+        assert (
+            len(distribution.batch_shape) == 1
+        ), f"{distribution.batch_shape=} must be one dimensional"
+        assert (
+            len(distribution.event_shape) == 0
+        ), f"{distribution} must be factorizable and report the log_prob of every dimension (i.e. all dims are in batch_shape)"
         prior = cls(
-            cdf=distribution.cdf,
-            icdf=distribution.icdf,
-            log_prob=distribution.log_prob,
+            cdf=compose(tensor_to_array, distribution.cdf, array_to_tensor),
+            icdf=compose(tensor_to_array, distribution.icdf, array_to_tensor),
+            log_prob=compose(tensor_to_array, distribution.log_prob, array_to_tensor),
             n_parameters=distribution.batch_shape.numel(),
         )
         prior.distribution = distribution
         return prior
 
     @classmethod
-    def from_uv(cls, icdf: Callable, n_parameters: int, n_grid_points: int = 10_000) -> PriorType:
+    def from_uv(
+        cls, icdf: Callable, n_parameters: int, n_grid_points: int = 10_000
+    ) -> PriorType:
         """Create a prior which depends on ``InterpolatedTabulatedDistribution``, i.e. an interpolated representation of the icdf, cdf, and log_prob.
 
         .. warning::
@@ -247,13 +259,16 @@ class Prior:
 
         Args:
             icdf: map from hypercube: u -> v. inverse cumulative density function (icdf)
-            n_parameters: number of parameters, dimensionality of the prior
+            n_parameters: number of parameters / dimensionality of the prior
             n_grid_points: number of grid points from which to interpolate the icdf, cdf, and log_prob
 
         Returns:
             Prior
         """
-        distribution = InterpolatedTabulatedDistribution(icdf, n_parameters, n_grid_points)
+        raise NotImplementedError("This was too inaccurate.")
+        distribution = InterpolatedTabulatedDistribution(
+            icdf, n_parameters, n_grid_points
+        )
         prior = cls(
             cdf=distribution.v,
             icdf=distribution.u,

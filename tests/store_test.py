@@ -8,7 +8,7 @@ import pytest
 import zarr
 
 from swyft import Prior
-from swyft.store.simulator import Simulator, DaskSimulator, SimulationStatus
+from swyft.store.simulator import DaskSimulator, SimulationStatus, Simulator
 from swyft.store.store import DirectoryStore, MemoryStore
 
 
