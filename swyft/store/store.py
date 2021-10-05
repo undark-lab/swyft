@@ -161,9 +161,9 @@ class Store(ABC):
         self, pnames, sim_shapes, root, chunksize=1, sim_dtype="f8"
     ) -> None:  # Adding observational shapes to store
         # Parameters
-        zdim = len(pnames)
+        n_parameters = len(pnames)
         v = root.zeros(
-            self._filesystem.v, shape=(0, zdim), chunks=(chunksize, zdim), dtype="f8"
+            self._filesystem.v, shape=(0, n_parameters), chunks=(chunksize, n_parameters), dtype="f8"
         )
         v.attrs["pnames"] = pnames
 
