@@ -6,8 +6,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from swyft.cache import MemoryCache
-from swyft.inference import RatioEstimator
+# from swyft.cache import MemoryCache
+# from swyft.inference import RatioEstimator
 
 # from swyft.ip3 import Points, get_unit_intensity
 

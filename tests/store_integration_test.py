@@ -6,11 +6,11 @@ import pytest
 import zarr
 from dask.distributed import LocalCluster
 
-from swyft import Dataset, DirectoryStore, Prior, Simulator
+from swyft import DirectoryStore, Prior, Simulator, DaskSimulator
 from swyft.store.simulator import SimulationStatus
 
 PARAMS = ["z1", "z2"]
-PRIOR = Prior.from_uv(lambda u: u * np.array([1 for _ in PARAMS]), len(PARAMS))
+PRIOR = Prior(lambda u: u * np.array([1 for _ in PARAMS]), len(PARAMS))
 OUTPUT_SHAPE = (20, 20)
 SIM_SHAPES = {"x": OUTPUT_SHAPE}
 N_SIMULATIONS = 1000
@@ -26,10 +26,10 @@ def model(_):
 
 @pytest.fixture(scope="function")
 def store():
-    simulator = Simulator(model, sim_shapes=SIM_SHAPES)
+    simulator = Simulator(model, sim_shapes=SIM_SHAPES, pnames=PARAMS)
     with tempfile.TemporaryDirectory() as tmpdir:
         path = f"{tmpdir}/test_store"
-        yield DirectoryStore(path=path, params=PARAMS, simulator=simulator)
+        yield DirectoryStore(path=path, simulator=simulator)
 
 
 @pytest.fixture(scope="module")
@@ -42,16 +42,17 @@ def simulate(cluster, path="./cache", wait_for_results=True):
     Open store, sample simulation parameters and run the corresponding
     simulations.
     """
-    simulator = Simulator(model=model, sim_shapes=SIM_SHAPES, cluster=cluster)
-    store = DirectoryStore(path=path, params=PARAMS, simulator=simulator)
-    dataset = Dataset(N_SIMULATIONS, PRIOR, store=store)
-    dataset.simulate(wait_for_results=wait_for_results, batch_size=BATCH_SIZE)
-    return dataset.indices
+    simulator = DaskSimulator(model=model, sim_shapes=SIM_SHAPES, pnames=PARAMS)
+    simulator.set_dask_cluster(cluster)
+    store = DirectoryStore(path=path, simulator=simulator)
+    indices = store.sample(N_SIMULATIONS, PRIOR, add=True)
+    store.simulate(indices=indices, wait_for_results=wait_for_results, batch_size=BATCH_SIZE)
+    return indices
 
 
 def read_from_store(path):
     """Extract data from the Zarr Directory store"""
-    z = zarr.open(f"{path}/samples/pars")
+    z = zarr.open(f"{path}/samples/v")
     x = zarr.open_group(f"{path}/samples/sims")
     s = zarr.open_array(f"{path}/samples/simulation_status")
     return z[:], {key: val[:] for key, val in x.items()}, s[:]

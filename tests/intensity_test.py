@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from swyft.ip3 import Intensity
+# from swyft.ip3 import Intensity
 
 # from swyft.ip3 import (
 #     FactorMask,
