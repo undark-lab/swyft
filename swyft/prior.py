@@ -1,12 +1,15 @@
+from importlib import import_module
 from typing import Callable, TypeVar
 
 import numpy as np
 import torch
 from toolz import compose
+from toolz.dicttoolz import keyfilter
+from torch.distributions import Normal, Uniform
 
 from swyft.bounds import Bound, UnitCubeBound
 from swyft.types import PathType
-from swyft.utils import array_to_tensor, tensor_to_array
+from swyft.utils import array, array_to_tensor, tensor_to_array
 
 PriorType = TypeVar("PriorType", bound="Prior")
 
@@ -168,6 +171,8 @@ class InterpolatedTabulatedDistribution:
         return log_prob
 
 
+# TODO this could be improved with some thought
+# it merely wraps a torch distribution and keeps track of the arguments...
 class Prior:
     def __init__(
         self, cdf: Callable, icdf: Callable, log_prob: Callable, n_parameters: int
@@ -193,6 +198,8 @@ class Prior:
         self.log_prob = log_prob
         self.n_parameters = n_parameters
         self.distribution = None
+        self._state_dict = None
+        self.method = "__init__"
 
     def u(self, v: np.ndarray) -> np.ndarray:
         """Map onto hypercube: v -> u. cumulative density function (cdf)
@@ -243,6 +250,31 @@ class Prior:
             n_parameters=distribution.batch_shape.numel(),
         )
         prior.distribution = distribution
+        prior.method = "from_torch_distribution"
+        prior._state_dict = {
+            "method": prior.method,
+            "name": distribution.__class__.__name__,
+            "module": distribution.__module__,
+            "kwargs": keyfilter(
+                lambda x: x in distribution.__class__.arg_constraints,
+                distribution.__dict__,  # this depends on all relevant arguments being contained with prior.distribution.__class__.__name__.arg_constraints
+            ),
+        }
+        return prior
+
+    @classmethod
+    def from_state_dict(cls, state_dict):
+        method = state_dict["method"]
+
+        if method == "from_torch_distribution":
+            name = state_dict["name"]
+            module = state_dict["module"]
+            kwargs = state_dict["kwargs"]
+            distribution = getattr(import_module(module), name)
+            distribution = distribution(**kwargs)
+            prior = getattr(cls, method)(distribution)
+        else:
+            NotImplementedError()
         return prior
 
     @classmethod
@@ -276,4 +308,25 @@ class Prior:
             n_parameters=n_parameters,
         )
         prior.distribution = distribution
+        prior.method = "from_from_uv"
+        prior.state_dict = None  # TODO, make like above.
         return prior
+
+    def state_dict(self):
+        return (
+            self._state_dict
+        )  # This is a callable to keep the syntax inline with pytorch.
+
+
+def get_uniform_prior(low: np.ndarray, high: np.ndarray) -> Prior:
+    distribution = Uniform(array_to_tensor(low), array_to_tensor(high))
+    return Prior.from_torch_distribution(distribution)
+
+
+def get_diagonal_normal_prior(loc: np.ndarray, scale: np.ndarray) -> Prior:
+    distribution = Normal(array_to_tensor(loc), array_to_tensor(scale))
+    return Prior.from_torch_distribution(distribution)
+
+
+if __name__ == "__main__":
+    pass

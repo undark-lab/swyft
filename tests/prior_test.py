@@ -1,4 +1,7 @@
+import pickle
+import tempfile
 from itertools import chain, product
+from pathlib import Path
 from typing import Callable, Tuple
 
 import numpy as np
@@ -127,6 +130,47 @@ class TestPrior:
             assert np.allclose(samples_true, samples_esti)
         elif isinstance(distribution, Normal):
             assert np.allclose(samples_true, samples_esti, atol=1e-4, rtol=5e-3)
+
+
+class TestSaveLoadPrior:
+    @classmethod
+    def setup_class(cls):
+        cls.directory = tempfile.TemporaryDirectory()
+
+    @classmethod
+    def teardown_class(cls):
+        cls.directory.cleanup()
+
+    @pytest.mark.parametrize(
+        "distribution, args",
+        [
+            (Uniform, uniform_hyperparameters[0]),
+            (Normal, normal_hyperparameters[0]),
+        ],
+    )
+    def test_save_load_from_torch_distribution(self, distribution, args):
+        distribution = distribution(*args)
+        prior = Prior.from_torch_distribution(distribution)
+
+        # Saving
+        path = (
+            Path(self.directory.name)
+            / f"from_torch_distribution_{distribution.__class__.__name__}"
+        )
+        with open(path, "wb") as f:
+            pickle.dump(prior.state_dict(), f)
+
+        # Loading
+        with open(path, "rb") as f:
+            loaded_state_dict = pickle.load(f)
+        prior_loaded = Prior.from_state_dict(loaded_state_dict)
+
+        # Testing by cdf
+        # (icdf or log_prob would also be fine.)
+        samples = prior.distribution.sample((1_000,))
+        cdf_true = prior.cdf(samples)
+        cdf_esti = prior_loaded.cdf(samples)
+        assert np.allclose(cdf_true, cdf_esti)
 
 
 if __name__ == "__main__":
