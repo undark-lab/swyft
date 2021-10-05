@@ -5,19 +5,17 @@ import subprocess
 import tempfile
 import traceback
 from operator import getitem
-from typing import Callable, Hashable, List, Mapping, Optional, Union
+from typing import Callable, Mapping, Optional, Tuple, Union
 
 import dask.array as da
 import numpy as np
-from dask.distributed import Client, fire_and_forget, wait
+from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
 from swyft.types import (
-    Array,
     ForwardModelType,
     PathType,
     PNamesType,
-    Shape,
     SimShapeType,
 )
 from swyft.utils import all_finite
@@ -34,12 +32,15 @@ class Simulator:
     """Wrapper class for simulator.
 
     Args:
-        model (callable): Model function
-        pnames (int or list): List of parameter names, or number of
-            parameters (interpreted as 'z0', 'z1', ...)
-        sim_shapes (dict): Dict describing model function output shapes.
+        model: Model function.
+        pnames: List of parameter names, or number of parameters (interpreted
+            as 'z0', 'z1', ...).
+        sim_shapes: Dict describing model function output shapes.
+        sim_dtype: Model output data type.
+        fail_on_non_finite: whether return an invalid code if simulation
+            returns NaN or infinite, default True
 
-    Examples::
+    Examples:
 
         >>> def model(v):
         >>>     mu = sum(v)  # mu = x + y + z
@@ -54,6 +55,7 @@ class Simulator:
         pnames: Union[PNamesType, int],
         sim_shapes: SimShapeType,
         sim_dtype: str = "f8",
+        fail_on_non_finite: bool = True,
     ) -> None:
         self.model = model
         if isinstance(pnames, int):
@@ -61,62 +63,121 @@ class Simulator:
         self.pnames = pnames
         self.sim_shapes = sim_shapes
         self.sim_dtype = sim_dtype
+        self.fail_on_non_finite = fail_on_non_finite
 
-    def _run(self, v, sims, sim_status, indices, **kwargs) -> None:
+    def _run(self, v, sims, sim_status, indices, **kwargs) -> None:  # TODO typing
         """Run the simulator on the input parameters.
 
         Args:
-            v: array with all the input parameters. Should have shape
-                (num. samples, num. parameters)
-            sims: dictionary of arrays where to store the simulation output.
+            v: Array with all the input parameters. Should have shape
+                (num. samples, num. parameters).
+            sims: Dictionary of arrays where to store the simulation output.
                 All arrays should have the number of samples as the size of the
-                first dimension
-            sim_status: array where to store the simulation status (size should
-                be equal to the number of samples)
-            indices: indices of the samples that need to be run by the
-                simulator
+                first dimension.
+            sim_status: Array where to store the simulation status (size should
+                be equal to the number of samples).
+            indices: Indices of the samples that need to be run by the
+                simulator.
         """
         for i in indices:
-            try:
-                sim = self.model(v[i])
-                for k in sims.keys():
-                    sims[k][i] = sim[k]
-                sim_status[i] = SimulationStatus.FINISHED
-            except:
-                for k in sims.keys():
-                    sims[k][i] = np.nan
-                sim_status[i] = SimulationStatus.FAILED
+            sim, status = _run_model(v[i], self.model, self.fail_on_non_finite)
+            for k in sims.keys():
+                sims[k][i] = sim.get(k, np.nan)
+            sim_status[i] = status
 
-
-class DaskSimulator:
-    """Setup and run the simulator engine, powered by dask."""
-
-    def __init__(
-        self,
-        model: ForwardModelType,
+    @classmethod
+    def from_command(
+        cls,
+        command: str,
         pnames: Union[PNamesType, int],
         sim_shapes: SimShapeType,
-        fail_on_non_finite: bool = True,
-        cluster=None,
-    ) -> None:
-        """Initiate Simulator using a python function.
+        set_input_method: Callable,
+        get_output_method: Callable,
+        tmpdir: Optional[PathType] = None,
+        sim_dtype: str = "f8",
+    ):
+        """Setup a simulator from a command line program.
 
         Args:
-            model: simulator model function
-            sim_shapes: map of simulator's output names to shapes
-            fail_on_non_finite: whether return an invalid code if simulation
-                returns NaN or infinite, default True
-            cluster: cluster address or Cluster object from dask.distributed
-                (default is LocalCluster)
+            command: Command-line program using shell-like syntax.
+            set_input_method: Function to setup the simulator input. It should
+                take one input argument (the array with the input parameters),
+                and return any input to be passed to the program via stdin. If
+                the simulator requires any input files to be present, this
+                function should write these to disk.
+            get_output_method: Function to retrieve results from the simulator
+                output. It should take two input arguments (stdout and stderr
+                of the simulator run) and return a dictionary with the
+                simulator output shaped as described by the ``sim_shapes``
+                argument. If the simulator writes output to disk, this function
+                should parse the results from the file(s).
+            tmpdir: Root temporary directory where to run the simulator.
+                Each instance of the simulator will run in a separate
+                sub-folder. It must exist.
         """
-        self.model = model
-        if isinstance(pnames, int):
-            pnames = ["z%i" % i for i in range(pnames)]
-        self.pnames = pnames
-        self.sim_shapes = sim_shapes
-        self.fail_on_non_finite = fail_on_non_finite
-        self.client = None
-        self.cluster = cluster
+        command_args = shlex.split(command)
+
+        def model(z):
+            """Closure to setup an instance of the simulator.
+
+            Args:
+                z: input parameter array.
+            """
+            with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
+                cwd = os.getcwd()
+                os.chdir(tmpdirname)
+                input = set_input_method(z)
+                res = subprocess.run(
+                    command_args,
+                    capture_output=True,
+                    input=input,
+                    text=True,
+                    check=True,
+                )
+                output = get_output_method(res.stdout, res.stderr)
+                os.chdir(cwd)
+            return output
+
+        return cls(
+            model=model,
+            pnames=pnames,
+            sim_shapes=sim_shapes,
+            sim_dtype=sim_dtype
+        )
+
+    @classmethod
+    def from_model(
+        cls,
+        model: ForwardModelType,
+        prior: Prior,
+        fail_on_non_finite: bool = True
+    ):
+        """Instantiate a Simulator with the correct sim_shapes.
+
+        Args:
+            model: Simulator model.
+            prior: Model prior.
+
+        Note:
+            The simulator model is run once in order to infer observable shapes from the output.
+        """
+        params = prior.sample(1)[0]
+        obs = model(params)
+        sim_shapes = {k: v.shape for k, v in obs.items()}
+        dtype = [v.dtype.str for v in obs.values()][0]
+        return cls(
+            model=model,
+            pnames=len(params),
+            sim_shapes=sim_shapes,
+            sim_dtype=dtype,
+            fail_on_non_finite=fail_on_non_finite
+        )
+
+
+class DaskSimulator(Simulator):
+    """Setup and run the simulator engine, powered by dask."""
+
+    client = None
 
     def _run(
         self,
@@ -130,15 +191,6 @@ class DaskSimulator:
         """Run the simulator on the input parameters.
 
         Args:
-            v: array with all the input parameters. Should have shape
-                (num. samples, num. parameters)
-            sims: dictionary of arrays where to store the simulation output.
-                All arrays should have the number of samples as the size of the
-                first dimension
-            sim_status: array where to store the simulation status (size should
-                be equal to the number of samples)
-            indices: indices of the samples that need to be run by the
-                simulator
             collect_in_memory: if True, collect the simulation output in
                 memory; if False, instruct Dask workers to save the output to
                 the corresponding arrays. The latter option is asynchronous,
@@ -146,7 +198,8 @@ class DaskSimulator:
             batch_size: simulations will be submitted in batches of the
                 specified size
         """
-        self.set_dask_cluster(self.cluster)
+        if self.client is None:
+            self.set_dask_cluster()
 
         # open parameter array as Dask array
         chunks = getattr(v, "chunks", "auto")
@@ -236,118 +289,69 @@ class DaskSimulator:
             status = self.client.persist(status)
             fire_and_forget(status)
 
-    @classmethod
-    def from_command(
-        cls,
-        command: str,
-        set_input_method: Callable,
-        get_output_method: Callable,
-        tmpdir: PathType = None,
-        **kwargs,
-    ):  # TODO typing
-        """Convenience function to setup a command-line simulator
-
-        Args:
-            command: command line simulator
-            set_input_method: method to prepare simulator input
-            get_output_method: method to retrieve results from the simulator output
-            tmpdir: temporary directory where to run the simulator instances
-                (one in each subdir). tmpdir must exist.
-        """
-        command_args = shlex.split(command)
-
-        def model(z):
-            """
-            Closure to run an instance of the simulator
-
-            Args:
-                z (array-like): input parameters for the model
-            """
-            with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
-                cwd = os.getcwd()
-                os.chdir(tmpdirname)
-                input = set_input_method(z)
-                res = subprocess.run(
-                    command_args,
-                    capture_output=True,
-                    input=input,
-                    text=True,
-                    check=True,
-                )
-                output = get_output_method(res.stdout, res.stderr)
-                os.chdir(cwd)
-            return output
-
-        return cls(model=model, **kwargs)
-
-    @classmethod
-    def from_model(
-        cls, model: ForwardModelType, prior: Prior, fail_on_non_finite: bool = True
-    ):
-        """Convenience function to instantiate a Simulator with the correct sim_shapes.
-
-        Args:
-            model: simulator model.
-            prior: model prior.
-            fail_on_non_finite: whether return an invalid code if simulation
-                returns NaN or infinite, default True
-
-        Note:
-            The simulator model is run once in order to infer observable shapes from the output.
-        """
-        obs = model(prior.sample(1)[0])
-        sim_shapes = {k: v.shape for k, v in obs.items()}
-
-        return cls(
-            model=model, sim_shapes=sim_shapes, fail_on_non_finite=fail_on_non_finite
-        )
-
     def set_dask_cluster(self, cluster=None) -> None:
         """Connect to Dask cluster.
 
         Args:
-            cluster: cluster address or Cluster object from dask.distributed
-                (default is LocalCluster)
+            cluster: Cluster address or Cluster object from dask.distributed
+                (default is LocalCluster).
         """
-        if not (self.cluster is None and self.client is not None):
-            self.client = Client(cluster)
+        self.client = Client(cluster)
+
+
+def _run_model(
+    z: np.ndarray, model: Callable, fail_on_non_finite: bool
+) -> Tuple[Mapping[str, np.ndarray], int]:
+    """Run one instance of the model.
+
+    Args:
+        z: Array with the model input parameters.
+        model: Simulator model function.
+        fail_on_non_finite: Whether return an invalid code if simulation
+            returns NaN or infinite, default True.
+
+    Return:
+        out: Dictionary with the output of the model run.
+        sim_status: Simulation status code
+    """
+    out = {}
+    sim_status = SimulationStatus.FAILED
+    try:
+        out = model(z)
+        sim_status = _get_sim_status(out, fail_on_non_finite)
+    except:
+        traceback.print_exc()
+    return out, sim_status
 
 
 def _run_model_chunk(
     z: np.ndarray, model: Callable, sim_shapes: SimShapeType, fail_on_non_finite: bool
-):
+) -> Tuple[Mapping[str, np.ndarray], np.ndarray]:
     """Run the model over a set of input parameters.
 
     Args:
-        z: array with the input parameters. Should have shape (num. samples,
-            num. parameters)
-        model: simulator model function
-        sim_shapes: map of simulator's output names to shapes
-        fail_on_non_finite: whether return an invalid code if simulation
-            returns NaN or infinite, default True
+        z: Array with the input parameters. Should have shape (num. samples,
+            num. parameters).
+        model: Simulator model function.
+        sim_shapes: Map of simulator's output names to shapes.
+        fail_on_non_finite: Whether return an invalid code if simulation
+            returns NaN or infinite, default True.
     Returns:
-        x: dictionary with the output of the simulations
-        status: array with the simulation status
+        x: Dictionary with the output of the simulations.
+        status: Array with the simulation status.
     """
     chunk_size = len(z)
     x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
     status = np.zeros(len(z), dtype=int)
     for i, z_i in enumerate(z):
-        try:
-            out = model(z_i)
-            _sim_stat = _get_sim_status(out, fail_on_non_finite)
-        except:
-            out = {}
-            _sim_stat = SimulationStatus.FAILED
-            traceback.print_exc()
-        finally:
-            for obs, val in out.items():
-                x[obs][i] = val
-            status[i] = _sim_stat
+        out, sim_status = _run_model(z_i, model, fail_on_non_finite)
+        for obs, val in out.items():
+            x[obs][i] = val
+        status[i] = sim_status
     return x, status
 
 
-def _get_sim_status(x: Mapping[str, Array], fail_on_non_finite: bool) -> int:
+def _get_sim_status(x: Mapping[str, np.ndarray], fail_on_non_finite: bool) -> int:
     """Did the simulation fail?"""
 
     assert isinstance(x, dict), "Simulators must return a dictionary."
