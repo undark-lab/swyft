@@ -4,7 +4,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Union
+from typing import Callable, Optional, Sequence, Union
 
 import fasteners
 import numcodecs
@@ -192,6 +192,8 @@ class Store(ABC):
             chunks=(chunksize,),
             dtype="int",
         )
+
+        self._update()
 
     def _update(self) -> None:
         self.sims = self._root[self._filesystem.sims]
@@ -445,7 +447,6 @@ class Store(ABC):
         # Run simulations and collect status
         if len(idx) == 0:
             log.debug("No simulations required.")
-            return
         else:
             # For the MemoryStore, we need to collect results in memory
             collect_in_memory = True if isinstance(self, MemoryStore) else False
