@@ -9,7 +9,7 @@ from torch.distributions import Normal, Uniform
 
 from swyft.bounds import Bound, UnitCubeBound
 from swyft.types import PathType
-from swyft.utils import array, array_to_tensor, tensor_to_array
+from swyft.utils import array_to_tensor, tensor_to_array
 
 PriorType = TypeVar("PriorType", bound="Prior")
 
@@ -197,9 +197,15 @@ class Prior:
         self.icdf = icdf
         self.log_prob = log_prob
         self.n_parameters = n_parameters
-        self.distribution = None
-        self._state_dict = None
         self.method = "__init__"
+        self._state_dict = {
+            "method": self.method,
+            "cdf": self.cdf,
+            "icdf": self.icdf,
+            "log_prob": self.log_prob,
+            "n_parameters": self.n_parameters,
+        }
+        self.distribution = None
 
     def u(self, v: np.ndarray) -> np.ndarray:
         """Map onto hypercube: v -> u. cumulative density function (cdf)
@@ -257,25 +263,27 @@ class Prior:
             "module": distribution.__module__,
             "kwargs": keyfilter(
                 lambda x: x in distribution.__class__.arg_constraints,
-                distribution.__dict__,  # this depends on all relevant arguments being contained with prior.distribution.__class__.__name__.arg_constraints
+                distribution.__dict__,  # this depends on all relevant arguments being contained with prior.distribution.__class__.arg_constraints
             ),
         }
         return prior
 
     @classmethod
-    def from_state_dict(cls, state_dict):
+    def from_state_dict(cls, state_dict: dict) -> PriorType:
         method = state_dict["method"]
 
-        if method == "from_torch_distribution":
+        if method == "__init__":
+            kwargs = keyfilter(lambda x: x != "method", state_dict)
+            return cls(**kwargs)
+        elif method == "from_torch_distribution":
             name = state_dict["name"]
             module = state_dict["module"]
             kwargs = state_dict["kwargs"]
             distribution = getattr(import_module(module), name)
             distribution = distribution(**kwargs)
-            prior = getattr(cls, method)(distribution)
+            return getattr(cls, method)(distribution)
         else:
             NotImplementedError()
-        return prior
 
     @classmethod
     def from_uv(

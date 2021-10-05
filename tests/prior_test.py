@@ -141,6 +141,11 @@ class TestSaveLoadPrior:
     def teardown_class(cls):
         cls.directory.cleanup()
 
+    # TODO
+    @pytest.mark.skip(reason="todo")
+    def test_save_load_init(self):
+        pass
+
     @pytest.mark.parametrize(
         "distribution, args",
         [
