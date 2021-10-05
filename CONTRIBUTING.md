@@ -38,14 +38,26 @@ We also highly recommend the use of the **[flake8](https://flake8.pycqa.org/en/l
 - When there is a default argument, do not repeat the default argument within the docstring since it is already visible when the user calls help on the function. The exception to this rule is when the default is `None`, then it needs an explanation which may include a default argument.
 
 ### Naming
-Consider the naming conventions when you introduce or modify functions. The relevant types are defined within `swyft/types.py`.  
-For quick reference, use `pnames` for parameters names; `v` for the actual parameter vectors; `u` for the hypercube projection; `PoI` for "parameters of interest" in tuple form, e.g. `(0,)` or `(0, 1)`; `marginals` for a dictionary mapping of `PoI` to another value, e.g. weights.
+- Long names are generally more useful than one-use shortened versions. Try to use them as much as possible.
+- When introducing a new variable, consider whether or not it already has a name... see the table below, for example.
+- Integers which count the quantity of something should be proceded with an `n_*`, i.e. `n_parameters`.
+
+For quick reference:
+| Python Variable Name | Mathematical Object                       |
+|----------------------|-------------------------------------------|
+| `pnames`             | list of parameter names                   |
+| `v`                  | parameter vector                          |
+| `u`                  | parameter vector mapped to the hypercube  |
+| `PoI`                | parameters of interest, in tuple form     |
+| `marginals`          | dictionary mapping `PoI` to another value |
+
+### Types
+Contributed code should have type hints. Some relevant types are defined within `swyft/types.py`, try to use them whenever possible.
 
 ### Converting between arrays and tensors
 Please use the functions `array_to_tensor` and `tensor_to_array` when converting between arbitrary array data and pytorch tensors.
 
 
 ## Online documentation
-
 We have a **[readthedocs](https://swyft.readthedocs.io/en/latest/)** site.
 Please follow conventions in order to let that site compile.
