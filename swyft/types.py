@@ -4,6 +4,7 @@ from typing import Callable, Dict, Hashable, Iterable, Mapping, Sequence, Tuple,
 
 import numpy as np
 import torch
+import zarr
 
 # If you add a type, don't forget to update autodoc_type_aliases in /docs/source/config.py
 
@@ -11,7 +12,7 @@ import torch
 PathType = Union[str, Path]
 Device = Union[torch.device, str]
 Tensor = torch.Tensor
-Array = Union[np.ndarray, torch.Tensor]
+Array = Union[np.ndarray, torch.Tensor, zarr.Array]
 Shape = Union[torch.Size, Tuple[int, ...]]
 
 # A list of marginals, e.g., [0, (3, 4), [3, 2]]

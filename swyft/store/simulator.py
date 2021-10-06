@@ -12,12 +12,7 @@ import numpy as np
 from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
-from swyft.types import (
-    ForwardModelType,
-    PathType,
-    PNamesType,
-    SimShapeType,
-)
+from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
 from swyft.utils import all_finite
 
 
@@ -65,7 +60,14 @@ class Simulator:
         self.sim_dtype = sim_dtype
         self.fail_on_non_finite = fail_on_non_finite
 
-    def _run(self, v, sims, sim_status, indices, **kwargs) -> None:  # TODO typing
+    def _run(
+        self,
+        v: Array,
+        sims: Mapping[str, Array],
+        sim_status: Array,
+        indices: np.ndarray,
+        **kwargs
+    ) -> None:
         """Run the simulator on the input parameters.
 
         Args:
@@ -125,32 +127,28 @@ class Simulator:
             """
             with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
                 cwd = os.getcwd()
-                os.chdir(tmpdirname)
-                input = set_input_method(z)
-                res = subprocess.run(
-                    command_args,
-                    capture_output=True,
-                    input=input,
-                    text=True,
-                    check=True,
-                )
-                output = get_output_method(res.stdout, res.stderr)
-                os.chdir(cwd)
+                try:
+                    os.chdir(tmpdirname)
+                    input = set_input_method(z)
+                    res = subprocess.run(
+                        command_args,
+                        capture_output=True,
+                        input=input,
+                        text=True,
+                        check=True,
+                    )
+                    output = get_output_method(res.stdout, res.stderr)
+                finally:
+                    os.chdir(cwd)
             return output
 
         return cls(
-            model=model,
-            pnames=pnames,
-            sim_shapes=sim_shapes,
-            sim_dtype=sim_dtype
+            model=model, pnames=pnames, sim_shapes=sim_shapes, sim_dtype=sim_dtype
         )
 
     @classmethod
     def from_model(
-        cls,
-        model: ForwardModelType,
-        prior: Prior,
-        fail_on_non_finite: bool = True
+        cls, model: ForwardModelType, prior: Prior, fail_on_non_finite: bool = True
     ):
         """Instantiate a Simulator with the correct sim_shapes.
 
@@ -170,7 +168,7 @@ class Simulator:
             pnames=len(params),
             sim_shapes=sim_shapes,
             sim_dtype=dtype,
-            fail_on_non_finite=fail_on_non_finite
+            fail_on_non_finite=fail_on_non_finite,
         )
 
 
@@ -181,13 +179,13 @@ class DaskSimulator(Simulator):
 
     def _run(
         self,
-        v,
-        sims,
-        sim_status,
-        indices,
+        v: Array,
+        sims: Mapping[str, Array],
+        sim_status: Array,
+        indices: np.ndarray,
         collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
-    ) -> None:  # TODO typing
+    ) -> None:
         """Run the simulator on the input parameters.
 
         Args:
