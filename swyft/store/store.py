@@ -307,8 +307,9 @@ class Store(ABC):
                 self.add(N, prior, bound=bound)
         if check_coverage:
             if self.coverage(N, prior, bound=bound) < 1.0:
-                print("WARNING: Store does not contain enough samples.")
-                return []
+                raise RuntimeError(
+                    "Store does not contain enough samples for your requested intensity function `N * prior`."
+                )
         pdf = swyft.TruncatedPrior(prior, bound)
 
         self._update()
