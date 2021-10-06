@@ -133,17 +133,19 @@ class Simulator:
             """
             with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
                 cwd = os.getcwd()
-                os.chdir(tmpdirname)
-                input = set_input_method(z)
-                res = subprocess.run(
-                    command_args,
-                    capture_output=True,
-                    input=input,
-                    text=True,
-                    check=True,
-                )
-                output = get_output_method(res.stdout, res.stderr)
-                os.chdir(cwd)
+                try:
+                    os.chdir(tmpdirname)
+                    input = set_input_method(z)
+                    res = subprocess.run(
+                        command_args,
+                        capture_output=True,
+                        input=input,
+                        text=True,
+                        check=True,
+                    )
+                    output = get_output_method(res.stdout, res.stderr)
+                finally:
+                    os.chdir(cwd)
             return output
 
         return cls(
