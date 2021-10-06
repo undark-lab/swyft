@@ -166,7 +166,7 @@ class Store(ABC):
         sim_shapes: SimShapeType,
         root: zarr.Group,
         chunksize: int = 1,
-        sim_dtype: str = "f8"
+        sim_dtype: str = "f8",
     ) -> None:  # Adding observational shapes to store
         # Parameters
         zdim = len(pnames)
@@ -336,7 +336,9 @@ class Store(ABC):
 
         return indices
 
-    def _get_indices_to_simulate(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
+    def _get_indices_to_simulate(
+        self, indices: Optional[Sequence[int]] = None
+    ) -> np.ndarray:
         """
         Determine which samples need to be simulated.
 
@@ -352,7 +354,9 @@ class Store(ABC):
         idx = np.flatnonzero(require_simulation)
         return indices[idx] if indices is not None else idx
 
-    def _set_simulation_status(self, indices: Sequence[int], status: SimulationStatus) -> None:
+    def _set_simulation_status(
+        self, indices: Sequence[int], status: SimulationStatus
+    ) -> None:
         """
         Flag the specified samples with the simulation status.
 
@@ -368,7 +372,9 @@ class Store(ABC):
             )
         self.sim_status.oindex[indices] = status
 
-    def get_simulation_status(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
+    def get_simulation_status(
+        self, indices: Optional[Sequence[int]] = None
+    ) -> np.ndarray:
         """Determine the status of sample simulations.
 
         Args:

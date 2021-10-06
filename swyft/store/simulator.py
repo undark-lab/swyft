@@ -12,13 +12,7 @@ import numpy as np
 from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
-from swyft.types import (
-    Array,
-    ForwardModelType,
-    PathType,
-    PNamesType,
-    SimShapeType,
-)
+from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
 from swyft.utils import all_finite
 
 
@@ -149,18 +143,12 @@ class Simulator:
             return output
 
         return cls(
-            model=model,
-            pnames=pnames,
-            sim_shapes=sim_shapes,
-            sim_dtype=sim_dtype
+            model=model, pnames=pnames, sim_shapes=sim_shapes, sim_dtype=sim_dtype
         )
 
     @classmethod
     def from_model(
-        cls,
-        model: ForwardModelType,
-        prior: Prior,
-        fail_on_non_finite: bool = True
+        cls, model: ForwardModelType, prior: Prior, fail_on_non_finite: bool = True
     ):
         """Instantiate a Simulator with the correct sim_shapes.
 
@@ -180,7 +168,7 @@ class Simulator:
             pnames=len(params),
             sim_shapes=sim_shapes,
             sim_dtype=dtype,
-            fail_on_non_finite=fail_on_non_finite
+            fail_on_non_finite=fail_on_non_finite,
         )
 
 
