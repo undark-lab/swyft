@@ -304,9 +304,7 @@ class Prior:
         return prior
 
     def state_dict(self):
-        return (
-            self._state_dict
-        )  # This is a callable to keep the syntax inline with pytorch.
+        return self._state_dict
 
     @classmethod
     def from_state_dict(cls, state_dict: dict) -> PriorType:
