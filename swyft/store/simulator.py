@@ -12,7 +12,13 @@ import numpy as np
 from dask.distributed import Client, fire_and_forget, wait
 
 from swyft.prior import Prior
-from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
+from swyft.types import (
+    Array,
+    ForwardModelType,
+    ParameterNamesType,
+    PathType,
+    SimShapeType,
+)
 from swyft.utils import all_finite
 
 
@@ -28,7 +34,7 @@ class Simulator:
 
     Args:
         model (callable): Model function
-        pnames (int or list): List of parameter names, or number of
+        parameter_names (int or list): List of parameter names, or number of
             parameters (interpreted as 'z0', 'z1', ...)
         sim_shapes (dict): Dict describing model function output shapes.
 
@@ -44,14 +50,14 @@ class Simulator:
     def __init__(
         self,
         model: ForwardModelType,
-        pnames: Union[PNamesType, int],
+        parameter_names: Union[ParameterNamesType, int],
         sim_shapes: SimShapeType,
         sim_dtype: str = "f8",
     ) -> None:
         self.model = model
-        if isinstance(pnames, int):
-            pnames = ["z%i" % i for i in range(pnames)]
-        self.pnames = pnames
+        if isinstance(parameter_names, int):
+            parameter_names = ["z%i" % i for i in range(parameter_names)]
+        self.parameter_names = parameter_names
         self.sim_shapes = sim_shapes
         self.sim_dtype = sim_dtype
 
@@ -87,7 +93,7 @@ class DaskSimulator:
     def __init__(
         self,
         model: ForwardModelType,
-        pnames: Union[PNamesType, int],
+        parameter_names: Union[ParameterNamesType, int],
         sim_shapes: SimShapeType,
         fail_on_non_finite: bool = True,
         cluster=None,
@@ -103,9 +109,9 @@ class DaskSimulator:
                 (default is LocalCluster)
         """
         self.model = model
-        if isinstance(pnames, int):
-            pnames = ["z%i" % i for i in range(pnames)]
-        self.pnames = pnames
+        if isinstance(parameter_names, int):
+            parameter_names = ["z%i" % i for i in range(parameter_names)]
+        self.parameter_names = parameter_names
         self.sim_shapes = sim_shapes
         self.fail_on_non_finite = fail_on_non_finite
         self.client = None

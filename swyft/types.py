@@ -26,7 +26,7 @@ StrictMarginalsType = Tuple[Tuple[int, ...], ...]
 # Map from (3, 4) --> ratio array
 RatiosType = Dict[Tuple[int, ...], Array]
 
-PNamesType = Sequence[str]
+ParameterNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]
 ForwardModelType = Callable[..., ObsType]
 SimShapeType = Mapping[Hashable, Shape]

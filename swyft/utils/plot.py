@@ -208,7 +208,7 @@ def plot_1d(
     )
 
     if labels is None:
-        labels = [samples["pnames"][pois[i]] for i in range(K)]
+        labels = [samples["parameter_names"][pois[i]] for i in range(K)]
 
     for k in range(K):
         if nrow == 1 and ncol > 1:
@@ -275,7 +275,7 @@ def plot_corner(
     diagnostics = {}
 
     if labels is None:
-        labels = [samples["pnames"][pois[i]] for i in range(K)]
+        labels = [samples["parameter_names"][pois[i]] for i in range(K)]
     for i in range(K):
         for j in range(K):
             ax = axes[i, j]

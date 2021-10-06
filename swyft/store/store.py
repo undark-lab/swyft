@@ -76,7 +76,7 @@ class Store(ABC):
             #            log.debug("Creating new store.")
 
             self._setup_new_zarr_store(
-                simulator.pnames,
+                simulator.parameter_names,
                 simulator.sim_shapes,
                 self._root,
                 chunksize=chunksize,
@@ -158,17 +158,17 @@ class Store(ABC):
             log.debug("Cache unlocked")
 
     def _setup_new_zarr_store(
-        self, pnames, sim_shapes, root, chunksize=1, sim_dtype="f8"
+        self, parameter_names, sim_shapes, root, chunksize=1, sim_dtype="f8"
     ) -> None:  # Adding observational shapes to store
         # Parameters
-        n_parameters = len(pnames)
+        n_parameters = len(parameter_names)
         v = root.zeros(
             self._filesystem.v,
             shape=(0, n_parameters),
             chunks=(chunksize, n_parameters),
             dtype="f8",
         )
-        v.attrs["pnames"] = pnames
+        v.attrs["parameter_names"] = parameter_names
 
         # Simulations
         sims = root.create_group(self._filesystem.sims)
@@ -202,7 +202,7 @@ class Store(ABC):
         self.log_w = self._root[self._filesystem.log_w]
         self.log_lambdas = self._root[self._filesystem.log_lambdas]
         self.sim_status = self._root[self._filesystem.simulation_status]
-        self.pnames = self._root[self._filesystem.v].attrs["pnames"]
+        self.parameter_names = self._root[self._filesystem.v].attrs["parameter_names"]
 
     def __len__(self):
         """Returns number of samples in the store."""

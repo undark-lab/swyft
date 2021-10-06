@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset as torch_Dataset
 
 import swyft
-from swyft.types import ObsType, PathType, PNamesType
+from swyft.types import ObsType, ParameterNamesType, PathType
 from swyft.utils.array import array_to_tensor
 
 log = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class Dataset(torch_Dataset):
         self._store = store
         self._simhook = simhook
         self._simkeys = simkeys if simkeys else list(self._store.sims)
-        self._pnames = self._store.pnames
+        self._parameter_names = self._store.parameter_names
 
         if self.requires_sim:
             print("WARNING: Some points require simulation.")
@@ -105,9 +105,9 @@ class Dataset(torch_Dataset):
         return np.array([self._store.v[i] for i in self._indices])
 
     @property
-    def pnames(self) -> PNamesType:
+    def parameter_names(self) -> ParameterNamesType:
         """Return parameter names (inherited from store and simulator)."""
-        return self._pnames
+        return self._parameter_names
 
     def __getitem__(self, idx):
         """Return datastore entry."""
@@ -133,7 +133,7 @@ class Dataset(torch_Dataset):
             trunc_prior=self._trunc_prior.state_dict(),
             simhook=bool(self._simhook),
             simkeys=self._simkeys,
-            pnames=self._pnames,
+            parameter_names=self._parameter_names,
         )
 
     @classmethod
@@ -147,7 +147,7 @@ class Dataset(torch_Dataset):
         obj._store = store
         obj._simhook = simhook
         obj._simkeys = state_dict["simkeys"]
-        obj._pnames = state_dict["pnames"]
+        obj._parameter_names = state_dict["parameter_names"]
         if state_dict["simhook"] and not simhook:
             log.warning(
                 "A simhook was specified when the dataset was saved, but is missing now."

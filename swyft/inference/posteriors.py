@@ -14,8 +14,8 @@ from swyft.types import (
     Device,
     MarginalsType,
     ObsType,
+    ParameterNamesType,
     PathType,
-    PNamesType,
     RatiosType,
 )
 from swyft.utils import tupleize_marginals
@@ -31,21 +31,21 @@ class Posteriors:
         dataset: Dataset for which we want to perform inference.
 
     .. note::
-        The dataset will be used to extract parameter names (`pnames`), the
+        The dataset will be used to extract `parameter_names`, the
         prior and its bound. It will be then set as default dataset for
         training.
     """
 
     def __init__(self, dataset: "swyft.Dataset") -> None:
-        self._pnames = dataset.pnames
+        self._parameter_names = dataset.parameter_names
         self._trunc_prior = swyft.TruncatedPrior(dataset.prior, bound=dataset.bound)
         self._ratios = {}
         self._dataset = dataset
 
     @property
-    def pnames(self) -> PNamesType:
+    def parameter_names(self) -> ParameterNamesType:
         """Parameter names. Inherited from dataset."""
-        return self._pnames
+        return self._parameter_names
 
     def add(
         self,
@@ -155,7 +155,7 @@ class Posteriors:
 
     def eval(
         self, v: Array, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Union[np.ndarray, RatiosType, PNamesType]]:
+    ) -> Dict[str, Union[np.ndarray, RatiosType, ParameterNamesType]]:
         """Returns weighted posterior.
 
         Args:
@@ -173,11 +173,11 @@ class Posteriors:
         weights = {}
         for k, val in ratios.items():
             weights[k] = np.exp(val)
-        return dict(v=v, weights=weights, pnames=self.pnames)
+        return dict(v=v, weights=weights, parameter_names=self.parameter_names)
 
     def sample(
         self, N: int, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Union[np.ndarray, RatiosType, PNamesType]]:
+    ) -> Dict[str, Union[np.ndarray, RatiosType, ParameterNamesType]]:
         """Returns weighted posterior samples for given observation.
 
         Args:
@@ -301,7 +301,7 @@ class Posteriors:
         state_dict = dict(
             trunc_prior=self._trunc_prior.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
-            pnames=self._pnames,
+            parameter_names=self._parameter_names,
         )
         return state_dict
 
@@ -329,7 +329,7 @@ class Posteriors:
             k: RatioEstimator.from_state_dict(v)
             for k, v in state_dict["ratios"].items()
         }
-        obj._pnames = state_dict["pnames"]
+        obj._parameter_names = state_dict["parameter_names"]
         obj._dataset = dataset
         return obj
 
