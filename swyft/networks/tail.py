@@ -7,14 +7,14 @@ import torch.nn as nn
 from swyft.networks.linear import LinearWithChannel
 from swyft.networks.module import Module
 from swyft.networks.normalization import OnlineNormalizationLayer
-from swyft.types import Array, MarginalsType, ObsType
+from swyft.types import Array, MarginalIndex, ObsType
 
 
-def _get_z_shape(marginals: MarginalsType) -> Tuple[int, int]:
+def _get_z_shape(marginals: MarginalIndex) -> Tuple[int, int]:
     return (len(marginals), max([len(c) for c in marginals]))
 
 
-def _combine(params: Array, marginals: MarginalsType) -> Array:
+def _combine(params: Array, marginals: MarginalIndex) -> Array:
     """Combine parameters according to parameter list. Supports one batch dimension."""
     shape = params.shape
     device = params.device

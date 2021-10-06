@@ -7,7 +7,7 @@ import torch
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
-from swyft.types import Array, Device, MarginalsType, ObsType, RatiosType
+from swyft.types import Array, Device, MarginalIndex, ObsType, RatiosType
 from swyft.utils import (
     array_to_tensor,
     dict_to_tensor_unsqueeze,
@@ -36,7 +36,7 @@ class RatioEstimator:
 
     def __init__(
         self,
-        marginals: MarginalsType,
+        marginals: MarginalIndex,
         head: Callable[..., "swyft.Module"] = DefaultHead,
         tail: Callable[..., "swyft.Module"] = DefaultTail,
         head_args: dict = {},

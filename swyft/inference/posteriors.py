@@ -12,7 +12,7 @@ from swyft.networks import DefaultHead, DefaultTail
 from swyft.types import (
     Array,
     Device,
-    MarginalsType,
+    MarginalIndex,
     ObsType,
     ParameterNamesType,
     PathType,
@@ -49,7 +49,7 @@ class Posteriors:
 
     def add(
         self,
-        marginals: MarginalsType,
+        marginals: MarginalIndex,
         head: Callable[..., "swyft.Module"] = DefaultHead,
         tail: Callable[..., "swyft.Module"] = DefaultTail,
         head_args: dict = {},
@@ -77,7 +77,7 @@ class Posteriors:
         self._ratios[marginals] = re
 
     def to(
-        self, device: Device, marginals: Optional[MarginalsType] = None
+        self, device: Device, marginals: Optional[MarginalIndex] = None
     ) -> "Posteriors":
         """Move networks to device.
 
@@ -104,7 +104,7 @@ class Posteriors:
 
     def train(
         self,
-        marginals: MarginalsType,
+        marginals: MarginalIndex,
         batch_size: int = 64,
         validation_size: float = 0.1,
         early_stopping_patience: int = 5,
@@ -149,13 +149,13 @@ class Posteriors:
 
         re.train(self._dataset, trainoptions)
 
-    def train_diagnostics(self, marginals: MarginalsType):
+    def train_diagnostics(self, marginals: MarginalIndex):
         marginals = tupleize_marginals(marginals)
         return self._ratios[marginals].train_diagnostics()
 
     def eval(
         self, v: Array, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Union[np.ndarray, RatiosType, ParameterNamesType]]:
+    ) -> Dict[str, Tuple[np.ndarray, RatiosType, ParameterNamesType]]:
         """Returns weighted posterior.
 
         Args:
@@ -177,7 +177,7 @@ class Posteriors:
 
     def sample(
         self, N: int, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Union[np.ndarray, RatiosType, ParameterNamesType]]:
+    ) -> Dict[str, Tuple[np.ndarray, RatiosType, ParameterNamesType]]:
         """Returns weighted posterior samples for given observation.
 
         Args:
@@ -196,8 +196,8 @@ class Posteriors:
     #        excess_factor: int = 10,
     #        maxiter: int = 1000,
     #        n_batch: int = 10_000,
-    #        PoI: Sequence[PoIType] = None,
-    #    ) -> MarginalType:
+    #        PoI: Sequence[MarginalIndex] = None,
+    #    ):
     #        """Samples from each marginal using rejection sampling.
     #
     #        Args:
@@ -282,7 +282,7 @@ class Posteriors:
     def prior(self) -> "swyft.bounds.Prior":
         return self._trunc_prior.prior
 
-    def truncate(self, marginals: MarginalsType, obs0: ObsType) -> "swyft.bounds.Bound":
+    def truncate(self, marginals: MarginalIndex, obs0: ObsType) -> "swyft.bounds.Bound":
         """Generate and return new bound object."""
         marginals = tupleize_marginals(marginals)
         bound = swyft.Bound.from_Posteriors(marginals, self, obs0)

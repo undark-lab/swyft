@@ -14,24 +14,15 @@ Tensor = torch.Tensor
 Array = Union[np.ndarray, torch.Tensor]
 Shape = Union[torch.Size, Tuple[int, ...]]
 
-MarginalIndex = Union[int, Sequence[int], Sequence[Sequence[int]]]
-StrictMarginalIndex = Tuple[Tuple[int, ...], ...]
-
 # A list of marginals, e.g., [0, (3, 4), [3, 2]]
-MarginalsType = Iterable[Union[int, Iterable[int]]]
-
+MarginalIndex = Union[int, Sequence[int], Sequence[Sequence[int]]]
 # Strict version of that type used internally, ((0,), (2, 3), (3, 4))
-StrictMarginalsType = Tuple[Tuple[int, ...], ...]
+StrictMarginalIndex = Tuple[Tuple[int, ...], ...]
 
 # Map from (3, 4) --> ratio array
 RatiosType = Dict[Tuple[int, ...], Array]
 
 ParameterNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]
-ForwardModelType = Callable[..., ObsType]
 SimShapeType = Mapping[Hashable, Shape]
-
-# Maybe obsolete?
-StrictPoIType = Tuple[int, ...]
-PoIType = Union[Sequence[int], Sequence[StrictPoIType]]
-MarginalType = Dict[PoIType, Array]
+ForwardModelType = Callable[..., ObsType]
