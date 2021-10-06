@@ -269,23 +269,6 @@ class Prior:
         return prior
 
     @classmethod
-    def from_state_dict(cls, state_dict: dict) -> PriorType:
-        method = state_dict["method"]
-
-        if method == "__init__":
-            kwargs = keyfilter(lambda x: x != "method", state_dict)
-            return cls(**kwargs)
-        elif method == "from_torch_distribution":
-            name = state_dict["name"]
-            module = state_dict["module"]
-            kwargs = state_dict["kwargs"]
-            distribution = getattr(import_module(module), name)
-            distribution = distribution(**kwargs)
-            return getattr(cls, method)(distribution)
-        else:
-            NotImplementedError()
-
-    @classmethod
     def from_uv(
         cls, icdf: Callable, n_parameters: int, n_grid_points: int = 10_000
     ) -> PriorType:
@@ -324,6 +307,23 @@ class Prior:
         return (
             self._state_dict
         )  # This is a callable to keep the syntax inline with pytorch.
+
+    @classmethod
+    def from_state_dict(cls, state_dict: dict) -> PriorType:
+        method = state_dict["method"]
+
+        if method == "__init__":
+            kwargs = keyfilter(lambda x: x != "method", state_dict)
+            return cls(**kwargs)
+        elif method == "from_torch_distribution":
+            name = state_dict["name"]
+            module = state_dict["module"]
+            kwargs = state_dict["kwargs"]
+            distribution = getattr(import_module(module), name)
+            distribution = distribution(**kwargs)
+            return getattr(cls, method)(distribution)
+        else:
+            NotImplementedError()
 
 
 def get_uniform_prior(low: np.ndarray, high: np.ndarray) -> Prior:

@@ -40,9 +40,7 @@ class Dataset(torch.utils.data.Dataset):
         simkeys: Optional[Sequence[Hashable]] = None,
     ) -> None:
         super().__init__()
-        self._trunc_prior = swyft.TruncatedPrior(
-            prior, bound
-        )  # TODO why do we need this?
+        self._trunc_prior = swyft.TruncatedPrior(prior, bound)
         self.indices = store.sample(N, prior, bound=bound)
         self._store = store
         self._simhook = simhook
@@ -102,7 +100,7 @@ class Dataset(torch.utils.data.Dataset):
         v = self._store.v[i]
         if self._simhook is not None:
             x = self._simhook(x, v)
-        u = self._trunc_prior.prior.u(v.reshape(1, -1)).flatten()
+        u = self.prior.u(v.reshape(1, -1)).flatten()
 
         return (
             {k: array_to_tensor(v) for k, v in x.items()},
@@ -129,11 +127,11 @@ class Dataset(torch.utils.data.Dataset):
         obj._store = store
         obj._simhook = simhook
         obj._simkeys = state_dict["simkeys"]
-        if simhook is None and state_dict["simhook"] is not None:
+        if simhook is None and state_dict["simhook"] is True:
             warn(
                 "A simhook was specified when the dataset was saved, but is missing now."
             )
-        elif simhook is not None and state_dict["simhook"] is None:
+        elif simhook is not None and state_dict["simhook"] is False:
             warn(
                 "A simhook was specified, but no simhook was specified when the Dataset was saved."
             )

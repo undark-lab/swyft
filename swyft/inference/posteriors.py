@@ -297,14 +297,6 @@ class Posteriors:
             result.update(ratios)
         return result
 
-    def state_dict(self) -> dict:
-        state_dict = dict(
-            trunc_prior=self._trunc_prior.state_dict(),
-            ratios={k: v.state_dict() for k, v in self._ratios.items()},
-            parameter_names=self._parameter_names,
-        )
-        return state_dict
-
     def empirical_mass(
         self, nobs: int = 1000, npost: int = 1000
     ) -> Dict[Tuple[int, ...], Dict[str, Array]]:
@@ -318,6 +310,14 @@ class Posteriors:
             Nominal and empirical masses.
         """
         return estimate_empirical_mass(self.dataset, self, nobs, npost)
+
+    def state_dict(self) -> dict:
+        state_dict = dict(
+            trunc_prior=self._trunc_prior.state_dict(),
+            ratios={k: v.state_dict() for k, v in self._ratios.items()},
+            parameter_names=self._parameter_names,
+        )
+        return state_dict
 
     @classmethod
     def from_state_dict(cls, state_dict: dict, dataset: "swyft.Dataset" = None):
@@ -333,11 +333,6 @@ class Posteriors:
         obj._dataset = dataset
         return obj
 
-    @classmethod
-    def load(cls, filename: PathType, dataset: "swyft.Dataset" = None):
-        sd = torch.load(filename)
-        return cls.from_state_dict(sd, dataset=dataset)
-
     def save(self, filename: PathType) -> None:
         """Save a posterior.
 
@@ -351,3 +346,8 @@ class Posteriors:
         """
         sd = self.state_dict()
         torch.save(sd, filename)
+
+    @classmethod
+    def load(cls, filename: PathType, dataset: "swyft.Dataset" = None):
+        sd = torch.load(filename)
+        return cls.from_state_dict(sd, dataset=dataset)
