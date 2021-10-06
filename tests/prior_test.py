@@ -7,6 +7,7 @@ from typing import Callable, Tuple
 import numpy as np
 import pytest
 import torch
+from scipy import stats
 from toolz import compose
 from torch.distributions import Normal, Uniform
 
@@ -141,10 +142,31 @@ class TestSaveLoadPrior:
     def teardown_class(cls):
         cls.directory.cleanup()
 
-    # TODO
-    @pytest.mark.skip(reason="todo")
     def test_save_load_init(self):
-        pass
+        normal = stats.norm(0, 1)
+        prior = Prior(
+            cdf=normal.cdf,
+            icdf=normal.ppf,
+            log_prob=normal.logpdf,
+            n_parameters=1,
+        )
+
+        # Saving
+        path = Path(self.directory.name) / f"from_init_scipy"
+        with open(path, "wb") as f:
+            pickle.dump(prior.state_dict(), f)
+
+        # Loading
+        with open(path, "rb") as f:
+            loaded_state_dict = pickle.load(f)
+        prior_loaded = Prior.from_state_dict(loaded_state_dict)
+
+        # Testing by cdf
+        # (icdf or log_prob would also be fine.)
+        samples = np.random.randn(1_000)
+        cdf_true = prior.log_prob(samples)
+        cdf_esti = prior_loaded.log_prob(samples)
+        assert np.allclose(cdf_true, cdf_esti)
 
     @pytest.mark.parametrize(
         "distribution, args",

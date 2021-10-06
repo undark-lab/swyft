@@ -14,21 +14,21 @@ from swyft.utils import array_to_tensor, tensor_to_array
 PriorType = TypeVar("PriorType", bound="Prior")
 
 
-class TruncatedPrior:
-    """Truncated prior.
+class PriorTruncator:
+    """Samples from a truncated version of the prior and calculates the log_prob.
 
     Args:
         prior: Parameter prior
         bound: Bound object
 
     .. note::
-        The truncated prior is defined through a swyft.Bound object, which
+        The prior truncator is defined through a swyft.Bound object, which
         sample from (subregions of) the hypercube, with swyft.Prior, which maps
         the samples onto parameters of interest.
     """
 
     def __init__(self, prior: "Prior", bound: Bound) -> None:
-        """Instantiate truncated prior (combination of prior and bound).
+        """Instantiate prior truncator (combination of prior and bound).
 
         Args:
             prior: Prior object.
@@ -40,7 +40,7 @@ class TruncatedPrior:
         self.bound = bound
 
     def sample(self, N: int) -> np.ndarray:
-        """Sample from bounded prior.
+        """Sample from truncated prior.
 
         Args:
             N: Number of samples to return
@@ -52,7 +52,7 @@ class TruncatedPrior:
         return self.prior.v(u)
 
     def log_prob(self, v: np.ndarray) -> np.ndarray:
-        """Evaluate log probability of pdf.
+        """Evaluate log probability.
 
         Args:
             v: (N, n_parameters) parameter points.

@@ -40,7 +40,7 @@ class Dataset(torch.utils.data.Dataset):
         simkeys: Optional[Sequence[Hashable]] = None,
     ) -> None:
         super().__init__()
-        self._trunc_prior = swyft.TruncatedPrior(prior, bound)
+        self._prior_truncator = swyft.PriorTruncator(prior, bound)
         self.indices = store.sample(N, prior, bound=bound)
         self._store = store
         self._simhook = simhook
@@ -58,12 +58,12 @@ class Dataset(torch.utils.data.Dataset):
     @property
     def prior(self) -> swyft.Prior:
         """Return prior of dataset."""
-        return self._trunc_prior.prior
+        return self._prior_truncator.prior
 
     @property
     def bound(self) -> swyft.Bound:
         """Return bound of truncated prior of dataset (swyft.Bound)."""
-        return self._trunc_prior.bound
+        return self._prior_truncator.bound
 
     def simulate(
         self, batch_size: Optional[int] = None, wait_for_results: bool = True
@@ -111,7 +111,7 @@ class Dataset(torch.utils.data.Dataset):
     def state_dict(self) -> dict:
         return dict(
             indices=self.indices,
-            trunc_prior=self._trunc_prior.state_dict(),
+            prior_truncator=self._prior_truncator.state_dict(),
             simhook=bool(self._simhook),
             simkeys=self._simkeys,
         )
@@ -119,8 +119,8 @@ class Dataset(torch.utils.data.Dataset):
     @classmethod
     def from_state_dict(cls, state_dict, store, simhook=None):
         obj = cls.__new__(cls)
-        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
-            state_dict["trunc_prior"]
+        obj._prior_truncator = swyft.PriorTruncator.from_state_dict(
+            state_dict["prior_truncator"]
         )
         obj.indices = state_dict["indices"]
 

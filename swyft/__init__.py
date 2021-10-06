@@ -3,7 +3,7 @@ from swyft.inference import Posteriors, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
 from swyft.prior import (
     Prior,
-    TruncatedPrior,
+    PriorTruncator,
     get_diagonal_normal_prior,
     get_uniform_prior,
 )
@@ -21,7 +21,7 @@ def zen():
 
 __all__ = [
     "TrainOptions",
-    "TruncatedPrior",
+    "PriorTruncator",
     "Posteriors",
     "Prior",
     "Bound",

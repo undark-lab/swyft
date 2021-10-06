@@ -38,7 +38,7 @@ class Posteriors:
 
     def __init__(self, dataset: "swyft.Dataset") -> None:
         self._parameter_names = dataset.parameter_names
-        self._trunc_prior = swyft.TruncatedPrior(dataset.prior, bound=dataset.bound)
+        self._prior_truncator = swyft.PriorTruncator(dataset.prior, bound=dataset.bound)
         self._ratios = {}
         self._dataset = dataset
 
@@ -164,8 +164,8 @@ class Posteriors:
             n_batch: number of samples to produce in each batch
         """
         # Unmasked original wrongly normalized log_prob densities
-        # log_probs = self._trunc_prior.log_prob(v)
-        u = self._trunc_prior.prior.u(v)
+        # log_probs = self._prior_truncator.log_prob(v)
+        u = self._prior_truncator.prior.u(v)
 
         ratios = self._eval_ratios(
             obs0, u, n_batch=n_batch
@@ -185,7 +185,7 @@ class Posteriors:
             obs0: Observation of interest
             n_batch: number of samples to produce in each batch
         """
-        v = self._trunc_prior.sample(N)  # prior samples
+        v = self._prior_truncator.sample(N)  # prior samples
         return self.eval(v, obs0, n_batch=n_batch)
 
     #    # TODO: Still needs to be fixed?
@@ -276,11 +276,11 @@ class Posteriors:
 
     @property
     def bound(self) -> "swyft.bounds.Bound":
-        return self._trunc_prior.bound
+        return self._prior_truncator.bound
 
     @property
     def prior(self) -> "swyft.bounds.Prior":
-        return self._trunc_prior.prior
+        return self._prior_truncator.prior
 
     def truncate(self, marginals: MarginalIndex, obs0: ObsType) -> "swyft.bounds.Bound":
         """Generate and return new bound object."""
@@ -313,7 +313,7 @@ class Posteriors:
 
     def state_dict(self) -> dict:
         state_dict = dict(
-            trunc_prior=self._trunc_prior.state_dict(),
+            prior_truncator=self._prior_truncator.state_dict(),
             ratios={k: v.state_dict() for k, v in self._ratios.items()},
             parameter_names=self._parameter_names,
         )
@@ -322,8 +322,8 @@ class Posteriors:
     @classmethod
     def from_state_dict(cls, state_dict: dict, dataset: "swyft.Dataset" = None):
         obj = Posteriors.__new__(Posteriors)
-        obj._trunc_prior = swyft.TruncatedPrior.from_state_dict(
-            state_dict["trunc_prior"]
+        obj._prior_truncator = swyft.PriorTruncator.from_state_dict(
+            state_dict["prior_truncator"]
         )
         obj._ratios = {
             k: RatioEstimator.from_state_dict(v)

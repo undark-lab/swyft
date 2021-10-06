@@ -108,7 +108,7 @@ class Store(ABC):
             additional points. Currently this cannot be reverted, so use with
             care when applying it to the DirectoryStore.
         """
-        pdf = swyft.TruncatedPrior(prior, bound)
+        pdf = swyft.PriorTruncator(prior, bound)
 
         # Lock store while adding new points
         self.lock()
@@ -239,7 +239,7 @@ class Store(ABC):
         if len(self.log_lambdas) == 0:
             return d
         for i in range(len(self.log_lambdas)):
-            pdf = swyft.TruncatedPrior.from_state_dict(self.log_lambdas[i]["pdf"])
+            pdf = swyft.PriorTruncator.from_state_dict(self.log_lambdas[i]["pdf"])
             N = self.log_lambdas[i]["N"]
             r = pdf.log_prob(z) + np.log(N)
             d = np.where(r > d, r, d)
@@ -267,7 +267,7 @@ class Store(ABC):
         .. warning::
             Results are Monte Carlo estimated and subject to sampling noise.
         """
-        pdf = swyft.TruncatedPrior(prior, bound)
+        pdf = swyft.PriorTruncator(prior, bound)
         Nsamples = max(N, 1000)  # At least 1000 test samples
         self._update()
 
@@ -310,7 +310,7 @@ class Store(ABC):
                 raise RuntimeError(
                     "Store does not contain enough samples for your requested intensity function `N * prior`."
                 )
-        pdf = swyft.TruncatedPrior(prior, bound)
+        pdf = swyft.PriorTruncator(prior, bound)
 
         self._update()
 
