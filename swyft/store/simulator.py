@@ -56,7 +56,7 @@ class Simulator:
     ) -> None:
         self.model = model
         if isinstance(pnames, int):
-            pnames = ["z%i" % i for i in range(pnames)]
+            pnames = ["v%i" % i for i in range(pnames)]
         self.pnames = pnames
         self.sim_shapes = sim_shapes
         self.sim_dtype = sim_dtype
