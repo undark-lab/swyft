@@ -6,7 +6,7 @@ import numpy as np
 import zarr
 from dask.distributed import LocalCluster, get_client
 
-from swyft import DaskSimulator, Simulator
+from swyft import DaskSimulator, Prior, Simulator
 from swyft.store.simulator import SimulationStatus
 
 
@@ -191,6 +191,41 @@ class TestSimulator(unittest.TestCase):
 
             assert np.all(sim_status[:] == SimulationStatus.FINISHED)
             assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
+
+    def test_setup_simulator_from_model_function(self):
+        prior = Prior(lambda u: u * 2 - 1, 2)
+        simulator = Simulator.from_model(model, prior)
+        assert len(simulator.pnames) == 2
+        assert simulator.sim_shapes == {"x": (10,)}
+
+    def test_run_a_simulator_that_is_setup_from_command_line(self):
+        def set_input(v):
+            return f"{v[0]} + {v[1]}\n"
+
+        def get_output(stdout, _):
+            return {"sum": float(stdout)}
+
+        simulator = Simulator.from_command(
+            command="bc -l",
+            set_input_method=set_input,
+            get_output_method=get_output,
+            pnames=2,
+            sim_shapes={"sum": ()},
+        )
+
+        pars = np.random.random((100, 2))
+        sims = dict(sum=np.zeros(100))
+        sim_status = np.full(100, SimulationStatus.RUNNING, dtype=np.int)
+
+        simulator._run(
+            v=pars,
+            sims=sims,
+            sim_status=sim_status,
+            indices=np.arange(100, dtype=np.int),
+        )
+
+        assert np.all(sim_status == SimulationStatus.FINISHED)
+        assert not np.any(np.isclose(sims["sum"], 0.0))
 
 
 class TestDaskSimulator(unittest.TestCase):
@@ -416,3 +451,41 @@ class TestDaskSimulator(unittest.TestCase):
             assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
         simulator.client.close()
         cluster.close()
+
+    def test_run_a_simulator_that_is_setup_from_command_line(self):
+        """Run a simulator based on a command line model
+
+        Notes:
+            Need to have a cluster which uses only processes since each
+            instance of the model is run in a separate subdirectory.
+        """
+        cluster = LocalCluster(n_workers=2, processes=True, threads_per_worker=1)
+
+        def set_input(v):
+            return f"{v[0]} + {v[1]}\n"
+
+        def get_output(stdout, _):
+            return {"sum": float(stdout)}
+
+        simulator = DaskSimulator.from_command(
+            command="bc -l",
+            set_input_method=set_input,
+            get_output_method=get_output,
+            pnames=2,
+            sim_shapes={"sum": ()},
+        )
+        simulator.set_dask_cluster(cluster)
+
+        pars = np.random.random((100, 2))
+        sims = dict(sum=np.zeros(100))
+        sim_status = np.full(100, SimulationStatus.RUNNING, dtype=np.int)
+
+        simulator._run(
+            v=pars,
+            sims=sims,
+            sim_status=sim_status,
+            indices=np.arange(100, dtype=np.int),
+        )
+
+        assert np.all(sim_status == SimulationStatus.FINISHED)
+        assert not np.any(np.isclose(sims["sum"], 0.0))
