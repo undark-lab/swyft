@@ -82,9 +82,7 @@ class TestStoreIO:
             loaded.set_simulator(sim_multi_out)
             assert np.allclose(loaded.v, store.v)
             assert loaded._zarr_store.root == store._zarr_store.root
-            assert all(
-                [np.allclose(loaded.sims[k], v) for k, v in store.sims.items()]
-            )
+            assert all([np.allclose(loaded.sims[k], v) for k, v in store.sims.items()])
 
     def test_directory_store_load(self):
         with tempfile.TemporaryDirectory() as td:
@@ -94,6 +92,10 @@ class TestStoreIO:
 
 
 class TestStoreRun:
+    def test_store_add(self):
+        store = MemoryStore(simulator=sim_multi_out)
+        store.add(20, prior)
+        assert store.sims.x1.shape[0]>0
 
     def test_memory_store_simulate(self):
         store = MemoryStore(simulator=sim_multi_out)
@@ -128,9 +130,7 @@ class TestStoreRun:
 
     def test_store_lockfile(self):
         with tempfile.TemporaryDirectory() as td:
-            store_dir = DirectoryStore(
-                simulator=sim, path=td, sync_path=td + ".sync"
-            )
+            store_dir = DirectoryStore(simulator=sim, path=td, sync_path=td + ".sync")
             assert store_dir._lock is not None
             assert store_dir._lock.lockfile is None
 
@@ -156,7 +156,3 @@ class TestStoreRun:
         store.add(10, prior)
         store.simulate()
         assert all(store.sim_status[:] == SimulationStatus.FAILED)
-
-
-if __name__ == "__main__":
-    pass
