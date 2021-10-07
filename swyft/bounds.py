@@ -1,7 +1,6 @@
 import logging
 
 import numpy as np
-import torch
 from sklearn.neighbors import BallTree
 
 from swyft.utils.saveable import StateDictSaveable
@@ -9,7 +8,7 @@ from swyft.utils.saveable import StateDictSaveable
 log = logging.getLogger(__name__)
 
 
-class Bound:
+class Bound(StateDictSaveable, ABC):
     """A bound region on the hypercube.
 
     .. note::
@@ -50,6 +49,7 @@ class Bound:
         """
         raise NotImplementedError
 
+    # TODO can we do away with this thing? I think yes.
     @classmethod
     def from_state_dict(cls, state_dict):
         """Instantiate Bound object based on state_dict.
@@ -68,15 +68,6 @@ class Bound:
             return CompositBound.from_state_dict(state_dict)
         else:
             raise KeyError
-
-    @classmethod
-    def load(cls, filename):
-        sd = torch.load(filename)
-        return cls.from_state_dict(sd)
-
-    def save(self, filename):
-        sd = self.state_dict()
-        torch.save(sd, filename)
 
     @classmethod
     def from_Posteriors(cls, partitions, post, obs, th=-13.0):
