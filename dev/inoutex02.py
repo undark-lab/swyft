@@ -22,7 +22,7 @@ def get_marginal_block_shape(marginal_indices: MarginalIndex) -> Tuple[int, int]
     marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
     assert is_marginal_block_possible(
         marginal_indices
-    ), f"Each tuple in {marginal_indices=} must have the same length."
+    ), f"Each tuple in {marginal_indices} must have the same length."
     return len(marginal_indices), len(marginal_indices[0])
 
 
@@ -31,7 +31,7 @@ def get_marginal_block(parameters: Array, marginal_indices: MarginalIndex) -> Ar
     tuple_marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
     assert is_marginal_block_possible(
         tuple_marginal_indices
-    ), f"Each tuple in {tuple_marginal_indices=} must have the same length."
+    ), f"Each tuple in {tuple_marginal_indices} must have the same length."
 
     if depth in [0, 1, 2]:
         return torch.stack(
@@ -39,7 +39,7 @@ def get_marginal_block(parameters: Array, marginal_indices: MarginalIndex) -> Ar
         )
     else:
         raise ValueError(
-            f"{marginal_indices=} must be of the form (a) 2, (b) [2, 3], (c) [2, [1, 3]], or (d) [[0, 1], [1, 2]]."
+            f"{marginal_indices} must be of the form (a) 2, (b) [2, 3], (c) [2, [1, 3]], or (d) [[0, 1], [1, 2]]."
         )
 
 

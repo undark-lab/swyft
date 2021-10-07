@@ -1,16 +1,16 @@
-# from .batchnorm import BatchNorm1dWithChannel
-# from .linear import LinearWithChannel
-# from .resnet import ResidualNet
-
-from .head import DefaultHead
-from .module import Module
-from .normalization import OnlineNormalizationLayer
-from .tail import DefaultTail
+from swyft.networks.channelized import LinearWithChannel, ResidualNetWithChannel
+from swyft.networks.head import DefaultHead
+from swyft.networks.module import Module
+from swyft.networks.normalization import (
+    BatchNorm1dWithChannel,
+    OnlineNormalizationLayer,
+)
+from swyft.networks.tail import DefaultTail
 
 __all__ = [
-    #    "BatchNorm1dWithChannel",
-    #    "LinearWithChannel",
-    #    "ResidualNet",
+    "BatchNorm1dWithChannel",
+    "LinearWithChannel",
+    "ResidualNetWithChannel",
     "DefaultHead",
     "DefaultTail",
     "Module",
