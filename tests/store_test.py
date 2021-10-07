@@ -5,6 +5,7 @@ import numpy as np
 import zarr
 
 from swyft import Prior
+from swyft.prior import get_uniform_prior
 from swyft.store.simulator import DaskSimulator, SimulationStatus, Simulator
 from swyft.store.store import DirectoryStore, MemoryStore
 
@@ -32,7 +33,7 @@ sim = Simulator(model, parameter_names=["a", "b"], sim_shapes=dict(x=(10,)))
 sim_multi_out = Simulator(
     model_multi_out, parameter_names=["a", "b"], sim_shapes=dict(x1=(10,), x2=(2, 5))
 )
-prior = Prior(lambda u: u * np.array([1.0, 0.5]), zdim=2)
+prior = get_uniform_prior(np.zeros(2), np.array([1.0, 0.5]))
 
 
 class TestStoreIO:
@@ -92,6 +93,11 @@ class TestStoreIO:
 
 
 class TestStoreRun:
+    def test_store_add(self):
+        store = MemoryStore(simulator=sim_multi_out)
+        store.add(20, prior)
+        assert store.sims.x1.shape[0] > 0
+
     def test_memory_store_simulate(self):
         store = MemoryStore(simulator=sim_multi_out)
         indices = store.sample(100, prior, add=True)
@@ -153,7 +159,3 @@ class TestStoreRun:
         store.add(10, prior)
         store.simulate()
         assert all(store.sim_status[:] == SimulationStatus.FAILED)
-
-
-if __name__ == "__main__":
-    pass

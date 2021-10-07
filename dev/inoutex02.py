@@ -9,7 +9,7 @@ import swyft
 import swyft.utils
 from swyft.inference.loss import double_features, double_params
 from swyft.inference.train import get_ntrain_nvalid
-from swyft.networks.linear import LinearWithChannel
+from swyft.networks.channelized import LinearWithChannel
 from swyft.types import Array, Device, MarginalIndex
 
 

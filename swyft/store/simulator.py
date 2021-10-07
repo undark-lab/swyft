@@ -61,7 +61,7 @@ class Simulator:
     ) -> None:
         self.model = model
         if isinstance(parameter_names, int):
-            parameter_names = ["z%i" % i for i in range(parameter_names)]
+            parameter_names = ["v%i" % i for i in range(parameter_names)]
         self.parameter_names = parameter_names
         self.sim_shapes = sim_shapes
         self.sim_dtype = sim_dtype

@@ -4,7 +4,7 @@ from typing import Callable, Dict, Optional, Sequence, Tuple
 import torch
 import torch.nn as nn
 
-from swyft.networks.linear import LinearWithChannel
+from swyft.networks.channelized import LinearWithChannel
 from swyft.networks.module import Module
 from swyft.networks.normalization import OnlineNormalizationLayer
 from swyft.types import Array, MarginalIndex, ObsType
