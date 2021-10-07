@@ -4,7 +4,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Union
+from typing import Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import fasteners
 import numcodecs
@@ -12,12 +12,11 @@ import numpy as np
 import zarr
 
 import swyft
+from swyft.store.simulator import SimulationStatus, Simulator
+from swyft.types import Array, ParameterNamesType, PathType, SimShapeType
+from swyft.utils import is_empty
 
 log = logging.getLogger(__name__)
-
-from swyft.store.simulator import SimulationStatus, Simulator
-from swyft.types import PathType
-from swyft.utils import is_empty
 
 
 class Filesystem:
@@ -115,18 +114,18 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        z_prop = pdf.sample(N=np.random.poisson(N))
-        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
-        log_lambda_store = self.log_lambda(z_prop)
-        log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
+        v_prop = pdf.sample(N=np.random.poisson(N))
+        log_lambda_target = pdf.log_prob(v_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(v_prop)
+        log_w = np.log(np.random.rand(len(v_prop))) + log_lambda_target
         accept_new = log_w > log_lambda_store
-        z_new = z_prop[accept_new]
+        v_new = v_prop[accept_new]
         log_w_new = log_w[accept_new]
 
         # Anything new?
         if sum(accept_new) > 0:
             # Add new entries to store
-            self._append_new_points(z_new, log_w_new)
+            self._append_new_points(v_new, log_w_new)
             print("Store: Adding %i new samples to simulator store." % sum(accept_new))
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
@@ -143,22 +142,30 @@ class Store(ABC):
     #        """Return ZarrStore object."""
     #        return self._zarr_store
 
-    def _setup_lock(self, sync_path):
+    def _setup_lock(self, sync_path: PathType) -> None:
+        """Setup lock for concurrent access from multiple processes."""
         path = os.path.join(sync_path, "cache.lock")
         self._lock = fasteners.InterProcessLock(path)
 
     def lock(self) -> None:
+        """Lock store for the current process."""
         if self._lock is not None:
-            log.debug("Cache locked")
+            log.debug("Store locked")
             self._lock.acquire(blocking=True)
 
     def unlock(self) -> None:
+        """Unlock store so that other processes can access it."""
         if self._lock is not None:
             self._lock.release()
-            log.debug("Cache unlocked")
+            log.debug("Store unlocked")
 
     def _setup_new_zarr_store(
-        self, parameter_names, sim_shapes, root, chunksize=1, sim_dtype="f8"
+        self,
+        parameter_names: ParameterNamesType,
+        sim_shapes: SimShapeType,
+        root: zarr.Group,
+        chunksize: int = 1,
+        sim_dtype: str = "f8",
     ) -> None:  # Adding observational shapes to store
         # Parameters
         n_parameters = len(parameter_names)
@@ -196,6 +203,8 @@ class Store(ABC):
             dtype="int",
         )
 
+        self._update()
+
     def _update(self) -> None:
         self.sims = self._root[self._filesystem.sims]
         self.v = self._root[self._filesystem.v]
@@ -204,12 +213,12 @@ class Store(ABC):
         self.sim_status = self._root[self._filesystem.simulation_status]
         self.parameter_names = self._root[self._filesystem.v].attrs["parameter_names"]
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns number of samples in the store."""
         self._update()
         return len(self.v)
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int) -> Tuple[Mapping[str, np.ndarray], np.ndarray]:
         """Returns data store entry with index :math:`i`."""
         self._update()
         sim = {}
@@ -218,7 +227,7 @@ class Store(ABC):
         par = self.v[i]
         return (sim, par)
 
-    def _append_new_points(self, v, log_w):
+    def _append_new_points(self, v: Array, log_w: Array) -> None:
         """Append z to zarr_store content and generate new slots for x."""
         self._update()
         n = len(v)
@@ -233,7 +242,15 @@ class Store(ABC):
         self.sim_status.append(m)
 
     def log_lambda(self, z: np.ndarray) -> np.ndarray:
-        """Intensity function of the store."""
+        """Intensity function of the store.
+
+        Args:
+            z: Array with the sample parameters. Should have shape (num. samples,
+                num. parameters per sample).
+
+        Returns:
+            Array with the sample intensities.
+        """
         self._update()
         d = -np.inf * np.ones_like(z[:, 0])
         if len(self.log_lambdas) == 0:
@@ -255,7 +272,6 @@ class Store(ABC):
             prior: Prior
             bound: Bound object for prior truncation
 
-
         Returns:
             Fraction of samples that is already covered by content of the store.
 
@@ -272,9 +288,9 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        z_prop = pdf.sample(N=np.random.poisson(Nsamples))
-        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
-        log_lambda_store = self.log_lambda(z_prop)
+        v_prop = pdf.sample(N=np.random.poisson(Nsamples))
+        log_lambda_target = pdf.log_prob(v_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(v_prop)
         frac = np.where(
             log_lambda_target > log_lambda_store,
             np.exp(-log_lambda_target + log_lambda_store),
@@ -293,14 +309,14 @@ class Store(ABC):
         """Return samples from store.
 
         Args:
-            N (int): Number of samples
-            prior (swyft.Prior): Prior
-            bound (swyft.Bound): Bound object for prior truncation
-            check_coverage (bool): Check whether requested points are contained in the store.
-            add (bool): If necessary, add requested points to the store.
+            N: Number of samples
+            prior: Prior
+            bound: Bound object for prior truncation
+            check_coverage: Check whether requested points are contained in the store.
+            add: If necessary, add requested points to the store.
 
         Returns:
-            Indices (list): Index list pointing to the relevant store entries.
+            Indices: Index list pointing to the relevant store entries.
         """
         if add:
             if self.coverage(N, prior, bound=bound) < 1:
@@ -315,15 +331,17 @@ class Store(ABC):
         self._update()
 
         # Select points from cache
-        z_store = self.v[:]
+        v_store = self.v[:]
         log_w_store = self.log_w[:]
-        log_lambda_target = pdf.log_prob(z_store) + np.log(N)
+        log_lambda_target = pdf.log_prob(v_store) + np.log(N)
         accept_stored = log_w_store <= log_lambda_target
         indices = np.array(range(len(accept_stored)))[accept_stored]
 
         return indices
 
-    def _get_indices_to_simulate(self, indices: Optional[Sequence[int]] = None):
+    def _get_indices_to_simulate(
+        self, indices: Optional[Sequence[int]] = None
+    ) -> np.ndarray:
         """
         Determine which samples need to be simulated.
 
@@ -339,7 +357,9 @@ class Store(ABC):
         idx = np.flatnonzero(require_simulation)
         return indices[idx] if indices is not None else idx
 
-    def _set_simulation_status(self, indices: Sequence[int], status: SimulationStatus):
+    def _set_simulation_status(
+        self, indices: Sequence[int], status: SimulationStatus
+    ) -> None:
         """
         Flag the specified samples with the simulation status.
 
@@ -355,7 +375,9 @@ class Store(ABC):
             )
         self.sim_status.oindex[indices] = status
 
-    def get_simulation_status(self, indices: Optional[Sequence[int]] = None):
+    def get_simulation_status(
+        self, indices: Optional[Sequence[int]] = None
+    ) -> np.ndarray:
         """Determine the status of sample simulations.
 
         Args:
@@ -373,11 +395,18 @@ class Store(ABC):
         )
 
     def requires_sim(self, indices: Optional[Sequence[int]] = None) -> bool:
-        """Check whether there are parameters which require simulation."""
+        """Check whether there are parameters which require simulation.
+
+        Args:
+            indices: List of indices. If None, check all samples.
+
+        Returns:
+            True if one or more samples require simulations, False otherwise.
+        """
         self._update()
         return self._get_indices_to_simulate(indices).size > 0
 
-    def _get_indices_failed_simulations(self):
+    def _get_indices_failed_simulations(self) -> np.ndarray:
         self._update()
         return np.flatnonzero(self.sim_status == SimulationStatus.FAILED)
 
@@ -387,30 +416,14 @@ class Store(ABC):
         self._update()
         return self._get_indices_failed_simulations().size > 0
 
-    def _add_sim(self, i, x):
+    def _add_sim(self, i: int, x: Mapping[str, Array]) -> None:
         for k, v in x.items():
             self.sims[k][i] = v
         self._set_simulation_status(i, SimulationStatus.FINISHED)
 
-    def _failed_sim(self, i):
+    def _failed_sim(self, i: int) -> None:
         self._update()
         self._set_simulation_status(i, SimulationStatus.FAILED)
-
-    # NOTE: Deprecated
-    #    @staticmethod
-    #    def did_simulator_succeed(x: Dict[str, Array], fail_on_non_finite: bool) -> bool:
-    #        """Is the simulation a success?"""
-    #
-    #        assert isinstance(x, dict), "Simulators must return a dictionary."
-    #
-    #        dict_anynone = lambda d: any(v is None for v in d.values())  # noqa: E731
-    #
-    #        if dict_anynone(x):
-    #            return False
-    #        elif fail_on_non_finite and not all_finite(x):
-    #            return False
-    #        else:
-    #            return True
 
     def set_simulator(self, simulator: "swyft.Simulator") -> None:
         """(Re)set simulator.
@@ -428,13 +441,12 @@ class Store(ABC):
         batch_size: Optional[int] = None,
         wait_for_results: Optional[bool] = True,
     ) -> None:
-        """Run simulator sequentially on parameter store with missing corresponding simulations.
+        """Run simulator on parameter store with missing corresponding simulations.
 
         Args:
-            indices (list): list of sample indices for which a simulation is required
-            batch_size (int): simulations will be submitted in batches of the specified
-                size
-            wait_for_results (bool): if True, return only when all simulations are done
+            indices: list of sample indices for which a simulation is required
+            batch_size: simulations will be submitted in batches of the specified size
+            wait_for_results: if True, return only when all simulations are done
         """
         if self._simulator is None:
             log.warning("No simulator specified.  No simulations will run.")
@@ -449,7 +461,6 @@ class Store(ABC):
         # Run simulations and collect status
         if len(idx) == 0:
             log.debug("No simulations required.")
-            return
         else:
             # For the MemoryStore, we need to collect results in memory
             collect_in_memory = True if isinstance(self, MemoryStore) else False
@@ -471,11 +482,11 @@ class Store(ABC):
         if wait_for_results:
             self.wait_for_simulations(indices)
 
-    def wait_for_simulations(self, indices: Sequence[int]):
+    def wait_for_simulations(self, indices: Sequence[int]) -> None:
         """Wait for a set of sample simulations to be finished.
 
         Args:
-            indices (list): list of sample indices
+            indices: list of sample indices
         """
         done = False
         while not done:
@@ -495,7 +506,7 @@ class DirectoryStore(Store):
             It must differ from path, it must be accessible to all processes working on the store,
             and the underlying filesystem must support file locking.
 
-    Example::
+    Example:
 
         >>> store = swyft.DirectoryStore(PATH_TO_STORE)
         >>> print("Number of simulations in store:", len(store))
@@ -571,7 +582,7 @@ class MemoryStore(Store):
             )
             return obj
         else:
-            raise FileNotFoundError(f"There is no directory store at {path=}.")
+            raise FileNotFoundError(f"There is no directory store at {path}.")
 
 
 #    def copy(self, sync_path=None):

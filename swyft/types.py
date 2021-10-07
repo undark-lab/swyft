@@ -4,6 +4,7 @@ from typing import Callable, Dict, Hashable, Iterable, Mapping, Sequence, Tuple,
 
 import numpy as np
 import torch
+import zarr
 
 # If you add a type, don't forget to update autodoc_type_aliases in /docs/source/config.py
 
