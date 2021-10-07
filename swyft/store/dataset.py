@@ -8,6 +8,7 @@ import torch
 import swyft
 from swyft.types import ObsType, ParameterNamesType, PathType
 from swyft.utils.array import array_to_tensor
+from swyft.utils.saveable import StateDictSaveable
 
 log = logging.getLogger(__name__)
 

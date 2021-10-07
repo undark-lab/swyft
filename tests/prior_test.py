@@ -1,4 +1,3 @@
-import pickle
 import tempfile
 from itertools import chain, product
 from pathlib import Path
@@ -153,13 +152,10 @@ class TestSaveLoadPrior:
 
         # Saving
         path = Path(self.directory.name) / f"from_init_scipy"
-        with open(path, "wb") as f:
-            pickle.dump(prior.state_dict(), f)
+        prior.save(path)
 
         # Loading
-        with open(path, "rb") as f:
-            loaded_state_dict = pickle.load(f)
-        prior_loaded = Prior.from_state_dict(loaded_state_dict)
+        prior_loaded = Prior.load(path)
 
         # Testing by cdf
         # (icdf or log_prob would also be fine.)
@@ -184,13 +180,10 @@ class TestSaveLoadPrior:
             Path(self.directory.name)
             / f"from_torch_distribution_{distribution.__class__.__name__}"
         )
-        with open(path, "wb") as f:
-            pickle.dump(prior.state_dict(), f)
+        prior.save(path)
 
         # Loading
-        with open(path, "rb") as f:
-            loaded_state_dict = pickle.load(f)
-        prior_loaded = Prior.from_state_dict(loaded_state_dict)
+        prior_loaded = Prior.load(path)
 
         # Testing by cdf
         # (icdf or log_prob would also be fine.)

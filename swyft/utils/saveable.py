@@ -6,7 +6,7 @@ import torch
 
 from swyft.types import PathType
 
-StateDictSaveableType = TypeVar("StateDictSaveableType", "StateDictSaveable")
+StateDictSaveableType = TypeVar("StateDictSaveableType", bound="StateDictSaveable")
 
 
 class StateDictSaveable(ABC):
