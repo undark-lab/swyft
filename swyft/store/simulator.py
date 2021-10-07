@@ -9,9 +9,11 @@ from typing import Callable, Mapping, Optional, Tuple, Union
 
 import dask.array as da
 import numpy as np
+import zarr
 from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
+from swyft.bounds.prior import TruncatedPrior
 from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
 from swyft.utils import all_finite
 
@@ -62,22 +64,27 @@ class Simulator:
 
     def _run(
         self,
-        v: Array,
-        sims: Mapping[str, Array],
-        sim_status: Array,
+        v: Union[zarr.Array, np.ndarray],
+        sims: Mapping[str, Union[zarr.indexing.OIndex, np.ndarray]],
+        sim_status: Union[zarr.indexing.OIndex, np.ndarray],
         indices: np.ndarray,
         **kwargs
     ) -> None:
         """Run the simulator on the input parameters.
 
         Args:
-            v: Array with all the input parameters. Should have shape
-                (num. samples, num. parameters).
-            sims: Dictionary of arrays where to store the simulation output.
-                All arrays should have the number of samples as the size of the
-                first dimension.
-            sim_status: Array where to store the simulation status (size should
-                be equal to the number of samples).
+            v: Array-like object with all the input parameters. Should have
+                shape (num. samples, num. parameters). Should have ``.shape``,
+                ``.ndim``, ``.dtype``, and support numpy-style slicing.
+            sims: Dictionary of array-like objects where to store the
+                simulation output. All arrays should have the number of samples
+                as the size of the first dimension. Arrays should support
+                numpy-style setitem orthogonal indexing (e.g.
+                ``array[:, [1, 2, 3]] = 0``).
+            sim_status: Array-like object where to store the simulation status
+                (size should be equal to the number of samples). It should
+                support numpy-style setitem orthogonal indexing (e.g.
+                ``array[:, [1, 2, 3]] = 0``).
             indices: Indices of the samples that need to be run by the
                 simulator.
         """
@@ -119,17 +126,17 @@ class Simulator:
         """
         command_args = shlex.split(command)
 
-        def model(z):
+        def model(v):
             """Closure to setup an instance of the simulator.
 
             Args:
-                z: input parameter array.
+                v: input parameter array.
             """
             with tempfile.TemporaryDirectory(dir=tmpdir) as tmpdirname:
                 cwd = os.getcwd()
                 try:
                     os.chdir(tmpdirname)
-                    input = set_input_method(z)
+                    input = set_input_method(v)
                     res = subprocess.run(
                         command_args,
                         capture_output=True,
@@ -159,13 +166,13 @@ class Simulator:
         Note:
             The simulator model is run once in order to infer observable shapes from the output.
         """
-        params = prior.sample(1)[0]
-        obs = model(params)
-        sim_shapes = {k: v.shape for k, v in obs.items()}
-        dtype = [v.dtype.str for v in obs.values()][0]
+        v = TruncatedPrior(prior, bound=None).sample(1)[0]
+        sims = model(v)
+        sim_shapes = {k: v.shape for k, v in sims.items()}
+        dtype = [v.dtype.str for v in sims.values()][0]
         return cls(
             model=model,
-            pnames=len(params),
+            pnames=len(v),
             sim_shapes=sim_shapes,
             sim_dtype=dtype,
             fail_on_non_finite=fail_on_non_finite,
@@ -179,9 +186,9 @@ class DaskSimulator(Simulator):
 
     def _run(
         self,
-        v: Array,
-        sims: Mapping[str, Array],
-        sim_status: Array,
+        v: Union[zarr.Array, np.ndarray],
+        sims: Mapping[str, Union[zarr.indexing.OIndex, np.ndarray]],
+        sim_status: Union[zarr.indexing.OIndex, np.ndarray],
         indices: np.ndarray,
         collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
@@ -201,16 +208,16 @@ class DaskSimulator(Simulator):
 
         # open parameter array as Dask array
         chunks = getattr(v, "chunks", "auto")
-        z = da.from_array(v, chunks=chunks)
+        v_dask = da.from_array(v, chunks=chunks)
         idx = da.from_array(indices, chunks=(batch_size or -1,))
-        z = z[idx]
+        v_dask = v_dask[idx]
 
-        z = z.persist()  # load the parameters in the distributed memory
+        v_dask = v_dask.persist()  # load the parameters in the distributed memory
 
         # block-wise run the model function on the parameter array
         out = da.map_blocks(
             _run_model_chunk,
-            z,
+            v_dask,
             model=self.model,
             sim_shapes=self.sim_shapes,
             fail_on_non_finite=self.fail_on_non_finite,
@@ -232,7 +239,7 @@ class DaskSimulator(Simulator):
                 getitem,
                 obs,
                 new_axis=[i + 1 for i in range(len(shape))],
-                chunks=(z.chunks[0], *shape),
+                chunks=(v_dask.chunks[0], *shape),
                 meta=np.array(()),
                 dtype=float,
             )
@@ -298,65 +305,63 @@ class DaskSimulator(Simulator):
 
 
 def _run_model(
-    z: np.ndarray, model: Callable, fail_on_non_finite: bool
+    v: np.ndarray, model: Callable, fail_on_non_finite: bool
 ) -> Tuple[Mapping[str, np.ndarray], int]:
     """Run one instance of the model.
 
     Args:
-        z: Array with the model input parameters.
+        v: Array with the model input parameters.
         model: Simulator model function.
         fail_on_non_finite: Whether return an invalid code if simulation
             returns NaN or infinite, default True.
 
     Return:
-        out: Dictionary with the output of the model run.
-        sim_status: Simulation status code
+        Dictionary with the output of the model run, simulation status code.
     """
-    out = {}
+    sim = {}
     sim_status = SimulationStatus.FAILED
     try:
-        out = model(z)
-        sim_status = _get_sim_status(out, fail_on_non_finite)
+        sim = model(v)
+        sim_status = _get_sim_status(sim, fail_on_non_finite)
     except:
         traceback.print_exc()
-    return out, sim_status
+    return sim, sim_status
 
 
 def _run_model_chunk(
-    z: np.ndarray, model: Callable, sim_shapes: SimShapeType, fail_on_non_finite: bool
+    v: np.ndarray, model: Callable, sim_shapes: SimShapeType, fail_on_non_finite: bool
 ) -> Tuple[Mapping[str, np.ndarray], np.ndarray]:
     """Run the model over a set of input parameters.
 
     Args:
-        z: Array with the input parameters. Should have shape (num. samples,
+        v: Array with the input parameters. Should have shape (num. samples,
             num. parameters).
         model: Simulator model function.
         sim_shapes: Map of simulator's output names to shapes.
         fail_on_non_finite: Whether return an invalid code if simulation
             returns NaN or infinite, default True.
     Returns:
-        x: Dictionary with the output of the simulations.
-        status: Array with the simulation status.
+        Dictionary with the output of the simulations, array with the simulation status.
     """
-    chunk_size = len(z)
-    x = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
-    status = np.zeros(len(z), dtype=int)
-    for i, z_i in enumerate(z):
-        out, sim_status = _run_model(z_i, model, fail_on_non_finite)
-        for obs, val in out.items():
-            x[obs][i] = val
-        status[i] = sim_status
-    return x, status
+    chunk_size = len(v)
+    sims = {obs: np.full((chunk_size, *shp), np.nan) for obs, shp in sim_shapes.items()}
+    sim_status = np.zeros(len(v), dtype=int)
+    for i, z_i in enumerate(v):
+        sim, status = _run_model(z_i, model, fail_on_non_finite)
+        for key, val in sim.items():
+            sims[key][i] = val
+        sim_status[i] = status
+    return sims, sim_status
 
 
-def _get_sim_status(x: Mapping[str, np.ndarray], fail_on_non_finite: bool) -> int:
+def _get_sim_status(sims: Mapping[str, np.ndarray], fail_on_non_finite: bool) -> int:
     """Did the simulation fail?"""
 
-    assert isinstance(x, dict), "Simulators must return a dictionary."
+    assert isinstance(sims, dict), "Simulators must return a dictionary."
 
-    if any([v is None for v in x.values()]):
+    if any([v is None for v in sims.values()]):
         return SimulationStatus.FAILED
-    elif fail_on_non_finite and not all_finite(x):
+    elif fail_on_non_finite and not all_finite(sims):
         return SimulationStatus.FAILED
     else:
         return SimulationStatus.FINISHED
