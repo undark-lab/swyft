@@ -238,7 +238,7 @@ class Prior(StateDictSaveable):
         """
         assert (
             len(distribution.batch_shape) == 1
-        ), f"{distribution.batch_shape=} must be one dimensional"
+        ), f"{distribution.batch_shape} must be one dimensional"
         assert (
             len(distribution.event_shape) == 0
         ), f"{distribution} must be factorizable and report the log_prob of every dimension (i.e. all dims are in batch_shape)"

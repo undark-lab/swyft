@@ -44,7 +44,7 @@ class TestSaveLoadPriorTruncator:
         prior_truncator = PriorTruncator(prior, bound=None)
 
         # Saving
-        path = Path(self.directory.name) / f"prior_truncator_{bound=}"
+        path = Path(self.directory.name) / f"prior_truncator_{bound}"
         prior_truncator.save(path)
 
         # Loading
