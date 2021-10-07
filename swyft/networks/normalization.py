@@ -17,10 +17,10 @@ class OnlineNormalizationLayer(nn.Module):
         """Accumulate mean and variance online using the "parallel algorithm" algorithm from [1].
 
         Args:
-            shape (tuple): shape of mean, variance, and std array. do not include batch dimension!
-            stable (bool): (optional) compute using the stable version of the algorithm [1]
-            epsilon (float): (optional) added to the computation of the standard deviation for numerical stability.
-            use_average_std (bool): (optional) ``True`` to normalize using std averaged over the whole observation, ``False`` to normalize using std of each component of the observation.
+            shape: shape of mean, variance, and std array. do not include batch dimension!
+            stable: (optional) compute using the stable version of the algorithm [1]
+            epsilon: (optional) added to the computation of the standard deviation for numerical stability.
+            use_average_std: (optional) ``True`` to normalize using std averaged over the whole observation, ``False`` to normalize using std of each component of the observation.
 
         References:
             [1] https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
@@ -79,28 +79,3 @@ class OnlineNormalizationLayer(nn.Module):
             return torch.sqrt(self.var + self.epsilon).mean()
         else:
             return torch.sqrt(self.var + self.epsilon)
-
-
-class BatchNorm1dWithChannel(nn.BatchNorm1d):
-    def __init__(
-        self,
-        num_channels: int,
-        num_features: int,
-        eps: float = 1e-5,
-        momentum: float = 0.1,
-        affine: bool = True,
-        track_running_stats: bool = True,
-    ) -> None:
-        """BatchNorm1d over the batch, N. Requires shape (N, C, L).
-
-        Otherwise, same as torch.nn.BatchNorm1d with extra num_channel. Cannot do the temporal batch norm case.
-        """
-        num_features = num_channels * num_features
-        super().__init__(num_features, eps, momentum, affine, track_running_stats)
-        self.flatten = nn.Flatten()
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        n, c, f = input.shape
-        flat = self.flatten(input)
-        batch_normed = super().forward(flat)
-        return batch_normed.reshape(n, c, f)

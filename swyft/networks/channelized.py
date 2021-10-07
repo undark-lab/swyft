@@ -6,7 +6,52 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn import init
 
-from swyft.networks.normalization import BatchNorm1dWithChannel
+
+# Inspired by: https://github.com/pytorch/pytorch/issues/36591
+class LinearWithChannel(torch.nn.Module):
+    def __init__(self, channels: int, in_features: int, out_features: int) -> None:
+        super(LinearWithChannel, self).__init__()
+        self.weights = torch.nn.Parameter(
+            torch.empty((channels, out_features, in_features))
+        )
+        self.bias = torch.nn.Parameter(torch.empty(channels, out_features))
+
+        # Initialize weights
+        torch.nn.init.kaiming_uniform_(self.weights, a=math.sqrt(5))
+        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weights)
+        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        torch.nn.init.uniform_(self.bias, -bound, bound)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.ndim >= 2, "Requires (..., channel, features) shape."
+        x = x.unsqueeze(-1)
+        result = torch.matmul(self.weights, x).squeeze(-1) + self.bias
+        return result
+
+
+class BatchNorm1dWithChannel(nn.BatchNorm1d):
+    def __init__(
+        self,
+        num_channels: int,
+        num_features: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+    ) -> None:
+        """BatchNorm1d over the batch, N. Requires shape (N, C, L).
+
+        Otherwise, same as torch.nn.BatchNorm1d with extra num_channel. Cannot do the temporal batch norm case.
+        """
+        num_features = num_channels * num_features
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
+        self.flatten = nn.Flatten()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        n, c, f = input.shape
+        flat = self.flatten(input)
+        batch_normed = super().forward(flat)
+        return batch_normed.reshape(n, c, f)
 
 
 class ResidualBlockWithChannel(nn.Module):
@@ -88,25 +133,3 @@ class ResidualNetWithChannel(nn.Module):
             temps = block(temps)
         outputs = self.final_layer(temps)
         return outputs
-
-
-# Inspired by: https://github.com/pytorch/pytorch/issues/36591
-class LinearWithChannel(torch.nn.Module):
-    def __init__(self, channels: int, in_features: int, out_features: int) -> None:
-        super(LinearWithChannel, self).__init__()
-        self.weights = torch.nn.Parameter(
-            torch.empty((channels, out_features, in_features))
-        )
-        self.bias = torch.nn.Parameter(torch.empty(channels, out_features))
-
-        # Initialize weights
-        torch.nn.init.kaiming_uniform_(self.weights, a=math.sqrt(5))
-        fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weights)
-        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-        torch.nn.init.uniform_(self.bias, -bound, bound)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        assert x.ndim >= 2, "Requires (..., channel, features) shape."
-        x = x.unsqueeze(-1)
-        result = torch.matmul(self.weights, x).squeeze(-1) + self.bias
-        return result
