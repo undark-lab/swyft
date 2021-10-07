@@ -115,18 +115,18 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        z_prop = pdf.sample(N=np.random.poisson(N))
-        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
-        log_lambda_store = self.log_lambda(z_prop)
-        log_w = np.log(np.random.rand(len(z_prop))) + log_lambda_target
+        v_prop = pdf.sample(N=np.random.poisson(N))
+        log_lambda_target = pdf.log_prob(v_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(v_prop)
+        log_w = np.log(np.random.rand(len(v_prop))) + log_lambda_target
         accept_new = log_w > log_lambda_store
-        z_new = z_prop[accept_new]
+        v_new = v_prop[accept_new]
         log_w_new = log_w[accept_new]
 
         # Anything new?
         if sum(accept_new) > 0:
             # Add new entries to store
-            self._append_new_points(z_new, log_w_new)
+            self._append_new_points(v_new, log_w_new)
             print("Store: Adding %i new samples to simulator store." % sum(accept_new))
             # Update intensity function
             self.log_lambdas.resize(len(self.log_lambdas) + 1)
@@ -286,9 +286,9 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        z_prop = pdf.sample(N=np.random.poisson(Nsamples))
-        log_lambda_target = pdf.log_prob(z_prop) + np.log(N)
-        log_lambda_store = self.log_lambda(z_prop)
+        v_prop = pdf.sample(N=np.random.poisson(Nsamples))
+        log_lambda_target = pdf.log_prob(v_prop) + np.log(N)
+        log_lambda_store = self.log_lambda(v_prop)
         frac = np.where(
             log_lambda_target > log_lambda_store,
             np.exp(-log_lambda_target + log_lambda_store),
@@ -328,9 +328,9 @@ class Store(ABC):
         self._update()
 
         # Select points from cache
-        z_store = self.v[:]
+        v_store = self.v[:]
         log_w_store = self.log_w[:]
-        log_lambda_target = pdf.log_prob(z_store) + np.log(N)
+        log_lambda_target = pdf.log_prob(v_store) + np.log(N)
         accept_stored = log_w_store <= log_lambda_target
         indices = np.array(range(len(accept_stored)))[accept_stored]
 
