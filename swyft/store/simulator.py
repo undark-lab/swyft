@@ -13,6 +13,7 @@ import zarr
 from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
+from swyft.bounds.prior import TruncatedPrior
 from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
 from swyft.utils import all_finite
 
@@ -63,7 +64,7 @@ class Simulator:
 
     def _run(
         self,
-        v: Union[zarr.Array, np.ndarry],
+        v: Union[zarr.Array, np.ndarray],
         sims: Mapping[str, Union[zarr.indexing.OIndex, np.ndarray]],
         sim_status: Union[zarr.indexing.OIndex, np.ndarray],
         indices: np.ndarray,
@@ -165,7 +166,7 @@ class Simulator:
         Note:
             The simulator model is run once in order to infer observable shapes from the output.
         """
-        v = prior.sample(1)[0]
+        v = TruncatedPrior(prior, bound=None).sample(1)[0]
         sims = model(v)
         sim_shapes = {k: v.shape for k, v in sims.items()}
         dtype = [v.dtype.str for v in sims.values()][0]
@@ -185,7 +186,7 @@ class DaskSimulator(Simulator):
 
     def _run(
         self,
-        v: Union[zarr.Array, np.ndarry],
+        v: Union[zarr.Array, np.ndarray],
         sims: Mapping[str, Union[zarr.indexing.OIndex, np.ndarray]],
         sim_status: Union[zarr.indexing.OIndex, np.ndarray],
         indices: np.ndarray,
