@@ -8,7 +8,7 @@ from swyft.utils.saveable import StateDictSaveable
 log = logging.getLogger(__name__)
 
 
-class Bound(StateDictSaveable, ABC):
+class Bound(StateDictSaveable):
     """A bound region on the hypercube.
 
     .. note::
