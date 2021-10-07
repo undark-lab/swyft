@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import Callable, TypeVar
+from typing import Callable, Type, TypeVar
 
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ from toolz.dicttoolz import keyfilter
 from torch.distributions import Normal, Uniform
 
 from swyft.bounds import Bound, UnitCubeBound
-from swyft.types import Array, PathType
+from swyft.types import Array
 from swyft.utils import array_to_tensor, tensor_to_array
 from swyft.utils.saveable import StateDictSaveable
 
@@ -223,7 +223,8 @@ class Prior(StateDictSaveable):
 
     @classmethod
     def from_torch_distribution(
-        cls, distribution: torch.distributions.Distribution
+        cls: Type[PriorType],
+        distribution: torch.distributions.Distribution,
     ) -> PriorType:
         r"""Create a prior from a batched pytorch distribution.
 

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from os import name
-from typing import TypeVar
+from typing import Type, TypeVar
 
 import torch
 
@@ -19,7 +19,9 @@ class StateDictSaveable(ABC):
         return NotImplementedError()
 
     @classmethod
-    def load(cls, filename: PathType) -> StateDictSaveableType:
+    def load(
+        cls: Type[StateDictSaveableType], filename: PathType
+    ) -> StateDictSaveableType:
         sd = torch.load(filename)
         return cls.from_state_dict(sd)
 
