@@ -12,7 +12,7 @@ import zarr
 PathType = Union[str, Path]
 Device = Union[torch.device, str]
 Tensor = torch.Tensor
-Array = Union[np.ndarray, torch.Tensor, zarr.Array]
+Array = Union[np.ndarray, torch.Tensor]
 Shape = Union[torch.Size, Tuple[int, ...]]
 
 # A list of marginals, e.g., [0, (3, 4), [3, 2]]

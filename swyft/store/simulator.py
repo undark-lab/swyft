@@ -9,6 +9,7 @@ from typing import Callable, Mapping, Optional, Tuple, Union
 
 import dask.array as da
 import numpy as np
+import zarr
 from dask.distributed import Client, fire_and_forget
 
 from swyft.bounds import Prior
@@ -62,22 +63,27 @@ class Simulator:
 
     def _run(
         self,
-        v: Array,
-        sims: Mapping[str, Array],
-        sim_status: Array,
+        v: Union[zarr.Array, np.ndarry],
+        sims: Mapping[str, Union[zarr.indexing.OIndex, np.ndarray]],
+        sim_status: Union[zarr.indexing.OIndex, np.ndarray],
         indices: np.ndarray,
         **kwargs
     ) -> None:
         """Run the simulator on the input parameters.
 
         Args:
-            v: Array with all the input parameters. Should have shape
-                (num. samples, num. parameters).
-            sims: Dictionary of arrays where to store the simulation output.
-                All arrays should have the number of samples as the size of the
-                first dimension.
-            sim_status: Array where to store the simulation status (size should
-                be equal to the number of samples).
+            v: Array-like object with all the input parameters. Should have
+                shape (num. samples, num. parameters). Should have ``.shape``,
+                ``.ndim``, ``.dtype``, and support numpy-style slicing.
+            sims: Dictionary of array-like objects where to store the
+                simulation output. All arrays should have the number of samples
+                as the size of the first dimension. Arrays should support
+                numpy-style setitem orthogonal indexing (e.g.
+                ``array[:, [1, 2, 3]] = 0``).
+            sim_status: Array-like object where to store the simulation status
+                (size should be equal to the number of samples). It should
+                support numpy-style setitem orthogonal indexing (e.g.
+                ``array[:, [1, 2, 3]] = 0``).
             indices: Indices of the samples that need to be run by the
                 simulator.
         """
@@ -179,9 +185,9 @@ class DaskSimulator(Simulator):
 
     def _run(
         self,
-        v: Array,
-        sims: Mapping[str, Array],
-        sim_status: Array,
+        v: Union[zarr.Array, np.ndarry],
+        sims: Mapping[str, Union[zarr.indexing.OIndex, np.ndarray]],
+        sim_status: Union[zarr.indexing.OIndex, np.ndarray],
         indices: np.ndarray,
         collect_in_memory: bool = True,
         batch_size: Optional[int] = None,
