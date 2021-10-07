@@ -6,7 +6,7 @@ import numpy as np
 import zarr
 from dask.distributed import LocalCluster, get_client
 
-from swyft import Simulator, DaskSimulator
+from swyft import DaskSimulator, Simulator
 from swyft.store.simulator import SimulationStatus
 
 
@@ -57,6 +57,7 @@ class TestSimulator(unittest.TestCase):
         )
 
         assert np.all(sim_status == SimulationStatus.FINISHED)
+        assert not np.all(np.isclose(sims["x"].sum(axis=1), 0.0))
 
     def test_run_simulator_fail_on_wrong_sim_shape(self):
         simulator = Simulator(model, sim_shapes=dict(x=(11,)), pnames=2)
@@ -147,6 +148,49 @@ class TestSimulator(unittest.TestCase):
         )
 
         assert np.all(sim_status[50:] == SimulationStatus.FINISHED)
+
+    def test_run_simulator_with_zarr_memory_store(self):
+        """Test the simulator with a store based on Zarr MemoryStore."""
+        simulator = Simulator(model, sim_shapes=dict(x=(10,)), pnames=2)
+
+        pars = zarr.zeros((100, 2))
+        pars[:, :] = np.random.random(pars.shape)
+        x = zarr.zeros((100, 10))
+        sims = dict(x=x.oindex)
+        sim_status = zarr.full(100, SimulationStatus.RUNNING, dtype="int")
+
+        simulator._run(
+            v=pars,
+            sims=sims,
+            sim_status=sim_status.oindex,
+            indices=np.arange(100, dtype=np.int),
+        )
+
+        assert np.all(sim_status[:] == SimulationStatus.FINISHED)
+        assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
+
+    def test_run_simulator_with_zarr_directory_store(self):
+        """Test simulator with a store based on Zarr DirectoryStore."""
+        simulator = Simulator(model, sim_shapes=dict(x=(10,)), pnames=2)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pars = zarr.open(f"{tmpdir}/pars.zarr", shape=(100, 2))
+            pars[:, :] = np.random.random(pars.shape)
+            x = zarr.open(f"{tmpdir}/x.zarr", shape=(100, 10))
+            x[:, :] = 0.0
+            sims = dict(x=x.oindex)
+            sim_status = zarr.open(f"{tmpdir}/sim_status.zarr", shape=(100,))
+            sim_status[:] = np.full(100, SimulationStatus.RUNNING, dtype="int")
+
+            simulator._run(
+                v=pars,
+                sims=sims,
+                sim_status=sim_status.oindex,
+                indices=np.arange(100, dtype=np.int),
+            )
+
+            assert np.all(sim_status[:] == SimulationStatus.FINISHED)
+            assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
 
 
 class TestDaskSimulator(unittest.TestCase):
