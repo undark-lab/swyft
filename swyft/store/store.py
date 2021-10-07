@@ -567,7 +567,7 @@ class MemoryStore(Store):
             )
             return obj
         else:
-            raise FileNotFoundError(f"There is no directory store at {path=}.")
+            raise FileNotFoundError(f"There is no directory store at {path}.")
 
 
 #    def copy(self, sync_path=None):
