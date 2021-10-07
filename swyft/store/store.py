@@ -403,7 +403,7 @@ class Store(ABC):
         self._update()
         return self._get_indices_to_simulate(indices).size > 0
 
-    def _get_indices_failed_simulations(self) -> None:
+    def _get_indices_failed_simulations(self) -> np.ndarray:
         self._update()
         return np.flatnonzero(self.sim_status == SimulationStatus.FAILED)
 
