@@ -4,6 +4,8 @@ import numpy as np
 import torch
 from sklearn.neighbors import BallTree
 
+from swyft.utils.saveable import StateDictSaveable
+
 log = logging.getLogger(__name__)
 
 
@@ -81,7 +83,7 @@ class Bound:
         return CompositBound.from_Posteriors(partitions, post, obs, post.bound, th=th)
 
 
-class UnitCubeBound(Bound):
+class UnitCubeBound(Bound, StateDictSaveable):
     """The unit hypercube bound."""
 
     def __init__(self, udim):
@@ -131,7 +133,7 @@ class UnitCubeBound(Bound):
         return cls(state_dict["udim"])
 
 
-class RectangleBound(Bound):
+class RectangleBound(Bound, StateDictSaveable):
     def __init__(self, rec_bounds):
         """Rectangle bound.
 
@@ -174,7 +176,7 @@ class RectangleBound(Bound):
         return cls(state_dict["rec_bounds"])
 
 
-class BallsBound(Bound):
+class BallsBound(Bound, StateDictSaveable):
     def __init__(self, points, scale=1.0):
         """Simple mask based on coverage balls around inducing points.
 
@@ -272,7 +274,7 @@ class BallsBound(Bound):
         return obj
 
 
-class CompositBound(Bound):
+class CompositBound(Bound, StateDictSaveable):
     """Composit bound object. Product of multiple bounds."""
 
     def __init__(self, bounds_map, udim):

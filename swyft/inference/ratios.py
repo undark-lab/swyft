@@ -14,9 +14,10 @@ from swyft.utils import (
     get_obs_shapes,
     tupleize_marginals,
 )
+from swyft.utils.saveable import StateDictSaveable
 
 
-class RatioEstimator:
+class RatioEstimator(StateDictSaveable):
     """RatioEstimator takes simulated points from the iP3 sample store and handles training and posterior calculation.
 
     Args:

@@ -19,12 +19,13 @@ from swyft.types import (
     RatiosType,
 )
 from swyft.utils import tupleize_marginals
+from swyft.utils.saveable import StateDictSaveable
 from swyft.utils.utils import estimate_empirical_mass
 
 log = logging.getLogger(__name__)
 
 
-class Posteriors:
+class Posteriors(StateDictSaveable):
     """Main inference class.
 
     Args:
@@ -334,20 +335,23 @@ class Posteriors:
         return obj
 
     def save(self, filename: PathType) -> None:
-        """Save a posterior.
-
-        Args:
-            filename: Filename
-
+        """
         .. note::
-            What will be saved are: parameter names, the prior and the bound,
-            as well as all networks.  We will NOT save the dataset, which can
-            be however specified during `load` if necessary.
+            The dataset is not saved, but can be specified during `load` if necessary.
         """
         sd = self.state_dict()
         torch.save(sd, filename)
 
     @classmethod
     def load(cls, filename: PathType, dataset: "swyft.Dataset" = None):
+        """Load posterior.
+
+        Args:
+            filename
+            dataset
+
+        .. warning::
+            Make sure that the dataset is the same that was originally used for training the posterior.
+        """
         sd = torch.load(filename)
         return cls.from_state_dict(sd, dataset=dataset)

@@ -8,13 +8,14 @@ from toolz.dicttoolz import keyfilter
 from torch.distributions import Normal, Uniform
 
 from swyft.bounds import Bound, UnitCubeBound
-from swyft.types import PathType
+from swyft.types import Array, PathType
 from swyft.utils import array_to_tensor, tensor_to_array
+from swyft.utils.saveable import StateDictSaveable
 
 PriorType = TypeVar("PriorType", bound="Prior")
 
 
-class PriorTruncator:
+class PriorTruncator(StateDictSaveable):
     """Samples from a truncated version of the prior and calculates the log_prob.
 
     Args:
@@ -77,15 +78,6 @@ class PriorTruncator:
         prior = Prior.from_state_dict(state_dict["prior"])
         bound = Bound.from_state_dict(state_dict["bound"])
         return cls(prior, bound)
-
-    @classmethod
-    def load(cls, filename: PathType):
-        sd = torch.load(filename)
-        return cls.from_state_dict(sd)
-
-    def save(self, filename: PathType) -> None:
-        sd = self.state_dict()
-        torch.save(sd, filename)
 
 
 class InterpolatedTabulatedDistribution:
@@ -173,7 +165,7 @@ class InterpolatedTabulatedDistribution:
 
 # TODO this could be improved with some thought
 # it merely wraps a torch distribution and keeps track of the arguments...
-class Prior:
+class Prior(StateDictSaveable):
     def __init__(
         self, cdf: Callable, icdf: Callable, log_prob: Callable, n_parameters: int
     ) -> None:
@@ -303,7 +295,7 @@ class Prior:
         prior.state_dict = None  # TODO, make like above.
         return prior
 
-    def state_dict(self):
+    def state_dict(self) -> dict:
         return self._state_dict
 
     @classmethod
@@ -324,12 +316,12 @@ class Prior:
             NotImplementedError()
 
 
-def get_uniform_prior(low: np.ndarray, high: np.ndarray) -> Prior:
+def get_uniform_prior(low: Array, high: Array) -> Prior:
     distribution = Uniform(array_to_tensor(low), array_to_tensor(high))
     return Prior.from_torch_distribution(distribution)
 
 
-def get_diagonal_normal_prior(loc: np.ndarray, scale: np.ndarray) -> Prior:
+def get_diagonal_normal_prior(loc: Array, scale: Array) -> Prior:
     distribution = Normal(array_to_tensor(loc), array_to_tensor(scale))
     return Prior.from_torch_distribution(distribution)
 

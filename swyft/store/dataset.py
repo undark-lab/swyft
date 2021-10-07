@@ -12,7 +12,7 @@ from swyft.utils.array import array_to_tensor
 log = logging.getLogger(__name__)
 
 
-class Dataset(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset, StateDictSaveable):
     """Dataset for access to swyft.Store.
 
     Args:
@@ -138,12 +138,12 @@ class Dataset(torch.utils.data.Dataset):
         return obj
 
     def save(self, filename: PathType) -> None:
-        """Save dataset (including indices).
-
-        Args:
-            filename: Output filename
         """
-        torch.save(self.state_dict(), filename)
+        .. note::
+            The store and the simhook are not saved. They must be loaded independently by the user.
+        """
+        sd = self.state_dict()
+        torch.save(sd, filename)
 
     @classmethod
     def load(
