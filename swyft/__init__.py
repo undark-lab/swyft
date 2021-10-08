@@ -1,6 +1,6 @@
 from swyft.bounds import Bound
 from swyft.inference import Posteriors, TrainOptions
-from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
+from swyft.networks import DefaultHead, DefaultTail, Module, OnlineStandardizingLayer
 from swyft.prior import (
     Prior,
     PriorTruncator,
@@ -30,7 +30,7 @@ __all__ = [
     "MemoryStore",
     "DefaultHead",
     "DefaultTail",
-    "OnlineNormalizationLayer",
+    "OnlineStandardizingLayer",
     "Dataset",
     "Simulator",
     "DaskSimulator",

@@ -6,7 +6,7 @@ import torch.nn as nn
 
 # TODO split this into a function which does the standardizing and a function which calculates the online z_scores
 # That way you can easily handle the case where the user provides mean and standard deviation information
-class OnlineNormalizationLayer(nn.Module):
+class OnlineStandardizingLayer(nn.Module):
     def __init__(
         self,
         shape: Tuple[int, ...],

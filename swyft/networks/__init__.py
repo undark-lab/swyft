@@ -5,7 +5,7 @@ from swyft.networks.channelized import (
 )
 from swyft.networks.head import DefaultHead
 from swyft.networks.module import Module
-from swyft.networks.normalization import OnlineNormalizationLayer
+from swyft.networks.standardization import OnlineStandardizingLayer
 from swyft.networks.tail import DefaultTail
 
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     "DefaultHead",
     "DefaultTail",
     "Module",
-    "OnlineNormalizationLayer",
+    "OnlineStandardizingLayer",
 ]

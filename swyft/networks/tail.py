@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from swyft.networks.channelized import LinearWithChannel
 from swyft.networks.module import Module
-from swyft.networks.normalization import OnlineNormalizationLayer
+from swyft.networks.standardization import OnlineStandardizingLayer
 from swyft.types import Array, MarginalIndex, ObsType
 
 
@@ -52,7 +52,7 @@ class DefaultTail(Module):
             marginals: List of marginals to learn.
             hidden_layers: Hidden layer size
             p: Dropout
-            online_norm: Online normalization of parameters.
+            online_norm: Online standardization of parameters.
             param_transform: Perform optional parameter transform.
             tail_features: Use tail features.
             n_tail_features: Additional feature extractor network, number of features.
@@ -90,9 +90,9 @@ class DefaultTail(Module):
         # Pre-network parameter transformation hook
         self.param_transform = param_transform
 
-        # Online normalization of (transformed) parameters
+        # Online standardization of (transformed) parameters
         if online_norm:
-            self.onl_z = OnlineNormalizationLayer(torch.Size([n_channels, pdim]))
+            self.onl_z = OnlineStandardizingLayer(torch.Size([n_channels, pdim]))
         else:
             self.onl_z = lambda z: z
 
@@ -182,13 +182,13 @@ class GenericTail(Module):
         self.register_buffer("num_channels", torch.tensor(num_channels))
         self.register_buffer("num_parameters", torch.tensor(num_parameters))
 
-        self.online_normalization_observations = (
-            OnlineNormalizationLayer((num_channels, num_observation_features))
+        self.online_standardization_observations = (
+            OnlineStandardizingLayer((num_channels, num_observation_features))
             if online_z_score_obs
             else nn.Identity()
         )
-        self.online_normalization_parameters = (
-            OnlineNormalizationLayer((num_channels, num_parameters))
+        self.online_standardization_parameters = (
+            OnlineStandardizingLayer((num_channels, num_parameters))
             if online_z_score_par
             else nn.Identity()
         )
@@ -225,8 +225,8 @@ class GenericTail(Module):
         obs = self._channelize_observation(observation)
         par = _combine(parameters, self.parameter_list)
 
-        obs_zscored = self.online_normalization_observations(obs)
-        par_zscored = self.online_normalization_parameters(par)
+        obs_zscored = self.online_standardization_observations(obs)
+        par_zscored = self.online_standardization_parameters(par)
 
         obs_embedded = self.embed_observation(obs_zscored)
         par_embedded = self.embed_parameter(par_zscored)

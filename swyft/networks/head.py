@@ -3,7 +3,7 @@ import torch
 from toolz import identity
 
 from swyft.networks.module import Module
-from swyft.networks.normalization import OnlineNormalizationLayer
+from swyft.networks.standardization import OnlineStandardizingLayer
 from swyft.types import ObsType, SimShapeType
 
 
@@ -12,7 +12,7 @@ class DefaultHead(Module):
 
     Args:
         sim_shapes: Shape of the simulation data
-        online_norm: Perform online normalization of the inputs
+        online_norm: Perform online standardization of the inputs
 
     .. note::
         The default head network requires that all simulation components are
@@ -32,9 +32,9 @@ class DefaultHead(Module):
         self.n_features = sum([v[0] for k, v in sim_shapes.items()])
 
         if online_norm:
-            self.onl_f = OnlineNormalizationLayer(torch.Size([self.n_features]))
+            self.osl_f = OnlineStandardizingLayer(torch.Size([self.n_features]))
         else:
-            self.onl_f = identity
+            self.osl_f = identity
 
     def forward(self, sim: ObsType) -> torch.Tensor:
         """Forward pass default head network. Concatenate.
@@ -46,5 +46,5 @@ class DefaultHead(Module):
             f: Feature vectors with shape (n_batch, M), with M = sum_i m_i
         """
         f = torch.cat([value for _, value in sorted(sim.items())], dim=-1)
-        f = self.onl_f(f)
+        f = self.osl_f(f)
         return f

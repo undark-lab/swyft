@@ -54,6 +54,7 @@ class BatchNorm1dWithChannel(nn.BatchNorm1d):
         return batch_normed.reshape(n, c, f)
 
 
+# inspired by https://github.com/bayesiains/nflows/blob/master/nflows/nn/nets/resnet.py
 class ResidualBlockWithChannel(nn.Module):
     """A general-purpose residual block. Works only with channelized 1-dim inputs."""
 
@@ -96,6 +97,7 @@ class ResidualBlockWithChannel(nn.Module):
         return inputs + temps
 
 
+# inspired by https://github.com/bayesiains/nflows/blob/master/nflows/nn/nets/resnet.py
 class ResidualNetWithChannel(nn.Module):
     """A general-purpose residual network. Works only with channelized 1-dim inputs."""
 
