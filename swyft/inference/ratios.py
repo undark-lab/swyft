@@ -4,13 +4,14 @@ from typing import Callable
 
 import numpy as np
 import torch
+from toolz import valmap
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
 from swyft.utils import (
     array_to_tensor,
-    dict_array_to_tensor_unsqueeze,
+    dict_array_to_tensor,
     get_obs_shapes,
     tupleize_marginals,
 )
@@ -118,8 +119,8 @@ class RatioEstimator(StateDictSaveable):
         tail = self.tail
 
         with torch.no_grad():
-            # obs = dict_array_to_tensor(obs, device = self.device)
-            obs = dict_array_to_tensor_unsqueeze(obs, device=self.device)
+            obs = dict_array_to_tensor(obs, device=self.device)
+            obs = valmap(lambda x: x.unsqueeze(0), obs)
             f = head(obs)
 
             npar = len(params)

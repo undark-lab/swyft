@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Dict, Hashable, Optional, Union
 
 import numpy as np
 import torch
@@ -6,20 +6,11 @@ import torch
 from swyft.types import Array, Device
 
 
-def dict_array_to_tensor(d, device="cpu", non_blocking=False, indices=slice(0, None)):
+def dict_array_to_tensor(
+    d, device="cpu", non_blocking=False, indices=slice(0, None)
+) -> Dict[Hashable, torch.Tensor]:
     return {
         k: array_to_tensor(v[indices]).to(device, non_blocking=non_blocking)
-        for k, v in d.items()
-    }
-
-
-def dict_array_to_tensor_unsqueeze(
-    d, device="cpu", non_blocking=False, indices=slice(0, None)
-):
-    return {
-        k: array_to_tensor(v[indices])
-        .unsqueeze(0)
-        .to(device, non_blocking=non_blocking)
         for k, v in d.items()
     }
 
@@ -94,7 +85,7 @@ def tensor_to_array(
         return out
 
 
-def tobytes(x: Array):
+def tobytes(x: Array) -> Array:
     if isinstance(x, np.ndarray):
         return x.tobytes()
     elif isinstance(x, torch.Tensor):
@@ -103,14 +94,14 @@ def tobytes(x: Array):
         raise TypeError(f"{type(x)} does not support tobytes.")
 
 
-def _all_finite(x: Array):
+def _all_finite(x: Array) -> Array:
     if isinstance(x, torch.Tensor):
         return torch.all(torch.isfinite(x))
     else:
         return np.all(np.isfinite(x))
 
 
-def all_finite(x):
+def all_finite(x: Union[dict, torch.Tensor, np.ndarray, list]) -> bool:
     if isinstance(x, dict):
         return all(_all_finite(v) for v in x.values())
     elif isinstance(x, (torch.Tensor, np.ndarray)):

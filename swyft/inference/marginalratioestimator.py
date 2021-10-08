@@ -10,7 +10,7 @@ import swyft
 import swyft.utils
 from swyft.inference.train import get_ntrain_nvalid
 from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
-from swyft.utils.array import array_to_tensor, dict_array_to_tensor_unsqueeze
+from swyft.utils.array import array_to_tensor, dict_array_to_tensor
 from swyft.utils.parameters import tupleize_marginals
 
 
@@ -225,9 +225,8 @@ class MarginalRatioEstimator:
 
         context = torch.inference_mode if inference_mode else torch.no_grad
         with context:
-            observation = dict_array_to_tensor_unsqueeze(
-                observation, device=self.device
-            )
+            observation = dict_array_to_tensor(observation, device=self.device)
+            observation = valmap(lambda x: x.unsqueeze(0), observation)
             len_parameters = len(parameters)
             if n_batch is None or len_parameters <= n_batch:
                 parameters = array_to_tensor(parameters, device=self.device)
