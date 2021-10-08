@@ -20,7 +20,7 @@ def model(params):
 
 def model_fail_if_negative(param):
     if param < 1:
-        assert ValueError
+        raise ValueError
     else:
         mu = param
     return dict(x=mu)
@@ -234,12 +234,18 @@ class TestSimulator(unittest.TestCase):
 
 class TestDaskSimulator(unittest.TestCase):
     def test_connect_to_dask_simulator(self):
-        with LocalCluster(n_workers=2, processes=True, threads_per_worker=1) as cluster:
-            simulator = DaskSimulator(
-                model_fail_if_negative, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
-            assert cluster.name == simulator.client.cluster.name
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=True,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model_fail_if_negative, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
+                assert cluster.name == simulator.client.cluster.name
 
     def test_run_simulator_with_processes_and_numpy_array(self):
         """
@@ -247,27 +253,33 @@ class TestDaskSimulator(unittest.TestCase):
         share  memory with the client (e.g. we have a processes-based cluster),
         collect_in_memory must be set to True.
         """
-        with LocalCluster(n_workers=2, processes=True, threads_per_worker=1) as cluster:
-            simulator = DaskSimulator(
-                model, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=True,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
 
-            pars = np.random.random((100, 2))
-            sims = dict(x=np.zeros((100, 10)))
-            sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
+                pars = np.random.random((100, 2))
+                sims = dict(x=np.zeros((100, 10)))
+                sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
-            simulator._run(
-                v=pars,
-                sims=sims,
-                sim_status=sim_status,
-                indices=np.arange(100, dtype=int),
-                collect_in_memory=True,
-                batch_size=20,
-            )
+                simulator._run(
+                    v=pars,
+                    sims=sims,
+                    sim_status=sim_status,
+                    indices=np.arange(100, dtype=int),
+                    collect_in_memory=True,
+                    batch_size=20,
+                )
 
-            assert np.all(sim_status == SimulationStatus.FINISHED)
-            assert not np.all(np.isclose(sims["x"].sum(axis=1), 0.0))
+                assert np.all(sim_status == SimulationStatus.FINISHED)
+                assert not np.all(np.isclose(sims["x"].sum(axis=1), 0.0))
 
     def test_run_simulator_with_threads_and_numpy_array(self):
         """
@@ -275,33 +287,37 @@ class TestDaskSimulator(unittest.TestCase):
         memory with the client (i.e. we have a threads-based cluster),
         collect_in_memory can be set to False.
         """
-        with LocalCluster(
-            n_workers=2, processes=False, threads_per_worker=1
-        ) as cluster:
-            simulator = DaskSimulator(
-                model, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=False,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
 
-            pars = np.random.random((100, 2))
-            sims = dict(x=np.zeros((100, 10)))
-            sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
+                pars = np.random.random((100, 2))
+                sims = dict(x=np.zeros((100, 10)))
+                sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
-            # the following is non-blocking (it immediately returns)
-            simulator._run(
-                v=pars,
-                sims=sims,
-                sim_status=sim_status,
-                indices=np.arange(100, dtype=int),
-                collect_in_memory=False,
-                batch_size=20,
-            )
+                # the following is non-blocking (it immediately returns)
+                simulator._run(
+                    v=pars,
+                    sims=sims,
+                    sim_status=sim_status,
+                    indices=np.arange(100, dtype=int),
+                    collect_in_memory=False,
+                    batch_size=20,
+                )
 
-            # need to wait for tasks to be completed
-            _wait_for_all_tasks()
+                # need to wait for tasks to be completed
+                _wait_for_all_tasks()
 
-            assert np.all(sim_status == SimulationStatus.FINISHED)
-            assert not np.all(np.isclose(sims["x"].sum(axis=1), 0.0))
+                assert np.all(sim_status == SimulationStatus.FINISHED)
+                assert not np.all(np.isclose(sims["x"].sum(axis=1), 0.0))
 
     def test_run_simulator_with_processes_and_zarr_memory_store(self):
         """
@@ -309,29 +325,35 @@ class TestDaskSimulator(unittest.TestCase):
         not share memory with the client (i.e. we have a processes-based cluster),
         collect_in_memory must be set to True.
         """
-        with LocalCluster(n_workers=2, processes=True, threads_per_worker=1) as cluster:
-            simulator = DaskSimulator(
-                model, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=True,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
 
-            pars = zarr.zeros((100, 2))
-            pars[:, :] = np.random.random(pars.shape)
-            x = zarr.zeros((100, 10))
-            sims = dict(x=x.oindex)
-            sim_status = zarr.full(100, SimulationStatus.RUNNING, dtype="int")
+                pars = zarr.zeros((100, 2))
+                pars[:, :] = np.random.random(pars.shape)
+                x = zarr.zeros((100, 10))
+                sims = dict(x=x.oindex)
+                sim_status = zarr.full(100, SimulationStatus.RUNNING, dtype="int")
 
-            simulator._run(
-                v=pars,
-                sims=sims,
-                sim_status=sim_status.oindex,
-                indices=np.arange(100, dtype=int),
-                collect_in_memory=True,
-                batch_size=20,
-            )
+                simulator._run(
+                    v=pars,
+                    sims=sims,
+                    sim_status=sim_status.oindex,
+                    indices=np.arange(100, dtype=int),
+                    collect_in_memory=True,
+                    batch_size=20,
+                )
 
-            assert np.all(sim_status[:] == SimulationStatus.FINISHED)
-            assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
+                assert np.all(sim_status[:] == SimulationStatus.FINISHED)
+                assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
 
     def test_run_simulator_with_threads_and_zarr_memory_store(self):
         """
@@ -339,50 +361,56 @@ class TestDaskSimulator(unittest.TestCase):
         share memory with the client (i.e. we have a threads-based cluster),
         collect_in_memory can be set to False.
         """
-        with LocalCluster(
-            n_workers=2, processes=False, threads_per_worker=1
-        ) as cluster:
-            simulator = DaskSimulator(
-                model, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=False,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
 
-            pars = zarr.zeros((100, 2))
-            pars[:, :] = np.random.random(pars.shape)
-            x = zarr.zeros((100, 10))
-            sims = dict(x=x.oindex)
-            sim_status = zarr.full(100, SimulationStatus.RUNNING, dtype="int")
+                pars = zarr.zeros((100, 2))
+                pars[:, :] = np.random.random(pars.shape)
+                x = zarr.zeros((100, 10))
+                sims = dict(x=x.oindex)
+                sim_status = zarr.full(100, SimulationStatus.RUNNING, dtype="int")
 
-            # the following is non-blocking (it immediately returns)
-            simulator._run(
-                v=pars,
-                sims=sims,
-                sim_status=sim_status.oindex,
-                indices=np.arange(100, dtype=int),
-                collect_in_memory=False,
-                batch_size=20,
-            )
+                # the following is non-blocking (it immediately returns)
+                simulator._run(
+                    v=pars,
+                    sims=sims,
+                    sim_status=sim_status.oindex,
+                    indices=np.arange(100, dtype=int),
+                    collect_in_memory=False,
+                    batch_size=20,
+                )
 
-            # need to wait for tasks to be completed
-            _wait_for_all_tasks()
+                # need to wait for tasks to be completed
+                _wait_for_all_tasks()
 
-            assert np.all(sim_status[:] == SimulationStatus.FINISHED)
-            assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
+                assert np.all(sim_status[:] == SimulationStatus.FINISHED)
+                assert not np.all(np.isclose(sims["x"][:, :].sum(axis=1), 0.0))
 
     def test_run_simulator_with_threads_and_zarr_directory_store(self):
         """
         If the store is on disk (here a Zarr DirectoryStore), collect_in_memory can
         be set to False (but synchronization needs to be employed).
         """
-        with LocalCluster(
-            n_workers=2, processes=False, threads_per_worker=1
-        ) as cluster:
-            simulator = DaskSimulator(
-                model, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
-
-            with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=False,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
                 pars = zarr.open(f"{tmpdir}/pars.zarr", shape=(100, 2))
                 pars[:, :] = np.random.random(pars.shape)
                 x = zarr.open(
@@ -420,13 +448,17 @@ class TestDaskSimulator(unittest.TestCase):
         If the store is on disk (here a Zarr DirectoryStore), collect_in_memory can
         be set to False (but synchronization needs to be employed).
         """
-        with LocalCluster(n_workers=2, processes=True, threads_per_worker=1) as cluster:
-            simulator = DaskSimulator(
-                model, sim_shapes=dict(x=(10,)), parameter_names=2
-            )
-            simulator.set_dask_cluster(cluster)
-
-            with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=True,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
+                simulator = DaskSimulator(
+                    model, sim_shapes=dict(x=(10,)), parameter_names=2
+                )
+                simulator.set_dask_cluster(cluster)
                 pars = zarr.open(f"{tmpdir}/pars.zarr", shape=(100, 2))
                 pars[:, :] = np.random.random(pars.shape)
                 synchronizer = zarr.ProcessSynchronizer(path=f"{tmpdir}/x.sync")
@@ -469,33 +501,39 @@ class TestDaskSimulator(unittest.TestCase):
             Need to have a cluster which uses only processes since each
             instance of the model is run in a separate subdirectory.
         """
-        with LocalCluster(n_workers=2, processes=True, threads_per_worker=1) as cluster:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(
+                n_workers=2,
+                processes=True,
+                threads_per_worker=1,
+                local_directory=tmpdir,
+            ) as cluster:
 
-            def set_input(v):
-                return f"{v[0]} + {v[1]}\n"
+                def set_input(v):
+                    return f"{v[0]} + {v[1]}\n"
 
-            def get_output(stdout, _):
-                return {"sum": float(stdout)}
+                def get_output(stdout, _):
+                    return {"sum": float(stdout)}
 
-            simulator = DaskSimulator.from_command(
-                command="bc -l",
-                set_input_method=set_input,
-                get_output_method=get_output,
-                parameter_names=2,
-                sim_shapes={"sum": ()},
-            )
-            simulator.set_dask_cluster(cluster)
+                simulator = DaskSimulator.from_command(
+                    command="bc -l",
+                    set_input_method=set_input,
+                    get_output_method=get_output,
+                    parameter_names=2,
+                    sim_shapes={"sum": ()},
+                )
+                simulator.set_dask_cluster(cluster)
 
-            pars = np.random.random((100, 2))
-            sims = dict(sum=np.zeros(100))
-            sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
+                pars = np.random.random((100, 2))
+                sims = dict(sum=np.zeros(100))
+                sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
-            simulator._run(
-                v=pars,
-                sims=sims,
-                sim_status=sim_status,
-                indices=np.arange(100, dtype=int),
-            )
+                simulator._run(
+                    v=pars,
+                    sims=sims,
+                    sim_status=sim_status,
+                    indices=np.arange(100, dtype=int),
+                )
 
-            assert np.all(sim_status == SimulationStatus.FINISHED)
-            assert not np.any(np.isclose(sims["sum"], 0.0))
+                assert np.all(sim_status == SimulationStatus.FINISHED)
+                assert not np.any(np.isclose(sims["sum"], 0.0))
