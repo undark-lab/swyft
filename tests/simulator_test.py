@@ -524,7 +524,7 @@ class TestDaskSimulator(unittest.TestCase):
                 )
                 simulator.set_dask_cluster(cluster)
 
-                pars = np.random.random((100, 2))
+                pars = np.random.randint(1, 100, size=(100, 2))
                 sims = dict(sum=np.zeros(100))
                 sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
