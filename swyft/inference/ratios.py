@@ -7,10 +7,10 @@ import torch
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
-from swyft.types import Array, Device, MarginalIndex, ObsType, RatiosType
+from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
 from swyft.utils import (
     array_to_tensor,
-    dict_to_tensor_unsqueeze,
+    dict_array_to_tensor_unsqueeze,
     get_obs_shapes,
     tupleize_marginals,
 )
@@ -109,7 +109,7 @@ class RatioEstimator(StateDictSaveable):
     def train_diagnostics(self):  # TODO add type annotation
         return self._train_diagnostics
 
-    def ratios(self, obs: ObsType, params: Array, n_batch: int = 10_000) -> RatiosType:
+    def ratios(self, obs: ObsType, params: Array, n_batch: int = 10_000) -> RatioType:
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()
@@ -118,8 +118,8 @@ class RatioEstimator(StateDictSaveable):
         tail = self.tail
 
         with torch.no_grad():
-            # obs = dict_to_tensor(obs, device = self.device)
-            obs = dict_to_tensor_unsqueeze(obs, device=self.device)
+            # obs = dict_array_to_tensor(obs, device = self.device)
+            obs = dict_array_to_tensor_unsqueeze(obs, device=self.device)
             f = head(obs)
 
             npar = len(params)

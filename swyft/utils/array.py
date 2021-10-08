@@ -6,19 +6,18 @@ import torch
 from swyft.types import Array, Device
 
 
-def dict_to_tensor(d, device="cpu", non_blocking=False, indices=slice(0, None)):
+def dict_array_to_tensor(d, device="cpu", non_blocking=False, indices=slice(0, None)):
     return {
-        k: array_to_tensor(v[indices]).float().to(device, non_blocking=non_blocking)
+        k: array_to_tensor(v[indices]).to(device, non_blocking=non_blocking)
         for k, v in d.items()
     }
 
 
-def dict_to_tensor_unsqueeze(
+def dict_array_to_tensor_unsqueeze(
     d, device="cpu", non_blocking=False, indices=slice(0, None)
 ):
     return {
         k: array_to_tensor(v[indices])
-        .float()
         .unsqueeze(0)
         .to(device, non_blocking=non_blocking)
         for k, v in d.items()

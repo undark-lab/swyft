@@ -16,7 +16,7 @@ from swyft.types import (
     ObsType,
     ParameterNamesType,
     PathType,
-    RatiosType,
+    RatioType,
 )
 from swyft.utils import tupleize_marginals
 from swyft.utils.saveable import StateDictSaveable
@@ -156,7 +156,7 @@ class Posteriors(StateDictSaveable):
 
     def eval(
         self, v: Array, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Tuple[np.ndarray, RatiosType, ParameterNamesType]]:
+    ) -> Dict[str, Tuple[np.ndarray, RatioType, ParameterNamesType]]:
         """Returns weighted posterior.
 
         Args:
@@ -178,7 +178,7 @@ class Posteriors(StateDictSaveable):
 
     def sample(
         self, N: int, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Tuple[np.ndarray, RatiosType, ParameterNamesType]]:
+    ) -> Dict[str, Tuple[np.ndarray, RatioType, ParameterNamesType]]:
         """Returns weighted posterior samples for given observation.
 
         Args:
@@ -291,7 +291,7 @@ class Posteriors(StateDictSaveable):
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
         return bound
 
-    def _eval_ratios(self, obs: ObsType, v: Array, n_batch: int = 100) -> RatiosType:
+    def _eval_ratios(self, obs: ObsType, v: Array, n_batch: int = 100) -> RatioType:
         result = {}
         for _, rc in self._ratios.items():
             ratios = rc.ratios(obs, v, n_batch=n_batch)

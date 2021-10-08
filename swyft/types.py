@@ -1,10 +1,9 @@
 # pylint: disable=no-member
 from pathlib import Path
-from typing import Callable, Dict, Hashable, Iterable, Mapping, Sequence, Tuple, Union
+from typing import Callable, Dict, Hashable, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 import torch
-import zarr
 
 # If you add a type, don't forget to update autodoc_type_aliases in /docs/source/config.py
 
@@ -21,7 +20,7 @@ MarginalIndex = Union[int, Sequence[int], Sequence[Sequence[int]]]
 StrictMarginalIndex = Tuple[Tuple[int, ...], ...]
 
 # Map from (3, 4) --> ratio array
-RatiosType = Dict[Tuple[int, ...], Array]
+RatioType = Dict[Tuple[int, ...], Array]
 
 ParameterNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]
