@@ -13,13 +13,7 @@ import zarr
 from dask.distributed import Client, fire_and_forget
 
 from swyft.prior import Prior, PriorTruncator
-from swyft.types import (
-    Array,
-    ForwardModelType,
-    ParameterNamesType,
-    PathType,
-    SimShapeType,
-)
+from swyft.types import ForwardModelType, ParameterNamesType, PathType, SimShapeType
 from swyft.utils import all_finite
 
 

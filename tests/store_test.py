@@ -3,8 +3,8 @@ from pathlib import Path
 
 import numpy as np
 import zarr
+from dask.distributed import LocalCluster
 
-from swyft import Prior
 from swyft.prior import get_uniform_prior
 from swyft.store.simulator import DaskSimulator, SimulationStatus, Simulator
 from swyft.store.store import DirectoryStore, MemoryStore
@@ -151,11 +151,15 @@ class TestStoreRun:
         assert all(store.sim_status[:] == SimulationStatus.FAILED)
 
     def test_interrupted_dasksimulator_failed(self):
-        sim_fail = DaskSimulator(
-            broken_model, parameter_names=["a", "b"], sim_shapes={"obs": (2,)}
-        )
-        store = MemoryStore(simulator=sim_fail)
-        # store = DirectoryStore(path="test.zarr", simulator=sim)
-        store.add(10, prior)
-        store.simulate()
-        assert all(store.sim_status[:] == SimulationStatus.FAILED)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with LocalCluster(local_directory=tmpdir) as cluster:
+                sim_fail = DaskSimulator(
+                    broken_model, parameter_names=["a", "b"], sim_shapes={"obs": (2,)}
+                )
+                sim_fail.set_dask_cluster(cluster)
+
+                store = MemoryStore(simulator=sim_fail)
+                # store = DirectoryStore(path="test.zarr", simulator=sim)
+                store.add(10, prior)
+                store.simulate()
+                assert all(store.sim_status[:] == SimulationStatus.FAILED)
