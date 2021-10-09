@@ -115,7 +115,7 @@ class DefaultTail(Module):
 
         self.af = nn.ReLU()
 
-    def forward(self, f: torch.Tensor, params) -> torch.Tensor:  # TODO Christoph typing
+    def forward(self, f: torch.Tensor, params) -> torch.Tensor:
         """Forward pass tail network.  Can handle one batch dimension.
 
         Args:

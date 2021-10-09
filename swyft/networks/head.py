@@ -4,7 +4,7 @@ from toolz import identity
 
 from swyft.networks.module import Module
 from swyft.networks.standardization import OnlineStandardizingLayer
-from swyft.types import ObsType, SimShapeType
+from swyft.types import ObsShapeType, ObsType
 
 
 class DefaultHead(Module):
@@ -22,7 +22,7 @@ class DefaultHead(Module):
         to better results.
     """
 
-    def __init__(self, sim_shapes: SimShapeType, online_norm: bool = True) -> None:
+    def __init__(self, sim_shapes: ObsShapeType, online_norm: bool = True) -> None:
         super().__init__(sim_shapes=sim_shapes, online_norm=online_norm)
         if not all(np.array([len(v) for v in sim_shapes.values()]) == 1):
             raise ValueError(

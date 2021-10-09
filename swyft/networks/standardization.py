@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Dict, Hashable, Tuple
 
 import torch
 import torch.nn as nn
@@ -79,3 +79,30 @@ class OnlineStandardizingLayer(nn.Module):
             return torch.sqrt(self.var + self.epsilon).mean()
         else:
             return torch.sqrt(self.var + self.epsilon)
+
+
+class OnlineDictStandardizingLayer(nn.Module):
+    def __init__(
+        self,
+        shapes: Dict[Hashable, Tuple[int, ...]],
+        stable: bool = False,
+        epsilon: float = 1e-10,
+        use_average_std: bool = False,
+    ) -> None:
+        super().__init__()
+        self.kwargs = dict(
+            stable=stable, epsilon=epsilon, use_average_std=use_average_std
+        )
+        self.osls = nn.ModuleDict(
+            {
+                key: OnlineStandardizingLayer(shape, **self.kwargs)
+                for key, shape in shapes.items()
+            }
+        )
+
+    def forward(self, x: Dict[Hashable, torch.Tensor]) -> torch.Tensor:
+        return {key: self.osls[key](value) for key, value in x.items()}
+
+
+if __name__ == "__main__":
+    pass

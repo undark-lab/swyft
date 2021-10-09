@@ -13,6 +13,10 @@ from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor
 from swyft.utils.parameters import tupleize_marginals
 
+SchedulerType = Union[
+    torch.optim.lr_scheduler._LRScheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+]
+
 
 def split_length_by_percentage(length: int, percents: Sequence[float]) -> Sequence[int]:
     """Given the length of a sequence, return the indices which would divide it into `percents` parts.
@@ -106,6 +110,7 @@ MarginalRatioEstimatorType = TypeVar(
 )
 
 
+# TODO change the ratio estimator to train / evaluate on v
 class MarginalRatioEstimator:
     def __init__(
         self,
@@ -133,7 +138,7 @@ class MarginalRatioEstimator:
         optimizer: Callable = torch.optim.Adam,
         scheduler: Optional[Callable] = torch.optim.lr_scheduler.ReduceLROnPlateau,
         scheduler_kwargs: dict = {"factor": 0.1, "patience": 5},
-        early_stopping_patience: Optional[int] = None,
+        early_stopping_patience: Optional[int] = 25,
         max_epochs: int = 2 ** 31 - 1,
         nworkers: int = 0,
         non_blocking: bool = True,
@@ -197,7 +202,7 @@ class MarginalRatioEstimator:
                 loss_avg = loss_sum / n_validation_batches
                 print(
                     "\rtraining: lr=%.2g, epoch=%i, validation loss=%.4g"
-                    % (learning_rate, self.epoch, loss_avg),
+                    % (self._get_last_lr(self.scheduler), self.epoch, loss_avg),
                     end="",
                     flush=True,
                 )
@@ -251,6 +256,20 @@ class MarginalRatioEstimator:
 
         return {k: ratio[..., i] for i, k in enumerate(self.marginal_indices)}
 
+    @staticmethod
+    def _get_last_lr(scheduler: SchedulerType) -> float:
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            if scheduler.best == float("Inf"):
+                return scheduler.optimizer.param_groups[0]["lr"]
+            else:
+                return scheduler._last_lr[-1]
+        elif isinstance(scheduler, torch.optim.lr_scheduler._LRScheduler):
+            return scheduler.get_last_lr()
+        else:
+            raise NotImplementedError(
+                f"Cannot determine learning_rate from {scheduler}"
+            )
+
     def _loss(
         self, observation: Dict[Hashable, torch.Tensor], parameters: torch.Tensor
     ) -> torch.Tensor:
@@ -298,7 +317,7 @@ class MarginalRatioEstimator:
         cls,
         network: torch.nn.Module,
         optimizer: Optional[torch.optim.Optimizer],
-        scheduler: Optional[torch.optim.lr_scheduler._LRScheduler],
+        scheduler: Optional[SchedulerType],
         device: Device,
         state_dict: dict,
     ) -> MarginalRatioEstimatorType:

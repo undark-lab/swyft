@@ -10,18 +10,22 @@ def dict_to_device(d, device, non_blocking=False):
     return {k: v.to(device, non_blocking=non_blocking) for k, v in d.items()}
 
 
+def is_cuda_available():
+    return torch.cuda.is_available()
+
+
 def set_device(gpu: bool = False) -> torch.device:
     """Select device, defaults to cpu."""
     if gpu and torch.cuda.is_available():
         device = torch.device("cuda")
-        # torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
     elif gpu and not torch.cuda.is_available():
         warn("Although the gpu flag was true, the gpu is not avaliable.")
         device = torch.device("cpu")
-        # torch.set_default_tensor_type("torch.FloatTensor")
+        torch.set_default_tensor_type("torch.FloatTensor")
     else:
         device = torch.device("cpu")
-        # torch.set_default_tensor_type("torch.FloatTensor")
+        torch.set_default_tensor_type("torch.FloatTensor")
     return device
 
 

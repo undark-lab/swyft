@@ -13,7 +13,7 @@ import zarr
 
 import swyft
 from swyft.store.simulator import SimulationStatus, Simulator
-from swyft.types import Array, ParameterNamesType, PathType, SimShapeType
+from swyft.types import Array, ObsShapeType, ParameterNamesType, PathType
 from swyft.utils import is_empty
 
 log = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ class Store(ABC):
     def _setup_new_zarr_store(
         self,
         parameter_names: ParameterNamesType,
-        sim_shapes: SimShapeType,
+        sim_shapes: ObsShapeType,
         root: zarr.Group,
         chunksize: int = 1,
         sim_dtype: str = "f8",

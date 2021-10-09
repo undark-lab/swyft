@@ -6,8 +6,11 @@ import torch.nn as nn
 import swyft
 import swyft.utils
 from swyft.networks.channelized import ResidualNetWithChannel
-from swyft.networks.standardization import OnlineStandardizingLayer
-from swyft.types import Array, MarginalIndex
+from swyft.networks.standardization import (
+    OnlineDictStandardizingLayer,
+    OnlineStandardizingLayer,
+)
+from swyft.types import Array, MarginalIndex, ObsShapeType
 
 
 def is_marginal_block_possible(marginal_indices: MarginalIndex) -> bool:
@@ -101,6 +104,7 @@ class Network(nn.Module):
         observation_transform: nn.Module,
         parameter_transform: nn.Module,
         marginal_classifier: nn.Module,
+        observation_shapes: ObsShapeType,
         n_parameters: int,
         observation_online_z_score: bool,
         parameter_online_z_score: bool,
@@ -110,10 +114,11 @@ class Network(nn.Module):
         self.parameter_transform = parameter_transform
         self.marginal_classifier = marginal_classifier
         self.n_parameters = n_parameters
+        self.observation_shapes = observation_shapes
 
         if observation_online_z_score:
-            self.observation_online_z_score = OnlineStandardizingLayer(
-                torch.Size([self.observation_transform.in_features])
+            self.observation_online_z_score = OnlineDictStandardizingLayer(
+                observation_shapes
             )
         else:
             self.observation_online_z_score = nn.Identity()
@@ -141,9 +146,11 @@ class Network(nn.Module):
 def get_marginal_classifier(
     observation_key: Hashable,
     marginal_indices: MarginalIndex,
+    observation_shapes: ObsShapeType,
     n_observation_features: int,
     n_parameters: int,
     hidden_features: int,
+    num_blocks: int,
 ) -> nn.Module:
     n_marginals, n_block_parameters = get_marginal_block_shape(marginal_indices)
     return Network(
@@ -153,7 +160,9 @@ def get_marginal_classifier(
             n_marginals,
             n_observation_features + n_block_parameters,
             hidden_features=hidden_features,
+            num_blocks=num_blocks,
         ),
+        observation_shapes,
         n_parameters,
         observation_online_z_score=True,
         parameter_online_z_score=True,

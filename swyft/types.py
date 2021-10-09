@@ -24,5 +24,5 @@ RatioType = Dict[Tuple[int, ...], Array]
 
 ParameterNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]
-SimShapeType = Mapping[Hashable, Shape]
+ObsShapeType = Mapping[Hashable, Shape]
 ForwardModelType = Callable[..., ObsType]

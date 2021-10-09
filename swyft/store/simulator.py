@@ -13,7 +13,7 @@ import zarr
 from dask.distributed import Client, fire_and_forget
 
 from swyft.prior import Prior, PriorTruncator
-from swyft.types import ForwardModelType, ParameterNamesType, PathType, SimShapeType
+from swyft.types import ForwardModelType, ObsShapeType, ParameterNamesType, PathType
 from swyft.utils import all_finite
 
 
@@ -49,7 +49,7 @@ class Simulator:
         self,
         model: ForwardModelType,
         parameter_names: Union[ParameterNamesType, int],
-        sim_shapes: SimShapeType,
+        sim_shapes: ObsShapeType,
         sim_dtype: str = "f8",
         fail_on_non_finite: bool = True,
     ) -> None:
@@ -98,7 +98,7 @@ class Simulator:
         cls,
         command: str,
         parameter_names: Union[ParameterNamesType, int],
-        sim_shapes: SimShapeType,
+        sim_shapes: ObsShapeType,
         set_input_method: Callable,
         get_output_method: Callable,
         tmpdir: Optional[PathType] = None,
@@ -331,7 +331,7 @@ def _run_model(
 
 
 def _run_model_chunk(
-    v: np.ndarray, model: Callable, sim_shapes: SimShapeType, fail_on_non_finite: bool
+    v: np.ndarray, model: Callable, sim_shapes: ObsShapeType, fail_on_non_finite: bool
 ) -> Tuple[Mapping[str, np.ndarray], np.ndarray]:
     """Run the model over a set of input parameters.
 
