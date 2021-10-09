@@ -110,14 +110,24 @@ MarginalRatioEstimatorType = TypeVar(
 )
 
 
-# TODO change the ratio estimator to train / evaluate on v
 class MarginalRatioEstimator:
+    """Handles the training and evaluation of a ratio estimator. Which ratios are defined by the `marginal_indices` attribute.
+    The network must take observation dictionaries and parameter arrays and produce estimated an `log_ratio` for every marginal of interest.
+    """
+
     def __init__(
         self,
         marginal_indices: MarginalIndex,
         network: nn.Module,
         device: Device,
     ) -> None:
+        """Define the marginals of interest with `marginal_indices` and the estimator architechture with `network`.
+
+        Args:
+            marginal_indices: marginals of interest defined by the parameter index
+            network: a neural network which accepts `observation` and `parameters` and returns `len(marginal_indices)` ratios.
+            device
+        """
         self.marginal_indices = tupleize_marginals(marginal_indices)
         self.device = device
         self.network = network
@@ -144,6 +154,25 @@ class MarginalRatioEstimator:
         non_blocking: bool = True,
         pin_memory: bool = True,
     ) -> None:
+        """Train the ratio estimator based off of a `dataset` containing observation and parameter pairs.
+
+        Note: if the network has already been trained, training will resume where it left off.
+        This effectively ignores `optimizer`, `learning_rate`, `scheduler`, and `scheduler_args`.
+
+        Args:
+            dataset: torch dataset which returns a tuple of (`observation`, `parameters`)
+            batch_size
+            learning_rate
+            validation_percentage: Approximates the percentage of `dataset` used in the validation set
+            optimizer: from `torch.optim` optimizer. It can only accept two arguments: `parameters` and `lr`. Need more arguments? Use `functools.partial`.
+            scheduler: from `torch.optim.lr_scheduler`
+            scheduler_kwargs: The arguments which get passed to `scheduler`
+            early_stopping_patience: after this many fuitless epochs, training stops
+            max_epochs: maximum number of epochs to train
+            nworkers: number of workers to divide `dataloader` duties between. 0 implies one thread for training and dataloading.
+            non_blocking: consult torch documentation, generally use `True`
+            pin_memory: consult torch documentation, generally use `True`
+        """
         if early_stopping_patience is None:
             early_stopping_patience = max_epochs
 
@@ -176,13 +205,13 @@ class MarginalRatioEstimator:
         while self.epoch < max_epochs and fruitless_epoch < early_stopping_patience:
             # Training
             self.network.train()
-            for observation, u, _ in train_loader:
+            for observation, _, v in train_loader:
                 self.optimizer.zero_grad()
                 observation = swyft.utils.dict_to_device(
                     observation, device=self.device, non_blocking=non_blocking
                 )
-                u = u.to(self.device)
-                loss = self._loss(observation, u).sum(dim=0)
+                v = v.to(self.device)
+                loss = self._loss(observation, v).sum(dim=0)
                 loss.backward()
                 self.optimizer.step()
 
@@ -192,12 +221,12 @@ class MarginalRatioEstimator:
             self.network.eval()
             loss_sum = 0
             with torch.inference_mode():
-                for observation, u, _ in valid_loader:
+                for observation, _, v in valid_loader:
                     observation = swyft.utils.dict_to_device(
                         observation, device=self.device, non_blocking=non_blocking
                     )
-                    u = u.to(self.device)
-                    validation_loss = self._loss(observation, u).sum(dim=0)
+                    v = v.to(self.device)
+                    validation_loss = self._loss(observation, v).sum(dim=0)
                     loss_sum += validation_loss
                 loss_avg = loss_sum / n_validation_batches
                 print(
@@ -221,10 +250,23 @@ class MarginalRatioEstimator:
     def log_ratio(
         self,
         observation: ObsType,
-        parameters: Array,
-        n_batch: Optional[int] = None,
+        v: Array,
+        batch_size: Optional[int] = None,
         inference_mode: bool = True,
     ) -> RatioType:
+        """Evaluate the ratio estimator on a single `observation` with many `parameters`.
+        The `parameters` correspond to `v`, i.e. the "physical" parameterization.
+        (As opposed to `u` which is mapped to the hypercube.)
+
+        Args:
+            observation: a single observation to estimate ratios on
+            v: parameters
+            batch_size: divides the evaluation into batches of this size
+            inference_mode: can provide a speedup, but removes some of pytorch's features (as opposed to `torch.no_grad`)
+
+        Returns:
+            RatioType: the ratios of each marginal in `marginal_indices`. Each marginal index is a key.
+        """
         was_training = self.network.training
         self.network.eval()
 
@@ -232,15 +274,15 @@ class MarginalRatioEstimator:
         with context:
             observation = dict_array_to_tensor(observation, device=self.device)
             observation = valmap(lambda x: x.unsqueeze(0), observation)
-            len_parameters = len(parameters)
-            if n_batch is None or len_parameters <= n_batch:
-                parameters = array_to_tensor(parameters, device=self.device)
-                ratio = self.network(observation, parameters).cpu().numpy()
+            len_v = len(v)
+            if batch_size is None or len_v <= batch_size:
+                v = array_to_tensor(v, device=self.device)
+                ratio = self.network(observation, v).cpu().numpy()
             else:
                 ratio = []
-                for i in range(len_parameters // n_batch + 1):
+                for i in range(len_v // batch_size + 1):
                     parameter_batch = array_to_tensor(
-                        parameters[i * n_batch : (i + 1) * n_batch, :],
+                        v[i * batch_size : (i + 1) * batch_size, :],
                         device=self.device,
                     )
                     ratio_batch = (
@@ -258,6 +300,7 @@ class MarginalRatioEstimator:
 
     @staticmethod
     def _get_last_lr(scheduler: SchedulerType) -> float:
+        """Get the last learning rate from a `lr_scheduler`."""
         if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
             if scheduler.best == float("Inf"):
                 return scheduler.optimizer.param_groups[0]["lr"]
@@ -273,13 +316,21 @@ class MarginalRatioEstimator:
     def _loss(
         self, observation: Dict[Hashable, torch.Tensor], parameters: torch.Tensor
     ) -> torch.Tensor:
-        """Returns marginal-wise losses."""
+        """Calculate the marginal-wise losses.
+
+        Args:
+            observation: a batch of observations within a dictionary
+            parameters: a batch of parameters
+
+        Returns:
+            torch.Tensor: the marginal-wise losses with `len(self.marginal_indices)`
+        """
         n_batch = parameters.size(0)
         assert (
             n_batch % 2 == 0
         ), "Loss function can only handle even-numbered batch sizes."
         assert all(
-            [v.size(0) == n_batch for v in observation.values()]
+            [value.size(0) == n_batch for value in observation.values()]
         ), "The observation batch_size must agree with the parameter batch_size."
 
         # Repeat interleave
@@ -321,6 +372,18 @@ class MarginalRatioEstimator:
         device: Device,
         state_dict: dict,
     ) -> MarginalRatioEstimatorType:
+        """Instantiate a MarginalRatioEstimator from a state_dict, along with a few necessary python objects.
+
+        Args:
+            network: initialized network
+            optimizer: same optimizer as used by saved model
+            scheduler: same scheduler as used by saved model
+            device
+            state_dict
+
+        Returns:
+            MarginalRatioEstimatorType: loaded model
+        """
         marginal_ratio_estimator = cls.__new__(cls)
 
         marginal_ratio_estimator.marginal_indices = state_dict["marginal_indices"]
@@ -336,8 +399,25 @@ class MarginalRatioEstimator:
         marginal_ratio_estimator.scheduler = scheduler
 
         marginal_ratio_estimator.network.load_state_dict(state_dict["network"])
-        marginal_ratio_estimator.optimizer.load_state_dict(state_dict["optimizer"])
-        marginal_ratio_estimator.scheduler.load_state_dict(state_dict["scheduler"])
+
+        if optimizer is not None and state_dict["optimizer"] is None:
+            raise FileNotFoundError(
+                "There was no data about the optimizer in the state_dict"
+            )
+        elif optimizer is not None and state_dict["optimizer"] is not None:
+            marginal_ratio_estimator.optimizer.load_state_dict(state_dict["optimizer"])
+        else:
+            pass
+
+        if scheduler is not None and state_dict["scheduler"] is None:
+            raise FileNotFoundError(
+                "There was no data about the scheduler in the state_dict"
+            )
+        elif scheduler is not None and state_dict["scheduler"] is not None:
+            marginal_ratio_estimator.scheduler.load_state_dict(state_dict["scheduler"])
+        else:
+            pass
+
         return marginal_ratio_estimator
 
 
