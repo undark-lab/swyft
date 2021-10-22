@@ -1,7 +1,8 @@
+from typing import Callable
+
 import numpy as np
 import torch
 
-from typing import Callable
 from .bounds import Bound, UnitCubeBound
 
 
@@ -95,14 +96,14 @@ class CustomTransform:
     def v(self, u):
         """The percent point function, inverse cdf, or quantile function."""
         return self._v(u)
-    
+
     def log_prob(self, v):
         """log pdf"""
         return self._log_prob(v)
-    
+
     def state_dict(self):
         return dict(u=self._u, v=self._v, log_prob=self._log_prob, zdim=self.zdim)
-    
+
     @classmethod
     def from_state_dict(cls, state_dict):
         obj = cls.__new__(cls)
@@ -111,7 +112,6 @@ class CustomTransform:
         obj._log_prob = state_dict["log_prob"]
         obj.zdim = state_dict["zdim"]
         return obj
-
 
 
 class PriorTransform:

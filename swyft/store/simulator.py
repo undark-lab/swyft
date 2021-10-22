@@ -13,7 +13,7 @@ from swyft.utils import all_finite
 
 
 class Simulator:
-    """ Setup and run the simulator engine """
+    """Setup and run the simulator engine"""
 
     def __init__(self, model, sim_shapes, fail_on_non_finite: bool = True):
         """
