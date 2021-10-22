@@ -102,6 +102,7 @@ class Simulator:
         sim_shapes: SimShapeType,
         set_input_method: Callable,
         get_output_method: Callable,
+        shell: bool = False,
         tmpdir: Optional[PathType] = None,
         sim_dtype: str = "f8",
     ):
@@ -120,11 +121,12 @@ class Simulator:
                 simulator output shaped as described by the ``sim_shapes``
                 argument. If the simulator writes output to disk, this function
                 should parse the results from the file(s).
+            shell: execute the specified command through the shell.
             tmpdir: Root temporary directory where to run the simulator.
                 Each instance of the simulator will run in a separate
                 sub-folder. It must exist.
         """
-        command_args = shlex.split(command)
+        command_args = shlex.split(command) if not shell else command
 
         def model(v):
             """Closure to setup an instance of the simulator.
@@ -143,6 +145,7 @@ class Simulator:
                         input=input,
                         text=True,
                         check=True,
+                        shell=shell,
                     )
                     output = get_output_method(res.stdout, res.stderr)
                 finally:
