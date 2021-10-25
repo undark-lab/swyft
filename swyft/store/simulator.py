@@ -121,7 +121,9 @@ class Simulator:
                 simulator output shaped as described by the ``sim_shapes``
                 argument. If the simulator writes output to disk, this function
                 should parse the results from the file(s).
-            shell: execute the specified command through the shell.
+            shell: execute the specified command through the shell. NOTE: the
+                following security considerations apply:
+                https://docs.python.org/3/library/subprocess.html#security-considerations
             tmpdir: Root temporary directory where to run the simulator.
                 Each instance of the simulator will run in a separate
                 sub-folder. It must exist.
