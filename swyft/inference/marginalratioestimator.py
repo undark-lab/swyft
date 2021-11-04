@@ -1,4 +1,14 @@
-from typing import Callable, Dict, Hashable, Optional, Sequence, Tuple, TypeVar, Union
+from typing import (
+    Callable,
+    Dict,
+    Hashable,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 import torch
@@ -9,9 +19,10 @@ from torch.utils.data import DataLoader, Dataset, random_split
 import swyft
 import swyft.utils
 from swyft.inference.train import get_ntrain_nvalid
-from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
+from swyft.types import Array, Device, MarginalIndex, ObsType, PathType, RatioType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor
 from swyft.utils.parameters import tupleize_marginals
+from swyft.utils.saveable import StateDictSaveable, StateDictSaveableType
 
 SchedulerType = Union[
     torch.optim.lr_scheduler._LRScheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -75,33 +86,36 @@ def get_ntrain_nvalid(
             n_valid += 1
             n_train -= 1
     else:
-        raise TypeError()
+        raise TypeError("validation_amount must be int or float")
     return n_train, n_valid
 
 
-def double_features(f: torch.Tensor) -> torch.Tensor:
-    """Double feature vector as (A, B, C, D) --> (A, A, B, B, C, C, D, D)
+def double_observation(f: torch.Tensor) -> torch.Tensor:
+    """Double observation vector as (A, B, C, D) --> (A, A, B, B, C, C, D, D)
 
     Args:
-        f: Feature vectors (n_batch, n_features)
+        f: Observation vectors (n_batch, ...)
 
     Returns:
-        f: Feature vectors (2*n_btach. n_features)
+        Observation vectors (2*n_batch, ...)
     """
     return torch.repeat_interleave(f, 2, dim=0)
 
 
-def double_params(params: torch.Tensor) -> torch.Tensor:
+def double_parameters(parameters: torch.Tensor) -> torch.Tensor:
     """Double parameters as (A, B, C, D) --> (A, B, A, B, C, D, C, D) etc
 
     Args:
-        params: Dictionary of parameters with shape (n_batch).
+        parameters: Parameter vectors (n_batch, n_parameters).
 
     Returns:
-        dict: Dictionary of parameters with shape (2*n_batch).
+        parameters with shape (2*n_batch, n_parameters).
     """
-    n = params.shape[-1]
-    out = torch.repeat_interleave(params.view(-1, 2 * n), 2, dim=0).view(-1, n)
+    n_batch, n_parameters = parameters.shape
+    assert n_batch % 2 == 0, "n_batch must be divisible by two."
+    out = torch.repeat_interleave(parameters.view(-1, 2 * n_parameters), 2, dim=0).view(
+        -1, n_parameters
+    )
     return out
 
 
@@ -110,7 +124,7 @@ MarginalRatioEstimatorType = TypeVar(
 )
 
 
-class MarginalRatioEstimator:
+class MarginalRatioEstimator(StateDictSaveable):
     """Handles the training and evaluation of a ratio estimator. Which ratios are defined by the `marginal_indices` attribute.
     The network must take observation dictionaries and parameter arrays and produce estimated an `log_ratio` for every marginal of interest.
     """
@@ -259,7 +273,7 @@ class MarginalRatioEstimator:
         (As opposed to `u` which is mapped to the hypercube.)
 
         Args:
-            observation: a single observation to estimate ratios on
+            observation: a single observation to estimate ratios on (Cannot have a batch dimension!)
             v: parameters
             batch_size: divides the evaluation into batches of this size
             inference_mode: can provide a speedup, but removes some of pytorch's features (as opposed to `torch.no_grad`)
@@ -271,12 +285,12 @@ class MarginalRatioEstimator:
         self.network.eval()
 
         context = torch.inference_mode if inference_mode else torch.no_grad
-        with context:
+        with context():
             observation = dict_array_to_tensor(observation, device=self.device)
-            observation = valmap(lambda x: x.unsqueeze(0), observation)
             len_v = len(v)
             if batch_size is None or len_v <= batch_size:
                 v = array_to_tensor(v, device=self.device)
+                observation = self._repeat_observation_to_match_v(observation, v)
                 ratio = self.network(observation, v).cpu().numpy()
             else:
                 ratio = []
@@ -285,8 +299,11 @@ class MarginalRatioEstimator:
                         v[i * batch_size : (i + 1) * batch_size, :],
                         device=self.device,
                     )
+                    observation_batch = self._repeat_observation_to_match_v(
+                        observation, parameter_batch
+                    )
                     ratio_batch = (
-                        self.network(observation, parameter_batch).cpu().numpy()
+                        self.network(observation_batch, parameter_batch).cpu().numpy()
                     )
                     ratio.append(ratio_batch)
                 ratio = np.vstack(ratio)
@@ -297,6 +314,13 @@ class MarginalRatioEstimator:
             self.network.eval()
 
         return {k: ratio[..., i] for i, k in enumerate(self.marginal_indices)}
+
+    @staticmethod
+    def _repeat_observation_to_match_v(
+        observation: Dict[Hashable, torch.Tensor], v: torch.Tensor
+    ) -> Dict[Hashable, torch.Tensor]:
+        b, *_ = v.size()
+        return valmap(lambda x: x.unsqueeze(0).expand(b, *x.size()), observation)
 
     @staticmethod
     def _get_last_lr(scheduler: SchedulerType) -> float:
@@ -334,8 +358,8 @@ class MarginalRatioEstimator:
         ), "The observation batch_size must agree with the parameter batch_size."
 
         # Repeat interleave
-        observation_doubled = valmap(double_features, observation)
-        parameters_doubled = double_params(parameters)
+        observation_doubled = valmap(double_observation, observation)
+        parameters_doubled = double_parameters(parameters)
 
         lnL = self.network(observation_doubled, parameters_doubled)
         lnL = lnL.view(-1, 4, lnL.shape[-1])
@@ -419,6 +443,24 @@ class MarginalRatioEstimator:
             pass
 
         return marginal_ratio_estimator
+
+    @classmethod
+    def load(
+        cls: Type[StateDictSaveableType],
+        network: torch.nn.Module,
+        device: Device,
+        filename: PathType,
+        optimizer: Optional[torch.optim.Optimizer] = None,
+        scheduler: Optional[SchedulerType] = None,
+    ) -> StateDictSaveableType:
+        sd = torch.load(filename)
+        return cls.from_state_dict(
+            network=network,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            device=device,
+            state_dict=sd,
+        )
 
 
 if __name__ == "__main__":

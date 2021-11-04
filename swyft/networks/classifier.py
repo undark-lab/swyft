@@ -13,38 +13,6 @@ from swyft.networks.standardization import (
 from swyft.types import Array, MarginalIndex, ObsShapeType
 
 
-def is_marginal_block_possible(marginal_indices: MarginalIndex) -> bool:
-    marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
-    return [len(marginal_indices[0]) == len(mi) for mi in marginal_indices]
-
-
-def get_marginal_block_shape(marginal_indices: MarginalIndex) -> Tuple[int, int]:
-    marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
-    assert is_marginal_block_possible(
-        marginal_indices
-    ), f"Each tuple in {marginal_indices} must have the same length."
-    return len(marginal_indices), len(marginal_indices[0])
-
-
-def get_marginal_block(
-    parameters: Array, marginal_indices: MarginalIndex
-) -> torch.Tensor:
-    depth = swyft.utils.depth(marginal_indices)
-    tuple_marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
-    assert is_marginal_block_possible(
-        tuple_marginal_indices
-    ), f"Each tuple in {tuple_marginal_indices} must have the same length."
-
-    if depth in [0, 1, 2]:
-        return torch.stack(
-            [parameters[..., mi] for mi in tuple_marginal_indices], dim=1
-        )
-    else:
-        raise ValueError(
-            f"{marginal_indices} must be of the form (a) 2, (b) [2, 3], (c) [2, [1, 3]], or (d) [[0, 1], [1, 2]]."
-        )
-
-
 class ObservationTransform(nn.Module):
     def __init__(self, observation_key: Hashable) -> None:
         super().__init__()
@@ -53,6 +21,13 @@ class ObservationTransform(nn.Module):
 
     def forward(self, observation: Dict[Hashable, torch.Tensor]) -> torch.Tensor:
         return self.flatten(observation[self.observation_key])  # B, O
+
+    def n_observation_features(self, observation_shapes: ObsShapeType) -> int:
+        fabricated_observation = {
+            key: torch.rand(2, *shape) for key, shape in observation_shapes.items()
+        }
+        _, n_observation_features = self.forward(fabricated_observation).shape
+        return n_observation_features
 
 
 class ParameterTransform(nn.Module):
@@ -64,7 +39,45 @@ class ParameterTransform(nn.Module):
         )
 
     def forward(self, parameters: torch.Tensor) -> torch.Tensor:
-        return get_marginal_block(parameters, self.marginal_indices)  # B, M, P
+        return self.get_marginal_block(parameters, self.marginal_indices)  # B, M, P
+
+    @property
+    def marginal_block_shape(self):
+        return self.get_marginal_block_shape(self.marginal_indices)
+
+    @staticmethod
+    def is_marginal_block_possible(marginal_indices: MarginalIndex) -> bool:
+        marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
+        return [len(marginal_indices[0]) == len(mi) for mi in marginal_indices]
+
+    @classmethod
+    def get_marginal_block_shape(
+        cls, marginal_indices: MarginalIndex
+    ) -> Tuple[int, int]:
+        marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
+        assert cls.is_marginal_block_possible(
+            marginal_indices
+        ), f"Each tuple in {marginal_indices} must have the same length."
+        return len(marginal_indices), len(marginal_indices[0])
+
+    @classmethod
+    def get_marginal_block(
+        cls, parameters: Array, marginal_indices: MarginalIndex
+    ) -> torch.Tensor:
+        depth = swyft.utils.depth(marginal_indices)
+        tuple_marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
+        assert cls.is_marginal_block_possible(
+            tuple_marginal_indices
+        ), f"Each tuple in {tuple_marginal_indices} must have the same length."
+
+        if depth in [0, 1, 2]:
+            return torch.stack(
+                [parameters[..., mi] for mi in tuple_marginal_indices], dim=1
+            )
+        else:
+            raise ValueError(
+                f"{marginal_indices} must be of the form (a) 2, (b) [2, 3], (c) [2, [1, 3]], or (d) [[0, 1], [1, 2]]."
+            )
 
 
 class MarginalClassifier(nn.Module):
@@ -147,21 +160,29 @@ def get_marginal_classifier(
     observation_key: Hashable,
     marginal_indices: MarginalIndex,
     observation_shapes: ObsShapeType,
-    n_observation_features: int,
     n_parameters: int,
     hidden_features: int,
     num_blocks: int,
 ) -> nn.Module:
-    n_marginals, n_block_parameters = get_marginal_block_shape(marginal_indices)
+    observation_transform = ObservationTransform(observation_key)
+    n_observation_features = observation_transform.n_observation_features(
+        observation_shapes
+    )
+
+    parameter_transform = ParameterTransform(marginal_indices)
+    n_marginals, n_block_parameters = parameter_transform.marginal_block_shape
+
+    marginal_classifier = MarginalClassifier(
+        n_marginals,
+        n_observation_features + n_block_parameters,
+        hidden_features=hidden_features,
+        num_blocks=num_blocks,
+    )
+
     return Network(
-        ObservationTransform(observation_key),
-        ParameterTransform(marginal_indices),
-        MarginalClassifier(
-            n_marginals,
-            n_observation_features + n_block_parameters,
-            hidden_features=hidden_features,
-            num_blocks=num_blocks,
-        ),
+        observation_transform,
+        parameter_transform,
+        marginal_classifier,
         observation_shapes,
         n_parameters,
         observation_online_z_score=True,

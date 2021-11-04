@@ -1,7 +1,7 @@
 import torch
 
 
-def double_features(f: torch.Tensor) -> torch.Tensor:
+def double_observation(f: torch.Tensor) -> torch.Tensor:
     """Double feature vector as (A, B, C, D) --> (A, A, B, B, C, C, D, D)
 
     Args:
@@ -12,7 +12,7 @@ def double_features(f: torch.Tensor) -> torch.Tensor:
     return torch.repeat_interleave(f, 2, dim=0)
 
 
-def double_params(params: torch.Tensor) -> torch.Tensor:
+def double_parameters(params: torch.Tensor) -> torch.Tensor:
     """Double parameters as (A, B, C, D) --> (A, B, A, B, C, D, C, D) etc
 
     Args:
@@ -38,8 +38,8 @@ def loss_fn(
     assert n_batch % 2 == 0, "Loss function can only handle even-numbered batch sizes."
 
     # Repeat interleave
-    f_doubled = double_features(f)
-    params_doubled = double_params(params)
+    f_doubled = double_observation(f)
+    params_doubled = double_parameters(params)
 
     # Get
     lnL = tail(f_doubled, params_doubled)

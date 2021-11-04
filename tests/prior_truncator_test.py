@@ -1,11 +1,9 @@
 import tempfile
-from itertools import chain, product
+from itertools import product
 from pathlib import Path
-from typing import Callable, Tuple
 
 import numpy as np
 import pytest
-from scipy.stats import distributions
 
 import swyft
 from swyft.bounds import RectangleBound, UnitCubeBound
