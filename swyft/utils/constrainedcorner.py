@@ -61,11 +61,11 @@ def corner(
     for ax in upper:
         ax.axis("off")
 
-    for i, ax in enumerate(diag):
-        df = marginals_1d[(i,)]
+    for i, (k, ax) in enumerate(zip(marginals_1d.keys(), diag)):
+        df = marginals_1d[k]
         sns.histplot(
-            marginals_1d[(i,)],
-            x=i,
+            df,
+            x=k[0],
             weights=_set_weight_keyword(df),
             bins=bins,
             ax=ax,
@@ -85,10 +85,11 @@ def corner(
         if truth is not None:
             ax.axvline(truth[i], color="r")
 
-    for i in tqdm(upper_inds):
-        x, y = i
-        ax = axes[y, x]  # targets the lower left corner
-        df = marginals_2d[i]
+    for k, i in tqdm(zip(marginals_2d.keys(), upper_inds)):
+        a, b = i  # plot array index
+        x, y = k  # marginal index
+        ax = axes[b, a]  # targets the lower left corner
+        df = marginals_2d[k]
 
         sns.histplot(
             data=df,
@@ -113,12 +114,21 @@ def corner(
             )
 
         if truth is not None:
-            ax.axvline(truth[i[0]], color="r")
-            ax.axhline(truth[i[1]], color="r")
+            ax.axvline(truth[a], color="r")
+            ax.axhline(truth[b], color="r")
             ax.scatter(*truth[i, ...], color="r")
 
-        if ylim_lower is not None:
+        if ylim_lower is None:
+            pass
+        elif isinstance(ylim_lower[0], (int, float)):
             ax.set_ylim(*ylim_lower)
+        elif isinstance(ylim_lower[0], (tuple, list)):
+            ax.set_ylim(*ylim_lower[b])
+        else:
+            raise NotImplementedError(
+                "ylim should be a tuple or a list of tuples. Rows are different, columns have the same ylim."
+            )
+
         ax.tick_params(
             axis="both",
             which="both",
@@ -130,11 +140,18 @@ def corner(
         )
 
     # clear all
-    for ax in axes.flatten():
-        ax.set_xlabel("")
-        ax.set_ylabel("")
-        if xlim is not None:
-            ax.set_xlim(*xlim)
+    for i, axrow in enumerate(axes):
+        for j, ax in enumerate(axrow):
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            if xlim is None:
+                pass
+            elif isinstance(xlim[0], (int, float)):
+                ax.set_xlim(*xlim)
+            elif isinstance(xlim[0], (tuple, list)):
+                ax.set_xlim(*xlim[j])
+            else:
+                raise NotImplementedError("xlim should be a tuple or a list of tuples.")
 
     # bottom row
     for i, ax in enumerate(axes[-1, :]):
