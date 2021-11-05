@@ -1,5 +1,5 @@
 from swyft.bounds import Bound
-from swyft.inference import Posteriors, TrainOptions
+from swyft.inference import MarginalRatioEstimator, Posteriors, TrainOptions
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineStandardizingLayer
 from swyft.prior import (
     Prior,
@@ -25,6 +25,7 @@ __all__ = [
     "Posteriors",
     "Prior",
     "Bound",
+    "MarginalRatioEstimator",
     "Module",
     "DirectoryStore",
     "MemoryStore",
