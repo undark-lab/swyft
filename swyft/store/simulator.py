@@ -1,4 +1,5 @@
 import enum
+import logging
 import os
 import shlex
 import subprocess
@@ -16,6 +17,8 @@ from swyft.bounds import Prior
 from swyft.bounds.prior import TruncatedPrior
 from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
 from swyft.utils import all_finite
+
+log = logging.getLogger(__name__)
 
 
 class SimulationStatus(enum.IntEnum):
@@ -128,6 +131,12 @@ class Simulator:
                 Each instance of the simulator will run in a separate
                 sub-folder. It must exist.
         """
+        if shell:
+            log.warning(
+                "Your command-line program will run through a shell - check the "
+                "following security considerations: "
+                "https://docs.python.org/3/library/subprocess.html#security-considerations"
+            )
         command_args = shlex.split(command) if not shell else command
 
         def model(v):
