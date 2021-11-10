@@ -11,11 +11,13 @@ log = logging.getLogger(__name__)
 class Bound(StateDictSaveable):
     """A bound region on the hypercube.
 
-    .. note::
+    Notes:
         The Bound object provides methods to sample from subregions of the
         hypercube, to evaluate the volume of the constrained region, and to
         evaluate the bound.
     """
+
+    rng = np.random.default_rng()
 
     def __init__(self):
         pass
@@ -30,6 +32,10 @@ class Bound(StateDictSaveable):
         """Number of dimensions."""
         raise NotImplementedError
 
+    def set_seed(self, seed):
+        """Set seed for random number generator."""
+        self.rng = np.random.default_rng(seed=seed)
+
     def sample(self, N):
         """Sample.
 
@@ -38,6 +44,10 @@ class Bound(StateDictSaveable):
 
         Returns:
             s (N x udim np.ndarray)
+
+        Notes:
+            Overriding methods should generate random numbers using `self.rng`,
+            which can be seeded via the method `Bound.set_seed`.
         """
         raise NotImplementedError
 
@@ -102,7 +112,7 @@ class UnitCubeBound(Bound, StateDictSaveable):
         Args:
             N (int): Number of samples
         """
-        return np.random.rand(N, self.udim)
+        return self.rng.random((N, self.udim))
 
     def __call__(self, u):
         """Evaluate bound.
@@ -147,7 +157,7 @@ class RectangleBound(Bound, StateDictSaveable):
         return len(self._rec_bounds)
 
     def sample(self, N):
-        u = np.random.rand(N, self.udim)
+        u = self.rng.random((N, self.udim))
         for i in range(self.udim):
             u[:, i] *= self._rec_bounds[i, 1] - self._rec_bounds[i, 0]
             u[:, i] += self._rec_bounds[i, 0]
@@ -198,17 +208,16 @@ class BallsBound(Bound, StateDictSaveable):
         epsilon = np.median(dist[:, -1]) * scale * 1.5
         return epsilon
 
-    @staticmethod
-    def _get_volume(X, epsilon, bt):
+    def _get_volume(self, X, epsilon, bt):
         N = 100
         vol_est = []
         d = X.shape[-1]
         area = {1: 2 * epsilon, 2: np.pi * epsilon ** 2}[d]
         for i in range(N):
-            n = np.random.randn(*X.shape)
+            n = self.rng.standard_normal(X.shape)
             norm = (n ** 2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
-            r = np.random.rand(len(X)) ** (1 / d) * epsilon
+            r = self.rng.random(len(X)) ** (1 / d) * epsilon
             Y = X + n * r.reshape(-1, 1)
             in_bounds = ((Y >= 0.0) & (Y <= 1.0)).prod(axis=1, dtype="bool")
             Y = Y[in_bounds]
@@ -226,21 +235,21 @@ class BallsBound(Bound, StateDictSaveable):
         samples = []
         d = self.X.shape[-1]
         while counter < N:
-            n = np.random.randn(*self.X.shape)
+            n = self.rng.standard_normal(self.X.shape)
             norm = (n ** 2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
-            r = np.random.rand(len(self.X)) ** (1 / d) * self.epsilon
+            r = self.rng.random(len(self.X)) ** (1 / d) * self.epsilon
             Y = self.X + n * r.reshape(-1, 1)
             in_bounds = ((Y >= 0.0) & (Y <= 1.0)).prod(axis=1, dtype="bool")
             Y = Y[in_bounds]
             counts = self.bt.query_radius(Y, r=self.epsilon, count_only=True)
             p = 1.0 / counts
-            w = np.random.rand(len(p))
+            w = self.rng.random(len(p))
             Y = Y[p >= w]
             samples.append(Y)
             counter += len(Y)
         samples = np.vstack(samples)
-        ind = np.random.choice(range(len(samples)), size=N, replace=False)
+        ind = self.rng.choice(range(len(samples)), size=N, replace=False)
         return samples[ind]
 
     def __call__(self, u):
