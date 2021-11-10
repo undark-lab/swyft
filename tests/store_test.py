@@ -7,7 +7,7 @@ from dask.distributed import LocalCluster
 
 from swyft.prior import get_uniform_prior
 from swyft.store.simulator import DaskSimulator, SimulationStatus, Simulator
-from swyft.store.store import DirectoryStore, MemoryStore
+from swyft.store.store import Store
 
 
 def model(params):
@@ -38,13 +38,13 @@ prior = get_uniform_prior(np.zeros(2), np.array([1.0, 0.5]))
 
 class TestStoreIO:
     def test_init_memory_store(self):
-        store = MemoryStore(simulator=sim)
+        store = Store.memory_store(simulator=sim)
         assert store.v.shape[1] == 2
         assert isinstance(store._zarr_store, zarr.storage.MemoryStore)
         assert isinstance(store._simulator, Simulator)
 
     def test_init_memory_store_multi_outputs(self):
-        store = MemoryStore(simulator=sim_multi_out)
+        store = Store.memory_store(simulator=sim_multi_out)
         assert store.v.shape[1] == 2
         assert {k: v.shape[1:] for k, v in store.sims.items()} == {
             "x1": (10,),
@@ -53,7 +53,7 @@ class TestStoreIO:
 
     def test_init_directory_store_multi_outputs(self):
         with tempfile.TemporaryDirectory() as td:
-            store = DirectoryStore(simulator=sim_multi_out, path=td)
+            store = Store.directory_store(simulator=sim_multi_out, path=td)
             assert store.v.shape[1] == 2
             assert {k: v.shape[1:] for k, v in store.sims.items()} == {
                 "x1": (10,),
@@ -66,7 +66,7 @@ class TestStoreIO:
             assert len(items) > 0
 
     def test_memory_store_save(self):
-        store = MemoryStore(simulator=sim_multi_out)
+        store = Store.memory_store(simulator=sim_multi_out)
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
             store.save(td)
@@ -76,10 +76,10 @@ class TestStoreIO:
             assert len(items) > 0
 
     def test_memory_store_load(self):
-        store = MemoryStore(simulator=sim_multi_out)
+        store = Store.memory_store(simulator=sim_multi_out)
         with tempfile.TemporaryDirectory() as td:
             store.save(td)
-            loaded = MemoryStore.load(td)
+            loaded = Store.load(td)
             loaded.set_simulator(sim_multi_out)
             assert np.allclose(loaded.v, store.v)
             assert loaded._zarr_store.root == store._zarr_store.root
@@ -87,19 +87,19 @@ class TestStoreIO:
 
     def test_directory_store_load(self):
         with tempfile.TemporaryDirectory() as td:
-            store = DirectoryStore(simulator=sim_multi_out, path=td)
-            loaded = MemoryStore.load(td)
+            store = Store.directory_store(simulator=sim_multi_out, path=td)
+            loaded = Store.load(td)
             assert np.allclose(loaded.v, store.v)
 
 
 class TestStoreRun:
     def test_store_add(self):
-        store = MemoryStore(simulator=sim_multi_out)
+        store = Store.memory_store(simulator=sim_multi_out)
         store.add(20, prior)
         assert store.sims.x1.shape[0] > 0
 
     def test_memory_store_simulate(self):
-        store = MemoryStore(simulator=sim_multi_out)
+        store = Store.memory_store(simulator=sim_multi_out)
         indices = store.sample(100, prior, add=True)
         ind_sim = indices[:50]
         store.simulate(ind_sim)
@@ -109,20 +109,20 @@ class TestStoreRun:
 
     def test_directory_store_sample(self):
         with tempfile.TemporaryDirectory() as td:
-            store = DirectoryStore(simulator=sim_multi_out, path=td)
+            store = Store.directory_store(simulator=sim_multi_out, path=td)
             indices = store.sample(100, prior, add=True)
             assert len(indices) == len(store)
 
     def test_directory_store_simulate(self):
         with tempfile.TemporaryDirectory() as td:
-            store = DirectoryStore(simulator=sim, path=td)
+            store = Store.directory_store(simulator=sim, path=td)
             ind_sim = store.sample(100, prior, add=True)
             store.simulate(ind_sim)
             assert store.sims.x[:].sum(axis=1).all()
 
     def test_directory_store_simulate_partial(self):
         with tempfile.TemporaryDirectory() as td:
-            store = DirectoryStore(simulator=sim, path=td)
+            store = Store.directory_store(simulator=sim, path=td)
             ind_sim = store.sample(100, prior, add=True)
             ind_sim = ind_sim[:40]
             store.simulate(ind_sim)
@@ -131,7 +131,9 @@ class TestStoreRun:
 
     def test_store_lockfile(self):
         with tempfile.TemporaryDirectory() as td:
-            store_dir = DirectoryStore(simulator=sim, path=td, sync_path=td + ".sync")
+            store_dir = Store.directory_store(
+                simulator=sim, path=td, sync_path=td + ".sync"
+            )
             assert store_dir._lock is not None
             assert store_dir._lock.lockfile is None
 
@@ -145,7 +147,7 @@ class TestStoreRun:
         sim_fail = Simulator(
             broken_model, parameter_names=["a", "b"], sim_shapes={"obs": (2,)}
         )
-        store = MemoryStore(simulator=sim_fail)
+        store = Store.memory_store(simulator=sim_fail)
         store.add(10, prior)
         store.simulate()
         assert all(store.sim_status[:] == SimulationStatus.FAILED)
@@ -158,8 +160,7 @@ class TestStoreRun:
                 )
                 sim_fail.set_dask_cluster(cluster)
 
-                store = MemoryStore(simulator=sim_fail)
-                # store = DirectoryStore(path="test.zarr", simulator=sim)
+                store = Store.memory_store(simulator=sim_fail)
                 store.add(10, prior)
                 store.simulate()
                 assert all(store.sim_status[:] == SimulationStatus.FAILED)
