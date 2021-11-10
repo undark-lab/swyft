@@ -7,7 +7,7 @@ from swyft.prior import (
     get_diagonal_normal_prior,
     get_uniform_prior,
 )
-from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator
+from swyft.store import DaskSimulator, Dataset, Simulator, Store
 from swyft.utils import plot_1d, plot_corner, plot_empirical_mass
 
 
@@ -27,8 +27,7 @@ __all__ = [
     "Bound",
     "MarginalRatioEstimator",
     "Module",
-    "DirectoryStore",
-    "MemoryStore",
+    "Store",
     "DefaultHead",
     "DefaultTail",
     "OnlineStandardizingLayer",
