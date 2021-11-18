@@ -165,7 +165,6 @@ class TestMarginalRatioEstimator:
         product(
             [[0, 1], [(0, 1)]],  # With these, n_parameters >= 2
             [None, 10],
-            [True, False],
         ),
     )
     def test_log_ratio_shape(self, marginal_indices, batch_size: Optional[int]):
