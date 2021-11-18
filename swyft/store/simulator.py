@@ -1,4 +1,5 @@
 import enum
+import logging
 import os
 import shlex
 import subprocess
@@ -16,6 +17,8 @@ from swyft.bounds import Prior
 from swyft.bounds.prior import TruncatedPrior
 from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
 from swyft.utils import all_finite
+
+log = logging.getLogger(__name__)
 
 
 class SimulationStatus(enum.IntEnum):
@@ -102,6 +105,7 @@ class Simulator:
         sim_shapes: SimShapeType,
         set_input_method: Callable,
         get_output_method: Callable,
+        shell: bool = False,
         tmpdir: Optional[PathType] = None,
         sim_dtype: str = "f8",
     ):
@@ -120,11 +124,20 @@ class Simulator:
                 simulator output shaped as described by the ``sim_shapes``
                 argument. If the simulator writes output to disk, this function
                 should parse the results from the file(s).
+            shell: execute the specified command through the shell. NOTE: the
+                following security considerations apply:
+                https://docs.python.org/3/library/subprocess.html#security-considerations
             tmpdir: Root temporary directory where to run the simulator.
                 Each instance of the simulator will run in a separate
                 sub-folder. It must exist.
         """
-        command_args = shlex.split(command)
+        if shell:
+            log.warning(
+                "Your command-line program will run through a shell - check the "
+                "following security considerations: "
+                "https://docs.python.org/3/library/subprocess.html#security-considerations"
+            )
+        command_args = shlex.split(command) if not shell else command
 
         def model(v):
             """Closure to setup an instance of the simulator.
@@ -143,6 +156,7 @@ class Simulator:
                         input=input,
                         text=True,
                         check=True,
+                        shell=shell,
                     )
                     output = get_output_method(res.stdout, res.stderr)
                 finally:
