@@ -161,16 +161,14 @@ class TestMarginalRatioEstimator:
         pass
 
     @pytest.mark.parametrize(
-        "marginal_indices, batch_size, inference_mode",
+        "marginal_indices, batch_size",
         product(
             [[0, 1], [(0, 1)]],  # With these, n_parameters >= 2
             [None, 10],
             [True, False],
         ),
     )
-    def test_log_ratio_shape(
-        self, marginal_indices, batch_size: Optional[int], inference_mode: bool
-    ):
+    def test_log_ratio_shape(self, marginal_indices, batch_size: Optional[int]):
         """The log_ratio function should return as many weights as there were n_batches of parameters provided."""
         n_batch = 100
         marginal_indices = tupleize_marginals(marginal_indices)
@@ -183,7 +181,6 @@ class TestMarginalRatioEstimator:
             observation=fabricated_observation,
             v=fabricated_v,
             batch_size=batch_size,
-            inference_mode=inference_mode,
         )
         assert set(log_ratio.keys()) == set(marginal_indices)
         for _, value in log_ratio.items():

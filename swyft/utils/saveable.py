@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from os import name
 from typing import Type, TypeVar
 
 import torch

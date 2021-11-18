@@ -234,7 +234,7 @@ class MarginalRatioEstimator(StateDictSaveable):
             # Evaluation
             self.network.eval()
             loss_sum = 0
-            with torch.inference_mode():
+            with torch.no_grad():
                 for observation, _, v in valid_loader:
                     observation = swyft.utils.dict_to_device(
                         observation, device=self.device, non_blocking=non_blocking
@@ -266,7 +266,6 @@ class MarginalRatioEstimator(StateDictSaveable):
         observation: ObsType,
         v: Array,
         batch_size: Optional[int] = None,
-        inference_mode: bool = True,
     ) -> RatioType:
         """Evaluate the ratio estimator on a single `observation` with many `parameters`.
         The `parameters` correspond to `v`, i.e. the "physical" parameterization.
@@ -276,7 +275,6 @@ class MarginalRatioEstimator(StateDictSaveable):
             observation: a single observation to estimate ratios on (Cannot have a batch dimension!)
             v: parameters
             batch_size: divides the evaluation into batches of this size
-            inference_mode: can provide a speedup, but removes some of pytorch's features (as opposed to `torch.no_grad`)
 
         Returns:
             RatioType: the ratios of each marginal in `marginal_indices`. Each marginal index is a key.
@@ -284,8 +282,7 @@ class MarginalRatioEstimator(StateDictSaveable):
         was_training = self.network.training
         self.network.eval()
 
-        context = torch.inference_mode if inference_mode else torch.no_grad
-        with context():
+        with torch.no_grad():
             observation = dict_array_to_tensor(observation, device=self.device)
             len_v = len(v)
             if batch_size is None or len_v <= batch_size:
