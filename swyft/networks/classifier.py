@@ -14,35 +14,57 @@ from swyft.types import Array, MarginalIndex, ObsShapeType
 
 
 class ObservationTransform(nn.Module):
-    def __init__(self, observation_key: Hashable) -> None:
+    def __init__(
+        self,
+        observation_key: Hashable,
+        observation_shapes: ObsShapeType,
+        online_z_score: bool,
+    ) -> None:
         super().__init__()
         self.observation_key = observation_key
+        self.observation_shapes = observation_shapes
         self.flatten = nn.Flatten()
+        if online_z_score:
+            self.online_z_score = OnlineDictStandardizingLayer(self.observation_shapes)
+        else:
+            self.online_z_score = nn.Identity()
 
     def forward(self, observation: Dict[Hashable, torch.Tensor]) -> torch.Tensor:
-        return self.flatten(observation[self.observation_key])  # B, O
+        z_scored_observation = self.online_z_score(observation)
+        return self.flatten(z_scored_observation[self.observation_key])  # B, O
 
-    def n_observation_features(self, observation_shapes: ObsShapeType) -> int:
-        fabricated_observation = {
-            key: torch.rand(2, *shape) for key, shape in observation_shapes.items()
-        }
-        _, n_observation_features = self.forward(fabricated_observation).shape
-        return n_observation_features
+    @property
+    def n_features(self) -> int:
+        with torch.no_grad():
+            fabricated_observation = {
+                key: torch.rand(2, *shape)
+                for key, shape in self.observation_shapes.items()
+            }
+            _, n_features = self.forward(fabricated_observation).shape
+        return n_features
 
 
 class ParameterTransform(nn.Module):
-    def __init__(self, marginal_indices: MarginalIndex):
+    def __init__(
+        self, n_parameters: int, marginal_indices: MarginalIndex, online_z_score: bool
+    ) -> None:
         super().__init__()
         self.register_buffer(
             "marginal_indices",
             torch.tensor(swyft.utils.tupleize_marginals(marginal_indices)),
         )
+        self.n_parameters = torch.Size([n_parameters])
+        if online_z_score:
+            self.online_z_score = OnlineStandardizingLayer(self.n_parameters)
+        else:
+            self.online_z_score = nn.Identity()
 
     def forward(self, parameters: torch.Tensor) -> torch.Tensor:
+        parameters = self.online_z_score(parameters)
         return self.get_marginal_block(parameters, self.marginal_indices)  # B, M, P
 
     @property
-    def marginal_block_shape(self):
+    def marginal_block_shape(self) -> Tuple[int, int]:
         return self.get_marginal_block_shape(self.marginal_indices)
 
     @staticmethod
@@ -117,42 +139,17 @@ class Network(nn.Module):
         observation_transform: nn.Module,
         parameter_transform: nn.Module,
         marginal_classifier: nn.Module,
-        observation_shapes: ObsShapeType,
-        n_parameters: int,
-        observation_online_z_score: bool,
-        parameter_online_z_score: bool,
     ) -> None:
         super().__init__()
         self.observation_transform = observation_transform
         self.parameter_transform = parameter_transform
         self.marginal_classifier = marginal_classifier
-        self.n_parameters = n_parameters
-        self.observation_shapes = observation_shapes
-
-        if observation_online_z_score:
-            self.observation_online_z_score = OnlineDictStandardizingLayer(
-                observation_shapes
-            )
-        else:
-            self.observation_online_z_score = nn.Identity()
-
-        if parameter_online_z_score:
-            self.parameter_online_z_score = OnlineStandardizingLayer(
-                torch.Size([self.n_parameters])
-            )
-        else:
-            self.parameter_online_z_score = nn.Identity()
 
     def forward(
         self, observation: Dict[Hashable, torch.Tensor], parameters: torch.Tensor
     ) -> torch.Tensor:
-        observation_z_scored = self.observation_online_z_score(observation)  # B, O
-        parameters_z_scored = self.parameter_online_z_score(
-            parameters
-        )  # B, n_parameters
-
-        features = self.observation_transform(observation_z_scored)  # B, O
-        marginal_block = self.parameter_transform(parameters_z_scored)  # B, M, P
+        features = self.observation_transform(observation)  # B, O
+        marginal_block = self.parameter_transform(parameters)  # B, M, P
         return self.marginal_classifier(features, marginal_block)  # B, M
 
 
@@ -163,13 +160,17 @@ def get_marginal_classifier(
     n_parameters: int,
     hidden_features: int,
     num_blocks: int,
+    observation_online_z_score: bool = True,
+    parameter_online_z_score: bool = True,
 ) -> nn.Module:
-    observation_transform = ObservationTransform(observation_key)
-    n_observation_features = observation_transform.n_observation_features(
-        observation_shapes
+    observation_transform = ObservationTransform(
+        observation_key, observation_shapes, online_z_score=observation_online_z_score
     )
+    n_observation_features = observation_transform.n_features
 
-    parameter_transform = ParameterTransform(marginal_indices)
+    parameter_transform = ParameterTransform(
+        n_parameters, marginal_indices, online_z_score=parameter_online_z_score
+    )
     n_marginals, n_block_parameters = parameter_transform.marginal_block_shape
 
     marginal_classifier = MarginalClassifier(
@@ -183,10 +184,6 @@ def get_marginal_classifier(
         observation_transform,
         parameter_transform,
         marginal_classifier,
-        observation_shapes,
-        n_parameters,
-        observation_online_z_score=True,
-        parameter_online_z_score=True,
     )
 
 
