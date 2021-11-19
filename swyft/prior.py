@@ -40,16 +40,16 @@ class PriorTruncator(StateDictSaveable):
             bound = UnitCubeBound(prior.n_parameters)
         self.bound = bound
 
-    def sample(self, N: int) -> np.ndarray:
+    def sample(self, n_samples: int) -> np.ndarray:
         """Sample from truncated prior.
 
         Args:
-            N: Number of samples to return
+            n_samples: Number of samples to return
 
         Returns:
-            Samples: (N, n_parameters)
+            Samples: (n_samples, n_parameters)
         """
-        u = self.bound.sample(N)
+        u = self.bound.sample(n_samples)
         return self.prior.v(u)
 
     def log_prob(self, v: np.ndarray) -> np.ndarray:

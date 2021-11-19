@@ -3,7 +3,7 @@ from typing import Optional
 import pandas as pd
 from toolz import keyfilter
 
-from swyft.types import Array, RatioType
+from swyft.types import Array, MarginalToArray
 from swyft.utils.array import tensor_to_array
 
 
@@ -15,7 +15,7 @@ def get_marginal_dim_by_value(value: Array) -> int:
     return value.shape[-1]
 
 
-def filter_marginals_by_dim(ratios: RatioType, dim: int) -> RatioType:
+def filter_marginals_by_dim(ratios: MarginalToArray, dim: int) -> MarginalToArray:
     assert all(
         isinstance(k, tuple) for k in ratios.keys()
     ), "This function works on tuples of parameters."

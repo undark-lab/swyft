@@ -114,7 +114,7 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        v_prop = pdf.sample(N=np.random.poisson(N))
+        v_prop = pdf.sample(np.random.poisson(N))
         log_lambda_target = pdf.log_prob(v_prop) + np.log(N)
         log_lambda_store = self.log_lambda(v_prop)
         log_w = np.log(np.random.rand(len(v_prop))) + log_lambda_target
@@ -288,7 +288,7 @@ class Store(ABC):
         self._update()
 
         # Generate new points
-        v_prop = pdf.sample(N=np.random.poisson(Nsamples))
+        v_prop = pdf.sample(np.random.poisson(Nsamples))
         log_lambda_target = pdf.log_prob(v_prop) + np.log(N)
         log_lambda_store = self.log_lambda(v_prop)
         frac = np.where(

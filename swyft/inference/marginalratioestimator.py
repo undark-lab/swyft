@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader, Dataset, random_split
 import swyft
 import swyft.utils
 from swyft.inference.train import get_ntrain_nvalid
-from swyft.types import Array, Device, MarginalIndex, ObsType, PathType, RatioType
+from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType, PathType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor
 from swyft.utils.parameters import tupleize_marginals
 from swyft.utils.saveable import StateDictSaveable, StateDictSaveableType
@@ -266,7 +266,7 @@ class MarginalRatioEstimator(StateDictSaveable):
         observation: ObsType,
         v: Array,
         batch_size: Optional[int] = None,
-    ) -> RatioType:
+    ) -> MarginalToArray:
         """Evaluate the ratio estimator on a single `observation` with many `parameters`.
         The `parameters` correspond to `v`, i.e. the "physical" parameterization.
         (As opposed to `u` which is mapped to the hypercube.)
@@ -277,7 +277,7 @@ class MarginalRatioEstimator(StateDictSaveable):
             batch_size: divides the evaluation into batches of this size
 
         Returns:
-            RatioType: the ratios of each marginal in `marginal_indices`. Each marginal index is a key.
+            MarginalToArray: the ratios of each marginal in `marginal_indices`. Each marginal index is a key.
         """
         was_training = self.network.training
         self.network.eval()

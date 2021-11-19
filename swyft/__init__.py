@@ -1,5 +1,10 @@
 from swyft.bounds import Bound
-from swyft.inference import MarginalRatioEstimator, Posteriors, TrainOptions
+from swyft.inference import (
+    MarginalPosterior,
+    MarginalRatioEstimator,
+    Posteriors,
+    TrainOptions,
+)
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineStandardizingLayer
 from swyft.prior import (
     Prior,
@@ -21,11 +26,12 @@ def zen():
 
 __all__ = [
     "TrainOptions",
-    "PriorTruncator",
     "Posteriors",
     "Prior",
+    "PriorTruncator",
     "Bound",
     "MarginalRatioEstimator",
+    "MarginalPosterior",
     "Module",
     "DirectoryStore",
     "MemoryStore",

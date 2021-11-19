@@ -8,7 +8,7 @@ from toolz import valmap
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
-from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
+from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType
 from swyft.utils import (
     array_to_tensor,
     dict_array_to_tensor,
@@ -110,7 +110,9 @@ class RatioEstimator(StateDictSaveable):
     def train_diagnostics(self):  # TODO add type annotation
         return self._train_diagnostics
 
-    def ratios(self, obs: ObsType, params: Array, n_batch: int = 10_000) -> RatioType:
+    def ratios(
+        self, obs: ObsType, params: Array, n_batch: int = 10_000
+    ) -> MarginalToArray:
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()

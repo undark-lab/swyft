@@ -8,6 +8,7 @@ import torch
 
 import swyft.inference.marginalratioestimator as mre
 import swyft.networks.classifier as classifier
+from swyft.types import MarginalIndex
 from swyft.utils.parameters import tupleize_marginals
 
 
@@ -167,7 +168,9 @@ class TestMarginalRatioEstimator:
             [None, 10],
         ),
     )
-    def test_log_ratio_shape(self, marginal_indices, batch_size: Optional[int]):
+    def test_log_ratio_shape(
+        self, marginal_indices: MarginalIndex, batch_size: Optional[int]
+    ):
         """The log_ratio function should return as many weights as there were n_batches of parameters provided."""
         n_batch = 100
         marginal_indices = tupleize_marginals(marginal_indices)

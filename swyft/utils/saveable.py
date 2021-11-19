@@ -13,8 +13,9 @@ class StateDictSaveable(ABC):
     def state_dict(self) -> dict:
         return NotImplementedError()
 
+    @classmethod
     @abstractmethod
-    def from_state_dict(self) -> StateDictSaveableType:
+    def from_state_dict(cls) -> StateDictSaveableType:
         return NotImplementedError()
 
     @classmethod
