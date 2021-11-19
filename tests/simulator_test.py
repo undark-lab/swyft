@@ -1,6 +1,7 @@
 import tempfile
 import time
 import unittest
+import decimal
 
 import numpy as np
 import zarr
@@ -200,7 +201,11 @@ class TestSimulator(unittest.TestCase):
 
     def test_run_a_simulator_that_is_setup_from_command_line(self):
         def set_input(v):
-            return f"{v[0]} + {v[1]}\n"
+            ctx = decimal.Context()
+            ctx.prec = 16
+            return "{} + {}\n".format(
+                ctx.create_decimal(repr(v[0])), ctx.create_decimal(repr(v[1]))
+            )
 
         def get_output(stdout, _):
             return {"sum": float(stdout)}
@@ -462,7 +467,11 @@ class TestDaskSimulator(unittest.TestCase):
         cluster = LocalCluster(n_workers=2, processes=True, threads_per_worker=1)
 
         def set_input(v):
-            return f"{v[0]} + {v[1]}\n"
+            ctx = decimal.Context()
+            ctx.prec = 16
+            return "{} + {}\n".format(
+                ctx.create_decimal(repr(v[0])), ctx.create_decimal(repr(v[1]))
+            )
 
         def get_output(stdout, _):
             return {"sum": float(stdout)}
