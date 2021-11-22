@@ -13,66 +13,7 @@ from swyft.bounds import RectangleBound
 from swyft.inference.marginalposterior import MarginalPosterior
 from swyft.prior import PriorTruncator, get_diagonal_normal_prior, get_uniform_prior
 from swyft.types import MarginalIndex
-from swyft.utils.parameters import tupleize_marginals
-
-# class TestSaveLoadMarginalPosterior:
-#     @classmethod
-#     def setup_class(cls):
-#         cls.directory = tempfile.TemporaryDirectory()
-
-#     @classmethod
-#     def teardown_class(cls):
-#         cls.directory.cleanup()
-
-#     def test_save_load_marginal_ratio_estimator(self):
-#         # Preliminary
-#         observation_key = "x"
-#         n_parameters = 2
-#         marginal_indices = list(range(n_parameters))
-#         device = "cpu"
-
-#         network = classifier.get_marginal_classifier(
-#             observation_key=observation_key,
-#             marginal_indices=marginal_indices,
-#             observation_shapes={observation_key: (10,)},
-#             n_parameters=n_parameters,
-#             hidden_features=32,
-#             num_blocks=2,
-#         )
-
-#         marginal_ratio_estimator = mre.MarginalRatioEstimator(
-#             marginal_indices=marginal_indices,
-#             network=network,
-#             device=device,
-#         )
-
-#         # Saving
-#         path = Path(self.directory.name) / f"marginal_ratio_estimator"
-#         marginal_ratio_estimator.save(path)
-
-#         # Loading
-#         marginal_ratio_estimator_loaded = mre.MarginalRatioEstimator.load(
-#             network=network,
-#             device=device,
-#             filename=path,
-#         )
-
-#         # Testing each loaded piece
-#         for weights, weights_loaded in zip(
-#             marginal_ratio_estimator.network.parameters(),
-#             marginal_ratio_estimator_loaded.network.parameters(),
-#         ):
-#             assert torch.all(weights == weights_loaded)
-
-#         for buffers, buffers_loaded in zip(
-#             marginal_ratio_estimator.network.buffers(),
-#             marginal_ratio_estimator_loaded.network.buffers(),
-#         ):
-#             assert torch.all(buffers == buffers_loaded)
-
-#         assert marginal_ratio_estimator.device == marginal_ratio_estimator_loaded.device
-
-#         # TODO: need to add a test for scheduler and optimizer loading
+from swyft.utils import tupleize_marginals
 
 
 class TestMarginalPosterior:

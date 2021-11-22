@@ -8,9 +8,9 @@ from toolz.dicttoolz import keyfilter
 from torch.distributions import Normal, Uniform
 
 from swyft.bounds import Bound, UnitCubeBound
+from swyft.saveable import StateDictSaveable
 from swyft.types import Array
 from swyft.utils import array_to_tensor, tensor_to_array
-from swyft.utils.saveable import StateDictSaveable
 
 PriorType = TypeVar("PriorType", bound="Prior")
 

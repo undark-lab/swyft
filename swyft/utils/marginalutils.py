@@ -3,8 +3,24 @@ from typing import Optional
 import pandas as pd
 from toolz import keyfilter
 
-from swyft.types import Array, MarginalToArray
+from swyft.types import Array, MarginalIndex, MarginalToArray, StrictMarginalIndex
 from swyft.utils.array import tensor_to_array
+
+
+def tupleize_marginals(marginals: MarginalIndex) -> StrictMarginalIndex:
+    """Reformat input marginals into sorted and hashable standard form: tuples of tuples"""
+    if isinstance(marginals, int):
+        out = [marginals]
+    else:
+        out = list(marginals)
+
+    for i in range(len(out)):
+        if isinstance(out[i], int):
+            out[i] = (out[i],)
+        else:
+            out[i] = tuple(sorted(set(out[i])))
+    out = tuple(sorted(out))
+    return out
 
 
 def get_marginal_dim_by_key(key: tuple) -> int:

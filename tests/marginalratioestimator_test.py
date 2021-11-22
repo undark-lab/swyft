@@ -9,7 +9,7 @@ import torch
 import swyft.inference.marginalratioestimator as mre
 import swyft.networks.classifier as classifier
 from swyft.types import MarginalIndex
-from swyft.utils.parameters import tupleize_marginals
+from swyft.utils.marginalutils import tupleize_marginals
 
 
 class TestSplitLengthByPercentage:

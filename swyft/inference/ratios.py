@@ -8,14 +8,13 @@ from toolz import valmap
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
+from swyft.saveable import StateDictSaveable
 from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType
-from swyft.utils import (
-    array_to_tensor,
-    dict_array_to_tensor,
-    get_obs_shapes,
-    tupleize_marginals,
-)
-from swyft.utils.saveable import StateDictSaveable
+from swyft.utils import array_to_tensor, dict_array_to_tensor, tupleize_marginals
+
+
+def get_obs_shapes(obs):
+    return {k: v.shape for k, v in obs.items()}
 
 
 class RatioEstimator(StateDictSaveable):

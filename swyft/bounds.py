@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from sklearn.neighbors import BallTree
 
-from swyft.utils.saveable import StateDictSaveable
+from swyft.saveable import StateDictSaveable
 
 log = logging.getLogger(__name__)
 

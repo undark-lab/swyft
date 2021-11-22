@@ -9,6 +9,7 @@ import swyft
 from swyft.inference.ratios import RatioEstimator
 from swyft.inference.train import TrainOptions
 from swyft.networks import DefaultHead, DefaultTail
+from swyft.saveable import StateDictSaveable
 from swyft.types import (
     Array,
     Device,
@@ -19,8 +20,7 @@ from swyft.types import (
     PathType,
 )
 from swyft.utils import tupleize_marginals
-from swyft.utils.saveable import StateDictSaveable
-from swyft.utils.utils import estimate_empirical_mass
+from swyft.utils.mass import estimate_empirical_mass
 
 log = logging.getLogger(__name__)
 

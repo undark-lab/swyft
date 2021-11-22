@@ -7,8 +7,20 @@ import seaborn as sns
 from scipy.integrate import simps
 
 from swyft.types import Array
-from swyft.utils.mutils import filter_marginals_by_dim
-from swyft.utils.utils import grid_interpolate_samples
+from swyft.utils.marginalutils import filter_marginals_by_dim
+
+
+def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
+    idx = np.argsort(x)
+    x, y = x[idx], y[idx]
+    x_grid = np.linspace(x[0], x[-1], bins)
+    y_grid = np.interp(x_grid, x, y)
+    norm = simps(y_grid, x_grid)
+    y_grid_normed = y_grid / norm
+    if return_norm:
+        return x_grid, y_grid_normed, norm
+    else:
+        return x_grid, y_grid_normed
 
 
 def split_corner_axes(axes):

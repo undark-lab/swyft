@@ -13,7 +13,7 @@ from swyft.types import (
     ParametersAndMarginalToArray,
 )
 from swyft.utils import tupleize_marginals
-from swyft.utils.utils import estimate_empirical_mass
+from swyft.utils.mass import estimate_empirical_mass
 
 MarginalPosteriorType = TypeVar("MarginalPosteriorType", bound="MarginalPosterior")
 

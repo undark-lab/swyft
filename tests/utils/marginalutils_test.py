@@ -3,7 +3,7 @@ from typing import Tuple
 import pytest
 
 from swyft.types import MarginalIndex, StrictMarginalIndex
-from swyft.utils.parameters import tupleize_marginals
+from swyft.utils.marginalutils import tupleize_marginals
 from swyft.utils.utils import depth
 
 

@@ -19,10 +19,10 @@ from torch.utils.data import DataLoader, Dataset, random_split
 import swyft
 import swyft.utils
 from swyft.inference.train import get_ntrain_nvalid
+from swyft.saveable import StateDictSaveable, StateDictSaveableType
 from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType, PathType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor
-from swyft.utils.parameters import tupleize_marginals
-from swyft.utils.saveable import StateDictSaveable, StateDictSaveableType
+from swyft.utils.marginalutils import tupleize_marginals
 
 SchedulerType = Union[
     torch.optim.lr_scheduler._LRScheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
