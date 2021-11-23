@@ -5,7 +5,7 @@ import numpy as np
 import zarr
 
 from swyft import Prior
-from swyft.store.simulator import Simulator, DaskSimulator, SimulationStatus
+from swyft.store.simulator import DaskSimulator, SimulationStatus, Simulator
 from swyft.store.store import DirectoryStore, MemoryStore
 
 
@@ -95,7 +95,7 @@ class TestStoreRun:
     def test_store_add(self):
         store = MemoryStore(simulator=sim_multi_out)
         store.add(20, prior)
-        assert store.sims.x1.shape[0]>0
+        assert store.sims.x1.shape[0] > 0
 
     def test_memory_store_simulate(self):
         store = MemoryStore(simulator=sim_multi_out)

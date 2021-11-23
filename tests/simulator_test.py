@@ -1,7 +1,7 @@
+import decimal
 import tempfile
 import time
 import unittest
-import decimal
 
 import numpy as np
 import zarr
