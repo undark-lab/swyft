@@ -3,17 +3,13 @@ from warnings import warn
 
 import numpy as np
 
+from swyft.bounds import Bound
 from swyft.inference.marginalratioestimator import MarginalRatioEstimator
-from swyft.prior import Prior, PriorTruncator
-from swyft.types import (
-    Array,
-    MarginalIndex,
-    MarginalToArray,
-    ObsType,
-    ParametersAndMarginalToArray,
-)
+from swyft.prior import Prior, PriorTruncator, promote_to_prior_truncator
+from swyft.types import Array, MarginalIndex, MarginalToArray, ObsType
 from swyft.utils import tupleize_marginals
 from swyft.utils.mass import estimate_empirical_mass
+from swyft.utils.weightedmarginalutils import WeightedMarginalSamples
 
 MarginalPosteriorType = TypeVar("MarginalPosteriorType", bound="MarginalPosterior")
 
@@ -32,23 +28,21 @@ class MarginalPosterior:
         """
         super().__init__()
         self.marginal_ratio_estimator = marginal_ratio_estimator
-        if isinstance(prior, Prior):
-            self.prior = PriorTruncator(prior, None)
-        else:
-            self.prior = prior
+        self.prior = promote_to_prior_truncator(prior)
 
     @property
     def marginal_indices(self) -> MarginalIndex:
         return tupleize_marginals(self.marginal_ratio_estimator.marginal_indices)
 
-    def truncate(self) -> PriorTruncator:
-        raise NotImplementedError()
-        """Generate and return new bound object."""
-        marginals = tupleize_marginals(marginals)
-        bound = Bound.from_Posteriors(marginals, self, obs0)
-        print("Bounds: Truncating...")
-        print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
-        return bound
+    def truncate(
+        self, n_samples: int, observation: ObsType, threshold: float = -13.0
+    ) -> Bound:
+        return Bound.from_marginal_posterior(
+            n_samples=n_samples,
+            observation=observation,
+            marginal_posterior=self,
+            threshold=threshold,
+        )
 
     def empirical_mass(self):
         raise NotImplementedError()
@@ -81,7 +75,7 @@ class MarginalPosterior:
 
     def weighted_sample(
         self, n_samples: int, observation: ObsType, batch_size: Optional[int] = None
-    ) -> ParametersAndMarginalToArray:
+    ) -> WeightedMarginalSamples:
         """sample from the prior and estimate the log ratio weights
 
         Args:
@@ -98,8 +92,7 @@ class MarginalPosterior:
         log_weights = self.marginal_ratio_estimator.log_ratio(
             observation, v, batch_size=batch_size
         )
-        log_weights.update({"v": v})
-        return log_weights
+        return WeightedMarginalSamples(log_weights, v)
 
     def sample(
         self,
@@ -130,8 +123,9 @@ class MarginalPosterior:
         weighted_samples = self.weighted_sample(
             excess_factor * n_samples, observation, batch_size
         )
+
         marginal_log_MAP = {
-            marginal_index: weighted_samples[marginal_index].max()
+            marginal_index: weighted_samples.get_logweight(marginal_index).max()
             for marginal_index in self.marginal_indices
         }
 
@@ -147,7 +141,7 @@ class MarginalPosterior:
         while counter < maxiter:
             # Calculate chance to keep a sample
             log_prob_to_keep = {
-                marginal_index: weighted_samples[marginal_index]
+                marginal_index: weighted_samples.get_logweight(marginal_index)
                 - marginal_log_MAP[marginal_index]
                 for marginal_index in remaining_marginal_indices
             }
@@ -162,7 +156,7 @@ class MarginalPosterior:
 
             # Collect samples for every tuple of parameters, if there are enough, add them to out.
             for marginal_index in remaining_marginal_indices:
-                all_parameters_to_keep = weighted_samples["v"][to_keep[marginal_index]]
+                all_parameters_to_keep = weighted_samples.v[to_keep[marginal_index]]
                 marginal_to_keep = all_parameters_to_keep[..., marginal_index]
                 collector[marginal_index].append(marginal_to_keep)
                 concatenated = np.concatenate(collector[marginal_index])[:n_samples]

@@ -21,7 +21,6 @@ StrictMarginalIndex = Tuple[Tuple[int, ...], ...]
 
 # Map from (3, 4) --> ratio array
 MarginalToArray = Dict[Tuple[int, ...], Array]
-ParametersAndMarginalToArray = Dict[Union[Tuple[int, ...], str], Array]
 
 ParameterNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]

@@ -5,12 +5,27 @@ from toolz import keyfilter
 
 from swyft.types import Array, MarginalIndex, MarginalToArray, StrictMarginalIndex
 from swyft.utils.array import tensor_to_array
+from swyft.utils.utils import depth
 
 
 def tupleize_marginals(marginals: MarginalIndex) -> StrictMarginalIndex:
-    """Reformat input marginals into sorted and hashable standard form: tuples of tuples"""
+    """Reformat input marginals into sorted and hashable standard form: tuples of tuples.
+
+    input tuples will be respected as coming from the same marginal.
+    lists will assumed to be collections of marginals
+    """
     if isinstance(marginals, int):
         out = [marginals]
+    elif isinstance(marginals, tuple):
+        d = depth(marginals)
+        if d == 0:
+            raise ValueError("how did this happen?")
+        elif d == 1:
+            return (marginals,)
+        elif d == 2:
+            return marginals
+        else:
+            raise ValueError("marginals can only have two layers of depth, no more.")
     else:
         out = list(marginals)
 

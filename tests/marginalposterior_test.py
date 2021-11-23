@@ -9,7 +9,7 @@ import torch
 
 import swyft.inference.marginalratioestimator as mre
 import swyft.networks.classifier as classifier
-from swyft.bounds import RectangleBound
+from swyft.bounds import Bound, RectangleBound
 from swyft.inference.marginalposterior import MarginalPosterior
 from swyft.prior import PriorTruncator, get_diagonal_normal_prior, get_uniform_prior
 from swyft.types import MarginalIndex
@@ -67,13 +67,28 @@ class TestMarginalPosterior:
         assert isinstance(mp.prior, PriorTruncator)
 
     def test_truncate(self):
-        n_parameters = 4
-        prior = get_uniform_prior([-2.5] * n_parameters, [5.0] * n_parameters)
-        marginal_indices = list(range(n_parameters))
+        prior = get_uniform_prior([-2.5] * self.n_parameters, [5.0] * self.n_parameters)
+        marginal_indices = list(range(self.n_parameters))
+        mre = self.get_marginal_ratio_estimator(marginal_indices)
+        mp = MarginalPosterior(mre, prior)
+
+        n_samples = 1_000
+        fabricated_observation = {
+            key: torch.rand(*shape) for key, shape in self.observation_shapes.items()
+        }
+        bound = mp.truncate(
+            n_samples, fabricated_observation
+        )  # TODO make this test the actual behavior of the function.
+        # TODO it fails because most points are below the threshold somehow
+        assert isinstance(bound, Bound)
+
+    def test_empirical_mass(self):
+        prior = get_uniform_prior([-2.5] * self.n_parameters, [5.0] * self.n_parameters)
+        marginal_indices = list(range(self.n_parameters))
         mre = self.get_marginal_ratio_estimator(marginal_indices)
         mp = MarginalPosterior(mre, prior)
         with pytest.raises(NotImplementedError):
-            mp.truncate()  # TODO make this test the actual behavior of the function.
+            mp.empirical_mass()
 
     @pytest.mark.skip
     def test_log_prob_value_with_fake_mre(self):
@@ -127,6 +142,7 @@ class TestMarginalPosterior:
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
         marginal_indices = tupleize_marginals(marginal_indices)
+        n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
         # Check when there are nuisance parameters, add one to the n_parameters
@@ -145,12 +161,21 @@ class TestMarginalPosterior:
             observation=fabricated_observation,
             batch_size=batch_size,
         )
-        assert set(weighted_samples.keys()) == set(marginal_indices).union("v")
-        for key, value in weighted_samples.items():
-            if key in marginal_indices:
-                assert value.shape == (n_samples,)
-            else:
-                assert value.shape == (n_samples, n_parameters)
+
+        assert set(weighted_samples.marginal_indices) == set(marginal_indices)
+        assert weighted_samples.v.shape == (
+            n_samples,
+            n_parameters,
+        ), "size of the parameters v does not match"
+        for marginal_index in marginal_indices:
+            log_weight, marginal = weighted_samples.get_logweight_marginal(
+                marginal_index
+            )
+            assert log_weight.shape == (n_samples,)
+            assert marginal.shape == (
+                n_samples,
+                n_marginal_parameters,
+            ), "size of the marginal parameters does not match"
 
     @pytest.mark.parametrize(
         "n_samples, marginal_indices, batch_size",
@@ -164,6 +189,7 @@ class TestMarginalPosterior:
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
         marginal_indices = tupleize_marginals(marginal_indices)
+        n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
         # Check when there are nuisance parameters, add one to the n_parameters
@@ -184,7 +210,7 @@ class TestMarginalPosterior:
         )
         assert set(samples.keys()) == set(marginal_indices)
         for _, value in samples.items():
-            assert value.shape == (n_samples, len(marginal_indices[0]))
+            assert value.shape == (n_samples, n_marginal_parameters)
 
 
 if __name__ == "__main__":

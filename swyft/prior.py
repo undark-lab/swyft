@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import Callable, Type, TypeVar
+from typing import Callable, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -13,6 +13,7 @@ from swyft.types import Array
 from swyft.utils import array_to_tensor, tensor_to_array
 
 PriorType = TypeVar("PriorType", bound="Prior")
+PriorTruncatorType = TypeVar("PriorTruncatorType", bound="PriorTruncator")
 
 
 class PriorTruncator(StateDictSaveable):
@@ -39,6 +40,18 @@ class PriorTruncator(StateDictSaveable):
         if bound is None:
             bound = UnitCubeBound(prior.n_parameters)
         self.bound = bound
+
+    @property
+    def cdf(self) -> Callable:
+        return self.prior.cdf
+
+    @property
+    def icdf(self) -> Callable:
+        return self.prior.icdf
+
+    @property
+    def n_parameters(self) -> int:
+        return self.prior.n_parameters
 
     def sample(self, n_samples: int) -> np.ndarray:
         """Sample from truncated prior.
@@ -74,7 +87,7 @@ class PriorTruncator(StateDictSaveable):
         return dict(prior=self.prior.state_dict(), bound=self.bound.state_dict())
 
     @classmethod
-    def from_state_dict(cls, state_dict: dict):
+    def from_state_dict(cls, state_dict: dict) -> PriorTruncatorType:
         prior = Prior.from_state_dict(state_dict["prior"])
         bound = Bound.from_state_dict(state_dict["bound"])
         return cls(prior, bound)
@@ -325,6 +338,15 @@ def get_uniform_prior(low: Array, high: Array) -> Prior:
 def get_diagonal_normal_prior(loc: Array, scale: Array) -> Prior:
     distribution = Normal(array_to_tensor(loc), array_to_tensor(scale))
     return Prior.from_torch_distribution(distribution)
+
+
+def promote_to_prior_truncator(
+    prior: Union[Prior, PriorTruncator]
+) -> PriorTruncatorType:
+    if isinstance(prior, Prior):
+        return PriorTruncator(prior, None)
+    else:
+        return prior
 
 
 if __name__ == "__main__":
