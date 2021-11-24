@@ -12,6 +12,7 @@ import swyft.networks.classifier as classifier
 from swyft.bounds import Bound, RectangleBound
 from swyft.inference.marginalposterior import MarginalPosterior
 from swyft.prior import PriorTruncator, get_diagonal_normal_prior, get_uniform_prior
+from swyft.store.dataset import SimpleDataset
 from swyft.types import MarginalIndex
 from swyft.utils import tupleize_marginals
 
@@ -102,16 +103,35 @@ class TestMarginalPosterior:
             fabricated_observation,
             threshold=-50.0,
         )  # TODO make this test the actual behavior of the function.
-        # TODO it fails because most points are below the threshold somehow
         assert isinstance(bound, Bound)
 
-    def test_empirical_mass(self):
+    @pytest.mark.parametrize("marginal_indices", [[0], [0, 1], [(0, 1)]])
+    def test_empirical_mass(self, marginal_indices):
         prior = get_uniform_prior([-2.5] * self.n_parameters, [5.0] * self.n_parameters)
         marginal_indices = list(range(self.n_parameters))
-        mre = self.get_marginal_ratio_estimator(marginal_indices)
-        mp = MarginalPosterior(mre, prior)
-        with pytest.raises(NotImplementedError):
-            mp.empirical_mass()
+        network = AllOneNetwork(marginal_indices)
+        marginal_ratio_estimator = mre.MarginalRatioEstimator(
+            marginal_indices=marginal_indices,
+            network=network,
+            device=self.device,
+        )
+        mp = MarginalPosterior(marginal_ratio_estimator, prior)
+
+        n_observations = 100
+        us = torch.randn(n_observations, self.n_parameters)
+        vs = torch.randn(n_observations, self.n_parameters)
+        observations = {
+            key: torch.rand(n_observations, *shape)
+            for key, shape in self.observation_shapes.items()
+        }
+        dataset = SimpleDataset(observations, us, vs)
+
+        empirical_mass, _ = mp.empirical_mass(
+            n_observations=n_observations,
+            n_posterior_samples=1000,
+            dataset=dataset,
+        )  # TODO make this test the actual behavior of the function.
+        assert isinstance(empirical_mass, dict)
 
     @pytest.mark.skip
     def test_log_prob_value_with_fake_mre(self):

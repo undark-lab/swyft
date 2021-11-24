@@ -20,7 +20,6 @@ from swyft.types import (
     PathType,
 )
 from swyft.utils import tupleize_marginals
-from swyft.utils.mass import estimate_empirical_mass
 
 log = logging.getLogger(__name__)
 
@@ -312,7 +311,8 @@ class Posteriors(StateDictSaveable):
         Returns:
             Nominal and empirical masses.
         """
-        return estimate_empirical_mass(self.dataset, self, nobs, npost)
+        raise NotImplementedError()
+        # return estimate_empirical_mass(self.dataset, self, nobs, npost)
 
     def state_dict(self) -> dict:
         state_dict = dict(

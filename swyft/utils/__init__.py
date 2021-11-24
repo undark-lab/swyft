@@ -1,6 +1,5 @@
 from swyft.utils.array import *
 from swyft.utils.marginalutils import *
-from swyft.utils.mass import *
 from swyft.utils.plot import *
 from swyft.utils.utils import *
 from swyft.utils.weightedmarginalutils import *

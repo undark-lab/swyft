@@ -1,14 +1,16 @@
-from typing import Optional, TypeVar, Union
+from typing import Optional, Tuple, TypeVar, Union
 from warnings import warn
 
 import numpy as np
+from torch.types import Device
+from torch.utils.data.dataset import Dataset
 
 from swyft.bounds import Bound
 from swyft.inference.marginalratioestimator import MarginalRatioEstimator
 from swyft.prior import Prior, PriorTruncator, promote_to_prior_truncator
 from swyft.types import Array, MarginalIndex, MarginalToArray, ObsType
 from swyft.utils import tupleize_marginals
-from swyft.utils.mass import estimate_empirical_mass
+from swyft.utils.array import array_to_tensor, dict_array_to_tensor
 from swyft.utils.weightedmarginalutils import WeightedMarginalSamples
 
 MarginalPosteriorType = TypeVar("MarginalPosteriorType", bound="MarginalPosterior")
@@ -34,6 +36,10 @@ class MarginalPosterior:
     def marginal_indices(self) -> MarginalIndex:
         return tupleize_marginals(self.marginal_ratio_estimator.marginal_indices)
 
+    @property
+    def device(self) -> Device:
+        return self.marginal_ratio_estimator.device
+
     def truncate(
         self, n_samples: int, observation: ObsType, threshold: float = -13.0
     ) -> Bound:
@@ -44,8 +50,56 @@ class MarginalPosterior:
             threshold=threshold,
         )
 
-    def empirical_mass(self):
-        raise NotImplementedError()
+    def empirical_mass(
+        self,
+        n_observations: int,
+        n_posterior_samples: int,
+        dataset: Dataset,
+    ) -> Tuple[MarginalToArray, MarginalToArray]:
+        """compute the empirical and nominal masses
+
+        Args:
+            n_observations: number of observations to estimate with
+            n_posterior_samples: number of samples to estimate the mass for a certain observation
+            dataset: indexable torch dataset which outputs `observation, u, v = dataset[i]`
+
+        Returns:
+            empirical mass and nominal mass for every marginal
+        """
+        empirical_mass = {marginal: [] for marginal in self.marginal_indices}
+        nominal_mass = {
+            marginal: np.linspace(1 / n_observations, 1, n_observations)
+            for marginal in self.marginal_indices
+        }
+
+        for _ in range(n_observations):
+            ind = np.random.randint(n_observations)
+            observation_o, _, v_o = dataset[ind]
+            logw_o = self.marginal_ratio_estimator.log_ratio(
+                observation_o, v_o.unsqueeze(0)
+            )
+            logw_s = self.weighted_sample(n_posterior_samples, observation_o)
+
+            w_o = {
+                marginal_index: np.exp(logw) for marginal_index, logw in logw_o.items()
+            }
+            w_s = {
+                marginal_index: np.exp(logw)
+                for marginal_index, logw in logw_s.weights.items()
+            }
+            for marginal_index, weight_o in w_o.items():
+                is_above_true_param_density = w_s[marginal_index] >= weight_o
+                sum_above_true_param_density = w_s[marginal_index][
+                    is_above_true_param_density
+                ].sum()
+                percent_above_true_param_density = (
+                    sum_above_true_param_density / w_s[marginal_index].sum()
+                )
+                empirical_mass[marginal_index].append(percent_above_true_param_density)
+        for marginal_index, mass in empirical_mass.items():
+            empirical_mass[marginal_index] = np.asarray(sorted(mass))
+
+        return empirical_mass, nominal_mass
 
     def log_prob(
         self, observation: ObsType, v: Array, batch_size: Optional[int] = None
