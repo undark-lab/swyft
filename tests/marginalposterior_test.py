@@ -16,6 +16,21 @@ from swyft.types import MarginalIndex
 from swyft.utils import tupleize_marginals
 
 
+class AllOneNetwork(torch.nn.Module):
+    def __init__(self, marginal_indices: MarginalIndex) -> None:
+        super().__init__()
+        self.marginal_indices = tupleize_marginals(marginal_indices)
+        self.block_shape = classifier.ParameterTransform.get_marginal_block_shape(
+            self.marginal_indices
+        )
+        self.m, _ = self.block_shape
+        self.register_buffer("out", torch.ones(1, self.m))
+
+    def forward(self, _, y: torch.Tensor) -> torch.Tensor:
+        b, *_ = y.shape
+        return self.out.expand(b, self.m)
+
+
 class TestMarginalPosterior:
     @classmethod
     def setup_class(cls):
@@ -69,15 +84,22 @@ class TestMarginalPosterior:
     def test_truncate(self):
         prior = get_uniform_prior([-2.5] * self.n_parameters, [5.0] * self.n_parameters)
         marginal_indices = list(range(self.n_parameters))
-        mre = self.get_marginal_ratio_estimator(marginal_indices)
-        mp = MarginalPosterior(mre, prior)
+        network = AllOneNetwork(marginal_indices)
+        marginal_ratio_estimator = mre.MarginalRatioEstimator(
+            marginal_indices=marginal_indices,
+            network=network,
+            device=self.device,
+        )
+        mp = MarginalPosterior(marginal_ratio_estimator, prior)
 
         n_samples = 1_000
         fabricated_observation = {
             key: torch.rand(*shape) for key, shape in self.observation_shapes.items()
         }
         bound = mp.truncate(
-            n_samples, fabricated_observation
+            n_samples,
+            fabricated_observation,
+            threshold=-50.0,
         )  # TODO make this test the actual behavior of the function.
         # TODO it fails because most points are below the threshold somehow
         assert isinstance(bound, Bound)
@@ -188,6 +210,7 @@ class TestMarginalPosterior:
     def test_sample_shape(
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
+        torch.manual_seed(0)
         marginal_indices = tupleize_marginals(marginal_indices)
         n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
