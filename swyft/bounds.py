@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, TypeVar
+from typing import Callable, Optional, TypeVar
 
 import numpy as np
 from sklearn.neighbors import BallTree
-from traitlets.traitlets import Callable
 
 from swyft.saveable import StateDictSaveable
 from swyft.types import ObsType
