@@ -1,7 +1,7 @@
 import tempfile
 from itertools import product
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Hashable, Optional
 
 import numpy as np
 import pytest
@@ -17,7 +17,7 @@ from swyft.types import MarginalIndex
 from swyft.utils import tupleize_marginals
 
 
-class AllOneNetwork(torch.nn.Module):
+class AllOneNetwork(torch.nn.Module, classifier.HeadTailClassifier):
     def __init__(self, marginal_indices: MarginalIndex) -> None:
         super().__init__()
         self.marginal_indices = tupleize_marginals(marginal_indices)
@@ -30,6 +30,12 @@ class AllOneNetwork(torch.nn.Module):
     def forward(self, _, y: torch.Tensor) -> torch.Tensor:
         b, *_ = y.shape
         return self.out.expand(b, self.m)
+
+    def head(self, _: Dict[Hashable, torch.Tensor]) -> torch.Tensor:
+        return self.out
+
+    def tail(self, features: torch.Tensor, parameters: torch.Tensor) -> torch.Tensor:
+        return self(features, parameters)
 
 
 class TestMarginalPosterior:

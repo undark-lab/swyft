@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Dict, Hashable, Tuple
 
 import torch
@@ -11,6 +12,35 @@ from swyft.networks.standardization import (
     OnlineStandardizingLayer,
 )
 from swyft.types import Array, MarginalIndex, ObsShapeType
+
+
+class HeadTailClassifier(ABC):
+    """Abstract class which ensures that child classifier networks will function with swyft"""
+
+    @abstractmethod
+    def head(self, observation: Dict[Hashable, torch.Tensor]) -> torch.Tensor:
+        """convert the observation into a tensor of features
+
+        Args:
+            observation: observation type
+
+        Returns:
+            a tensor of features which can be utilized by tail
+        """
+        pass
+
+    @abstractmethod
+    def tail(self, features: torch.Tensor, parameters: torch.Tensor) -> torch.Tensor:
+        """finish the forward pass using features computed by head
+
+        Args:
+            features: output of head
+            parameters: the parameters normally given to forward pass
+
+        Returns:
+            the same output as `forward(observation, parameters)`
+        """
+        pass
 
 
 class ObservationTransform(nn.Module):
@@ -133,7 +163,7 @@ class MarginalClassifier(nn.Module):
         return self.net(combined).squeeze(-1)  # B, M
 
 
-class Network(nn.Module):
+class Network(nn.Module, HeadTailClassifier):
     def __init__(
         self,
         observation_transform: nn.Module,
@@ -149,6 +179,13 @@ class Network(nn.Module):
         self, observation: Dict[Hashable, torch.Tensor], parameters: torch.Tensor
     ) -> torch.Tensor:
         features = self.observation_transform(observation)  # B, O
+        marginal_block = self.parameter_transform(parameters)  # B, M, P
+        return self.marginal_classifier(features, marginal_block)  # B, M
+
+    def head(self, observation: Dict[Hashable, torch.Tensor]) -> torch.Tensor:
+        return self.observation_transform(observation)  # B, O
+
+    def tail(self, features: torch.Tensor, parameters: torch.Tensor) -> torch.Tensor:
         marginal_block = self.parameter_transform(parameters)  # B, M, P
         return self.marginal_classifier(features, marginal_block)  # B, M
 

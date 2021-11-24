@@ -10,7 +10,6 @@ from swyft.inference.marginalratioestimator import MarginalRatioEstimator
 from swyft.prior import Prior, PriorTruncator, promote_to_prior_truncator
 from swyft.types import Array, MarginalIndex, MarginalToArray, ObsType
 from swyft.utils import tupleize_marginals
-from swyft.utils.array import array_to_tensor, dict_array_to_tensor
 from swyft.utils.weightedmarginalutils import WeightedMarginalSamples
 
 MarginalPosteriorType = TypeVar("MarginalPosteriorType", bound="MarginalPosterior")

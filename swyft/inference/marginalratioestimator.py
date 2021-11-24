@@ -284,11 +284,14 @@ class MarginalRatioEstimator(StateDictSaveable):
 
         with torch.no_grad():
             observation = dict_array_to_tensor(observation, device=self.device)
+            features = self.network.head(
+                {key: value.unsqueeze(0) for key, value in observation.items()}
+            )
             len_v = len(v)
             if batch_size is None or len_v <= batch_size:
                 v = array_to_tensor(v, device=self.device)
-                observation = self._repeat_observation_to_match_v(observation, v)
-                ratio = self.network(observation, v).cpu().numpy()
+                repeated_features = features.expand(v.size(0), *features.shape[1:])
+                ratio = self.network.tail(repeated_features, v).cpu().numpy()
             else:
                 ratio = []
                 for i in range(len_v // batch_size + 1):
@@ -296,11 +299,11 @@ class MarginalRatioEstimator(StateDictSaveable):
                         v[i * batch_size : (i + 1) * batch_size, :],
                         device=self.device,
                     )
-                    observation_batch = self._repeat_observation_to_match_v(
-                        observation, parameter_batch
+                    feature_batch = features.expand(
+                        parameter_batch.size(0), *features.shape[1:]
                     )
                     ratio_batch = (
-                        self.network(observation_batch, parameter_batch).cpu().numpy()
+                        self.network.tail(feature_batch, parameter_batch).cpu().numpy()
                     )
                     ratio.append(ratio_batch)
                 ratio = np.vstack(ratio)
