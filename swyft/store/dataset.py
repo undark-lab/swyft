@@ -135,7 +135,7 @@ class Dataset(torch.utils.data.Dataset, StateDictSaveable):
         v = self._store.v[i]
         if self._simhook is not None:
             x = self._simhook(x, v)
-        u = self.prior.u(v.reshape(1, -1)).flatten()
+        u = self.prior.cdf(v.reshape(1, -1)).flatten()
 
         return (
             {key: array_to_tensor(val) for key, val in x.items()},

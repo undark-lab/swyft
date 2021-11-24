@@ -63,7 +63,7 @@ class PriorTruncator(StateDictSaveable):
             Samples: (n_samples, n_parameters)
         """
         u = self.bound.sample(n_samples)
-        return self.prior.v(u)
+        return self.prior.icdf(u)
 
     def log_prob(self, v: np.ndarray) -> np.ndarray:
         """Evaluate log probability.
@@ -74,7 +74,7 @@ class PriorTruncator(StateDictSaveable):
         Returns:
             log_prob: (N,)
         """
-        u = self.prior.u(v)
+        u = self.prior.cdf(v)
         b = np.where(u.sum(axis=-1) == np.inf, 0.0, self.bound(u))
         log_prob = np.where(
             b == 0.0,
@@ -121,7 +121,7 @@ class InterpolatedTabulatedDistribution:
             table.append(uv(np.ones(n_parameters) * x))
         return np.array(table).T
 
-    def u(self, v: np.ndarray) -> np.ndarray:
+    def cdf(self, v: np.ndarray) -> np.ndarray:
         """Map onto hypercube: v -> u
 
         Args:
@@ -137,7 +137,7 @@ class InterpolatedTabulatedDistribution:
             )
         return u
 
-    def v(self, u: np.ndarray) -> np.ndarray:
+    def icdf(self, u: np.ndarray) -> np.ndarray:
         """Map from hypercube: u -> v
 
         Args:
@@ -164,7 +164,7 @@ class InterpolatedTabulatedDistribution:
             log_prob: (N, n_parameters) factors of pdf
         """
         dv = np.empty_like(v)
-        u = self.u(v)
+        u = self.cdf(v)
         for i in range(self.n_parameters):
             dv[:, i] = np.interp(
                 u[:, i] + (du / 2), self._grid, self._table[i], left=None, right=None
@@ -211,28 +211,6 @@ class Prior(StateDictSaveable):
             "n_parameters": self.n_parameters,
         }
         self.distribution = None
-
-    def u(self, v: np.ndarray) -> np.ndarray:
-        """Map onto hypercube: v -> u. cumulative density function (cdf)
-
-        Args:
-            v: (N, n_parameters) batched physical parameter array
-
-        Returns:
-            u: (N, n_parameters) batched hypercube parameter array
-        """
-        return self.cdf(v)
-
-    def v(self, u: np.ndarray) -> np.ndarray:
-        """Map from hypercube: u -> v. inverse cumulative density function (icdf)
-
-        Args:
-            u: (N, n_parameters) batched hypercube parameter array
-
-        Returns:
-            v: (N, n_parameters) batched physical parameter array
-        """
-        return self.icdf(u)
 
     @classmethod
     def from_torch_distribution(

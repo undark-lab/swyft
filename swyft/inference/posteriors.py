@@ -165,7 +165,7 @@ class Posteriors(StateDictSaveable):
         """
         # Unmasked original wrongly normalized log_prob densities
         # log_probs = self._prior_truncator.log_prob(v)
-        u = self._prior_truncator.prior.u(v)
+        u = self._prior_truncator.prior.cdf(v)
 
         ratios = self._eval_ratios(
             obs0, u, n_batch=n_batch
