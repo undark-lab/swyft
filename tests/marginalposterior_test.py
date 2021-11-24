@@ -81,7 +81,8 @@ class TestMarginalPosterior:
         mp = MarginalPosterior(mre, prior_truncator)
         assert isinstance(mp.prior, PriorTruncator)
 
-    def test_truncate(self):
+    @pytest.mark.parametrize("marginal_indices", [[0], [0, 1], [(0, 1)]])
+    def test_truncate(self, marginal_indices: MarginalIndex):
         prior = get_uniform_prior([-2.5] * self.n_parameters, [5.0] * self.n_parameters)
         marginal_indices = list(range(self.n_parameters))
         network = AllOneNetwork(marginal_indices)
@@ -121,7 +122,7 @@ class TestMarginalPosterior:
     @pytest.mark.parametrize(
         "marginal_indices, batch_size",
         product(
-            [[0, 1], [(0, 1)]],  # With these, n_parameters >= 2
+            [[0], [0, 1], [(0, 1)]],
             [None, 10],
         ),
     )
@@ -132,9 +133,8 @@ class TestMarginalPosterior:
         marginal_indices = tupleize_marginals(marginal_indices)
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
-        n_parameters = np.asarray(marginal_indices).max()
         prior = get_diagonal_normal_prior(
-            loc=[0] * n_parameters, scale=[1] * n_parameters
+            loc=[0] * self.n_parameters, scale=[1] * self.n_parameters
         )
 
         marginal_posterior = MarginalPosterior(marginal_ratio_estimator, prior)
@@ -156,7 +156,7 @@ class TestMarginalPosterior:
         "n_samples, marginal_indices, batch_size",
         product(
             [101, 1000],
-            [[0, 1], [(0, 1)]],  # With these, n_parameters >= 2
+            [[0], [0, 1], [(0, 1)]],
             [None, 10],
         ),
     )
@@ -167,10 +167,8 @@ class TestMarginalPosterior:
         n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
-        # Check when there are nuisance parameters, add one to the n_parameters
-        n_parameters = np.asarray(marginal_indices).max() + 1
         prior = get_diagonal_normal_prior(
-            loc=[0] * n_parameters, scale=[1] * n_parameters
+            loc=[0] * self.n_parameters, scale=[1] * self.n_parameters
         )
 
         marginal_posterior = MarginalPosterior(marginal_ratio_estimator, prior)
@@ -187,7 +185,7 @@ class TestMarginalPosterior:
         assert set(weighted_samples.marginal_indices) == set(marginal_indices)
         assert weighted_samples.v.shape == (
             n_samples,
-            n_parameters,
+            self.n_parameters,
         ), "size of the parameters v does not match"
         for marginal_index in marginal_indices:
             log_weight, marginal = weighted_samples.get_logweight_marginal(
@@ -203,7 +201,7 @@ class TestMarginalPosterior:
         "n_samples, marginal_indices, batch_size",
         product(
             [5, 10],
-            [[0, 1], [(0, 1)]],
+            [[0], [0, 1], [(0, 1)]],
             [None, 10],
         ),
     )
@@ -215,10 +213,8 @@ class TestMarginalPosterior:
         n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
-        # Check when there are nuisance parameters, add one to the n_parameters
-        n_parameters = np.asarray(marginal_indices).max() + 1
         prior = get_diagonal_normal_prior(
-            loc=[0] * n_parameters, scale=[1] * n_parameters
+            loc=[0] * self.n_parameters, scale=[1] * self.n_parameters
         )
 
         marginal_posterior = MarginalPosterior(marginal_ratio_estimator, prior)
