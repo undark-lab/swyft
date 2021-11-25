@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -68,6 +68,13 @@ class WeightedMarginalSamples:
         )
         columns = list(marginal_index) + ["weight"] + ["logweight"]
         return pd.DataFrame(data=data, columns=columns)
+
+    def get_df_dict(self) -> Dict[Tuple[int], pd.DataFrame]:
+        """produce a map from marginal_index to df for all dfs and marginal_indices"""
+        return {
+            marginal_index: self.get_df(marginal_index)
+            for marginal_index in self.marginal_indices
+        }
 
     @property
     def marginal_indices(self) -> StrictMarginalIndex:

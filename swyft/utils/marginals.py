@@ -1,7 +1,30 @@
+from itertools import combinations
+from typing import List, Tuple
+
 from toolz import keyfilter
 
 from swyft.types import Array, MarginalIndex, MarginalToArray, StrictMarginalIndex
 from swyft.utils.misc import depth
+
+
+def get_all_d_dim_marginals(n_parameters: int, d: int) -> StrictMarginalIndex:
+    return tuple(combinations(range(n_parameters), d))
+
+
+def get_corner_marginals(
+    n_parameters: int,
+) -> Tuple[StrictMarginalIndex, StrictMarginalIndex]:
+    """produce the marginals for a corner plot
+
+    Args:
+        n_parameters
+
+    Returns:
+        marginal_indices_1d, marginal_indices_2d
+    """
+    marginal_indices_1d = get_all_d_dim_marginals(n_parameters, 1)
+    marginal_indices_2d = get_all_d_dim_marginals(n_parameters, 2)
+    return marginal_indices_1d, marginal_indices_2d
 
 
 def tupleize_marginal_indices(marginal_indices: MarginalIndex) -> StrictMarginalIndex:

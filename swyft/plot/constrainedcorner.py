@@ -1,12 +1,14 @@
-from itertools import combinations
+from typing import Dict, Tuple
 
 import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+from pandas import DataFrame
 from tqdm import tqdm
 
-from swyft.utils.marginals import filter_marginals_by_dim
+from swyft.utils.marginals import filter_marginals_by_dim, get_all_d_dim_marginals
 
 
 def split_corner_axes(axes):
@@ -16,19 +18,17 @@ def split_corner_axes(axes):
     return lower, diag, upper
 
 
-def get_upper_inds(d):
-    return list(combinations(range(d), 2))
-
-
 def _set_weight_keyword(df):
-    if "weights" in df.columns:
+    if "weight" in df.columns:
+        return "weight"
+    elif "weights" in df.columns:
         return "weights"
     else:
         return None
 
 
 def corner(
-    marginal_dfs,
+    marginal_dfs: Dict[Tuple[int], DataFrame],
     figsize=None,
     bins=50,
     kde=False,
@@ -47,7 +47,7 @@ def corner(
     marginals_1d = filter_marginals_by_dim(marginal_dfs, 1)
     marginals_2d = filter_marginals_by_dim(marginal_dfs, 2)
     d = len(marginals_1d)
-    upper_inds = get_upper_inds(d)
+    upper_inds = get_all_d_dim_marginals(d, 2)
     assert len(marginals_2d) == len(upper_inds)
 
     fig, axes = plt.subplots(nrows=d, ncols=d, sharex="col", figsize=figsize)
@@ -260,7 +260,7 @@ def construct_vertices(bounds, x, y):
 
 def lower_constraint(axes, bounds, alpha=0.25):
     d, _ = axes.shape
-    upper_inds = get_upper_inds(d)
+    upper_inds = get_all_d_dim_marginals(d, 2)
     for i in upper_inds:
         x, y = i
         ax = axes[y, x]  # targets the lower left corner
