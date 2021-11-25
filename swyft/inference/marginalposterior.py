@@ -142,10 +142,10 @@ class MarginalPosterior:
                 each marginal index maps to the log ratio (n_samples, len(marginal_index)).
         """
         v = self.prior.sample(n_samples)
-        log_weights = self.marginal_ratio_estimator.log_ratio(
+        logweight = self.marginal_ratio_estimator.log_ratio(
             observation, v, batch_size=batch_size
         )
-        return WeightedMarginalSamples(log_weights, v)
+        return WeightedMarginalSamples(logweight, v)
 
     def sample(
         self,

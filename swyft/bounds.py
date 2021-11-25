@@ -327,7 +327,7 @@ class CompositBound(Bound, StateDictSaveable):
     #   - Samples should be samples from the hypercube
     #   - Use sampled points above a threshold for generating Rec bound and BallBounds, directly based on points
     # - Function: Return isolated ratio function & bound object from Posteriors object
-    #   - Can be used ilog_weightn sampling
+    #   - Can be used in sampling
 
     @classmethod
     def from_weighted_samples(

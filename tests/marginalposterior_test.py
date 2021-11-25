@@ -214,10 +214,10 @@ class TestMarginalPosterior:
             self.n_parameters,
         ), "size of the parameters v does not match"
         for marginal_index in marginal_indices:
-            log_weight, marginal = weighted_samples.get_logweight_marginal(
+            logweight, marginal = weighted_samples.get_logweight_marginal(
                 marginal_index
             )
-            assert log_weight.shape == (n_samples,)
+            assert logweight.shape == (n_samples,)
             assert marginal.shape == (
                 n_samples,
                 n_marginal_parameters,
