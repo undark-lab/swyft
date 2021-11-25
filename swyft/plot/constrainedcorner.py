@@ -6,7 +6,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
 
-from swyft.utils import filter_marginals_by_dim, split_corner_axes
+from swyft.utils.marginals import filter_marginals_by_dim
+
+
+def split_corner_axes(axes):
+    diag = np.diag(axes)
+    lower = axes[np.tril(axes, -1).nonzero()]
+    upper = axes[np.triu(axes, 1).nonzero()]
+    return lower, diag, upper
 
 
 def get_upper_inds(d):

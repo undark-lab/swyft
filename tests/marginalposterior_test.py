@@ -234,6 +234,7 @@ class TestMarginalPosterior:
     def test_sample_shape(
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
+        np.random.seed(0)
         torch.manual_seed(0)
         marginal_indices = tupleize_marginals(marginal_indices)
         n_marginal_parameters = len(marginal_indices[0])

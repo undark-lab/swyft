@@ -1,4 +1,3 @@
-# pylint: disable=no-member
 from pathlib import Path
 from typing import Callable, Dict, Hashable, Mapping, Sequence, Tuple, Union
 

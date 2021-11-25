@@ -1,7 +1,6 @@
 from swyft.utils.array import *
-from swyft.utils.marginalutils import *
-from swyft.utils.plot import *
-from swyft.utils.utils import *
-from swyft.utils.weightedmarginalutils import *
+from swyft.utils.df import *
+from swyft.utils.marginals import *
+from swyft.utils.misc import *
 
-__all__ = ["plot_1d", "plot_corner", "plot_empirical_mass"]
+__all__ = []

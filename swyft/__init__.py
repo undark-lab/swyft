@@ -6,6 +6,7 @@ from swyft.inference import (
     TrainOptions,
 )
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineStandardizingLayer
+from swyft.plot import plot_1d, plot_corner, plot_empirical_mass
 from swyft.prior import (
     Prior,
     PriorTruncator,
@@ -13,7 +14,6 @@ from swyft.prior import (
     get_uniform_prior,
 )
 from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator
-from swyft.utils import plot_1d, plot_corner, plot_empirical_mass
 
 
 def zen():

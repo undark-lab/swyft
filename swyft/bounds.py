@@ -8,7 +8,7 @@ from sklearn.neighbors import BallTree
 
 from swyft.saveable import StateDictSaveable
 from swyft.types import ObsType
-from swyft.utils.weightedmarginalutils import WeightedMarginalSamples
+from swyft.weightedmarginals import WeightedMarginalSamples
 
 log = logging.getLogger(__name__)
 

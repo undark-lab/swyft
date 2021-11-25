@@ -3,8 +3,8 @@ from typing import Tuple
 import pytest
 
 from swyft.types import MarginalIndex, StrictMarginalIndex
-from swyft.utils.marginalutils import tupleize_marginals
-from swyft.utils.utils import depth
+from swyft.utils.marginals import tupleize_marginals
+from swyft.utils.misc import depth
 
 
 class TupleizeMarginals:
@@ -16,7 +16,26 @@ class TupleizeMarginals:
         [0, 1, [2, 3], [3, 4]],
         [[0, 1], [2, 3]],
         (0, (1, 2), 2),
+        (0, 1),
     ]
+    truth = [
+        ((0,),),
+        ((0,), (1,), (2,)),
+        ((0,), (1, 2)),
+        ((0,), (1,), (2, 3)),
+        ((0,), (1,), (2, 3), (3, 4)),
+        ((0, 1), (2, 3)),
+        ((0,), (1, 2), (2,)),
+        ((0, 1),),
+    ]
+    str_to_truth = {str(mi): t for mi, t in zip(marginal_indices, truth)}
+
+    @pytest.mark.parametrize(
+        "marginal_index",
+        marginal_indices,
+    )
+    def test_compare_to_truth(self, mi: MarginalIndex) -> None:
+        assert tupleize_marginals(mi) == self.str_to_truth[str(mi)]
 
     @pytest.mark.parametrize(
         "marginal_index",
