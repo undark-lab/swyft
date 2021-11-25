@@ -14,13 +14,13 @@ from swyft.inference.marginalposterior import MarginalPosterior
 from swyft.prior import PriorTruncator, get_diagonal_normal_prior, get_uniform_prior
 from swyft.store.dataset import SimpleDataset
 from swyft.types import MarginalIndex
-from swyft.utils import tupleize_marginals
+from swyft.utils import tupleize_marginal_indices
 
 
 class AllOneNetwork(torch.nn.Module, classifier.HeadTailClassifier):
     def __init__(self, marginal_indices: MarginalIndex) -> None:
         super().__init__()
-        self.marginal_indices = tupleize_marginals(marginal_indices)
+        self.marginal_indices = tupleize_marginal_indices(marginal_indices)
         self.block_shape = classifier.ParameterTransform.get_marginal_block_shape(
             self.marginal_indices
         )
@@ -156,7 +156,7 @@ class TestMarginalPosterior:
         self, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
         n_batch = 100
-        marginal_indices = tupleize_marginals(marginal_indices)
+        marginal_indices = tupleize_marginal_indices(marginal_indices)
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
         prior = get_diagonal_normal_prior(
@@ -189,7 +189,7 @@ class TestMarginalPosterior:
     def test_weighted_sample_shape(
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
-        marginal_indices = tupleize_marginals(marginal_indices)
+        marginal_indices = tupleize_marginal_indices(marginal_indices)
         n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 
@@ -236,7 +236,7 @@ class TestMarginalPosterior:
     ):
         np.random.seed(0)
         torch.manual_seed(0)
-        marginal_indices = tupleize_marginals(marginal_indices)
+        marginal_indices = tupleize_marginal_indices(marginal_indices)
         n_marginal_parameters = len(marginal_indices[0])
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
 

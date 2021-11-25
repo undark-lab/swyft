@@ -9,7 +9,7 @@ import torch
 import swyft.inference.marginalratioestimator as mre
 import swyft.networks.classifier as classifier
 from swyft.types import MarginalIndex
-from swyft.utils.marginals import tupleize_marginals
+from swyft.utils.marginals import tupleize_marginal_indices
 
 
 class TestSplitLengthByPercentage:
@@ -173,7 +173,7 @@ class TestMarginalRatioEstimator:
     ):
         """The log_ratio function should return as many weights as there were n_batches of parameters provided."""
         n_batch = 100
-        marginal_indices = tupleize_marginals(marginal_indices)
+        marginal_indices = tupleize_marginal_indices(marginal_indices)
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
         fabricated_observation = {
             key: torch.rand(*shape) for key, shape in self.observation_shapes.items()

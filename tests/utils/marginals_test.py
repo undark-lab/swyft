@@ -3,7 +3,7 @@ from typing import Tuple
 import pytest
 
 from swyft.types import MarginalIndex, StrictMarginalIndex
-from swyft.utils.marginals import tupleize_marginals
+from swyft.utils.marginals import tupleize_marginal_indices
 from swyft.utils.misc import depth
 
 
@@ -35,21 +35,21 @@ class TupleizeMarginals:
         marginal_indices,
     )
     def test_compare_to_truth(self, mi: MarginalIndex) -> None:
-        assert tupleize_marginals(mi) == self.str_to_truth[str(mi)]
+        assert tupleize_marginal_indices(mi) == self.str_to_truth[str(mi)]
 
     @pytest.mark.parametrize(
         "marginal_index",
         marginal_indices,
     )
     def test_depth(mi: MarginalIndex) -> None:
-        assert depth(tupleize_marginals(mi)) == 2
+        assert depth(tupleize_marginal_indices(mi)) == 2
 
     @pytest.mark.parametrize(
         "marginal_index",
         marginal_indices,
     )
     def test_tuple(mi: MarginalIndex) -> StrictMarginalIndex:
-        mi = tupleize_marginals(mi)
+        mi = tupleize_marginal_indices(mi)
         assert isinstance(mi, Tuple)
 
     @pytest.mark.parametrize(
@@ -57,7 +57,7 @@ class TupleizeMarginals:
         marginal_indices,
     )
     def test_nested_tuple(mi: MarginalIndex) -> StrictMarginalIndex:
-        mi = tupleize_marginals(mi)
+        mi = tupleize_marginal_indices(mi)
         assert all(isinstance(i, Tuple) for i in mi)
 
     def test_sorting():

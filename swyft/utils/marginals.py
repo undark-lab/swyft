@@ -4,26 +4,26 @@ from swyft.types import Array, MarginalIndex, MarginalToArray, StrictMarginalInd
 from swyft.utils.misc import depth
 
 
-def tupleize_marginals(marginals: MarginalIndex) -> StrictMarginalIndex:
-    """Reformat input marginals into sorted and hashable standard form: tuples of tuples.
+def tupleize_marginal_indices(marginal_indices: MarginalIndex) -> StrictMarginalIndex:
+    """Reformat input marginal_indices into sorted and hashable standard form: tuples of tuples.
 
-    input tuples will be respected as coming from the same marginal.
-    lists will assumed to be collections of marginals
+    a lone input tuple will be respected as coming from the same marginal
+    lists will assumed to be collections of different marginals
     """
-    if isinstance(marginals, int):
-        out = [marginals]
-    elif isinstance(marginals, tuple):
-        d = depth(marginals)
+    if isinstance(marginal_indices, int):
+        out = [marginal_indices]
+    elif isinstance(marginal_indices, tuple):
+        d = depth(marginal_indices)
         if d == 0:
             raise ValueError("how did this happen?")
         elif d == 1:
-            return (marginals,)
+            return (marginal_indices,)
         elif d == 2:
-            return marginals
+            return marginal_indices
         else:
             raise ValueError("marginals can only have two layers of depth, no more.")
     else:
-        out = list(marginals)
+        out = list(marginal_indices)
 
     for i in range(len(out)):
         if isinstance(out[i], int):

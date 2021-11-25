@@ -19,7 +19,7 @@ from swyft.types import (
     ParameterNamesType,
     PathType,
 )
-from swyft.utils import tupleize_marginals
+from swyft.utils import tupleize_marginal_indices
 
 log = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class Posteriors(StateDictSaveable):
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         re = RatioEstimator(
             marginals,
             device=device,
@@ -86,7 +86,7 @@ class Posteriors(StateDictSaveable):
             marginals: Optional, only move networks related to specific marginals.
         """
         if marginals is not None:
-            marginals = tupleize_marginals(marginals)
+            marginals = tupleize_marginal_indices(marginals)
             self._ratios[marginals].to(device)
         else:
             for _, v in self._ratios.items():
@@ -131,7 +131,7 @@ class Posteriors(StateDictSaveable):
             print("ERROR: Not all points in the dataset are simulated yet.")
             return
 
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         re = self._ratios[marginals]
 
         trainoptions = TrainOptions(
@@ -150,7 +150,7 @@ class Posteriors(StateDictSaveable):
         re.train(self._dataset, trainoptions)
 
     def train_diagnostics(self, marginals: MarginalIndex):
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         return self._ratios[marginals].train_diagnostics()
 
     def eval(
@@ -284,7 +284,7 @@ class Posteriors(StateDictSaveable):
 
     def truncate(self, marginals: MarginalIndex, obs0: ObsType) -> "swyft.bounds.Bound":
         """Generate and return new bound object."""
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         bound = swyft.Bound.from_Posteriors(marginals, self, obs0)
         print("Bounds: Truncating...")
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)

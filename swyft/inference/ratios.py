@@ -10,7 +10,7 @@ from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
 from swyft.saveable import StateDictSaveable
 from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType
-from swyft.utils import array_to_tensor, dict_array_to_tensor, tupleize_marginals
+from swyft.utils import array_to_tensor, dict_array_to_tensor, tupleize_marginal_indices
 
 
 def get_obs_shapes(obs):
@@ -44,7 +44,7 @@ class RatioEstimator(StateDictSaveable):
         tail_args: dict = {},
         device: Device = "cpu",
     ) -> None:
-        self.marginals = tupleize_marginals(marginals)
+        self.marginals = tupleize_marginal_indices(marginals)
         self._device = device
 
         if isinstance(head, type):

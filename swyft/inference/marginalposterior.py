@@ -9,7 +9,7 @@ from swyft.bounds import Bound
 from swyft.inference.marginalratioestimator import MarginalRatioEstimator
 from swyft.prior import Prior, PriorTruncator, promote_to_prior_truncator
 from swyft.types import Array, MarginalIndex, MarginalToArray, ObsType
-from swyft.utils import tupleize_marginals
+from swyft.utils import tupleize_marginal_indices
 from swyft.weightedmarginals import WeightedMarginalSamples
 
 MarginalPosteriorType = TypeVar("MarginalPosteriorType", bound="MarginalPosterior")
@@ -33,7 +33,7 @@ class MarginalPosterior:
 
     @property
     def marginal_indices(self) -> MarginalIndex:
-        return tupleize_marginals(self.marginal_ratio_estimator.marginal_indices)
+        return tupleize_marginal_indices(self.marginal_ratio_estimator.marginal_indices)
 
     @property
     def device(self) -> Device:

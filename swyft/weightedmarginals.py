@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np
 
 from swyft.types import MarginalIndex, MarginalToArray, StrictMarginalIndex
-from swyft.utils.marginals import tupleize_marginals
+from swyft.utils.marginals import tupleize_marginal_indices
 
 
 @dataclass
@@ -14,7 +14,7 @@ class WeightedMarginalSamples:
 
     @staticmethod
     def _select_marginal_index(marginal_index: MarginalIndex) -> Tuple[int, ...]:
-        marginal_index = tupleize_marginals(marginal_index)
+        marginal_index = tupleize_marginal_indices(marginal_index)
         assert (
             len(marginal_index) == 1
         ), "weighted marginal samples can only be recovered one index at a time"

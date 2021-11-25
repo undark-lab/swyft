@@ -22,7 +22,7 @@ from swyft.inference.train import get_ntrain_nvalid
 from swyft.saveable import StateDictSaveable, StateDictSaveableType
 from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType, PathType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor
-from swyft.utils.marginals import tupleize_marginals
+from swyft.utils.marginals import tupleize_marginal_indices
 
 SchedulerType = Union[
     torch.optim.lr_scheduler._LRScheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -142,7 +142,7 @@ class MarginalRatioEstimator(StateDictSaveable):
             network: a neural network which accepts `observation` and `parameters` and returns `len(marginal_indices)` ratios.
             device
         """
-        self.marginal_indices = tupleize_marginals(marginal_indices)
+        self.marginal_indices = tupleize_marginal_indices(marginal_indices)
         self.device = device
         self.network = network
         self.network.to(self.device)

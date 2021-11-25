@@ -81,7 +81,7 @@ class ParameterTransform(nn.Module):
         super().__init__()
         self.register_buffer(
             "marginal_indices",
-            torch.tensor(swyft.utils.tupleize_marginals(marginal_indices)),
+            torch.tensor(swyft.utils.tupleize_marginal_indices(marginal_indices)),
         )
         self.n_parameters = torch.Size([n_parameters])
         if online_z_score:
@@ -99,14 +99,14 @@ class ParameterTransform(nn.Module):
 
     @staticmethod
     def is_marginal_block_possible(marginal_indices: MarginalIndex) -> bool:
-        marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
+        marginal_indices = swyft.utils.tupleize_marginal_indices(marginal_indices)
         return [len(marginal_indices[0]) == len(mi) for mi in marginal_indices]
 
     @classmethod
     def get_marginal_block_shape(
         cls, marginal_indices: MarginalIndex
     ) -> Tuple[int, int]:
-        marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
+        marginal_indices = swyft.utils.tupleize_marginal_indices(marginal_indices)
         assert cls.is_marginal_block_possible(
             marginal_indices
         ), f"Each tuple in {marginal_indices} must have the same length."
@@ -117,7 +117,7 @@ class ParameterTransform(nn.Module):
         cls, parameters: Array, marginal_indices: MarginalIndex
     ) -> torch.Tensor:
         depth = swyft.utils.depth(marginal_indices)
-        tuple_marginal_indices = swyft.utils.tupleize_marginals(marginal_indices)
+        tuple_marginal_indices = swyft.utils.tupleize_marginal_indices(marginal_indices)
         assert cls.is_marginal_block_possible(
             tuple_marginal_indices
         ), f"Each tuple in {tuple_marginal_indices} must have the same length."
