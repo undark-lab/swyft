@@ -6,7 +6,7 @@ from swyft.inference import (
     TrainOptions,
 )
 from swyft.networks import DefaultHead, DefaultTail, Module, OnlineStandardizingLayer
-from swyft.plot import plot_1d, plot_corner, plot_empirical_mass
+from swyft.plot import plot_empirical_mass
 from swyft.prior import (
     Prior,
     PriorTruncator,
@@ -41,8 +41,6 @@ __all__ = [
     "Dataset",
     "Simulator",
     "DaskSimulator",
-    "plot_corner",
-    "plot_1d",
     "plot_empirical_mass",
     "get_uniform_prior",
     "get_diagonal_normal_prior",

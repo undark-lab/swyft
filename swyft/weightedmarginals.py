@@ -4,7 +4,12 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from swyft.types import MarginalIndex, MarginalToArray, StrictMarginalIndex
+from swyft.types import (
+    MarginalIndex,
+    MarginalToArray,
+    MarginalToDataFrame,
+    StrictMarginalIndex,
+)
 from swyft.utils.marginals import tupleize_marginal_indices
 
 
@@ -69,7 +74,7 @@ class WeightedMarginalSamples:
         columns = list(marginal_index) + ["weight"] + ["logweight"]
         return pd.DataFrame(data=data, columns=columns)
 
-    def get_df_dict(self) -> Dict[Tuple[int], pd.DataFrame]:
+    def get_df_dict(self) -> MarginalToDataFrame:
         """produce a map from marginal_index to df for all dfs and marginal_indices"""
         return {
             marginal_index: self.get_df(marginal_index)
