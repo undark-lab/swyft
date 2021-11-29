@@ -1,3 +1,4 @@
+from re import A
 import tempfile
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from dask.distributed import LocalCluster
 from swyft.prior import get_uniform_prior
 from swyft.store.simulator import DaskSimulator, SimulationStatus, Simulator
 from swyft.store.store import DirectoryStore, MemoryStore
+from swyft.bounds import UnitCubeBound
 
 
 def model(params):
@@ -97,6 +99,26 @@ class TestStoreRun:
         store = MemoryStore(simulator=sim_multi_out)
         store.add(20, prior)
         assert store.sims.x1.shape[0] > 0
+
+    def test_store_add_with_bound_seed(self):
+        store1 = MemoryStore(simulator=sim_multi_out)
+        store2 = MemoryStore(simulator=sim_multi_out)
+        bound = UnitCubeBound(2)
+        bound.set_seed(1234)
+        store1.add(20, prior, bound)
+        bound.set_seed(1234)
+        store2.add(20, prior, bound)
+        ind = np.min((store1.v.shape[0], store2.v.shape[0]))
+        assert np.all(store1.v[:ind] == store2.v[:ind])
+
+    def test_store_add_without_bound_seed(self):
+        store1 = MemoryStore(simulator=sim_multi_out)
+        store2 = MemoryStore(simulator=sim_multi_out)
+        bound = UnitCubeBound(2)
+        store1.add(20, prior, bound)
+        store2.add(20, prior, bound)
+        ind = np.min((store1.v.shape[0], store2.v.shape[0]))
+        assert not(np.all(store1.v[:ind] == store2.v[:ind]))
 
     def test_memory_store_simulate(self):
         store = MemoryStore(simulator=sim_multi_out)
