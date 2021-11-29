@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 import zarr
 from dask.distributed import LocalCluster
 
@@ -53,43 +54,107 @@ class TestStoreIO:
 
     def test_init_directory_store_multi_outputs(self):
         with tempfile.TemporaryDirectory() as td:
-            store = Store.directory_store(simulator=sim_multi_out, path=td)
+            td_path = Path(td) / "store.zarr"
+            store = Store.directory_store(simulator=sim_multi_out, path=td_path)
+            assert store.v.shape[1] == 2
+            assert {k: v.shape[1:] for k, v in store.sims.items()} == {
+                "x1": (10,),
+                "x2": (2, 5),
+            }
+            groups = set(p.name for p in td_path.glob("*") if p.is_dir())
+            assert groups == {"samples", "metadata"}
+            sims = set(
+                p.name for p in (td_path / "samples/sims/").glob("*") if p.is_dir()
+            )
+            assert sims == {"x1", "x2"}
+
+    def test_init_directory_store_with_existing_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            with pytest.raises(FileExistsError):
+                Store.directory_store(simulator=sim_multi_out, path=td)
+
+    def test_init_directory_store_overwriting_existing_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = Store.directory_store(
+                simulator=sim_multi_out, path=td, overwrite=True
+            )
             assert store.v.shape[1] == 2
             assert {k: v.shape[1:] for k, v in store.sims.items()} == {
                 "x1": (10,),
                 "x2": (2, 5),
             }
             td_path = Path(td)
-            items = [
-                p.relative_to(td).as_posix() for p in td_path.rglob("*/") if p.is_dir()
-            ]
-            assert len(items) > 0
+            groups = set(p.name for p in td_path.glob("*") if p.is_dir())
+            assert groups == {"samples", "metadata"}
+            sims = set(
+                p.name for p in (td_path / "samples/sims/").glob("*") if p.is_dir()
+            )
+            assert sims == {"x1", "x2"}
 
     def test_memory_store_save(self):
         store = Store.memory_store(simulator=sim_multi_out)
         with tempfile.TemporaryDirectory() as td:
-            td_path = Path(td)
-            store.save(td)
-            items = [
-                p.relative_to(td).as_posix() for p in td_path.rglob("*") if p.is_dir()
-            ]
-            assert len(items) > 0
+            td_path = Path(td) / "store.zarr"
+            store.save(td_path)
+            groups = set(p.name for p in td_path.glob("*") if p.is_dir())
+            assert groups == {"samples", "metadata"}
+            sims = set(
+                p.name for p in (td_path / "samples/sims/").glob("*") if p.is_dir()
+            )
+            assert sims == {"x1", "x2"}
 
-    def test_memory_store_load(self):
-        store = Store.memory_store(simulator=sim_multi_out)
-        with tempfile.TemporaryDirectory() as td:
-            store.save(td)
-            loaded = Store.load(td)
-            loaded.set_simulator(sim_multi_out)
-            assert np.allclose(loaded.v, store.v)
-            assert loaded._zarr_store.root == store._zarr_store.root
-            assert all([np.allclose(loaded.sims[k], v) for k, v in store.sims.items()])
+    def test_directory_store_save_to_different_path(self):
+        with tempfile.TemporaryDirectory() as td1, tempfile.TemporaryDirectory() as td2:
+            td_from = Path(td1) / "store.zarr"
+            store = Store.directory_store(simulator=sim_multi_out, path=td_from)
+            td_to = Path(td2) / "store.zarr"
+            store.save(td_to)
+            groups = set(p.name for p in td_to.glob("*") if p.is_dir())
+            assert groups == {"samples", "metadata"}
+            sims = set(
+                p.name for p in (td_to / "samples/sims/").glob("*") if p.is_dir()
+            )
+            assert sims == {"x1", "x2"}
 
-    def test_directory_store_load(self):
+    def test_directory_store_save_to_same_path_does_not_remove_store(self):
         with tempfile.TemporaryDirectory() as td:
-            store = Store.directory_store(simulator=sim_multi_out, path=td)
-            loaded = Store.load(td)
+            td_path = Path(td) / "store.zarr"
+            store = Store.directory_store(simulator=sim_multi_out, path=td_path)
+            store.save(td_path)
+            groups = set(p.name for p in td_path.glob("*") if p.is_dir())
+            assert groups == {"samples", "metadata"}
+            sims = set(
+                p.name for p in (td_path / "samples/sims/").glob("*") if p.is_dir()
+            )
+            assert sims == {"x1", "x2"}
+
+    def test_directory_store_load_existing_store(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td) / "store.zarr"
+            store = Store.directory_store(simulator=sim_multi_out, path=td_path)
+            loaded = Store.load(td_path)
+            # loaded.set_simulator(sim_multi_out)
             assert np.allclose(loaded.v, store.v)
+            assert loaded._zarr_store.path == store._zarr_store.path
+            assert loaded.sims.keys() == store.sims.keys()
+
+    def test_directory_store_load_store_from_wrong_paths(self):
+        with tempfile.TemporaryDirectory() as td:
+            with pytest.raises(KeyError):
+                # path exists, keys not found
+                Store.load(td)
+            with pytest.raises(FileNotFoundError):
+                # non-existent path
+                td_path = Path(td) / "store.zarr"
+                Store.load(td_path)
+
+    def test_directory_store_to_memory(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td) / "store.zarr"
+            store = Store.directory_store(simulator=sim_multi_out, path=td_path)
+            loaded = store.to_memory()
+            assert isinstance(loaded._zarr_store, zarr.MemoryStore)
+            assert np.allclose(loaded.v.shape, store.v.shape)
 
 
 class TestStoreRun:
@@ -109,20 +174,22 @@ class TestStoreRun:
 
     def test_directory_store_sample(self):
         with tempfile.TemporaryDirectory() as td:
-            store = Store.directory_store(simulator=sim_multi_out, path=td)
+            store = Store.directory_store(
+                simulator=sim_multi_out, path=td, overwrite=True
+            )
             indices = store.sample(100, prior, add=True)
             assert len(indices) == len(store)
 
     def test_directory_store_simulate(self):
         with tempfile.TemporaryDirectory() as td:
-            store = Store.directory_store(simulator=sim, path=td)
+            store = Store.directory_store(simulator=sim, path=td, overwrite=True)
             ind_sim = store.sample(100, prior, add=True)
             store.simulate(ind_sim)
             assert store.sims.x[:].sum(axis=1).all()
 
     def test_directory_store_simulate_partial(self):
         with tempfile.TemporaryDirectory() as td:
-            store = Store.directory_store(simulator=sim, path=td)
+            store = Store.directory_store(simulator=sim, path=td, overwrite=True)
             ind_sim = store.sample(100, prior, add=True)
             ind_sim = ind_sim[:40]
             store.simulate(ind_sim)
@@ -132,7 +199,7 @@ class TestStoreRun:
     def test_store_lockfile(self):
         with tempfile.TemporaryDirectory() as td:
             store_dir = Store.directory_store(
-                simulator=sim, path=td, sync_path=td + ".sync"
+                simulator=sim, path=td, sync_path=td + ".sync", overwrite=True
             )
             assert store_dir._lock is not None
             assert store_dir._lock.lockfile is None
