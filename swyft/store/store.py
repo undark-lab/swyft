@@ -44,6 +44,7 @@ class Store:
             specified chunk size along the sample dimension (a single chunk will be used for the
             other dimensions).
         pickle_protocol: pickle protocol number used for storing intensity functions.
+        from_scratch: if False, load the sample store from the Zarr store provided.
     """
 
     _filesystem = Filesystem
@@ -55,18 +56,25 @@ class Store:
         sync_path: Optional[PathType] = None,
         chunksize: int = 1,
         pickle_protocol: int = 4,
+        from_scratch: bool = True,
     ) -> None:
         self._zarr_store = zarr_store
         self._simulator = simulator
         self._pickle_protocol = pickle_protocol  # TODO: to be deprecated, we will default to 4, which is supported since python 3.4
 
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
-        self._root = zarr.group(store=self._zarr_store, synchronizer=synchronizer)
+        self._root = zarr.group(
+            store=self._zarr_store, synchronizer=synchronizer, overwrite=from_scratch
+        )
 
-        if set(["samples", "metadata"]) == set(self._root.keys()):
+        if not from_scratch:
+            if not {"samples", "metadata"} == self._root.keys():
+                raise KeyError(
+                    "Invalid Zarr store. It should have keys: ['samples', 'metadata']."
+                )
             print("Loading existing store.")
             self._update()
-        elif len(self._root.keys()) == 0:
+        else:
             print("Creating new store.")
             if simulator is None:
                 raise ValueError("A simulator is required to setup a new store.")
@@ -78,10 +86,6 @@ class Store:
                 sim_dtype=simulator.sim_dtype,
             )
             log.debug("  sim_shapes = %s" % str(simulator.sim_shapes))
-        else:
-            raise KeyError(
-                "The zarr storage is corrupted. It should either be empty or only have the keys ['samples', 'metadata']."
-            )
 
         # a second layer of synchronization is required to grow the store
         self._lock = None
@@ -499,8 +503,9 @@ class Store:
         path: PathType,
         simulator: Optional[Simulator] = None,
         sync_path: Optional[PathType] = None,
+        overwrite: bool = False,
     ) -> "Store":
-        """Instantiate a new or existing Store based on a Zarr DirectoryStore.
+        """Instantiate a new Store based on a Zarr DirectoryStore.
 
         Args:
             path: path to storage directory
@@ -508,17 +513,27 @@ class Store:
             sync_path: path for synchronization via file locks (files will be stored in the given path).
                 It must differ from path, it must be accessible to all processes working on the store,
                 and the underlying filesystem must support file locking.
+            overwrite: if True, and a store already exists at the specified path, overwrite it.
 
         Returns:
             Store based on a Zarr DirectoryStore
 
         Example:
             >>> store = swyft.Store.directory_store(PATH_TO_STORE)
-            >>> print("Number of simulations in store:", len(store))
         """
-        zarr_store = zarr.DirectoryStore(path)
-        sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
-        return cls(zarr_store=zarr_store, simulator=simulator, sync_path=sync_path)
+        if not Path(path).exists() or overwrite:
+            zarr_store = zarr.DirectoryStore(path)
+            sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
+            return cls(
+                zarr_store=zarr_store,
+                simulator=simulator,
+                sync_path=sync_path,
+                from_scratch=True,
+            )
+        else:
+            raise FileExistsError(
+                f"Path {path} exists - set overwrite=True to initialize a new store there."
+            )
 
     @classmethod
     def memory_store(cls, simulator: Simulator) -> "Store":
@@ -539,7 +554,7 @@ class Store:
             >>> store = swyft.Store.memory_store(simulator)
         """
         zarr_store = zarr.MemoryStore()
-        return cls(zarr_store=zarr_store, simulator=simulator)
+        return cls(zarr_store=zarr_store, simulator=simulator, from_scratch=True)
 
     def save(self, path: PathType) -> None:
         """Save the Store to disk using a Zarr DirectoryStore.
@@ -562,17 +577,37 @@ class Store:
             zarr.convenience.copy_store(source=self._zarr_store, dest=zarr_store)
 
     @classmethod
-    def load(cls, path: PathType, simulator: Optional[Simulator] = None) -> "Store":
-        """Load an existing Store from disk into memory.
+    def load(
+        cls,
+        path: PathType,
+        simulator: Optional[Simulator] = None,
+        sync_path: Optional[PathType] = None,
+    ) -> "Store":
+        """Open an existing sample store using a Zarr DirectoryStore.
 
         Args:
             path: path to the Zarr root directory
             simulator: simulator object
+            sync_path: path for synchronization via file locks (files will be stored in the given path).
+                It must differ from path, it must be accessible to all processes working on the store,
+                and the underlying filesystem must support file locking.
         """
         if Path(path).exists():
-            memory_store = zarr.MemoryStore()
-            directory_store = zarr.DirectoryStore(path)
-            zarr.convenience.copy_store(source=directory_store, dest=memory_store)
-            return cls(zarr_store=memory_store, simulator=simulator)
+            store = zarr.DirectoryStore(path)
+            sync_path = sync_path or os.path.splitext(path)[0] + ".sync"
+            return cls(
+                zarr_store=store,
+                simulator=simulator,
+                sync_path=sync_path,
+                from_scratch=False,
+            )
         else:
             raise FileNotFoundError(f"There is no directory store at {path}.")
+
+    def to_memory(self) -> "Store":
+        """Make an in-memory copy of the existing Store using a Zarr MemoryStore."""
+        memory_store = zarr.MemoryStore()
+        zarr.convenience.copy_store(source=self._zarr_store, dest=memory_store)
+        return Store(
+            zarr_store=memory_store, simulator=self._simulator, from_scratch=False
+        )
