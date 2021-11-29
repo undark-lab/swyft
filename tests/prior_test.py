@@ -53,7 +53,7 @@ class TestInterpolatedTabulatedDistribution:
             n_grid_points=self.n_grid_points,
         )
 
-        hypercube_samples_itd = itd.u(samples)
+        hypercube_samples_itd = itd.cdf(samples)
         assert np.allclose(
             hypercube_samples, hypercube_samples_itd, atol=1e-4, rtol=5e-3
         )
@@ -78,7 +78,7 @@ class TestInterpolatedTabulatedDistribution:
             n_grid_points=self.n_grid_points,
         )
 
-        samples_itd = itd.v(hypercube_samples)
+        samples_itd = itd.icdf(hypercube_samples)
 
         if isinstance(distribution, Uniform):
             assert np.allclose(samples, samples_itd)
@@ -106,7 +106,7 @@ class TestPrior:
         hypercube_samples_true = distribution.cdf(samples).numpy()
 
         prior = Prior.from_torch_distribution(distribution)
-        hypercube_samples_esti = prior.u(samples)
+        hypercube_samples_esti = prior.cdf(samples)
         assert np.allclose(hypercube_samples_true, hypercube_samples_esti)
 
     @pytest.mark.parametrize(
@@ -124,7 +124,7 @@ class TestPrior:
         hypercube_samples = distribution.cdf(samples_true).numpy()
 
         prior = Prior.from_torch_distribution(distribution)
-        samples_esti = prior.v(hypercube_samples)
+        samples_esti = prior.icdf(hypercube_samples)
 
         if isinstance(distribution, Uniform):
             assert np.allclose(samples_true, samples_esti)

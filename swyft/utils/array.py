@@ -6,6 +6,10 @@ import torch
 from swyft.types import Array, Device
 
 
+def dict_to_device(d, device, non_blocking=False):
+    return {k: v.to(device, non_blocking=non_blocking) for k, v in d.items()}
+
+
 def dict_array_to_tensor(
     d, device="cpu", non_blocking=False, indices=slice(0, None)
 ) -> Dict[Hashable, torch.Tensor]:

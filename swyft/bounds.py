@@ -1,11 +1,19 @@
+from __future__ import annotations
+
 import logging
+from typing import Callable, Optional, TypeVar
 
 import numpy as np
 from sklearn.neighbors import BallTree
 
-from swyft.utils.saveable import StateDictSaveable
+from swyft.saveable import StateDictSaveable
+from swyft.types import ObsType
+from swyft.weightedmarginals import WeightedMarginalSamples
 
 log = logging.getLogger(__name__)
+
+
+BoundType = TypeVar("BoundType", bound="Bound")
 
 
 class Bound(StateDictSaveable):
@@ -17,41 +25,41 @@ class Bound(StateDictSaveable):
         evaluate the bound.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     @property
-    def volume(self):
+    def volume(self) -> float:
         """Volume of the bound region."""
         raise NotImplementedError
 
     @property
-    def udim(self):
+    def n_parameters(self) -> int:
         """Number of dimensions."""
         raise NotImplementedError
 
-    def sample(self, N):
+    def sample(self, n_samples: int) -> np.ndarray:
         """Sample.
 
         Args:
-            N (int): Numbe of samples.
+            n_samples: Numbe of samples.
 
         Returns:
-            s (N x udim np.ndarray)
+            s (n_samples x n_parameters)
         """
         raise NotImplementedError
 
-    def __call__(self, u):
+    def __call__(self, u: np.ndarray):
         """Check whether parameters are within bounds.
 
         Args:
-            u (N x udim np.ndarray): Parameters on hypercube
+            u (n_samples x n_parameters): Parameters on hypercube
         """
         raise NotImplementedError
 
     # TODO can we do away with this thing? I think yes.
     @classmethod
-    def from_state_dict(cls, state_dict):
+    def from_state_dict(cls, state_dict) -> BoundType:
         """Instantiate Bound object based on state_dict.
 
         Args:
@@ -69,21 +77,34 @@ class Bound(StateDictSaveable):
         else:
             raise KeyError
 
-    @classmethod
-    def from_Posteriors(cls, partitions, post, obs, th=-13.0):
-        return CompositBound.from_Posteriors(partitions, post, obs, post.bound, th=th)
+    @staticmethod
+    def from_marginal_posterior(
+        n_samples: int,
+        observation: ObsType,
+        marginal_posterior: "swyft.inference.marginalposterior.MarginalPosterior",
+        threshold: float = -13.0,
+        batch_size: Optional[int] = None,
+    ) -> BoundType:
+        """see CompositBound.from_marginal_posterior"""
+        return CompositBound.from_marginal_posterior(
+            n_samples,
+            observation,
+            marginal_posterior,
+            threshold,
+            batch_size,
+        )
 
 
 class UnitCubeBound(Bound, StateDictSaveable):
     """The unit hypercube bound."""
 
-    def __init__(self, udim):
+    def __init__(self, n_parameters):
         """Initialize unit hypercube bound.
 
         Args:
-            udim (int): Number of parameters.
+            n_parameters (int): Number of parameters.
         """
-        self._udim = udim
+        self._n_parameters = n_parameters
         self._volume = 1.0
 
     @property
@@ -92,17 +113,16 @@ class UnitCubeBound(Bound, StateDictSaveable):
         return self._volume
 
     @property
-    def udim(self):
-        """Dimensionality of the constrained region."""
-        return self._udim
+    def n_parameters(self) -> int:
+        return self._n_parameters
 
-    def sample(self, N):
+    def sample(self, n_samples):
         """Generate samples from the bound region.
 
         Args:
-            N (int): Number of samples
+            n_samples (int): Number of samples
         """
-        return np.random.rand(N, self.udim)
+        return np.random.rand(n_samples, self.n_parameters)
 
     def __call__(self, u):
         """Evaluate bound.
@@ -117,11 +137,11 @@ class UnitCubeBound(Bound, StateDictSaveable):
         return b.prod(axis=-1)
 
     def state_dict(self):
-        return dict(tag="UnitCubeBound", udim=self.udim)
+        return dict(tag="UnitCubeBound", n_parameters=self.n_parameters)
 
     @classmethod
     def from_state_dict(cls, state_dict):
-        return cls(state_dict["udim"])
+        return cls(state_dict["n_parameters"])
 
 
 class RectangleBound(Bound, StateDictSaveable):
@@ -138,17 +158,17 @@ class RectangleBound(Bound, StateDictSaveable):
     @property
     def volume(self):
         V = 1.0
-        for i in range(self.udim):
+        for i in range(self.n_parameters):
             V *= self._rec_bounds[i, 1] - self._rec_bounds[i, 0]
         return V
 
     @property
-    def udim(self):
+    def n_parameters(self):
         return len(self._rec_bounds)
 
-    def sample(self, N):
-        u = np.random.rand(N, self.udim)
-        for i in range(self.udim):
+    def sample(self, n_samples):
+        u = np.random.rand(n_samples, self.n_parameters)
+        for i in range(self.n_parameters):
             u[:, i] *= self._rec_bounds[i, 1] - self._rec_bounds[i, 0]
             u[:, i] += self._rec_bounds[i, 0]
         return u
@@ -177,18 +197,18 @@ class BallsBound(Bound, StateDictSaveable):
         """
         assert len(points.shape) == 2
         self.X = points
-        self._udim = self.X.shape[-1]
+        self._n_parameters = self.X.shape[-1]
         self.bt = BallTree(self.X, leaf_size=2)
         self.epsilon = self._set_epsilon(self.X, self.bt, scale)
         self._volume = self._get_volume(self.X, self.epsilon, self.bt)
 
     @property
-    def volume(self):
+    def volume(self) -> float:
         return self._volume
 
     @property
-    def udim(self):
-        return self._udim
+    def n_parameters(self) -> int:
+        return self._n_parameters
 
     @staticmethod
     def _set_epsilon(X, bt, scale):
@@ -200,11 +220,11 @@ class BallsBound(Bound, StateDictSaveable):
 
     @staticmethod
     def _get_volume(X, epsilon, bt):
-        N = 100
+        n_samples = 100
         vol_est = []
         d = X.shape[-1]
         area = {1: 2 * epsilon, 2: np.pi * epsilon ** 2}[d]
-        for i in range(N):
+        for i in range(n_samples):
             n = np.random.randn(*X.shape)
             norm = (n ** 2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
@@ -215,17 +235,17 @@ class BallsBound(Bound, StateDictSaveable):
             counts = bt.query_radius(Y, epsilon, count_only=True)
             vol_est.append(area * sum(1.0 / counts))
         vol_est = np.array(vol_est)
-        out, err = vol_est.mean(), vol_est.std() / np.sqrt(N)
+        out, err = vol_est.mean(), vol_est.std() / np.sqrt(n_samples)
         rel = err / out
         if rel > 0.01:
             log.debug("WARNING: Rel volume uncertainty is %.4g" % rel)
         return out
 
-    def sample(self, N):
+    def sample(self, n_samples):
         counter = 0
         samples = []
         d = self.X.shape[-1]
-        while counter < N:
+        while counter < n_samples:
             n = np.random.randn(*self.X.shape)
             norm = (n ** 2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
@@ -240,7 +260,7 @@ class BallsBound(Bound, StateDictSaveable):
             samples.append(Y)
             counter += len(Y)
         samples = np.vstack(samples)
-        ind = np.random.choice(range(len(samples)), size=N, replace=False)
+        ind = np.random.choice(range(len(samples)), size=n_samples, replace=False)
         return samples[ind]
 
     def __call__(self, u):
@@ -258,7 +278,7 @@ class BallsBound(Bound, StateDictSaveable):
         obj = cls.__new__(cls)
         obj.X = state_dict["points"]
         assert len(obj.X.shape) == 2
-        obj._udim = obj.X.shape[-1]
+        obj.n_parameters = obj.X.shape[-1]
         obj.epsilon = state_dict["epsilon"]
         obj._volume = state_dict["volume"]
         obj.bt = BallTree(obj.X, leaf_size=2)
@@ -268,31 +288,31 @@ class BallsBound(Bound, StateDictSaveable):
 class CompositBound(Bound, StateDictSaveable):
     """Composit bound object. Product of multiple bounds."""
 
-    def __init__(self, bounds_map, udim):
+    def __init__(self, bounds_map, n_parameters):
         """
         Args:
             bounds_map (dict): Dictionary mapping indices like (0, 3) etc --> bounds
-            udim (int): Length of parameter vector.
+            n_parameters (int): Length of parameter vector.
         """
         self._bounds = bounds_map
-        self._udim = udim
+        self._n_parameters = n_parameters
 
-    def sample(self, N):
-        results = -np.ones((N, self._udim))
+    def sample(self, n_samples):
+        results = -np.ones((n_samples, self.n_parameters))
         for k, v in self._bounds.items():
-            results[:, np.array(k)] = v.sample(N)
+            results[:, np.array(k)] = v.sample(n_samples)
         return results
 
     @property
-    def volume(self):
+    def volume(self) -> float:
         volume = 1.0
         for k, v in self._bounds.items():
             volume *= v.volume
         return volume
 
     @property
-    def udim(self):
-        return self._udim
+    def n_parameters(self) -> int:
+        return self._n_parameters
 
     def __call__(self, u):
         res = []
@@ -310,57 +330,68 @@ class CompositBound(Bound, StateDictSaveable):
     #   - Can be used in sampling
 
     @classmethod
-    def from_Posteriors(cls, partition, post, obs, bound, th=-13.0, N=10000):
-        """Generate new CompositBound object based on RatioEstimator.
+    def from_weighted_samples(
+        cls,
+        weighted_samples: WeightedMarginalSamples,
+        cdf: Callable,
+        n_parameters: int,
+        threshold: float,
+    ) -> BoundType:
+        """create a new bound object from weighted samples and the cdf
 
         Args:
-            rc (RatioEstimator): RatioEstimator to evaluate.
-            obs (dict): Reference observation.
-            bound (Bound): Bound of RatioEstimator.
-            th (float): Threshold value, default -13
+            weighted_samples: log weighted samples
+            cdf: transforms from v to u
+            n_parameters: number of total parameters
+            threshold: above which log weight do we bound? -13 is standard.
+
+        Returns:
+            a bound object based on the above
         """
         bounds = {}
-        udim = bound.udim
-        idx_rec = []
+        u = cdf(weighted_samples.v)
+        for marginal_index in weighted_samples.marginal_indices:
+            logw, _ = weighted_samples.get_logweight_marginal(marginal_index)
+            mask = logw - logw.max() > threshold
+            u_above_threshold = u[mask][:, marginal_index]
+            bounds[marginal_index] = BallsBound(u_above_threshold)
+        return cls(bounds, n_parameters)
 
-        samples = post.sample(N, obs)
-        v = samples["v"]
-        u = post.prior.u(v)
+    @classmethod
+    def from_marginal_posterior(
+        cls,
+        n_samples: int,
+        observation: ObsType,
+        marginal_posterior: "swyft.inference.marginalposterior.MarginalPosterior",
+        threshold: float,
+        batch_size: Optional[int] = None,
+    ) -> BoundType:
+        """create a new bound object from a marginal posterior by sampling to estimate the log_prob contours
 
-        weights = samples["weights"]
+        Args:
+            n_samples: number of samples to estimate with
+            observation: single observation to define the bounds
+            marginal_posterior: marginal posterior object
+            threshold: above which log weight do we bound? -13 is standard
+            batch_size: when evaluating the log_prob, what batch size to use
 
-        for part in partition:
-            if part not in weights:
-                raise KeyError
-            #            if len(part) == 1:
-            #                idx_rec.append(part[0])
-            #            else:
-            w = weights[part]
-            mask = w / w.max() > np.exp(th)
-            points = u[mask][:, part]
-            b = BallsBound(points)
-            bounds[part] = b
-
-        #        if len(idx_rec) > 0:
-        #            res = np.zeros((len(idx_rec, 2))
-        #            res[:, 1] = 1.0
-        #            part = tuple(idx_rec)
-        #            for i in part:
-        #                w = weights[(i,)]
-        #                mask = w-w.max() > th
-        #                p = points[mask,i]
-        #                [p.min(), p.max()]
-        #            points = points[:,part]
-        #            #bounds[part] = RectangleBound.from_RatioEstimator(
-        #            #    rc, obs, bound, th=th, part=part
-        # )
-
-        return cls(bounds, udim)
+        Returns:
+            a bound object based on the above
+        """
+        weighted_samples = marginal_posterior.weighted_sample(
+            n_samples, observation, batch_size
+        )
+        return cls.from_weighted_samples(
+            weighted_samples=weighted_samples,
+            cdf=marginal_posterior.prior.cdf,
+            n_parameters=marginal_posterior.prior.n_parameters,
+            threshold=threshold,
+        )
 
     def state_dict(self):
         state_dict = dict(
             tag="CompositBound",
-            udim=self._udim,
+            n_parameters=self.n_parameters,
             bounds={k: v.state_dict() for k, v in self._bounds.items()},
         )
         return state_dict
@@ -368,5 +399,5 @@ class CompositBound(Bound, StateDictSaveable):
     @classmethod
     def from_state_dict(cls, state_dict):
         bounds = {k: Bound.from_state_dict(v) for k, v in state_dict["bounds"].items()}
-        udim = state_dict["udim"]
-        return cls(bounds, udim)
+        n_parameters = state_dict["n_parameters"]
+        return cls(bounds, n_parameters)

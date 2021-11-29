@@ -1,4 +1,3 @@
-# pylint: disable=no-member, undefined-variable
 from itertools import product
 
 import pytest
@@ -7,7 +6,7 @@ import torch
 from swyft.networks.standardization import OnlineStandardizingLayer
 
 
-class TeststandardizationLayer:
+class TestStandardizationLayer:
     bss = [1, 128]
     shapes = [(1,), (5,), (10, 5, 2, 1), (1, 1, 1)]
     means = [2, 139]

@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import Callable, Type, TypeVar
+from typing import Callable, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -8,11 +8,12 @@ from toolz.dicttoolz import keyfilter
 from torch.distributions import Normal, Uniform
 
 from swyft.bounds import Bound, UnitCubeBound
+from swyft.saveable import StateDictSaveable
 from swyft.types import Array
 from swyft.utils import array_to_tensor, tensor_to_array
-from swyft.utils.saveable import StateDictSaveable
 
 PriorType = TypeVar("PriorType", bound="Prior")
+PriorTruncatorType = TypeVar("PriorTruncatorType", bound="PriorTruncator")
 
 
 class PriorTruncator(StateDictSaveable):
@@ -40,17 +41,29 @@ class PriorTruncator(StateDictSaveable):
             bound = UnitCubeBound(prior.n_parameters)
         self.bound = bound
 
-    def sample(self, N: int) -> np.ndarray:
+    @property
+    def cdf(self) -> Callable:
+        return self.prior.cdf
+
+    @property
+    def icdf(self) -> Callable:
+        return self.prior.icdf
+
+    @property
+    def n_parameters(self) -> int:
+        return self.prior.n_parameters
+
+    def sample(self, n_samples: int) -> np.ndarray:
         """Sample from truncated prior.
 
         Args:
-            N: Number of samples to return
+            n_samples: Number of samples to return
 
         Returns:
-            Samples: (N, n_parameters)
+            Samples: (n_samples, n_parameters)
         """
-        u = self.bound.sample(N)
-        return self.prior.v(u)
+        u = self.bound.sample(n_samples)
+        return self.prior.icdf(u)
 
     def log_prob(self, v: np.ndarray) -> np.ndarray:
         """Evaluate log probability.
@@ -61,7 +74,7 @@ class PriorTruncator(StateDictSaveable):
         Returns:
             log_prob: (N,)
         """
-        u = self.prior.u(v)
+        u = self.prior.cdf(v)
         b = np.where(u.sum(axis=-1) == np.inf, 0.0, self.bound(u))
         log_prob = np.where(
             b == 0.0,
@@ -74,7 +87,7 @@ class PriorTruncator(StateDictSaveable):
         return dict(prior=self.prior.state_dict(), bound=self.bound.state_dict())
 
     @classmethod
-    def from_state_dict(cls, state_dict: dict):
+    def from_state_dict(cls, state_dict: dict) -> PriorTruncatorType:
         prior = Prior.from_state_dict(state_dict["prior"])
         bound = Bound.from_state_dict(state_dict["bound"])
         return cls(prior, bound)
@@ -108,7 +121,7 @@ class InterpolatedTabulatedDistribution:
             table.append(uv(np.ones(n_parameters) * x))
         return np.array(table).T
 
-    def u(self, v: np.ndarray) -> np.ndarray:
+    def cdf(self, v: np.ndarray) -> np.ndarray:
         """Map onto hypercube: v -> u
 
         Args:
@@ -124,7 +137,7 @@ class InterpolatedTabulatedDistribution:
             )
         return u
 
-    def v(self, u: np.ndarray) -> np.ndarray:
+    def icdf(self, u: np.ndarray) -> np.ndarray:
         """Map from hypercube: u -> v
 
         Args:
@@ -151,7 +164,7 @@ class InterpolatedTabulatedDistribution:
             log_prob: (N, n_parameters) factors of pdf
         """
         dv = np.empty_like(v)
-        u = self.u(v)
+        u = self.cdf(v)
         for i in range(self.n_parameters):
             dv[:, i] = np.interp(
                 u[:, i] + (du / 2), self._grid, self._table[i], left=None, right=None
@@ -198,28 +211,6 @@ class Prior(StateDictSaveable):
             "n_parameters": self.n_parameters,
         }
         self.distribution = None
-
-    def u(self, v: np.ndarray) -> np.ndarray:
-        """Map onto hypercube: v -> u. cumulative density function (cdf)
-
-        Args:
-            v: (N, n_parameters) batched physical parameter array
-
-        Returns:
-            u: (N, n_parameters) batched hypercube parameter array
-        """
-        return self.cdf(v)
-
-    def v(self, u: np.ndarray) -> np.ndarray:
-        """Map from hypercube: u -> v. inverse cumulative density function (icdf)
-
-        Args:
-            u: (N, n_parameters) batched hypercube parameter array
-
-        Returns:
-            v: (N, n_parameters) batched physical parameter array
-        """
-        return self.icdf(u)
 
     @classmethod
     def from_torch_distribution(
@@ -325,6 +316,15 @@ def get_uniform_prior(low: Array, high: Array) -> Prior:
 def get_diagonal_normal_prior(loc: Array, scale: Array) -> Prior:
     distribution = Normal(array_to_tensor(loc), array_to_tensor(scale))
     return Prior.from_torch_distribution(distribution)
+
+
+def promote_to_prior_truncator(
+    prior: Union[Prior, PriorTruncator]
+) -> PriorTruncatorType:
+    if isinstance(prior, Prior):
+        return PriorTruncator(prior, None)
+    else:
+        return prior
 
 
 if __name__ == "__main__":

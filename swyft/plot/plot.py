@@ -1,21 +1,19 @@
-from typing import Dict
-
 import numpy as np
-import pandas as pd
 import pylab as plt
-import seaborn as sns
 from scipy.integrate import simps
 
-from swyft.types import Array
-from swyft.utils.mutils import filter_marginals_by_dim
-from swyft.utils.utils import grid_interpolate_samples
 
-
-def split_corner_axes(axes):
-    diag = np.diag(axes)
-    lower = axes[np.tril(axes, -1).nonzero()]
-    upper = axes[np.triu(axes, 1).nonzero()]
-    return lower, diag, upper
+def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
+    idx = np.argsort(x)
+    x, y = x[idx], y[idx]
+    x_grid = np.linspace(x[0], x[-1], bins)
+    y_grid = np.interp(x_grid, x, y)
+    norm = simps(y_grid, x_grid)
+    y_grid_normed = y_grid / norm
+    if return_norm:
+        return x_grid, y_grid_normed, norm
+    else:
+        return x_grid, y_grid_normed
 
 
 def get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
@@ -26,42 +24,6 @@ def get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
     idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
     levels = np.array(x[idx])
     return levels
-
-
-def create_violin_df_from_marginal_dict(marginals, method: str):
-    marginals_1d = filter_marginals_by_dim(marginals, 1)
-    rows = []
-    for key, value in marginals_1d.items():
-        data = {}
-        data["Marginal"] = [key[0]] * len(value)
-        data["Parameter"] = value.flatten()
-        data["Method"] = [method] * len(value)
-        df = pd.DataFrame.from_dict(data)
-        rows.append(df)
-    return pd.concat(rows, ignore_index=True)
-
-
-def violin_plot(
-    reference_marginals, estimated_marginals, method: str, ax=None, palette="muted"
-):
-    data = [
-        create_violin_df_from_marginal_dict(reference_marginals, "Reference"),
-        create_violin_df_from_marginal_dict(estimated_marginals, method),
-    ]
-    data = pd.concat(data, ignore_index=True)
-    sns.set_theme(style="whitegrid")
-    ax = sns.violinplot(
-        x="Marginal",
-        y="Parameter",
-        hue="Method",
-        data=data,
-        palette=palette,
-        split=True,
-        scale="width",
-        inner="quartile",
-        ax=ax,
-    )
-    return ax
 
 
 def plot_posterior(
@@ -341,31 +303,6 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
     #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
     #    for c in z[zero_crossings]:
     #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
-
-
-def plot_empirical_mass(masses: Dict[str, Array]) -> None:
-    """Plot empirical vs nominal mass.
-
-    Args:
-        masses: Result from `swyft.Posteriors.empirical_mass()`
-
-    Example::
-
-        >>> masses = posteriors.empirical_mass()
-        >>> swyft.plot_empirical_mass(mass[(0,)])  # Plot empirical mass for 1-dim posterior for parameter 0
-    """
-    plt.plot(1 - masses["nominal"], 1 - masses["empirical"])
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.gca().invert_xaxis()
-    plt.gca().invert_yaxis()
-    plt.plot([0, 1], [0, 1], "k:")
-    plt.xlabel("1-Cn, Nominal HDI level")
-    plt.xlabel("Nominal HDI credible level")
-    plt.ylabel("Empirical HDI credible level")
-    cred = [0.683, 0.954, 0.997]
-    plt.xticks(1 - np.array(cred), cred)
-    plt.yticks(1 - np.array(cred), cred)
 
 
 if __name__ == "__main__":

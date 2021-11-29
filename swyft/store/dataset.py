@@ -1,35 +1,54 @@
-import logging
-from typing import Callable, Hashable, Optional, Sequence
+from typing import Callable, Hashable, Optional, Sequence, Tuple
 from warnings import warn
 
 import numpy as np
 import torch
 
 import swyft
-from swyft.types import ObsType, ParameterNamesType, PathType
+from swyft.saveable import StateDictSaveable
+from swyft.types import Array, ObsType, ParameterNamesType, PathType
 from swyft.utils.array import array_to_tensor
-from swyft.utils.saveable import StateDictSaveable
 
-log = logging.getLogger(__name__)
+
+class SimpleDataset(torch.utils.data.Dataset):
+    """Dataset which merely keeps track of observation and parameter data in one place"""
+
+    def __init__(self, observations: ObsType, us: Array, vs: Array) -> None:
+        """
+        Args:
+            observations: dictionary of batched obserations
+            us: array or tensor of unit cube parameters
+            vs: array or tensor of natural parameters
+        """
+        super().__init__()
+        b = us.shape[0]
+        assert (
+            vs.shape[0] == b
+        ), "the us and vs arrays do not have the same batch dimension"
+        assert all(
+            [b == x.shape[0] for x in observations.values()]
+        ), "the observation values do not have the same batch dimension as us and vs"
+        self.observations = observations
+        self.us = us
+        self.vs = vs
+        self._len = b
+
+    def __getitem__(self, idx) -> Tuple[ObsType, torch.Tensor, torch.Tensor]:
+        return (
+            {
+                key: array_to_tensor(val[idx, ...])
+                for key, val in self.observations.items()
+            },
+            array_to_tensor(self.us[idx, ...]),
+            array_to_tensor(self.vs[idx, ...]),
+        )
+
+    def __len__(self) -> int:
+        return self._len
 
 
 class Dataset(torch.utils.data.Dataset, StateDictSaveable):
-    """Dataset for access to swyft.Store.
-
-    Args:
-        N: Number of samples.
-        prior: Parameter prior.
-        store: Store reference.
-        simhook: Applied on-the-fly to each sample. simhook(x, v)
-        simkeys: List of simulation keys that should be exposed (None means that all store sims are exposed)
-
-    .. note::
-        swyft.Dataset is essentially a list of indices that point to
-        corresponding entries in the swyft.Store.  It is a daughter class of
-        torch.utils.data.Dataset, and can be used directly for training.  Due
-        to the statistical nature of the Store, the returned number of samples
-        is effectively drawn from a Poisson distribution with mean N.
-    """
+    """Dataset for access to swyft.Store."""
 
     def __init__(
         self,
@@ -40,6 +59,21 @@ class Dataset(torch.utils.data.Dataset, StateDictSaveable):
         simhook: Optional[Callable[..., ObsType]] = None,
         simkeys: Optional[Sequence[Hashable]] = None,
     ) -> None:
+        """
+        Args:
+            N: Number of samples.
+            prior: Parameter prior.
+            store: Store reference.
+            simhook: Applied on-the-fly to each sample. simhook(x, v)
+            simkeys: List of simulation keys that should be exposed (None means that all store sims are exposed)
+
+        .. note::
+            swyft.Dataset is essentially a list of indices that point to
+            corresponding entries in the swyft.Store.  It is a daughter class of
+            torch.utils.data.Dataset, and can be used directly for training.  Due
+            to the statistical nature of the Store, the returned number of samples
+            is effectively drawn from a Poisson distribution with mean N.
+        """
         super().__init__()
         self._prior_truncator = swyft.PriorTruncator(prior, bound)
         self.indices = store.sample(N, prior, bound=bound)
@@ -52,7 +86,7 @@ class Dataset(torch.utils.data.Dataset, StateDictSaveable):
                 "The store requires simulation for some of the indices in this Dataset."
             )
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return length of dataset."""
         return len(self.indices)
 
@@ -94,17 +128,17 @@ class Dataset(torch.utils.data.Dataset, StateDictSaveable):
         """Return parameter names (inherited from store and simulator)."""
         return self._store.parameter_names
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Tuple[ObsType, torch.Tensor, torch.Tensor]:
         """Return datastore entry."""
         i = self.indices[idx]
         x = {k: self._store.sims[k][i] for k in self._simkeys}
         v = self._store.v[i]
         if self._simhook is not None:
             x = self._simhook(x, v)
-        u = self.prior.u(v.reshape(1, -1)).flatten()
+        u = self.prior.cdf(v.reshape(1, -1)).flatten()
 
         return (
-            {k: array_to_tensor(v) for k, v in x.items()},
+            {key: array_to_tensor(val) for key, val in x.items()},
             array_to_tensor(u),
             array_to_tensor(v),
         )
