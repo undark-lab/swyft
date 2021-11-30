@@ -118,7 +118,7 @@ class TestStoreRun:
         store1.add(20, prior, bound)
         store2.add(20, prior, bound)
         ind = np.min((store1.v.shape[0], store2.v.shape[0]))
-        assert not(np.all(store1.v[:ind] == store2.v[:ind]))
+        assert not (np.all(store1.v[:ind] == store2.v[:ind]))
 
     def test_memory_store_simulate(self):
         store = MemoryStore(simulator=sim_multi_out)
