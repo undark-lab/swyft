@@ -13,7 +13,7 @@ from swyft.prior import (
     get_diagonal_normal_prior,
     get_uniform_prior,
 )
-from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator
+from swyft.store import DaskSimulator, Dataset, Simulator, Store
 
 
 def zen():
@@ -33,8 +33,7 @@ __all__ = [
     "MarginalRatioEstimator",
     "MarginalPosterior",
     "Module",
-    "DirectoryStore",
-    "MemoryStore",
+    "Store",
     "DefaultHead",
     "DefaultTail",
     "OnlineStandardizingLayer",
