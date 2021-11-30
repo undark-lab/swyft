@@ -134,7 +134,7 @@ class UnitCubeBound(Bound, StateDictSaveable):
             n_samples (int): Number of samples
         """
 
-        return self.rng.random(n_samples, self.n_parameters)
+        return self.rng.random((n_samples, self.n_parameters))
 
 
     def __call__(self, u):
@@ -180,7 +180,7 @@ class RectangleBound(Bound, StateDictSaveable):
         return len(self._rec_bounds)
 
     def sample(self, n_samples):
-        u = self.rng.random(n_samples, self.n_parameters)
+        u = self.rng.random((n_samples, self.n_parameters))
         for i in range(self.n_parameters):
             u[:, i] *= self._rec_bounds[i, 1] - self._rec_bounds[i, 0]
             u[:, i] += self._rec_bounds[i, 0]
@@ -213,7 +213,7 @@ class BallsBound(Bound, StateDictSaveable):
         self._n_parameters = self.X.shape[-1]
         self.bt = BallTree(self.X, leaf_size=2)
         self.epsilon = self._set_epsilon(self.X, self.bt, scale)
-        self._volume = self._get_volume(self.X, self.epsilon, self.bt)
+        self._volume = self._get_volume(self.X, self.epsilon, self.bt, self.rng)
 
     @property
     def volume(self) -> float:
@@ -232,16 +232,16 @@ class BallsBound(Bound, StateDictSaveable):
         return epsilon
 
     @staticmethod
-    def _get_volume(X, epsilon, bt):
+    def _get_volume(X, epsilon, bt, rng):
         n_samples = 100
         vol_est = []
         d = X.shape[-1]
         area = {1: 2 * epsilon, 2: np.pi * epsilon ** 2}[d]
         for i in range(n_samples):
-            n = self.rng.standard_normal(X.shape)
+            n = rng.standard_normal(X.shape)
             norm = (n ** 2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
-            r = self.rng.random(len(X)) ** (1 / d) * epsilon
+            r = rng.random(len(X)) ** (1 / d) * epsilon
             Y = X + n * r.reshape(-1, 1)
             in_bounds = ((Y >= 0.0) & (Y <= 1.0)).prod(axis=1, dtype="bool")
             Y = Y[in_bounds]
