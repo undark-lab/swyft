@@ -65,7 +65,7 @@ def tupleize_marginal_indices(marginal_indices: MarginalIndex) -> StrictMarginal
     return out
 
 
-def get_marginal_dim_by_key(key: tuple) -> int:
+def get_marginal_dim_by_key(key: Tuple[int]) -> int:
     return len(key)
 
 
