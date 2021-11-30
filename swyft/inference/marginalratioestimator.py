@@ -19,10 +19,10 @@ from torch.utils.data import DataLoader, Dataset, random_split
 import swyft
 import swyft.utils
 from swyft.inference.train import get_ntrain_nvalid
-from swyft.types import Array, Device, MarginalIndex, ObsType, PathType, RatioType
+from swyft.saveable import StateDictSaveable, StateDictSaveableType
+from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType, PathType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor
-from swyft.utils.parameters import tupleize_marginals
-from swyft.utils.saveable import StateDictSaveable, StateDictSaveableType
+from swyft.utils.marginals import tupleize_marginal_indices
 
 SchedulerType = Union[
     torch.optim.lr_scheduler._LRScheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -142,7 +142,7 @@ class MarginalRatioEstimator(StateDictSaveable):
             network: a neural network which accepts `observation` and `parameters` and returns `len(marginal_indices)` ratios.
             device
         """
-        self.marginal_indices = tupleize_marginals(marginal_indices)
+        self.marginal_indices = tupleize_marginal_indices(marginal_indices)
         self.device = device
         self.network = network
         self.network.to(self.device)
@@ -234,7 +234,7 @@ class MarginalRatioEstimator(StateDictSaveable):
             # Evaluation
             self.network.eval()
             loss_sum = 0
-            with torch.inference_mode():
+            with torch.no_grad():
                 for observation, _, v in valid_loader:
                     observation = swyft.utils.dict_to_device(
                         observation, device=self.device, non_blocking=non_blocking
@@ -266,8 +266,7 @@ class MarginalRatioEstimator(StateDictSaveable):
         observation: ObsType,
         v: Array,
         batch_size: Optional[int] = None,
-        inference_mode: bool = True,
-    ) -> RatioType:
+    ) -> MarginalToArray:
         """Evaluate the ratio estimator on a single `observation` with many `parameters`.
         The `parameters` correspond to `v`, i.e. the "physical" parameterization.
         (As opposed to `u` which is mapped to the hypercube.)
@@ -276,22 +275,23 @@ class MarginalRatioEstimator(StateDictSaveable):
             observation: a single observation to estimate ratios on (Cannot have a batch dimension!)
             v: parameters
             batch_size: divides the evaluation into batches of this size
-            inference_mode: can provide a speedup, but removes some of pytorch's features (as opposed to `torch.no_grad`)
 
         Returns:
-            RatioType: the ratios of each marginal in `marginal_indices`. Each marginal index is a key.
+            MarginalToArray: the ratios of each marginal in `marginal_indices`. Each marginal index is a key.
         """
         was_training = self.network.training
         self.network.eval()
 
-        context = torch.inference_mode if inference_mode else torch.no_grad
-        with context():
+        with torch.no_grad():
             observation = dict_array_to_tensor(observation, device=self.device)
+            features = self.network.head(
+                {key: value.unsqueeze(0) for key, value in observation.items()}
+            )
             len_v = len(v)
             if batch_size is None or len_v <= batch_size:
                 v = array_to_tensor(v, device=self.device)
-                observation = self._repeat_observation_to_match_v(observation, v)
-                ratio = self.network(observation, v).cpu().numpy()
+                repeated_features = features.expand(v.size(0), *features.shape[1:])
+                ratio = self.network.tail(repeated_features, v).cpu().numpy()
             else:
                 ratio = []
                 for i in range(len_v // batch_size + 1):
@@ -299,11 +299,11 @@ class MarginalRatioEstimator(StateDictSaveable):
                         v[i * batch_size : (i + 1) * batch_size, :],
                         device=self.device,
                     )
-                    observation_batch = self._repeat_observation_to_match_v(
-                        observation, parameter_batch
+                    feature_batch = features.expand(
+                        parameter_batch.size(0), *features.shape[1:]
                     )
                     ratio_batch = (
-                        self.network(observation_batch, parameter_batch).cpu().numpy()
+                        self.network.tail(feature_batch, parameter_batch).cpu().numpy()
                     )
                     ratio.append(ratio_batch)
                 ratio = np.vstack(ratio)

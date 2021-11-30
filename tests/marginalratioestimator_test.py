@@ -8,7 +8,8 @@ import torch
 
 import swyft.inference.marginalratioestimator as mre
 import swyft.networks.classifier as classifier
-from swyft.utils.parameters import tupleize_marginals
+from swyft.types import MarginalIndex
+from swyft.utils.marginals import tupleize_marginal_indices
 
 
 class TestSplitLengthByPercentage:
@@ -161,19 +162,18 @@ class TestMarginalRatioEstimator:
         pass
 
     @pytest.mark.parametrize(
-        "marginal_indices, batch_size, inference_mode",
+        "marginal_indices, batch_size",
         product(
             [[0, 1], [(0, 1)]],  # With these, n_parameters >= 2
             [None, 10],
-            [True, False],
         ),
     )
     def test_log_ratio_shape(
-        self, marginal_indices, batch_size: Optional[int], inference_mode: bool
+        self, marginal_indices: MarginalIndex, batch_size: Optional[int]
     ):
         """The log_ratio function should return as many weights as there were n_batches of parameters provided."""
         n_batch = 100
-        marginal_indices = tupleize_marginals(marginal_indices)
+        marginal_indices = tupleize_marginal_indices(marginal_indices)
         marginal_ratio_estimator = self.get_marginal_ratio_estimator(marginal_indices)
         fabricated_observation = {
             key: torch.rand(*shape) for key, shape in self.observation_shapes.items()
@@ -183,7 +183,6 @@ class TestMarginalRatioEstimator:
             observation=fabricated_observation,
             v=fabricated_v,
             batch_size=batch_size,
-            inference_mode=inference_mode,
         )
         assert set(log_ratio.keys()) == set(marginal_indices)
         for _, value in log_ratio.items():

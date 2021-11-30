@@ -8,14 +8,13 @@ from toolz import valmap
 
 from swyft.inference.train import trainloop
 from swyft.networks import DefaultHead, DefaultTail, Module
-from swyft.types import Array, Device, MarginalIndex, ObsType, RatioType
-from swyft.utils import (
-    array_to_tensor,
-    dict_array_to_tensor,
-    get_obs_shapes,
-    tupleize_marginals,
-)
-from swyft.utils.saveable import StateDictSaveable
+from swyft.saveable import StateDictSaveable
+from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType
+from swyft.utils import array_to_tensor, dict_array_to_tensor, tupleize_marginal_indices
+
+
+def get_obs_shapes(obs):
+    return {k: v.shape for k, v in obs.items()}
 
 
 class RatioEstimator(StateDictSaveable):
@@ -45,7 +44,7 @@ class RatioEstimator(StateDictSaveable):
         tail_args: dict = {},
         device: Device = "cpu",
     ) -> None:
-        self.marginals = tupleize_marginals(marginals)
+        self.marginals = tupleize_marginal_indices(marginals)
         self._device = device
 
         if isinstance(head, type):
@@ -110,7 +109,9 @@ class RatioEstimator(StateDictSaveable):
     def train_diagnostics(self):  # TODO add type annotation
         return self._train_diagnostics
 
-    def ratios(self, obs: ObsType, params: Array, n_batch: int = 10_000) -> RatioType:
+    def ratios(
+        self, obs: ObsType, params: Array, n_batch: int = 10_000
+    ) -> MarginalToArray:
         """Retrieve estimated marginal posterior."""
         self.head.eval()
         self.tail.eval()

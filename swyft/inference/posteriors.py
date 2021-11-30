@@ -9,18 +9,17 @@ import swyft
 from swyft.inference.ratios import RatioEstimator
 from swyft.inference.train import TrainOptions
 from swyft.networks import DefaultHead, DefaultTail
+from swyft.saveable import StateDictSaveable
 from swyft.types import (
     Array,
     Device,
     MarginalIndex,
+    MarginalToArray,
     ObsType,
     ParameterNamesType,
     PathType,
-    RatioType,
 )
-from swyft.utils import tupleize_marginals
-from swyft.utils.saveable import StateDictSaveable
-from swyft.utils.utils import estimate_empirical_mass
+from swyft.utils import tupleize_marginal_indices
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class Posteriors(StateDictSaveable):
             head_args (dict): Keyword arguments for head network instantiation.
             tail_args (dict): Keyword arguments for tail network instantiation.
         """
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         re = RatioEstimator(
             marginals,
             device=device,
@@ -87,7 +86,7 @@ class Posteriors(StateDictSaveable):
             marginals: Optional, only move networks related to specific marginals.
         """
         if marginals is not None:
-            marginals = tupleize_marginals(marginals)
+            marginals = tupleize_marginal_indices(marginals)
             self._ratios[marginals].to(device)
         else:
             for _, v in self._ratios.items():
@@ -132,7 +131,7 @@ class Posteriors(StateDictSaveable):
             print("ERROR: Not all points in the dataset are simulated yet.")
             return
 
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         re = self._ratios[marginals]
 
         trainoptions = TrainOptions(
@@ -151,12 +150,12 @@ class Posteriors(StateDictSaveable):
         re.train(self._dataset, trainoptions)
 
     def train_diagnostics(self, marginals: MarginalIndex):
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         return self._ratios[marginals].train_diagnostics()
 
     def eval(
         self, v: Array, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Tuple[np.ndarray, RatioType, ParameterNamesType]]:
+    ) -> Dict[str, Tuple[np.ndarray, MarginalToArray, ParameterNamesType]]:
         """Returns weighted posterior.
 
         Args:
@@ -166,7 +165,7 @@ class Posteriors(StateDictSaveable):
         """
         # Unmasked original wrongly normalized log_prob densities
         # log_probs = self._prior_truncator.log_prob(v)
-        u = self._prior_truncator.prior.u(v)
+        u = self._prior_truncator.prior.cdf(v)
 
         ratios = self._eval_ratios(
             obs0, u, n_batch=n_batch
@@ -178,7 +177,7 @@ class Posteriors(StateDictSaveable):
 
     def sample(
         self, N: int, obs0: ObsType, n_batch: int = 100
-    ) -> Dict[str, Tuple[np.ndarray, RatioType, ParameterNamesType]]:
+    ) -> Dict[str, Tuple[np.ndarray, MarginalToArray, ParameterNamesType]]:
         """Returns weighted posterior samples for given observation.
 
         Args:
@@ -285,13 +284,15 @@ class Posteriors(StateDictSaveable):
 
     def truncate(self, marginals: MarginalIndex, obs0: ObsType) -> "swyft.bounds.Bound":
         """Generate and return new bound object."""
-        marginals = tupleize_marginals(marginals)
+        marginals = tupleize_marginal_indices(marginals)
         bound = swyft.Bound.from_Posteriors(marginals, self, obs0)
         print("Bounds: Truncating...")
         print("Bounds: ...done. New volue is V=%.4g" % bound.volume)
         return bound
 
-    def _eval_ratios(self, obs: ObsType, v: Array, n_batch: int = 100) -> RatioType:
+    def _eval_ratios(
+        self, obs: ObsType, v: Array, n_batch: int = 100
+    ) -> MarginalToArray:
         result = {}
         for _, rc in self._ratios.items():
             ratios = rc.ratios(obs, v, n_batch=n_batch)
@@ -310,7 +311,8 @@ class Posteriors(StateDictSaveable):
         Returns:
             Nominal and empirical masses.
         """
-        return estimate_empirical_mass(self.dataset, self, nobs, npost)
+        raise NotImplementedError()
+        # return estimate_empirical_mass(self.dataset, self, nobs, npost)
 
     def state_dict(self) -> dict:
         state_dict = dict(
