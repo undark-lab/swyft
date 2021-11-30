@@ -1,11 +1,6 @@
 from swyft.bounds import Bound
-from swyft.inference import (
-    MarginalPosterior,
-    MarginalRatioEstimator,
-    Posteriors,
-    TrainOptions,
-)
-from swyft.networks import DefaultHead, DefaultTail, Module, OnlineStandardizingLayer
+from swyft.inference import MarginalPosterior, MarginalRatioEstimator
+from swyft.networks import OnlineStandardizingLayer
 from swyft.plot import plot_empirical_mass
 from swyft.prior import (
     Prior,
@@ -25,22 +20,17 @@ def zen():
 
 
 __all__ = [
-    "TrainOptions",
-    "Posteriors",
+    "Bound",
+    "DaskSimulator",
+    "Dataset",
+    "MarginalPosterior",
+    "MarginalRatioEstimator",
+    "OnlineStandardizingLayer",
     "Prior",
     "PriorTruncator",
-    "Bound",
-    "MarginalRatioEstimator",
-    "MarginalPosterior",
-    "Module",
-    "Store",
-    "DefaultHead",
-    "DefaultTail",
-    "OnlineStandardizingLayer",
-    "Dataset",
     "Simulator",
-    "DaskSimulator",
-    "plot_empirical_mass",
-    "get_uniform_prior",
+    "Store",
     "get_diagonal_normal_prior",
+    "get_uniform_prior",
+    "plot_empirical_mass",
 ]

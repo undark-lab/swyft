@@ -18,7 +18,6 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 import swyft
 import swyft.utils
-from swyft.inference.train import get_ntrain_nvalid
 from swyft.saveable import StateDictSaveable, StateDictSaveableType
 from swyft.types import Array, Device, MarginalIndex, MarginalToArray, ObsType, PathType
 from swyft.utils.array import array_to_tensor, dict_array_to_tensor

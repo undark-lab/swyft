@@ -158,8 +158,9 @@ class TestMarginalRatioEstimator:
         )
         return marginal_ratio_estimator
 
+    @pytest.mark.skip
     def test_train(self):
-        pass
+        raise NotImplementedError("Need to test this function.")
 
     @pytest.mark.parametrize(
         "marginal_indices, batch_size",
