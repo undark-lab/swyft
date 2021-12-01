@@ -28,7 +28,8 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
 
 
 def corner(
-    marginal_dfs: Dict[Tuple[int], DataFrame],
+    marginal_df_1d: Dict[Tuple[int], DataFrame],
+    marginal_df_2d: Dict[Tuple[int], DataFrame],
     figsize: Optional[Tuple[float, float]] = None,
     bins: int = 50,
     kde: Optional[bool] = False,
@@ -66,12 +67,8 @@ def corner(
     Returns:
         matplotlib figure, np array of matplotlib axes
     """
-    marginals_1d = filter_marginals_by_dim(marginal_dfs, 1)
-    marginals_2d = filter_marginals_by_dim(marginal_dfs, 2)
-
-    assert (
-        marginals_2d
-    ), "a corner plot doesn't make sense if there are no 2d marginal_dfs provided"
+    marginals_1d = marginal_df_1d
+    marginals_2d = marginal_df_2d
 
     d = len(marginals_1d)
     upper_inds = get_d_dim_marginal_indices(d, 2)

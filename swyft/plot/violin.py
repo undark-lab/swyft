@@ -22,14 +22,14 @@ def violin_plot(
 ):
     data = [
         create_violin_df_from_marginal_dict(reference_marginals, "Reference"),
-        create_violin_df_from_marginal_dict(estimated_marginals, method),
+        # create_violin_df_from_marginal_dict(estimated_marginals, method),
     ]
     data = pd.concat(data, ignore_index=True)
     sns.set_theme(style="whitegrid")
     ax = sns.violinplot(
         x="Marginal",
         y="Parameter",
-        hue="Method",
+        # hue="Method",
         data=data,
         palette=palette,
         split=True,

@@ -2,6 +2,7 @@ from typing import Optional, Tuple, TypeVar, Union
 from warnings import warn
 
 import numpy as np
+import torch
 from torch.types import Device
 from torch.utils.data.dataset import Dataset
 
@@ -63,7 +64,7 @@ class MarginalPosterior:
             dataset: indexable torch dataset which outputs `observation, u, v = dataset[i]`
 
         Returns:
-            empirical mass and nominal mass for every marginal
+            empirical mass dict and nominal mass dict for every marginal
         """
         empirical_mass = {marginal: [] for marginal in self.marginal_indices}
         nominal_mass = {
@@ -75,7 +76,7 @@ class MarginalPosterior:
             ind = np.random.randint(n_observations)
             observation_o, _, v_o = dataset[ind]
             logw_o = self.marginal_ratio_estimator.log_ratio(
-                observation_o, v_o.unsqueeze(0)
+                observation_o, torch.atleast_2d(v_o)
             )
             logw_s = self.weighted_sample(n_posterior_samples, observation_o)
 
@@ -113,7 +114,7 @@ class MarginalPosterior:
         Returns:
             dictionary with marginal_indices keys and log posterior values.
         """
-        log_prior = self.prior.log_prob(v)
+        log_prior = np.atleast_2d(self.prior.log_prob(v))
         marginal_log_prior = {
             k: log_prior[..., i] for i, k in enumerate(self.marginal_indices)
         }
