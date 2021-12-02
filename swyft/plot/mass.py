@@ -153,22 +153,30 @@ def plot_empirical_z_score(
     for i_sigma in range(1, int(max_z_score) + 1):
         empirical_i_sigma = np.interp(i_sigma, nominal_z_scores, z_mean)
         if empirical_i_sigma != np.inf:  # when the vertical line intersects z_mean
+            # Horizontal line
             axes.plot(
                 [0, i_sigma],
                 [empirical_i_sigma, empirical_i_sigma],
                 ":",
                 color=sigma_color,
             )
+            # horizontal text
             c = 1 - get_alpha(empirical_i_sigma)
             axes.text(0.1, empirical_i_sigma + 0.05, ("%.2f" % (c * 100)) + "%")
+            # vertical line
             axes.plot(
                 [i_sigma, i_sigma], [0, empirical_i_sigma], ":", color=sigma_color
             )
+            # vertical text
+            c = 1 - get_alpha(i_sigma)
+            axes.text(i_sigma, 0.3, ("%.2f" % (c * 100)) + "%", rotation=-90)
         else:  # when the vertical line fails to intersect z_mean
+            # # horizontal line
             # axes.plot([i_sigma, i_sigma], [0, 10.0], ":", color=sigma_color)
+            # # horizontal text
+            # c = 1 - get_alpha(i_sigma)
+            # axes.text(i_sigma, 0.3, ("%.2f" % (c * 100)) + "%", rotation=-90)
             pass
-        c = 1 - get_alpha(i_sigma)
-        axes.text(i_sigma, 0.3, ("%.2f" % (c * 100)) + "%", rotation=-90)
 
     # set labels
     axes.set_ylabel(xlabel)
@@ -210,7 +218,7 @@ def plot_empirical_z_score(
     return axes
 
 
-def plot_empirical_z_score_corner(
+def empirical_z_score_corner(
     empirical_mass_1d: MarginalToArray,
     empirical_mass_2d: MarginalToArray,
     max_z_score: float = 3.5,

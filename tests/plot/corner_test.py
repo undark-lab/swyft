@@ -3,7 +3,7 @@ import pytest
 from matplotlib.figure import Figure
 
 from swyft.plot.corner import corner
-from swyft.utils.marginals import get_corner_marginal_indices
+from swyft.utils.marginals import filter_marginals_by_dim, get_corner_marginal_indices
 from swyft.weightedmarginals import WeightedMarginalSamples
 
 
@@ -22,6 +22,9 @@ class TestCorner:
         }
 
         df_dict = WeightedMarginalSamples(weights, v).get_df_dict()
-        fig, axes = corner(df_dict)
+        fig, axes = corner(
+            marginal_df_1d=filter_marginals_by_dim(df_dict, 1),
+            marginal_df_2d=filter_marginals_by_dim(df_dict, 2),
+        )
         assert isinstance(fig, Figure)
         assert axes.shape == (n_parameters, n_parameters)

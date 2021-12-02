@@ -1,17 +1,17 @@
-## Tell us about your experience!
+# Tell us about your experience!
 
 If you are a `swyft` user, please tell us about your use experience.
 In particular, please provide details about your simulator, the setup that you used, and importantly the version of `swyft`.
 
 Bug reports, feature requests, etc. are available on [issues on GitHub](https://github.com/undark-lab/swyft/issues).
 
-## Would you like to contribute code?
+# Would you like to contribute code?
 
 We try to use pull requests when we change `swyft`.
 Ideally those pull requests are answering a git issue of some kind.
 Do you have a change you'd like to see made? We recommend first making an issue then addressing it with a pull request.
 
-### Setup Envrionment
+## Setup Envrionment
 
 Create the environment, including pre-commit hooks.
 
@@ -26,18 +26,18 @@ pre-commit will enforce **[black](https://github.com/psf/black)**,
 and a few other code format rules before every commit.
 It is a good idea to run `pytest` before making commits you intend to pull into the master branch.
 
-### Linting
+## Linting
 We also highly recommend the use of the **[flake8](https://flake8.pycqa.org/en/latest/)** linter, although we do not have a CLI for it right now.
 
-## Standards
+# Code Standards
 
-### Docstrings
+## Docstrings
 - Please use [Google Style](http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for docstrings and comments.
 - When we create a class, we put the docstring in the class rather than the `__init__` function, where appropriate.
 - Use type annotations rather than putting the type in the docstring.
-- When there is a default argument, do not repeat the default argument within the docstring since it is already visible when the user calls help on the function. The exception to this rule is when the default is `None`, then it needs an explanation which may include a default argument.
+- When there is a default argument, do not repeat the default argument within the docstring since it is already visible when the user calls help on the function. The exception to this rule is when the default is `None`, then it may require an explanation which may include a default argument.
 
-### Naming
+## Naming
 - Long names are generally more useful than one-use shortened versions. Try to use them as much as possible.
 - When introducing a new variable, consider whether or not it already has a name... see the table below, for example.
 - Integers which count the quantity of something should be proceded with an `n_*`, i.e. `n_parameters`.
@@ -45,18 +45,30 @@ We also highly recommend the use of the **[flake8](https://flake8.pycqa.org/en/l
 For quick reference:
 | Python Variable Name | Mathematical Object                       |
 |----------------------|-------------------------------------------|
-| `parameter_names`    | list of parameter names                   |
 | `v`                  | parameter vector                          |
 | `u`                  | parameter vector mapped to the hypercube  |
-| `PoI`                | parameters of interest, in tuple form     |
-| `marginals`          | dictionary mapping `PoI` to another value |
+| `marginal_index`     | tuple of integers, often a key in a dict  |
+| `marginal_indices`   | tuple of `marginal_index`                 |
 
-### Types
+
+## Types
 Contributed code should have type hints. Some relevant types are defined within `swyft/types.py`, try to use them whenever possible.
 
-### Converting between arrays and tensors
+## Converting between arrays and tensors
 Please use the functions `array_to_tensor` and `tensor_to_array` when converting between arbitrary array data and pytorch tensors.
 
+# Documentation
+
+## Compiling documentation
+
+To compile your own version of the documentation, run the following commands:
+
+```bash
+cd docs
+make html
+```
+
+This will produce an html version of the documentation which can easily be viewed on a web browser by pointing to `swyft/docs/build/html/index.html`.
 
 ## Online documentation
 We have a **[readthedocs](https://swyft.readthedocs.io/en/latest/)** site.

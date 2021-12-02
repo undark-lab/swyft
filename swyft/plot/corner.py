@@ -8,7 +8,7 @@ from pandas import DataFrame
 from tqdm import tqdm
 
 from swyft.types import Array, LimitType
-from swyft.utils.marginals import filter_marginals_by_dim, get_d_dim_marginal_indices
+from swyft.utils.marginals import get_d_dim_marginal_indices
 
 
 def split_corner_axes(axes: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:

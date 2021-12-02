@@ -46,13 +46,16 @@ autodoc_type_aliases = {
     "Tensor": "swyft.typing.Tensor",
     "Array": "swyft.typing.Array",
     "Shape": "swyft.typing.Shape",
-    "StrictPoIType": "swyft.typing.StrictPoIType",
-    "PoIType": "swyft.typing.PoIType",
-    "MarginalType": "swyft.typing.MarginalType",
-    "PNamesType": "swyft.typing.PNamesType",
+    "MarginalIndex": "swyft.typing.MarginalIndex",
+    "StrictMarginalIndex": "swyft.typing.StrictMarginalIndex",
+    "MarginalToArray": "swyft.typing.MarginalToArray",
+    "MarginalToDataFrame": "swyft.typing.MarginalToDataFrame",
+    "ParameterNamesType": "swyft.typing.ParameterNamesType",
     "ObsType": "swyft.typing.ObsType",
+    "ObsShapeType": "swyft.typing.ObsShapeType",
     "ForwardModelType": "swyft.typing.ForwardModelType",
-    "SimShapeType": "swyft.typing.SimShapeType",
+    "BaseLimitType": "swyft.typing.BaseLimitType",
+    "LimitType": "swyft.typing.LimitType",
 }
 
 

@@ -26,18 +26,18 @@ Marginal posterior estimation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 *swyft* can directly estimate marginal posteriors for parameters of interest
-:math:`\mathbf{z}`, given some observation :math:`\mathbf{x}`. These are
-formally obtained by integrating over all remaining (nuisance) parameters
+:math:`\boldsymbol{\vartheta}`, given some observation :math:`\mathbf{x}`. These are
+formally obtained by integrating over all remaining nuisance parameters
 :math:`\boldsymbol{\eta}`,
 
 .. math::
-   p(\mathbf{z}|\mathbf{x}) = \frac{\int d\boldsymbol{\eta}\,
-   p(\mathbf{x}|\mathbf{z}, \boldsymbol{\eta}) p(\boldsymbol{\eta}, \mathbf{z})}
+   p(\boldsymbol{\vartheta}|\mathbf{x}) = \frac{\int d\boldsymbol{\eta}\,
+   p(\mathbf{x}|\boldsymbol{\vartheta}, \boldsymbol{\eta}) p(\boldsymbol{\eta}, \boldsymbol{\vartheta})}
    {p(\mathbf{x})}\;.
 
-Here, :math:`p(\mathbf{x}|\mathbf{z}, \boldsymbol{\eta})` is an abritrary
+Here, :math:`p(\mathbf{x}|\boldsymbol{\vartheta}, \boldsymbol{\eta})` is an abritrary
 forward model that includes both the physics and detector simulator,
-:math:`p(\mathbf{z}, \boldsymbol{\eta})` is the joint prior,
+:math:`p(\boldsymbol{\vartheta}, \boldsymbol{\eta})` is the joint prior,
 and :math:`p(\mathbf{x})` is the Bayesian evidence.
 
 
@@ -46,16 +46,16 @@ Nuisance parameters
 
 *In the context of likelihood-based inference, nuisance parameters are an
 integration problem.* Given the likelihood density
-:math:`p(\mathbf{x}|\mathbf{z}, \boldsymbol{\eta})` for a particular
+:math:`p(\mathbf{x}|\boldsymbol{\vartheta}, \boldsymbol{\eta})` for a particular
 observation :math:`\mathbf{x}`, one attempts to solve the above integral over
 :math:`\boldsymbol{\eta}`, e.g. through sampling based methods.  This becomes
 increasingly challenging if the number of nuisance parameters grows.
 
 *In the context of likelihood-free inference, nuisance parameters are noise.*
 Posteriors are estimated based on a large number of training samples
-:math:`\mathbf{x}, \mathbf{z}\sim p(\mathbf{x}|\mathbf{z},
-\boldsymbol{\eta})p(\mathbf{z}, \boldsymbol{\eta})`, no matter the dimension
-of the nuisance parameter space. For a given :math:`\mathbf{z}`, more nuisance
+:math:`\mathbf{x}, \boldsymbol{\vartheta}\sim p(\mathbf{x}|\boldsymbol{\vartheta},
+\boldsymbol{\eta})p(\boldsymbol{\vartheta}, \boldsymbol{\eta})`, no matter the dimension
+of the nuisance parameter space. For a given :math:`\boldsymbol{\vartheta}`, more nuisance
 parameters just increase the variance of :math:`\mathbf{x}` (which oddly enough
 can make the inference problem simpler rather than more difficult).
 
@@ -96,9 +96,12 @@ possible through providing custom feature extractor networks in pytorch.
 References
 ----------
 
-[1] Joeri Hermans, Volodimir Begy, and Gilles Louppe. Likelihood-free mcmc
-with amortized approximate ratio estimators. arXiv preprint arXiv:1903.04057, 2019.
+[1] Benjamin Kurt Miller, Alex Cole, Patrick Forré, Gilles Louppe, and Christoph Weniger.
+Truncated Marginal Neural Ratio Estimation. Advances in Neural Information Processing Systems 34, 2021.
 
 [2] Benjamin Kurt Miller, Alex Cole, Gilles Louppe, and Christoph Weniger.
-Simulation-efficient marginal posterior estimationwithswyft: stop wasting your freaking time.
+Simulation-efficient marginal posterior estimation with swyft: stop wasting your freaking time.
 arXiv preprint, 2020.
+
+[3] Joeri Hermans, Volodimir Begy, and Gilles Louppe. Likelihood-free mcmc
+with amortized approximate ratio estimators. arXiv preprint arXiv:1903.04057, 2019.

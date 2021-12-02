@@ -1,10 +1,25 @@
+from typing import Optional
+
 import pandas as pd
 import seaborn as sns
+from matplotlib.axes import Axes
 
+from swyft.types import MarginalToArray
 from swyft.utils.marginals import filter_marginals_by_dim
 
 
-def create_violin_df_from_marginal_dict(marginals, method: str):
+def create_violin_df_from_marginal_dict(
+    marginals: MarginalToArray, method: Optional[str] = None
+) -> pd.DataFrame:
+    """map from a marginal sample dict to the df format for violin plots
+
+    Args:
+        marginals: marginal dictionary
+        method: name of method used to estimate posterior
+
+    Returns:
+        violin dataframe
+    """
     marginals_1d = filter_marginals_by_dim(marginals, 1)
     rows = []
     for key, value in marginals_1d.items():
@@ -17,24 +32,29 @@ def create_violin_df_from_marginal_dict(marginals, method: str):
     return pd.concat(rows, ignore_index=True)
 
 
-def violin_plot(
-    reference_marginals, estimated_marginals, method: str, ax=None, palette="muted"
-):
-    data = [
-        create_violin_df_from_marginal_dict(reference_marginals, "Reference"),
-        # create_violin_df_from_marginal_dict(estimated_marginals, method),
-    ]
-    data = pd.concat(data, ignore_index=True)
-    sns.set_theme(style="whitegrid")
+def violin(
+    marginals: MarginalToArray,
+    axes: Axes = None,
+    palette: str = "muted",
+) -> Axes:
+    """create a seaborn violin plot
+
+    Args:
+        marginals: marginals from the estimator, must be samples (NOT weighted samples)
+        axes: matplotlib axes
+        palette: seaborn palette
+
+    Returns:
+        Axes
+    """
     ax = sns.violinplot(
         x="Marginal",
         y="Parameter",
-        # hue="Method",
-        data=data,
+        data=create_violin_df_from_marginal_dict(marginals),
         palette=palette,
         split=True,
         scale="width",
         inner="quartile",
-        ax=ax,
+        ax=axes,
     )
     return ax
