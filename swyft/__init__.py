@@ -1,6 +1,6 @@
 from swyft.bounds import Bound
 from swyft.inference import MarginalPosterior, MarginalRatioEstimator
-from swyft.networks import OnlineStandardizingLayer
+from swyft.networks import get_marginal_classifier
 from swyft.plot import corner, empirical_z_score_corner, violin
 from swyft.prior import (
     Prior,
@@ -25,8 +25,10 @@ __all__ = [
     "DaskSimulator",
     "Dataset",
     "empirical_z_score_corner",
+    "get_marginal_classifier",
     "MarginalPosterior",
     "MarginalRatioEstimator",
+    "OnlineDictStandardizingLayer",
     "OnlineStandardizingLayer",
     "Prior",
     "PriorTruncator",
