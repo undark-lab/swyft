@@ -4,12 +4,12 @@ Why *swyft*?
 Overview
 --------
 
-With *swyft* our goal is to provide a general, flexible, reliable and practical
+With *swyft* :cite:p:`miller2020simulation` our goal is to provide a general, flexible, reliable and practical
 tool for solving hard Bayesian parameter inference problems in physics and
 astronomy.  *swyft* uses a specific flavor of simulation-based neural inference
-techniques (truncated marginal neural ratio estimation [1]), that offers
+techniques called Truncated Marginal Neural Ratio Estimation :cite:p:`miller2021truncated`, that offers
 multiple advantages over established Markov Chain based methods, or other
-simulation-based neural approaches.
+simulation-based neural approaches. It is based on the technique presented in :cite:t:`hermans2020likelihood`.
 
 - *swyft* directly estimates marginal posteriors, which typically requires far
   less simulation runs than estimating the full joint posterior.
@@ -92,16 +92,4 @@ low-dimensional data.  Tackling complex and/or high-dimensional data (e.g.,
 high-resolution images or spectra, combination of multiple data sets) is
 possible through providing custom feature extractor networks in pytorch.
 
-
-References
-----------
-
-[1] Benjamin Kurt Miller, Alex Cole, Patrick Forré, Gilles Louppe, and Christoph Weniger.
-Truncated Marginal Neural Ratio Estimation. Advances in Neural Information Processing Systems 34, 2021.
-
-[2] Benjamin Kurt Miller, Alex Cole, Gilles Louppe, and Christoph Weniger.
-Simulation-efficient marginal posterior estimation with swyft: stop wasting your freaking time.
-arXiv preprint, 2020.
-
-[3] Joeri Hermans, Volodimir Begy, and Gilles Louppe. Likelihood-free mcmc
-with amortized approximate ratio estimators. arXiv preprint arXiv:1903.04057, 2019.
+.. bibliography::

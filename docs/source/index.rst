@@ -15,7 +15,6 @@ For getting started, check out our `quickstart notebook <https://colab.research.
 Further tutorial notebooks can be found in the `notebooks <https://github.com/undark-lab/swyft/tree/master/notebooks>`_ folder on github.
 
 .. toctree::
-   :maxdepth: 1
    :caption: Contents:
 
    swyft
@@ -23,3 +22,4 @@ Further tutorial notebooks can be found in the `notebooks <https://github.com/un
    autodoc
    zen
    citation
+   tutorial-notebooks

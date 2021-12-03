@@ -2,22 +2,26 @@ Theoretical concepts
 ====================
 
 Introduction
-------------
+============
 
 Parametric stochastic simulators are ubiquitous in the physical sciences
- [1–3]. However, performing parameter inference based on simulator runs
-using Markov chain Monte Carlo is inconvenient or even impossible if the
-model parameter space is large or the likelihood function is
-intractable. This problem is addressed by so-called likelihood-free
-inference  [4] or simulation-based inference  [5] techniques. Deep
-learning based likelihood-free inference algorithms were organized into
-a taxonomy in Ref.  [6], where methods that estimated likelihood ratios
-in a series of rounds were denoted Sequential Ratio Estimation
-(SRE)  [7]. Our presented method is closely related.
+:raw-latex:`\cite{Banik_2018, Bartels_2016, Rodr_guez_Puebla_2016}`.
+However, performing parameter inference based on simulator runs using
+Markov chain Monte Carlo is inconvenient or even impossible if the model
+parameter space is large or the likelihood function is intractable. This
+problem is addressed by so-called likelihood-free inference
+:raw-latex:`\cite{sisson2018handbook}` or simulation-based inference
+:raw-latex:`\cite{Cranmer2020}` techniques. Deep learning based
+likelihood-free inference algorithms were organized into a taxonomy in
+Ref. :raw-latex:`\cite{Durkan2020}`, where methods that estimated
+likelihood ratios in a series of rounds were denoted Sequential Ratio
+Estimation (SRE) :raw-latex:`\cite{Hermans2019}`. Our presented method
+is closely related.
 
 We propose *Nested Ratio Estimation* (NRE), which approximates the
 likelihood-to-evidence ratio in a sequence of rounds. Loosely inspired
-by the contour sorting method of nested sampling  [8–10], the scheme
+by the contour sorting method of nested sampling
+:raw-latex:`\cite{Skilling2006, Feroz2008, Handley2015}`, the scheme
 alternates between sampling from a constrained prior and estimating
 likelihood-to-evidence ratios. It allows for efficient estimation of any
 marginal posteriors of interest. Furthermore, we propose an algorithm
@@ -37,10 +41,10 @@ marginalizing numerically. Furthermore, the method facilitates
 effortless marginalization over arbitrary numbers of nuisance
 parameters, increasing its utility in high-dimensional parameter
 regimes–even to simulators with a tractable, yet high-dimensional,
-likelihood  [11].
+likelihood :raw-latex:`\cite{lensing}`.
 
-Nested Ratio Estimation (NRE)
------------------------------
+Nested Ratio Estimation (NRE).
+==============================
 
 We operate in the context of simulation-based inference where our
 simulator :math:`\mathbf{g}` is a nonlinear function mapping a vector of
@@ -70,8 +74,8 @@ by integrating over all components of :math:`\boldsymbol{\eta}`,
 
    \label{eqn:post}
    p(\boldsymbol{\vartheta}\vert \mathbf{x})  \equiv \int p(\boldsymbol{\vartheta}, \boldsymbol{\eta}| \mathbf{x}) d\boldsymbol{\eta}
-   = \int \frac{p(\mathbf{x}| \boldsymbol{\vartheta}, \boldsymbol{\eta})}{p(\mathbf{x})}  
-   p(\boldsymbol{\theta}) 
+   = \int \frac{p(\mathbf{x}| \boldsymbol{\vartheta}, \boldsymbol{\eta})}{p(\mathbf{x})}
+   p(\boldsymbol{\theta})
    %\prod_{j \notin \texttt{idx}} d\theta_{j}
    d\boldsymbol{\eta}
    = \frac{p(\mathbf{x}|\boldsymbol{\vartheta})}{p(\mathbf{x})}p(\boldsymbol{\vartheta})\;,
@@ -83,7 +87,7 @@ Just like in SRE, we focus on a specific observation of interest,
 :math:`\mathbf{x}_0`. Only parameter values :math:`\boldsymbol{\theta}`
 that could have plausibly generated observation :math:`\mathbf{x}_0`
 will significantly contribute to the integrals in
-Eq. `[eqn:post] <#eqn:post>`__. For implausible values the likelihood
+Eq. `[eqn:post] <#eqn:post>`__. For implausible values the likelihood
 :math:`p(\mathbf{x}_0|\boldsymbol{\theta})` will be negligible. We
 denote priors that are suitably constrained to plausible parameter
 values by :math:`\tilde{p}(\theta_1, \dots, \theta_d)`. Similarly,
@@ -94,7 +98,7 @@ in place of our true prior beliefs,
 
 .. math::
 
-   p(\boldsymbol{\vartheta}| \mathbf{x}_0) =  
+   p(\boldsymbol{\vartheta}| \mathbf{x}_0) =
    \frac{p(\mathbf{x}_0|\boldsymbol{\vartheta})}{p(\mathbf{x}_0)} p(\boldsymbol{\vartheta}) \simeq
    \frac{\tilde{p}(\mathbf{x}_0|\boldsymbol{\vartheta})}{\tilde{p}(\mathbf{x}_0)} \tilde{p}(\boldsymbol{\vartheta})\;.
 
@@ -106,17 +110,18 @@ likelihood-to-evidence ratio
 .. math::
 
    \label{eqn:likelihood_ratio}
-       \tilde{r}(\mathbf{x}, \boldsymbol{\vartheta}) 
-       \equiv \frac{\tilde{p}(\mathbf{x}\vert \boldsymbol{\vartheta})}{\tilde{p}(\mathbf{x})} 
-       = \frac{\tilde{p}(\mathbf{x}, \boldsymbol{\vartheta})}{\tilde{p}(\mathbf{x}) \tilde{p}(\boldsymbol{\vartheta})} 
+       \tilde{r}(\mathbf{x}, \boldsymbol{\vartheta})
+       \equiv \frac{\tilde{p}(\mathbf{x}\vert \boldsymbol{\vartheta})}{\tilde{p}(\mathbf{x})}
+       = \frac{\tilde{p}(\mathbf{x}, \boldsymbol{\vartheta})}{\tilde{p}(\mathbf{x}) \tilde{p}(\boldsymbol{\vartheta})}
        = \frac{\tilde{p}(\boldsymbol{\vartheta}\vert\mathbf{x})}{\tilde{p}(\boldsymbol{\vartheta})}\;,
 
 which is sufficient to evaluate the marginal posterior in
-Eq. `[eqn:post] <#eqn:post>`__, and which we will now estimate. Under
-the assumption of equal class population, it is known  [6,12] that one
-can recover density ratios using binary classification to distinguish
-between samples from two distributions. Our binary classification
-problem is to distinguish positive samples,
+Eq. `[eqn:post] <#eqn:post>`__, and which we will now estimate. Under
+the assumption of equal class population, it is known
+:raw-latex:`\cite{Durkan2020, Cranmer2015}` that one can recover density
+ratios using binary classification to distinguish between samples from
+two distributions. Our binary classification problem is to distinguish
+positive samples,
 :math:`(\mathbf{x}, \boldsymbol{\vartheta}) \sim \tilde{p}(\mathbf{x}, \boldsymbol{\vartheta}) = p(\mathbf{x}\vert \boldsymbol{\vartheta}) \tilde{p}(\boldsymbol{\vartheta})`,
 drawn jointly, and negative samples,
 :math:`(\mathbf{x}, \boldsymbol{\vartheta}) \sim \tilde{p}(\mathbf{x}) \tilde{p}(\boldsymbol{\vartheta})`,
@@ -144,8 +149,8 @@ which is defined recursively by a cutoff criterion,
 
 .. math::
 
-   \tilde{p}_{r}(\theta_{i}) 
-       \propto 
+   \tilde{p}_{r}(\theta_{i})
+       \propto
        p(\theta_{i}) \Theta_{H} \left[ \frac{\tilde{r}_{r-1}(\theta_{i}, \mathbf{x})}{\max_{\theta_{i}} \tilde{r}_{r-1}(\theta_{i}, \mathbf{x})} - \epsilon \right],
        \label{eqn:it}
 
@@ -167,14 +172,14 @@ that
 :math:`f_{\phi}(\mathbf{x}, \theta_i) = \textrm{MLP}_i(\mathbf{F}(\mathbf{x}), \theta_i)`.
 
 This technique is valid as long as the excluded prior regions do not
-significantly affect the integrals in Eq. `[eqn:post] <#eqn:post>`__.
+significantly affect the integrals in Eq. `[eqn:post] <#eqn:post>`__.
 For uncorrelated parameters, a sufficient criterion is that the impact
 on the marginal posteriors is small, which we guarantee through the
-iteration criterion Eq. `[eqn:it] <#eqn:it>`__. In the case of a very
+iteration criterion Eq. `[eqn:it] <#eqn:it>`__. In the case of a very
 large number of strongly correlated parameters the algorithm can
 inadvertently cut away tails of the marginal posteriors. Decreasing
 :math:`\epsilon` mitigates this effect. Discussion is left for future
-study  [13].
+study :raw-latex:`\cite{swyft_future}`.
 
 With this design, the posteriors from the final round can be used to
 approximate the true 1-dim marginal posteriors,
@@ -188,8 +193,8 @@ allows for estimation of *any* higher dimensional marginal posterior
 of interest by doing likelihood-to-evidence ratio estimation, often
 without further simulation.
 
-Inhomogeneous Poisson Point Process (iP3) Sample Caching
---------------------------------------------------------
+Inhomogeneous Poisson Point Process (iP3) Sample Caching.
+=========================================================
 
 Simulating
 :math:`(\mathbf{x}, \boldsymbol{\theta})\sim p(\mathbf{x}|\boldsymbol{\theta})p(\boldsymbol{\theta})`
@@ -203,10 +208,10 @@ expected number of samples. Taking :math:`N` samples from
 inhomogenous Poisson point process (PPP) with intensity function
 :math:`\lambda_{r}(\boldsymbol{\theta}) = \hat{N} p(\boldsymbol{\theta})`.
 In this context, :math:`\Theta` is known as a set of *points*. This
-formulation provides convenient mathematical properties  [14], at the
-low price of introducing variance in the number of samples drawn. The
-precise number of samples doesn’t matter as long as
-:math:`N \approx \hat{N}`, which is true in our regime of order
+formulation provides convenient mathematical properties
+:raw-latex:`\cite{ppp}`, at the low price of introducing variance in the
+number of samples drawn. The precise number of samples doesn’t matter as
+long as :math:`N \approx \hat{N}`, which is true in our regime of order
 :math:`\geq 1000`.
 
 We will need two properties of PPPs. *Superposition:* Given two
@@ -271,98 +276,3 @@ relevant target intensities always factorize,
 :math:`\lambda_t(\boldsymbol{\theta}) = \lambda_t(\theta_1)\cdots \lambda_t(\theta_d)`.
 Storage of and calculation with factorizable functions simplifies
 matters.
-
-.. container:: references csl-bib-body
-   :name: refs
-
-   .. container:: csl-entry
-      :name: ref-Banik_2018
-
-      [1]N. Banik, G. Bertone, J. Bovy, and N. Bozorgnia, Probing the
-      Nature of Dark Matter Particles with Stellar Streams, Journal of
-      Cosmology and Astroparticle Physics 2018, 061 (2018).
-
-   .. container:: csl-entry
-      :name: ref-Bartels_2016
-
-      [2]R. Bartels, S. Krishnamurthy, and C. Weniger, Strong Support
-      for the Millisecond Pulsar Origin of the Galactic Center GeV
-      Excess, Physical Review Letters 116, (2016).
-
-   .. container:: csl-entry
-      :name: ref-Rodr_guez_Puebla_2016
-
-      [3]A. Rodríguez-Puebla, P. Behroozi, J. Primack, A. Klypin, C.
-      Lee, and D. Hellinger, Halo and Subhalo Demographics with Planck
-      Cosmological Parameters: Bolshoi–Planck and MultiDark–Planck
-      Simulations, Monthly Notices of the Royal Astronomical Society
-      462, 893 (2016).
-
-   .. container:: csl-entry
-      :name: ref-sisson2018handbook
-
-      [4]S. A. Sisson, Y. Fan, and M. Beaumont, Handbook of Approximate
-      Bayesian Computation (CRC Press, 2018).
-
-   .. container:: csl-entry
-      :name: ref-Cranmer2020
-
-      [5]K. Cranmer, J. Brehmer, and G. Louppe, The Frontier of
-      Simulation-Based Inference, Proc. Natl. Acad. Sci. U. S. A.
-      (2020).
-
-   .. container:: csl-entry
-      :name: ref-Durkan2020
-
-      [6]C. Durkan, I. Murray, and G. Papamakarios, On Contrastive
-      Learning for Likelihood-Free Inference, (2020).
-
-   .. container:: csl-entry
-      :name: ref-Hermans2019
-
-      [7]J. Hermans, V. Begy, and G. Louppe, Likelihood-Free MCMC with
-      Amortized Approximate Ratio Estimators, (2019).
-
-   .. container:: csl-entry
-      :name: ref-Skilling2006
-
-      [8]J. Skilling, Nested Sampling for General Bayesian Computation,
-      Bayesian Anal. 1, 833 (2006).
-
-   .. container:: csl-entry
-      :name: ref-Feroz2008
-
-      [9]F. Feroz, M. P. Hobson, and M. Bridges, MultiNest: An Efficient
-      and Robust Bayesian Inference Tool for Cosmology and Particle
-      Physics, Mon. Not. Roy. Astron. Soc. 398: 1601-1614,2009 (2008).
-
-   .. container:: csl-entry
-      :name: ref-Handley2015
-
-      [10]W. J. Handley, M. P. Hobson, and A. N. Lasenby, Polychord :
-      Next-Generation Nested Sampling, Mon. Not. R. Astron. Soc. 453,
-      4384 (2015).
-
-   .. container:: csl-entry
-      :name: ref-lensing
-
-      [11]A. et. al., Precision Analysis of Gravitational Strong Lensing
-      Images with Nested Likelihood-Free Inference, (2020).
-
-   .. container:: csl-entry
-      :name: ref-Cranmer2015
-
-      [12]K. Cranmer, J. Pavez, and G. Louppe, Approximating Likelihood
-      Ratios with Calibrated Discriminative Classifiers, (2015).
-
-   .. container:: csl-entry
-      :name: ref-swyft_future
-
-      [13]A. et. al., Nested Ratio Estimation and iP3 Sample Caching,
-      (2020).
-
-   .. container:: csl-entry
-      :name: ref-ppp
-
-      [14]J. F. C. Kingman, Poisson Processes (Oxford University Press,
-      1993).

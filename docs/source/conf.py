@@ -58,6 +58,7 @@ autodoc_type_aliases = {
     "LimitType": "swyft.typing.LimitType",
 }
 
+nbsphinx_allow_errors = True
 
 # -- General configuration ------------------------------------------------
 
@@ -73,7 +74,15 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
+    "sphinxcontrib.bibtex",
+    "nbsphinx",
+    "nbsphinx_link",
 ]
+
+# bibliography
+bibtex_bibfiles = ["refs.bib"]
+bibtex_reference_style = "author_year"
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["ntemplates"]
@@ -89,8 +98,8 @@ master_doc = "index"
 
 # General information about the project.
 project = u"swyft"
-copyright = u"2021, Christoph Weniger"
-author = u"Christoph Weniger"
+copyright = u"2021, Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
+author = u"Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -111,7 +120,9 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns = [
+    # '_build',
+]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -134,7 +145,9 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    "titles_only": True,
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

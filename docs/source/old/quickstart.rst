@@ -5,22 +5,22 @@ Run this example in a colab notebook here_.
 ..  _here: https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb
 
 .. As a quick example, the following code defines a simple "simulator" and noise model and performs inference given a particular draw.
-.. :: 
+.. ::
 ..     import numpy as np
 ..     import pylab as plt
 ..     import swyft
 ..     import torch
 ..     from scipy import stats
-    
+
 ..     DEVICE = 'cuda' #your gpu, or 'cpu' if a gpu is not available
-    
+
 ..     #a simple simulator
 ..     def model(params):
 ..         a = params['a']
 ..         b = params['b']
 ..         x=np.array([a,2*(b-a)])
 ..         return dict(mu=x)
-    
+
 ..     #a simple noise model
 ..     def noise(obs, params, noise = 0.01):
 ..         x = obs['mu']
@@ -29,16 +29,16 @@ Run this example in a colab notebook here_.
 
 ..     #choose the "true" parameters for an inference problem
 ..     par0 = dict(a=0.55, b=0.45)
-..     obs0 = model(par0) # using Asimov data  
-    
+..     obs0 = model(par0) # using Asimov data
+
 ..     #give priors for model parameters
 ..     prior = swyft.Prior({"a": ["uniform", 0., 1.], "b": ["uniform",  0., 1.]})
-    
+
 ..     #a simple inference
 ..     s = swyft.NestedRatios(model, prior, noise = noise, obs = obs0, device = DEVICE)
 ..     #train!
 ..     s.run(Ninit = 500)
-  
+
 .. The last line, which trains networks that estimate the 1-dimensional marginal posteriors, will output something like:
 .. ::
 ..     Simulate:  14%|█▎        | 67/495 [00:00<00:00, 667.16it/s]
@@ -83,7 +83,7 @@ Run this example in a colab notebook here_.
 ..     samples = post(obs0, 1000000);
 ..     #plot estimated posteriors
 ..     swyft.corner(samples, ["a", "b"], color='k', figsize = (15,15), truth=par0)
-    
+
 .. .. image:: images/quickstart-2d.png
 ..    :width: 600
 

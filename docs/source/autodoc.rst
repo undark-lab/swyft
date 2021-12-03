@@ -35,7 +35,7 @@ swyft.utils
   :special-members: __len__, __getitem__
 
 swyft.store
-----------
+------------
 
 .. automodule:: swyft.store
   :members:
