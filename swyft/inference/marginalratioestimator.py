@@ -259,6 +259,7 @@ class MarginalRatioEstimator(StateDictSaveable):
 
                 if self.scheduler is not None:
                     self.scheduler.step(loss_avg)
+        print("")
 
     def log_ratio(
         self,

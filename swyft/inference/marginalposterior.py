@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, TypeVar, Union
+from typing import Optional, Tuple, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -8,7 +8,7 @@ from torch.utils.data.dataset import Dataset
 
 from swyft.bounds import Bound
 from swyft.inference.marginalratioestimator import MarginalRatioEstimator
-from swyft.prior import Prior, PriorTruncator, promote_to_prior_truncator
+from swyft.prior import Prior, PriorTruncator
 from swyft.types import Array, MarginalIndex, MarginalToArray, ObsType
 from swyft.utils import tupleize_marginal_indices
 from swyft.weightedmarginals import WeightedMarginalSamples
@@ -20,7 +20,8 @@ class MarginalPosterior:
     def __init__(
         self,
         marginal_ratio_estimator: MarginalRatioEstimator,
-        prior: Union[Prior, PriorTruncator],
+        prior: Prior,
+        bound: Optional[Bound] = None,
     ) -> None:
         """a trained marginal ratio estimator and a prior allows access to the posterior
 
@@ -30,7 +31,9 @@ class MarginalPosterior:
         """
         super().__init__()
         self.marginal_ratio_estimator = marginal_ratio_estimator
-        self.prior = promote_to_prior_truncator(prior)
+        self.prior = prior
+        self.bound = bound
+        self.prior_truncator = PriorTruncator(self.prior, self.bound)
 
     @property
     def marginal_indices(self) -> MarginalIndex:
@@ -114,7 +117,7 @@ class MarginalPosterior:
         Returns:
             dictionary with marginal_indices keys and log posterior values.
         """
-        log_prior = np.atleast_2d(self.prior.log_prob(v))
+        log_prior = np.atleast_2d(self.prior_truncator.log_prob(v))
         marginal_log_prior = {
             k: log_prior[..., i] for i, k in enumerate(self.marginal_indices)
         }
@@ -142,7 +145,7 @@ class MarginalPosterior:
                 "v" maps to the parameters drawn from the prior (n_samples, n_parameters).
                 each marginal index maps to the log ratio (n_samples, len(marginal_index)).
         """
-        v = self.prior.sample(n_samples)
+        v = self.prior_truncator.sample(n_samples)
         logweight = self.marginal_ratio_estimator.log_ratio(
             observation, v, batch_size=batch_size
         )

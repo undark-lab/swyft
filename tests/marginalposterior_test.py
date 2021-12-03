@@ -11,7 +11,12 @@ import swyft.inference.marginalratioestimator as mre
 import swyft.networks.classifier as classifier
 from swyft.bounds import Bound, RectangleBound
 from swyft.inference.marginalposterior import MarginalPosterior
-from swyft.prior import PriorTruncator, get_diagonal_normal_prior, get_uniform_prior
+from swyft.prior import (
+    Prior,
+    PriorTruncator,
+    get_diagonal_normal_prior,
+    get_uniform_prior,
+)
 from swyft.store.dataset import SimpleDataset
 from swyft.types import MarginalIndex
 from swyft.utils import tupleize_marginal_indices
@@ -71,7 +76,7 @@ class TestMarginalPosterior:
         mre = self.get_marginal_ratio_estimator(marginal_indices)
 
         mp = MarginalPosterior(mre, prior)
-        assert isinstance(mp.prior, PriorTruncator)
+        assert isinstance(mp.prior, Prior)
 
     def test_init_prior_truncator(self):
         bound = [[0.1, 0.9], [0.2, 0.8]]
@@ -80,13 +85,12 @@ class TestMarginalPosterior:
 
         n_parameters = len(bound)
         prior = get_uniform_prior([-0.5] * n_parameters, [5.0] * n_parameters)
-        prior_truncator = PriorTruncator(prior, rectangle_bound)
 
         marginal_indices = list(range(n_parameters))
         mre = self.get_marginal_ratio_estimator(marginal_indices)
 
-        mp = MarginalPosterior(mre, prior_truncator)
-        assert isinstance(mp.prior, PriorTruncator)
+        mp = MarginalPosterior(mre, prior, rectangle_bound)
+        assert isinstance(mp.prior_truncator, PriorTruncator)
 
     @pytest.mark.parametrize("marginal_indices", [[0], [0, 1], [(0, 1)]])
     def test_truncate(self, marginal_indices: MarginalIndex):

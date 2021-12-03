@@ -278,7 +278,7 @@ class BallsBound(Bound, StateDictSaveable):
         obj = cls.__new__(cls)
         obj.X = state_dict["points"]
         assert len(obj.X.shape) == 2
-        obj.n_parameters = obj.X.shape[-1]
+        obj._n_parameters = obj.X.shape[-1]
         obj.epsilon = state_dict["epsilon"]
         obj._volume = state_dict["volume"]
         obj.bt = BallTree(obj.X, leaf_size=2)

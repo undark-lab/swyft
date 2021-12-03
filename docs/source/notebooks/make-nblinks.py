@@ -1,6 +1,11 @@
 import json
 from pathlib import Path
 
+IGNORE = [
+    ".ipynb_checkpoints",
+    "Video",
+]
+
 
 def create_nblink(notebook_path):
     d = {}
@@ -11,10 +16,15 @@ def create_nblink(notebook_path):
 
 def main():
     root = Path(__file__).parent
+    # clean directory first
+    for old_nblink in root.glob("*.nblink"):
+        Path(old_nblink).unlink()
+
+    # add the relevant notebooks and names
     relative_source = Path("../../../notebooks/")
     source = Path(root, relative_source)
     for nbpath in source.glob("*/"):
-        if ".ipynb_checkpoints" in str(nbpath):
+        if any([ign in str(nbpath) for ign in IGNORE]):
             continue
         else:
             target_path = Path(relative_source, f"{nbpath.stem}.ipynb")

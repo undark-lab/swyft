@@ -318,14 +318,5 @@ def get_diagonal_normal_prior(loc: Array, scale: Array) -> Prior:
     return Prior.from_torch_distribution(distribution)
 
 
-def promote_to_prior_truncator(
-    prior: Union[Prior, PriorTruncator]
-) -> PriorTruncatorType:
-    if isinstance(prior, Prior):
-        return PriorTruncator(prior, None)
-    else:
-        return prior
-
-
 if __name__ == "__main__":
     pass
