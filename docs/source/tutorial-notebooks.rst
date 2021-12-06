@@ -1,4 +1,4 @@
-Tutorial Notebooks
+Tutorial notebooks
 ==================
 
 You may find the tutorial notebooks here.
