@@ -1,5 +1,5 @@
 Quickstart with *swyft*
-=====================
+=======================
 Run this example in a colab notebook here_.
 
 ..  _here: https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb
