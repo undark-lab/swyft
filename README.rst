@@ -54,6 +54,7 @@ a hyper-efficient, simulation-based inference technique for complex data and exp
 * estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically requirer fewer simulations than the corresponding joint.
 * performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
 * seamless reuses simulations drawn from previous analyses, even with different priors.
+* integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy.
 
 *swyft* is designed to solve the Bayesian inverse problem when the user has access to a simulator that stochastically maps parameters to observational data.
 In scientific settings, a cost-benefit analysis often favors approximating the posterior marginality; *swyft* provides this functionality.
