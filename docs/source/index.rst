@@ -14,6 +14,11 @@ For getting started, check out our `quickstart notebook <https://colab.research.
 
 Further tutorial notebooks can be found in the `notebooks <https://github.com/undark-lab/swyft/tree/master/notebooks>`_ folder on github.
 
+Readme File
+===========
+
+.. mdinclude:: ../../README.md
+
 .. toctree::
    :caption: Contents:
 
