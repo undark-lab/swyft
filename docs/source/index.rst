@@ -17,7 +17,7 @@ Further tutorial notebooks can be found in the `notebooks <https://github.com/un
 Readme File
 ===========
 
-.. mdinclude:: ../../README.md
+.. include:: ../../README.rst
 
 .. toctree::
    :caption: Contents:
