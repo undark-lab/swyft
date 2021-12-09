@@ -13,9 +13,8 @@ import numpy as np
 import zarr
 from dask.distributed import Client, fire_and_forget
 
-from swyft.bounds import Prior
-from swyft.bounds.prior import TruncatedPrior
-from swyft.types import Array, ForwardModelType, PathType, PNamesType, SimShapeType
+from swyft.prior import Prior, PriorTruncator
+from swyft.types import ForwardModelType, ObsShapeType, ParameterNamesType, PathType
 from swyft.utils import all_finite
 
 log = logging.getLogger(__name__)
@@ -33,7 +32,7 @@ class Simulator:
 
     Args:
         model: Model function.
-        pnames: List of parameter names, or number of parameters (interpreted
+        parameter_names: List of parameter names, or number of parameters (interpreted
             as 'z0', 'z1', ...).
         sim_shapes: Dict describing model function output shapes.
         sim_dtype: Model output data type.
@@ -52,15 +51,15 @@ class Simulator:
     def __init__(
         self,
         model: ForwardModelType,
-        pnames: Union[PNamesType, int],
-        sim_shapes: SimShapeType,
+        parameter_names: Union[ParameterNamesType, int],
+        sim_shapes: ObsShapeType,
         sim_dtype: str = "f8",
         fail_on_non_finite: bool = True,
     ) -> None:
         self.model = model
-        if isinstance(pnames, int):
-            pnames = ["v%i" % i for i in range(pnames)]
-        self.pnames = pnames
+        if isinstance(parameter_names, int):
+            parameter_names = ["v%i" % i for i in range(parameter_names)]
+        self.parameter_names = parameter_names
         self.sim_shapes = sim_shapes
         self.sim_dtype = sim_dtype
         self.fail_on_non_finite = fail_on_non_finite
@@ -101,8 +100,8 @@ class Simulator:
     def from_command(
         cls,
         command: str,
-        pnames: Union[PNamesType, int],
-        sim_shapes: SimShapeType,
+        parameter_names: Union[ParameterNamesType, int],
+        sim_shapes: ObsShapeType,
         set_input_method: Callable,
         get_output_method: Callable,
         shell: bool = False,
@@ -164,7 +163,10 @@ class Simulator:
             return output
 
         return cls(
-            model=model, pnames=pnames, sim_shapes=sim_shapes, sim_dtype=sim_dtype
+            model=model,
+            parameter_names=parameter_names,
+            sim_shapes=sim_shapes,
+            sim_dtype=sim_dtype,
         )
 
     @classmethod
@@ -180,13 +182,13 @@ class Simulator:
         Note:
             The simulator model is run once in order to infer observable shapes from the output.
         """
-        v = TruncatedPrior(prior, bound=None).sample(1)[0]
+        v = PriorTruncator(prior, bound=None).sample(1)[0]
         sims = model(v)
         sim_shapes = {k: v.shape for k, v in sims.items()}
         dtype = [v.dtype.str for v in sims.values()][0]
         return cls(
             model=model,
-            pnames=len(v),
+            parameter_names=len(v),
             sim_shapes=sim_shapes,
             sim_dtype=dtype,
             fail_on_non_finite=fail_on_non_finite,
@@ -343,7 +345,7 @@ def _run_model(
 
 
 def _run_model_chunk(
-    v: np.ndarray, model: Callable, sim_shapes: SimShapeType, fail_on_non_finite: bool
+    v: np.ndarray, model: Callable, sim_shapes: ObsShapeType, fail_on_non_finite: bool
 ) -> Tuple[Mapping[str, np.ndarray], np.ndarray]:
     """Run the model over a set of input parameters.
 

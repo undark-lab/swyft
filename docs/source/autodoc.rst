@@ -1,38 +1,32 @@
 swyft API
 =====================
 
-Posterior inference
+swyft.inference
 -------------------
+
+The primary marginal objects are contained here.
 
 .. automodule:: swyft.inference
   :members:
   :inherited-members:
   :special-members: __len__, __getitem__
 
-Data store
-----------
-
-.. automodule:: swyft.store
-  :members:
-  :inherited-members:
-  :special-members: __len__, __getitem__
-
-Networks definitions
+swyft.networks
 --------------------
 
 .. automodule:: swyft.networks
   :members:
   :special-members: __len__, __getitem__
 
-Bounds for prior truncation
----------------------------
+swyft.plot
+-----------------
 
-.. automodule:: swyft.bounds
+.. automodule:: swyft.plot
   :members:
   :inherited-members:
   :special-members: __len__, __getitem__
 
-Utility functions
+swyft.utils
 -----------------
 
 .. automodule:: swyft.utils
@@ -40,3 +34,35 @@ Utility functions
   :inherited-members:
   :special-members: __len__, __getitem__
 
+swyft.store
+------------
+
+.. automodule:: swyft.store
+  :members:
+  :inherited-members:
+  :special-members: __len__, __getitem__
+
+
+swyft.bounds
+---------------------------
+
+.. automodule:: swyft.bounds
+  :members:
+  :inherited-members:
+  :special-members: __len__, __getitem__
+
+swyft.prior
+---------------------------
+
+.. automodule:: swyft.prior
+  :members:
+  :inherited-members:
+  :special-members: __len__, __getitem__
+
+swyft.weightedmarginals
+---------------------------
+
+.. automodule:: swyft.weightedmarginals
+  :members:
+  :inherited-members:
+  :special-members: __len__, __getitem__

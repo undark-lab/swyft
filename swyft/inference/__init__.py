@@ -1,4 +1,7 @@
-from swyft.inference.posteriors import Posteriors
-from swyft.inference.train import TrainOptions
+from swyft.inference.marginalposterior import MarginalPosterior
+from swyft.inference.marginalratioestimator import MarginalRatioEstimator
 
-__all__ = ["Posteriors"]
+__all__ = [
+    "MarginalRatioEstimator",
+    "MarginalPosterior",
+]

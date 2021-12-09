@@ -1,8 +1,14 @@
-from swyft.bounds import Bound, Prior, TruncatedPrior
-from swyft.inference import Posteriors, TrainOptions
-from swyft.networks import DefaultHead, DefaultTail, Module, OnlineNormalizationLayer
-from swyft.store import DaskSimulator, Dataset, DirectoryStore, MemoryStore, Simulator
-from swyft.utils import plot_1d, plot_corner, plot_empirical_mass
+from swyft.bounds import Bound
+from swyft.inference import MarginalPosterior, MarginalRatioEstimator
+from swyft.networks import get_marginal_classifier
+from swyft.plot import corner, empirical_z_score_corner, violin
+from swyft.prior import (
+    Prior,
+    PriorTruncator,
+    get_diagonal_normal_prior,
+    get_uniform_prior,
+)
+from swyft.store import DaskSimulator, Dataset, Simulator, Store
 
 
 def zen():
@@ -14,21 +20,21 @@ def zen():
 
 
 __all__ = [
-    "TrainOptions",
-    "TruncatedPrior",
-    "Posteriors",
-    "Prior",
     "Bound",
-    "Module",
-    "DirectoryStore",
-    "MemoryStore",
-    "DefaultHead",
-    "DefaultTail",
-    "OnlineNormalizationLayer",
-    "Dataset",
-    "Simulator",
+    "corner",
     "DaskSimulator",
-    "plot_corner",
-    "plot_1d",
-    "plot_empirical_mass",
+    "Dataset",
+    "empirical_z_score_corner",
+    "get_marginal_classifier",
+    "MarginalPosterior",
+    "MarginalRatioEstimator",
+    "OnlineDictStandardizingLayer",
+    "OnlineStandardizingLayer",
+    "Prior",
+    "PriorTruncator",
+    "Simulator",
+    "Store",
+    "get_diagonal_normal_prior",
+    "get_uniform_prior",
+    "violin",
 ]

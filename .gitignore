@@ -1,8 +1,14 @@
 # conda
 envs/
+env/
+.envrc
 
 # Generated versions
 swyft/__version__.py
+
+# files from notebooks
+docs/source/notebooks/SavedStore.sync
+docs/source/notebooks/SavedStore
 
 # Mac Item
 .DS_Store

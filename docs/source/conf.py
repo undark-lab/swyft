@@ -46,15 +46,19 @@ autodoc_type_aliases = {
     "Tensor": "swyft.typing.Tensor",
     "Array": "swyft.typing.Array",
     "Shape": "swyft.typing.Shape",
-    "StrictPoIType": "swyft.typing.StrictPoIType",
-    "PoIType": "swyft.typing.PoIType",
-    "MarginalType": "swyft.typing.MarginalType",
-    "PNamesType": "swyft.typing.PNamesType",
+    "MarginalIndex": "swyft.typing.MarginalIndex",
+    "StrictMarginalIndex": "swyft.typing.StrictMarginalIndex",
+    "MarginalToArray": "swyft.typing.MarginalToArray",
+    "MarginalToDataFrame": "swyft.typing.MarginalToDataFrame",
+    "ParameterNamesType": "swyft.typing.ParameterNamesType",
     "ObsType": "swyft.typing.ObsType",
+    "ObsShapeType": "swyft.typing.ObsShapeType",
     "ForwardModelType": "swyft.typing.ForwardModelType",
-    "SimShapeType": "swyft.typing.SimShapeType",
+    "BaseLimitType": "swyft.typing.BaseLimitType",
+    "LimitType": "swyft.typing.LimitType",
 }
 
+nbsphinx_allow_errors = True
 
 # -- General configuration ------------------------------------------------
 
@@ -70,7 +74,16 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
+    "sphinxcontrib.bibtex",
+    "nbsphinx",
+    "nbsphinx_link",
+    "m2r2",
 ]
+
+# bibliography
+bibtex_bibfiles = ["refs.bib"]
+bibtex_reference_style = "author_year"
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["ntemplates"]
@@ -78,16 +91,16 @@ templates_path = ["ntemplates"]
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
-# source_suffix = ['.rst', '.md']
-source_suffix = ".rst"
+source_suffix = [".rst", ".md"]
+# source_suffix = ".rst"
 
 # The master toctree document.
 master_doc = "index"
 
 # General information about the project.
 project = u"swyft"
-copyright = u"2021, Christoph Weniger"
-author = u"Christoph Weniger"
+copyright = u"2021, Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
+author = u"Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -108,7 +121,9 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = []
+exclude_patterns = [
+    # '_build',
+]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "sphinx"
@@ -131,7 +146,9 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    "titles_only": True,
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
