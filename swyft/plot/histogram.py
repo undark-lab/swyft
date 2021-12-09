@@ -1,14 +1,17 @@
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from pandas import DataFrame
+from torch import Tensor
 from tqdm import tqdm
 
-from swyft.types import Array, LimitType
-from swyft.utils.marginals import get_d_dim_marginal_indices
+from swyft.types import Array, LimitType, MarginalToArray, MarginalToDataFrame
+from swyft.utils.marginals import get_d_dim_marginal_indices, get_df_dict_from_marginals
+from swyft.weightedmarginals import WeightedMarginalSamples
 
 
 def split_corner_axes(axes: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -27,11 +30,149 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
         return None
 
 
-def corner(
-    marginal_df_1d: Dict[Tuple[int], DataFrame],
-    marginal_df_2d: Dict[Tuple[int], DataFrame],
+def _marginal_weightedmarginal_to_df(
+    marginal: Union[WeightedMarginalSamples, MarginalToArray]
+) -> MarginalToDataFrame:
+    """convert marginal samples, marginal weighted samples, and marginal dataframes to marginal dataframes.
+
+    Args:
+        marginal: input to convert
+
+    Raises:
+        TypeError: when not one of the supported types
+
+    Returns:
+        MarginalToDataFrame: a dictionary mapping marginal to dataframe
+    """
+    if isinstance(marginal, WeightedMarginalSamples):
+        return marginal.get_df_dict()
+    elif isinstance(list(marginal.values())[0], (np.ndarray, Tensor)):
+        return get_df_dict_from_marginals(marginal)
+    elif isinstance(list(marginal.values())[0], DataFrame):
+        return marginal
+    else:
+        raise TypeError(
+            "Only marginal samples, marginal weighted samples, and marginal dataframes are supported."
+        )
+
+
+def hist1d(
+    marginal_1d: Union[WeightedMarginalSamples, MarginalToArray, MarginalToDataFrame],
     figsize: Optional[Tuple[float, float]] = None,
-    bins: int = 50,
+    bins: int = 100,
+    kde: Optional[bool] = False,
+    xlim: LimitType = None,
+    ylim: LimitType = None,
+    truth: Array = None,
+    levels: int = 3,
+    labels: Sequence[str] = None,
+    ticks: bool = True,
+    ticklabels: bool = True,
+    ticklabelsize: str = "x-small",
+    tickswhich: str = "both",
+    labelrotation: float = 45.0,
+    space_between_axes: float = 0.1,
+) -> Tuple[Figure, np.ndarray]:
+    """create a row of 1d histograms from marginals
+
+    Args:
+        marginal_1d: one dimensional marginal samples, weighted samples, or dataframes
+        figsize: choose the figsize. like matplotlib.
+        bins: number of bins for the histogram
+        kde: do a kernel density estimate to produce isocontour lines? (may be expensive)
+        xlim: set the xlim. either a single tuple for the same value on all plots, or a sequence of tuples for every plot.
+        ylim: set the ylim. either a single tuple for the same value on all plots, or a sequence of tuples for every plot.
+        truth: array denoting the true parameter which generated the observation.
+        levels: number of isocontour lines to plot. only functions when `kde=True`.
+        labels: the string labels for the parameters.
+        ticks: whether to show ticks
+        ticklabels: whether to show the value of the ticks. only functions when `ticks=True`.
+        ticklabelsize: set size of tick labels. see `plt.tick_params`
+        tickswhich: whether to affect major or minor ticks. see `plt.tick_params`
+        labelrotation: tick label rotation. see `plt.tick_params`
+        space_between_axes: changes the `wspace` and `hspace` between subplots. see `plt.subplots_adjust`
+
+    Returns:
+        matplotlib figure, np array of matplotlib axes
+    """
+    marginals_1d = _marginal_weightedmarginal_to_df(marginal_1d)
+
+    d = len(marginal_1d)
+
+    fig, axes = plt.subplots(nrows=d, figsize=figsize)
+
+    lb = 0.125
+    tr = 0.9
+    fig.subplots_adjust(
+        left=lb,
+        bottom=lb,
+        right=tr,
+        top=tr,
+        wspace=space_between_axes,
+        hspace=space_between_axes,
+    )
+
+    color = "k"
+
+    for i, (k, ax) in enumerate(zip(marginals_1d.keys(), axes.flatten())):
+        df = marginals_1d[k]
+        sns.histplot(
+            df,
+            x=k[0],
+            weights=_set_weight_keyword(df),
+            bins=bins,
+            ax=ax,
+            element="step",
+            fill=False,
+            color=color,
+            kde=kde,
+            kde_kws={"levels": levels},
+        )
+        ax.tick_params(
+            axis="x",
+            which=tickswhich,
+            bottom=ticks,
+            direction="out",
+            labelbottom=ticks and ticklabels,
+            labelrotation=labelrotation,
+            labelsize=ticklabelsize,
+        )
+
+        if labels is not None:
+            ax.set_xlabel(labels[i])
+
+        if truth is not None:
+            ax.axvline(truth[i], color="r")
+
+        if xlim is None:
+            pass
+        elif isinstance(xlim[0], (int, float)):
+            ax.set_xlim(*xlim)
+        elif isinstance(xlim[0], (tuple, list)):
+            ax.set_xlim(*xlim[i])
+        else:
+            raise NotImplementedError("xlim should be a tuple or a list of tuples.")
+
+        if ylim is None:
+            pass
+        elif isinstance(ylim[0], (int, float)):
+            ax.set_ylim(*ylim)
+        elif isinstance(ylim[0], (tuple, list)):
+            ax.set_ylim(*ylim[i])
+        else:
+            raise NotImplementedError("ylim should be a tuple or a list of tuples.")
+
+        ax.set_ylim(*ylim)
+
+    fig.align_labels()
+    return fig, axes
+
+
+def corner(
+    marginal_1d: Union[WeightedMarginalSamples, MarginalToArray, MarginalToDataFrame],
+    marginal_2d: Union[WeightedMarginalSamples, MarginalToArray, MarginalToDataFrame],
+    figsize: Optional[Tuple[float, float]] = None,
+    bins: int = 100,
     kde: Optional[bool] = False,
     xlim: LimitType = None,
     ylim_lower: LimitType = None,
@@ -45,10 +186,11 @@ def corner(
     labelrotation: float = 45.0,
     space_between_axes: float = 0.1,
 ) -> Tuple[Figure, np.ndarray]:
-    """create a corner plot from a dictionary of marginal DataFrames
+    """create a corner plot from a dictionary of marginals
 
     Args:
-        marginal_dfs: a dictionary map from marginal_index to DataFrame (with a weight column). the DataFrame requires columns tilted by the corresponding marginal_index integer.
+        marginal_1d: one dimensional marginal samples, weighted samples, or dataframes
+        marginal_2d: two dimensional marginal samples, weighted samples, or dataframes
         figsize: choose the figsize. like matplotlib.
         bins: number of bins for the histogram
         kde: do a kernel density estimate to produce isocontour lines? (may be expensive)
@@ -67,8 +209,8 @@ def corner(
     Returns:
         matplotlib figure, np array of matplotlib axes
     """
-    marginals_1d = marginal_df_1d
-    marginals_2d = marginal_df_2d
+    marginals_1d = _marginal_weightedmarginal_to_df(marginal_1d)
+    marginals_2d = _marginal_weightedmarginal_to_df(marginal_2d)
 
     d = len(marginals_1d)
     upper_inds = get_d_dim_marginal_indices(d, 2)

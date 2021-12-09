@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from swyft.plot.constraint import diagonal_constraint, lower_constraint
-from swyft.plot.corner import corner
+from swyft.plot.histogram import corner
 from swyft.utils.marginals import get_corner_marginal_indices
 from swyft.weightedmarginals import WeightedMarginalSamples
 

@@ -1,7 +1,7 @@
 import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 
-from swyft.plot.corner import split_corner_axes
+from swyft.plot.histogram import split_corner_axes
 from swyft.utils.marginals import get_d_dim_marginal_indices
 
 
