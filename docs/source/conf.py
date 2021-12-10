@@ -60,6 +60,10 @@ autodoc_type_aliases = {
 
 nbsphinx_allow_errors = True
 
+# # To be used with autosummary,
+# autodoc_default_flags = ['members']
+# autosummary_generate = True
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -71,6 +75,7 @@ nbsphinx_allow_errors = True
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    # "sphinx.ext.autosummary",
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",

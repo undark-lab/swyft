@@ -78,7 +78,7 @@ Please use the functions `array_to_tensor` and `tensor_to_array` when converting
 
 ## Documentation
 
-We have a [readthedocs](https://swyft.readthedocs.io/en/latest/) site and use the [sphinx_rtd_theme](https://github.com/readthedocs/sphinx_rtd_theme). The details of the configuration can be found in the [`docs/source/conf.py`](https://github.com/undark-lab/swyft/blob/master/docs/source/conf.py) file.
+We have a [readthedocs](https://swyft.readthedocs.io/en/latest/) site and use the [sphinx_rtd_theme](https://github.com/readthedocs/sphinx_rtd_theme). The details of the configuration can be found in the [docs/source/conf.py](https://github.com/undark-lab/swyft/blob/master/docs/source/conf.py) file.
 
 ### Compiling documentation
 

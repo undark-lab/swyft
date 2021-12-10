@@ -5,10 +5,8 @@ You may find the tutorial notebooks here.
 
 .. toctree::
    :caption: Notebooks:
-
-   notebooks/Quickstart
-
-.. toctree::
+   :maxdepth: 1
    :glob:
 
+   notebooks/Quickstart
    notebooks/Examples*

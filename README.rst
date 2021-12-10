@@ -41,17 +41,17 @@
 *swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
 a hyper-efficient, simulation-based inference technique for complex data and expensive simulators.
 
-* **Documentation & installation**: https://readthedocs.org/projects/swyft/
-* **Example usage**: TODO
+* **Documentation & installation**: https://swyft.readthedocs.io/en/latest/
+* **Example usage**: https://swyft.readthedocs.io/en/latest/tutorial-notebooks.html
 * **Source code**: https://github.com/undark-lab/swyft
 * **Support & discussion**: https://github.com/undark-lab/swyft/discussions
 * **Bug reports**: https://github.com/undark-lab/swyft/issues
 * **Contributing**: https://github.com/undark-lab/swyft/blob/master/CONTRIBUTING.md
-* **Citation**: TODO
+* **Citation**: https://swyft.readthedocs.io/en/latest/citation.html
 
 *swyft*:
 
-* estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically requirer fewer simulations than the corresponding joint.
+* estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically require fewer simulations than the corresponding joint.
 * performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
 * seamless reuses simulations drawn from previous analyses, even with different priors.
 * integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy.

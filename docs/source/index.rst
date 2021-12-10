@@ -7,6 +7,7 @@
 
 .. toctree::
    :caption: Contents:
+   :maxdepth: 2
 
    swyft
    install
