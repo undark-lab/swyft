@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,11 @@ from swyft.types import (
     MarginalToDataFrame,
     StrictMarginalIndex,
 )
-from swyft.utils.marginals import tupleize_marginal_indices
+from swyft.utils.marginals import filter_marginals_by_dim, tupleize_marginal_indices
+
+WeightedMarginalSamplesType = TypeVar(
+    "WeightedMarginalSamplesType", bound="WeightedMarginalSamples"
+)
 
 
 @dataclass
@@ -80,6 +84,10 @@ class WeightedMarginalSamples:
             marginal_index: self.get_df(marginal_index)
             for marginal_index in self.marginal_indices
         }
+
+    def filter_by_dim(self, dim: int) -> WeightedMarginalSamplesType:
+        weights = filter_marginals_by_dim(self.weights, dim)
+        return self.__class__(weights, self.v)
 
     @property
     def marginal_indices(self) -> StrictMarginalIndex:

@@ -1,9 +1,8 @@
-from typing import Dict, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from pandas import DataFrame
 from torch import Tensor
@@ -30,7 +29,7 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
         return None
 
 
-def _marginal_weightedmarginal_to_df(
+def _marginaldict_weightedmarginaldict_to_dfdict(
     marginal: Union[WeightedMarginalSamples, MarginalToArray]
 ) -> MarginalToDataFrame:
     """convert marginal samples, marginal weighted samples, and marginal dataframes to marginal dataframes.
@@ -64,7 +63,6 @@ def hist1d(
     xlim: LimitType = None,
     ylim: LimitType = None,
     truth: Array = None,
-    levels: int = 3,
     labels: Sequence[str] = None,
     ticks: bool = True,
     ticklabels: bool = True,
@@ -83,7 +81,6 @@ def hist1d(
         xlim: set the xlim. either a single tuple for the same value on all plots, or a sequence of tuples for every plot.
         ylim: set the ylim. either a single tuple for the same value on all plots, or a sequence of tuples for every plot.
         truth: array denoting the true parameter which generated the observation.
-        levels: number of isocontour lines to plot. only functions when `kde=True`.
         labels: the string labels for the parameters.
         ticks: whether to show ticks
         ticklabels: whether to show the value of the ticks. only functions when `ticks=True`.
@@ -95,11 +92,10 @@ def hist1d(
     Returns:
         matplotlib figure, np array of matplotlib axes
     """
-    marginals_1d = _marginal_weightedmarginal_to_df(marginal_1d)
-
+    marginal_1d = _marginaldict_weightedmarginaldict_to_dfdict(marginal_1d)
     d = len(marginal_1d)
 
-    fig, axes = plt.subplots(nrows=d, figsize=figsize)
+    fig, axes = plt.subplots(ncols=d, sharey=True, figsize=figsize)
 
     lb = 0.125
     tr = 0.9
@@ -112,22 +108,28 @@ def hist1d(
         hspace=space_between_axes,
     )
 
-    color = "k"
-
-    for i, (k, ax) in enumerate(zip(marginals_1d.keys(), axes.flatten())):
-        df = marginals_1d[k]
+    for i, (k, ax) in enumerate(zip(sorted(marginal_1d.keys()), axes.flatten())):
+        df = marginal_1d[k]
         sns.histplot(
-            df,
+            data=df,
             x=k[0],
+            stat="density",
             weights=_set_weight_keyword(df),
             bins=bins,
             ax=ax,
             element="step",
             fill=False,
-            color=color,
-            kde=kde,
-            kde_kws={"levels": levels},
+            color="k",
         )
+        if kde:
+            sns.kdeplot(
+                data=df,
+                x=k[0],
+                weights=_set_weight_keyword(df),
+                ax=ax,
+                fill=False,
+                color="b",
+            )
         ax.tick_params(
             axis="x",
             which=tickswhich,
@@ -161,8 +163,6 @@ def hist1d(
             ax.set_ylim(*ylim[i])
         else:
             raise NotImplementedError("ylim should be a tuple or a list of tuples.")
-
-        ax.set_ylim(*ylim)
 
     fig.align_labels()
     return fig, axes
@@ -209,8 +209,8 @@ def corner(
     Returns:
         matplotlib figure, np array of matplotlib axes
     """
-    marginals_1d = _marginal_weightedmarginal_to_df(marginal_1d)
-    marginals_2d = _marginal_weightedmarginal_to_df(marginal_2d)
+    marginals_1d = _marginaldict_weightedmarginaldict_to_dfdict(marginal_1d)
+    marginals_2d = _marginaldict_weightedmarginaldict_to_dfdict(marginal_2d)
 
     d = len(marginals_1d)
     upper_inds = get_d_dim_marginal_indices(d, 2)
@@ -229,23 +229,31 @@ def corner(
         hspace=space_between_axes,
     )
 
-    color = "k"
-
     for ax in upper:
         ax.axis("off")
 
-    for i, (k, ax) in enumerate(zip(marginals_1d.keys(), diag)):
+    for i, (k, ax) in enumerate(zip(sorted(marginals_1d.keys()), diag)):
         df = marginals_1d[k]
         sns.histplot(
-            df,
+            data=df,
             x=k[0],
+            stat="density",
             weights=_set_weight_keyword(df),
             bins=bins,
             ax=ax,
             element="step",
             fill=False,
-            color=color,
+            color="k",
         )
+        if kde:
+            sns.kdeplot(
+                data=df,
+                x=k[0],
+                weights=_set_weight_keyword(df),
+                ax=ax,
+                fill=False,
+                color="b",
+            )
         ax.tick_params(
             axis="both",
             which="both",
@@ -258,7 +266,8 @@ def corner(
         if truth is not None:
             ax.axvline(truth[i], color="r")
 
-    for k, i in tqdm(zip(marginals_2d.keys(), upper_inds)):
+    # TODO is this sorting always correct to do?
+    for k, i in tqdm(zip(sorted(marginals_2d.keys()), upper_inds)):
         a, b = i  # plot array index, upper index (lower index is transpose)
         x, y = k  # marginal index
         ax = axes[b, a]  # targets the lower left corner
@@ -271,7 +280,7 @@ def corner(
             weights=_set_weight_keyword(df),
             bins=bins,
             ax=ax,
-            color=color,
+            color="k",
             pthresh=0.01,
         )
         if kde:
@@ -282,7 +291,7 @@ def corner(
                 weights=_set_weight_keyword(df),
                 ax=ax,
                 # palette="muted",
-                color=color,
+                color="b",
                 levels=levels,
             )
 

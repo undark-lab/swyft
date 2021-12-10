@@ -1,7 +1,7 @@
 from swyft.bounds import Bound
 from swyft.inference import MarginalPosterior, MarginalRatioEstimator
 from swyft.networks import get_marginal_classifier
-from swyft.plot import corner, empirical_z_score_corner, violin
+from swyft.plot import corner, empirical_z_score_corner, hist1d, violin
 from swyft.prior import (
     Prior,
     PriorTruncator,
@@ -26,6 +26,7 @@ __all__ = [
     "Dataset",
     "empirical_z_score_corner",
     "get_marginal_classifier",
+    "hist1d",
     "MarginalPosterior",
     "MarginalRatioEstimator",
     "OnlineDictStandardizingLayer",
