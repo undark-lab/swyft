@@ -34,4 +34,16 @@ First clone the github repo, navigate to the repo in your terminal, from within 
 The :code:`-e` flag will install *swyft* in development mode such that your version of the code is used when *swyft* is imported.
 The :code:`[dev]` flag installs the extra tools necessary to format and test your contribution.
 
+
+docs
+---------
+Compiling the docs requires an additional flag. Then the docs may be compiled by navigating to the docs folder.
+
+.. code-block:: bash
+
+  pip install -e .[docs]
+  cd docs
+  make html
+
+
 .. _pytorch: https://pytorch.org/get-started/locally/
