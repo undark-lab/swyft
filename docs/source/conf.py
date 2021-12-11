@@ -58,6 +58,8 @@ autodoc_type_aliases = {
     "LimitType": "swyft.typing.LimitType",
 }
 
+# nbsphinx
+nbsphinx_kernel_name = "python3"  # https://github.com/spatialaudio/nbsphinx/issues/121
 nbsphinx_allow_errors = True
 
 # # To be used with autosummary,
