@@ -11,8 +11,8 @@
 
    swyft
    install
-   autodoc
    tutorial-notebooks
    videos
+   autodoc
    contributing-link
    citation
