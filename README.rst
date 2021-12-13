@@ -46,7 +46,7 @@ a hyper-efficient, simulation-based inference technique for complex data and exp
 * **Source code**: https://github.com/undark-lab/swyft
 * **Support & discussion**: https://github.com/undark-lab/swyft/discussions
 * **Bug reports**: https://github.com/undark-lab/swyft/issues
-* **Contributing**: https://github.com/undark-lab/swyft/blob/master/CONTRIBUTING.md
+* **Contributing**: https://swyft.readthedocs.io/en/latest/contributing-link.html
 * **Citation**: https://swyft.readthedocs.io/en/latest/citation.html
 
 *swyft*:
