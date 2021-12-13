@@ -25,8 +25,8 @@ authors:
   - name: Ou Ku
     orcid: 0000-0002-5373-5209
     affiliation: 4
-  - name: Meiert Grootes
-    orcid:
+  - name: Meiert W. Grootes
+    orcid: 0000-0002-5733-4795
     affiliation: 4
 affiliations:
  - name: Gravitation Astroparticle Physics Amsterdam (GRAPPA), University of Amsterdam
@@ -42,27 +42,42 @@ bibliography: paper.bib
 ---
 
 # Summary
-- A list of the authors of the software and their affiliations, using the correct format (see the example below).
-- A summary describing the high-level functionality and purpose of the software for a diverse, non-specialist audience.
-- A Statement of Need section that clearly illustrates the research purpose of the software.
-- A list of key references, including to other software addressing related needs. Note that the references should include full names of venues, e.g., journals and conferences, not abbreviations only understood in the context of a specific discipline.
-- Mention (if applicable) a representative set of past or ongoing research projects using the software and recent scholarly publications enabled by it.
-- Acknowledgement of any financial support.
+Parametric stochastic numerical simulators are ubiquitous in science. They model observed phenomena by mapping a parametric representation of simulation conditions to a hypothetical observation--effectively sampling from a complex probability distribution over observational data known as the likelihood. Simulators are advantageous because they easily encode relevant scientific knowledge. However, the simulation-based, implicit representation of the likelihood makes it difficult to find the set of parameters which plausibly generated some observational data--an incredibly common task called the inverse problem. Simulation-based inference is a machine learning technique which estimates a probabilistic description of this parameter set, known as the Bayesian posterior, by fitting a surrogate statistical model to parameters and simulated data.
 
-Here are the inception papers [@miller2021truncated] [@swyft].
+Our package `swyft` implements a specific simulation-based inference method called Truncated Marginal Neural Ratio Estimation (TMNRE) [@miller2021truncated; @swyft]. `swyft` accomplishes four primary goals: a) Estimate arbitrary marginal posteriors, i.e., the posterior over parameters of interest, marginalizing over nuisance parameters, b) perform targeted inference by truncating the prior distribution--this combines simulation efficiency with empirical testability, c) seamlessly reuse simulations drawn from previous analyses, and d) integrate advanced distribution and storage tools to simplify application of complex simulators.
 
-Two papers which used our method (maybe swyft) were [@delaunoy2020lightning] and [@coogan2020targeted] (There was demand for a method which estimated marginal posteriors using likelihood-to-evidence ratio estimation as which led to the creation of the software package.)
+# Motivation
+TODO (explain why this is necessary given all of that development with related work)
 
-The software was cited in [@batista2021eucapt], a white paper laying out a vision for astropartical physics research during the next decade.
+## Existing research with `swyft`
+The existing software package has enabled inference on dark matter substructure in strongly lensed galaxies [@coogan2020targeted], has estimated cosmological parameters from cosmic microwave background simulation data [@cole2021fast], and was cited in a white paper laying out a vision for astropartical physics research during the next decade [@batista2021eucapt]. In an ongoing project, `swyft` may help reduce the response time to a LIGO-Virgo trigger by estimating the marginal posterior for future events with unprecedented speed. In another project, `swyft` helps to characterize the magnetohydrodynamics of binary neutron star mergers where the likelihood is intractable and the marginalization expensive.
 
-A recent version of the software was applied directly to [@cole2021fast].
+## Related work
+There is a long tradition of likelihood-free inference, also known as Approximate Bayesian Computation (ABC), going back to as early as the 1980s [@diggle1984monte; @first_abc; @second_abc; @Toni2009-fd; @Beaumont2009-gl]. Traditional techniques use Monte-Carlo rejection sampling and are summarized within @sisson2018handbook and @karabatsos2018approximate. We track the development of classifiers for the estimation of likelihood ratios to a few references. @Cranmer2015 which compares the ratio between the likelihood of a freely varying parameter and a fixed reference value for frequentist inference. @pham2014note estimated the ratio between likelihoods for Markov chain Monte-Carlo sampling. @thomas2016likelihood and @gutmann2018likelihood introduced the framework which allows for likelihood-to-evidence ratio estimation. Like `swyft`, @blum2010non truncates the prior--except within an ABC scheme.
 
-# Motivation / Statement of Need
-Here's the motivation.
+Modern simulation-based inference is a quickly evolving field that has several techniques under development [@Cranmer2020]. There have been extensive investigations on the suitability of simulation-based inference posteriors for science [@hermans2021averting]. The different methods are categorized by the term they approximate in Bayes' formula
 
-First [@Hermans2019].
+$$p(\theta \mid x) = \frac{p(x \mid \theta)}{p(x)} p(\theta).$$
+
+- Likelihood-to-evidence ratio estimation approximates $\frac{p(x \mid \theta)}{p(x)}$ and was developed in @Hermans2019 and @Durkan2020.
+- Posterior estimation approximates $p(\theta \mid x)$. Chronologically the relevant papers include @epsilon_free, @lueckmann2017flexible, @greenberg2019automatic, and @Durkan2020.
+- Likelihood estimation approximates $p(x \mid \theta)$, as seen in @papamakarios2019sequential and @lueckmann2019likelihood.
+
+There are a number of relevant and notable software repositories. `sbi` [@sbi] is a fully-featured software package that implements a selection of modern methods. It is accompanied by a benchmark `sbibm` which tests
+those methods against a set of tractable toy problems [@sbibm]. `pydelfi` [@pydelfi-repo] estimates the likelihood of a learned summary statistic [@alsing2018massive; alsing2019fast]. It is particularly relevant for `swyft` users due to the work on projecting out nuisance parameters [@alsing2019nuisance]. `carl` [@louppe2016] uses a classifier to estimate the likelihood ratio from @Cranmer2015 and `hypothesis` [@hypothesis-repo] includes several toy simulators.
+
+Non-neural implementations for simulation-based inference also exist. `elfi` [@elfi2018] which implements BOLFI, an algorithm based on Gaussian processes [@gutmann2016bayesian]. `pyabc` [@Klinger2018] and `ABCpy` [@dutta2017] are two suites of ABC algorithms.
+
+
+# Description of software
+TODO
+
+The machine learning aspects of `swyft` are implemented in PyTorch [@pytorch] while the truncated prior is implemented within `numpy` [harris2020array]. Storing previously simulated data for reuse in later analyses is acomplished with `zarr` [@zarr] and parallelization of simulation is achieved with `dask` [@dask]. `swyft` has other importance dependencies, namely `scipy` [2020SciPy-NMeth], `seaborn` [@Waskom2021], `matplotlib` [@Hunter:2007], `pandas` [@reback2020pandas; @mckinney-proc-scipy-2010], and `jupyter` [@jupyter].
 
 # Acknowledgements
-Thanks to you all.
+TODO
+
+This work was supported by the Netherlands eScience Center and SURF under grant number ETEC.2019.018. We also would like to thank SURF for providing computational resources via the EINF-1194 grant.
+
 
 # References
