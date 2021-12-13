@@ -42,10 +42,25 @@ bibliography: paper.bib
 ---
 
 # Summary
-Here's a summary. [@miller2021truncated] [@swyft]
+- A list of the authors of the software and their affiliations, using the correct format (see the example below).
+- A summary describing the high-level functionality and purpose of the software for a diverse, non-specialist audience.
+- A Statement of Need section that clearly illustrates the research purpose of the software.
+- A list of key references, including to other software addressing related needs. Note that the references should include full names of venues, e.g., journals and conferences, not abbreviations only understood in the context of a specific discipline.
+- Mention (if applicable) a representative set of past or ongoing research projects using the software and recent scholarly publications enabled by it.
+- Acknowledgement of any financial support.
 
-# Motivation
+Here are the inception papers [@miller2021truncated] [@swyft].
+
+Two papers which used our method (maybe swyft) were [@delaunoy2020lightning] and [@coogan2020targeted] (There was demand for a method which estimated marginal posteriors using likelihood-to-evidence ratio estimation as which led to the creation of the software package.)
+
+The software was cited in [@batista2021eucapt], a white paper laying out a vision for astropartical physics research during the next decade.
+
+A recent version of the software was applied directly to [@cole2021fast].
+
+# Motivation / Statement of Need
 Here's the motivation.
+
+First [@Hermans2019].
 
 # Acknowledgements
 Thanks to you all.
