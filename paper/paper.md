@@ -42,23 +42,26 @@ bibliography: paper.bib
 ---
 
 # Notes
-- I don't mention what we estimate (likelihood-to-evidence ratio). Should I?
 - Should I be more careful saying "posterior estimate" since we don't estimate the posterior directly, rather the likelihood-to-evidence ratio.
 - Is the related work excessive? Perhaps I can cite all modern neural methods in a single line without explaining their details.
 
 # Summary
-Parametric stochastic numerical simulators are ubiquitous in science. They model observed phenomena by mapping a parametric representation of simulation conditions to a hypothetical observation--effectively sampling from a complex probability distribution over observational data known as the likelihood. Simulators are advantageous because they easily encode relevant scientific knowledge. *Simulation-based inference* is a machine learning technique which applies this simulator, a fitted statistical surrogate model, and a set of prior beliefs to estimate a probabilistic description of the parameters which plausibly generated some observational data. This description of parameters is known as the posterior and it is the end-product of Bayesian inference.
+Parametric stochastic numerical simulators are ubiquitous in science. They model observed phenomena by mapping a parametric representation of simulation conditions to a hypothetical observation--effectively sampling from a probability distribution over observational data known as the likelihood. Simulators are advantageous because they easily encode relevant scientific knowledge. *Simulation-based inference* is a machine learning technique which applies a simulator, a fitted statistical surrogate model, and a set of prior beliefs to estimate a probabilistic description of the parameters which plausibly generated some observational data. This description of parameters is known as the posterior and it is the end-product of Bayesian inference.
 
 
-Our package `swyft` implements a specific SBI method called *Truncated Marginal Neural Ratio Estimation* (TMNRE) [@miller2021truncated; @swyft]. `swyft` provides a collection of tools to simulate locally, or in a distributed computing setting, and use those simulations to perform (marginalized) Bayesian inference on complex data. It produces ready-to-publish plots that demonstrate the calibration of the posterior estimate along with the posterior itself.
+Our package `swyft` implements a specific SBI method called *Truncated Marginal Neural Ratio Estimation* (TMNRE) [@miller2021truncated]; it estimates the likelihood-to-evidence ratio to approximate the posterior, as in @Hermans2019. `swyft` [@swyft] provides a collection of tools to simulate data, locally or in a distributed computing setting, and perform (marginalized) simulation-based Bayesian inference. It produces ready-to-publish plots that demonstrate the calibration of the posterior estimate along with the posterior itself.
 
 
 # Motivation
-Estimating the posterior with SBI can be prohibitively expensive for complex data and slow simulators. We offer two suggestions to reduce the simulation burden: a) Fitting the joint posterior for all parameters is unnecessary when a marginal estimate of parameters-of-interest is sufficient and b) amortization of posteriors, whereby an SBI method is fitted for all possible observations simultaneously, is an inefficient use of simulation data when a only subset of the parameter space could have plausibly generated the observation. `swyft` takes a lean approach by satisficing the necessary requirements and avoiding all unnecessary computation. Additionally, `swyft` automates irksome aspects of running expensive simulations and doesn't simulate unless it must. `swyft` achieves this with four attributes:
+Estimating the posterior can be prohibitively expensive for complex data and slow simulators. Likelihood-based Markov chain Monte-Carlo [@metropolis; @hastings] can be inconveniently slow due to sequential simulation requirements. In contrast, SBI can parallelize simulation in many circumstances, thereby reducing the practical waiting time for results. In pursuit of further simulation efficiency, @miller2021truncated argues that fitting the joint posterior for all parameters is unnecessary when a marginal estimate of the posterior will suffice. SBI methods can be amortized, whereby the statistical model is fitted to estimate posteriors for possible observations simultaneously. While amortization enables necessary posterior calibration checks, like expected coverage probability [@miller2021truncated; @hermans2021averting], it is more efficient to fit the model on only a subset of parameters that could have plausibly generated the observation.
+
+`swyft` satisfices necessary requirements, like estimating the marginal posteriors of interest and enabling posterior calibration checks, while taking a lean approach to avoid all unnecessary simulation. In this pursuit, `swyft` truncates the prior to regions relevant for given observational data and reuses compatible previously simulated data.  `swyft` automates irksome aspects of running expensive simulations like distributed computing and storage of results. `swyft` achieves five design goals:
+
 1. Estimate arbitrary marginal posteriors, i.e., the posterior over parameters of interest, marginalizing over nuisance parameters.
-2. Perform targeted inference by truncating the prior distribution with an indicator function estimated in a sequence of rounds. It improves simulation efficiency by amortizing over only the necessary subset of the parameter space, while enabling empirical testability on this region via expected coverage testing.
-3. Seamlessly reuse simulations from previous analyses by drawing already-simulated data first.
-4. Integrate advanced distribution and storage tools to simplify application of complex simulators.
+2. Perform targeted inference by truncating the prior distribution with an indicator function estimated in a sequence of rounds.
+3. Estimate the expected coverage probability of fully amortized SBI posteriors and for truncated ones.
+4. Seamlessly reuse simulations from previous analyses by drawing already-simulated data first.
+5. Integrate advanced distribution and storage tools to simplify application of complex simulators.
 
 Although there is a rich ecosystem of SBI implementations, TMNRE did not naturally fit in an existing framework since it requires parallel estimation of marginal posteriors and a truncated prior. `swyft` aims to meet the ever-increasing demand for efficient and testable Bayesian inference in fields like physics, cosmology, and astronomy by implementing TMNRE together with practical distributed computing and storage tools.
 
