@@ -59,37 +59,30 @@ Estimating the posterior can be prohibitively expensive for complex data and slo
 
 1. Estimate arbitrary marginal posteriors, i.e., the posterior over parameters of interest, marginalizing over nuisance parameters.
 2. Perform targeted inference by truncating the prior distribution with an indicator function estimated in a sequence of rounds.
-3. Estimate the expected coverage probability of fully amortized SBI posteriors and for truncated ones.
+3. Estimate the expected coverage probability of fully amortized SBI posteriors and for locally amortized posteriors on truncated regions.
 4. Seamlessly reuse simulations from previous analyses by drawing already-simulated data first.
 5. Integrate advanced distribution and storage tools to simplify application of complex simulators.
 
 Although there is a rich ecosystem of SBI implementations, TMNRE did not naturally fit in an existing framework since it requires parallel estimation of marginal posteriors and a truncated prior. `swyft` aims to meet the ever-increasing demand for efficient and testable Bayesian inference in fields like physics, cosmology, and astronomy by implementing TMNRE together with practical distributed computing and storage tools.
 
 ## Existing research with `swyft`
-The existing software package has enabled inference on dark matter substructure in strongly lensed galaxies [@coogan2020targeted], has estimated cosmological parameters from cosmic microwave background simulation data [@cole2021fast], and was cited in a white paper laying out a vision for astropartical physics research during the next decade [@batista2021eucapt]. Ongoing work with `swyft` aims to reduce the response time to gravitational wave triggers from LIGO-Virgo by estimating the marginal posterior with unprecedented speed. In another project, `swyft` helps to characterize the magnetohydrodynamics of binary neutron star mergers using multi-messenger gravitational and electrodynamic data where marginalization would be impossible with likelihood-based methods.
+The existing software package has enabled inference on dark matter substructure in strongly lensed galaxies [@coogan2020targeted], estimated cosmological parameters from cosmic microwave background simulation data [@cole2021fast], and was cited in a white paper laying out a vision for astropartical physics research during the next decade [@batista2021eucapt]. Ongoing work with `swyft` aims to reduce the response time to gravitational wave triggers from LIGO-Virgo by estimating the marginal posterior with unprecedented speed. In another project, `swyft` helps to characterize the magnetohydrodynamics of binary neutron star mergers using multi-messenger gravitational and electrodynamic data where marginalization would be impossible with likelihood-based methods.
 
-## Related work
+## Related theoretical work
 There is a long tradition of likelihood-free inference, also known as *Approximate Bayesian Computation* (ABC), going back to as early as the 1980s [@diggle1984monte; @first_abc; @second_abc; @Toni2009-fd; @Beaumont2009-gl]. Traditional techniques use Monte-Carlo rejection sampling and are summarized within @sisson2018handbook and @karabatsos2018approximate. We track the development of classifiers for the estimation of likelihood ratios to a few references. @Cranmer2015 compares the ratio between the likelihood of a freely varying parameter and a fixed reference value for frequentist inference. @pham2014note estimated the ratio between likelihoods for Markov chain Monte-Carlo sampling. @thomas2016likelihood and @gutmann2018likelihood introduced the framework which allows for likelihood-to-evidence ratio estimation. Like `swyft`, @blum2010non proposes to truncate the prior for sampling but it does so within an ABC scheme.
 
-Modern SBI is a quickly evolving field that has several techniques under development [@Cranmer2020]. There have been extensive investigations on the suitability of SBI posteriors for science [@hermans2021averting]. The different methods are categorized by the term they approximate in Bayes' formula
+Modern SBI is a quickly evolving field that has several techniques under development [@Cranmer2020]. Neural network-based methods are categorized according to the term they approximate in Bayes' formula. `swyft` is a method which approximates the likelihood-to-evidence ratio $\frac{p(x \mid \theta)}{p(x)}$ where $\theta$ are the parameters and $x$ is the observational data. @Hermans2019, @Durkan2020, and @rozet2021arbitrary are the most closely related to `swyft` as they also approximate the likelihood-to-evidence ratio. Like `swyft`, @rozet2021arbitrary also estimates marginal posteriors, but attempts to amortize over all possible marginals with a single neural network. Other methods estimate the posterior directly [@epsilon_free; @lueckmann2017flexible; @greenberg2019automatic; @Durkan2020] or the likelihood itself [@papamakarios2019sequential; @lueckmann2019likelihood].
 
-$$p(\theta \mid x) = \frac{p(x \mid \theta)}{p(x)} p(\theta),$$
-
-where $\theta$ are the parameters and $x$ is the observational data. The categories for neural approximation methods are given:
-
-- Likelihood-to-evidence ratio estimation approximates $\frac{p(x \mid \theta)}{p(x)}$ and was developed in @Hermans2019 and @Durkan2020.
-- Posterior estimation approximates $p(\theta \mid x)$. The relevant papers include @epsilon_free, @lueckmann2017flexible, @greenberg2019automatic, and @Durkan2020.
-- Likelihood estimation approximates $p(x \mid \theta)$, as seen in @papamakarios2019sequential and @lueckmann2019likelihood.
-
-There are a number of relevant software repositories. `sbi` [@sbi] is a fully-featured software package that implements a selection of modern methods. It is accompanied by a benchmark `sbibm` [@sbibm] which tests those methods against a set of tractable toy problems. `pydelfi` [@pydelfi-repo] estimates the likelihood of a learned summary statistic [@alsing2018massive; @alsing2019fast]. It is particularly relevant for `swyft` users due to the work on projecting out nuisance parameters [@alsing2019nuisance]. `carl` [@louppe2016] uses a classifier to estimate the likelihood ratio as in @Cranmer2015 and `hypothesis` [@hypothesis-repo] includes several toy simulators.
+## Related software
+`sbi` [@sbi] is a fully-featured software package that implements a selection of modern methods. It is accompanied by a benchmark `sbibm` [@sbibm] which tests those methods against a set of tractable toy problems. `pydelfi` [@pydelfi-repo] estimates the likelihood of a learned summary statistic [@alsing2018massive; @alsing2019fast]. It is particularly relevant for `swyft` users due to the work on projecting out nuisance parameters [@alsing2019nuisance]. `carl` [@louppe2016] uses a classifier to estimate the likelihood ratio as in @Cranmer2015 and `hypothesis` [@hypothesis-repo] includes several toy simulators.
 
 Non-neural implementations for SBI also exist. `elfi` [@elfi2018] implements BOLFI, an algorithm based on Gaussian processes [@gutmann2016bayesian]. `pyabc` [@Klinger2018] and `ABCpy` [@dutta2017] are two suites of ABC algorithms.
 
 
 # Description of software
-TODO
+`swyft` implements *Marginal Neural Ratio Estimation* (MNRE), a method which trains an amortized likelihood-to-evidence ratio estimator for any marginal of interest. `swyft` makes it easy to estimate a set of marginals in parallel, e.g., for a corner plot. Performing TMNRE by restricting simulation to a truncated region is simple and demonstrated in the documentation. Constructing these truncated regions can be done manually or based on a previous round's posterior estimate. Routines are provided for all necessary plots and to calculate the expected coverage probability of a given likelihood-to-evidence ratio estimator.
 
-The machine learning aspects of `swyft` are implemented in PyTorch [@pytorch] while the truncated prior is implemented within `numpy` [@harris2020array]. Storing previously simulated data for reuse in later analyses is acomplished with `zarr` [@zarr] and parallelization of simulation is achieved with `dask` [@dask]. `swyft` has other important dependencies, namely `scipy` [@2020SciPy-NMeth], `seaborn` [@Waskom2021], `matplotlib` [@Hunter:2007], `pandas` [@reback2020pandas; @mckinney-proc-scipy-2010], and `jupyter` [@jupyter].
+The machine learning aspects of `swyft` are implemented in PyTorch [@pytorch] while the truncated prior is implemented within `numpy` [@harris2020array]. Storing previously simulated data for reuse in later analyses is accomplished with `zarr` [@zarr] and parallelization of simulation is achieved with `dask` [@dask]. `swyft` has other important dependencies, namely `scipy` [@2020SciPy-NMeth], `seaborn` [@Waskom2021], `matplotlib` [@Hunter:2007], `pandas` [@reback2020pandas; @mckinney-proc-scipy-2010], and `jupyter` [@jupyter].
 
 # Acknowledgements
 TODO
