@@ -35,8 +35,8 @@
 ..    :target: https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb
 ..    :alt: colab
 
-.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.5752735.svg
-   :target: https://doi.org/10.5281/zenodo.5752735
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.5752734.svg
+   :target: https://doi.org/10.5281/zenodo.5752734
 
 *swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
 a hyper-efficient, simulation-based inference technique for complex data and expensive simulators.
