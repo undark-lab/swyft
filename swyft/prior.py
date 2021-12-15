@@ -1,5 +1,6 @@
+from functools import partial
 from importlib import import_module
-from typing import Callable, Type, TypeVar, Union
+from typing import Callable, Sequence, Type, TypeVar
 
 import numpy as np
 import torch
@@ -211,6 +212,7 @@ class Prior(StateDictSaveable):
             "n_parameters": self.n_parameters,
         }
         self.distribution = None
+        self.get_split = None
 
     @classmethod
     def from_torch_distribution(
@@ -234,12 +236,13 @@ class Prior(StateDictSaveable):
             len(distribution.event_shape) == 0
         ), f"{distribution} must be factorizable and report the log_prob of every dimension (i.e. all dims are in batch_shape)"
         prior = cls(
-            cdf=compose(tensor_to_array, distribution.cdf, array_to_tensor),
-            icdf=compose(tensor_to_array, distribution.icdf, array_to_tensor),
-            log_prob=compose(tensor_to_array, distribution.log_prob, array_to_tensor),
+            cdf=cls.conjugate_tensor_func(distribution.cdf),
+            icdf=cls.conjugate_tensor_func(distribution.icdf),
+            log_prob=cls.conjugate_tensor_func(distribution.log_prob),
             n_parameters=distribution.batch_shape.numel(),
         )
         prior.distribution = distribution
+        prior.get_split = None
         prior.method = "from_torch_distribution"
         prior._state_dict = {
             "method": prior.method,
@@ -251,6 +254,64 @@ class Prior(StateDictSaveable):
             ),
         }
         return prior
+
+    @classmethod
+    def composite_prior(
+        cls,
+        cdfs: Sequence[Callable],
+        icdfs: Sequence[Callable],
+        log_probs: Sequence[Callable],
+        parameter_dimensions: Sequence[int],
+    ) -> PriorType:
+        assert len(cdfs) == len(icdfs), "there must be as many icdfs as cdfs"
+        assert len(cdfs) == len(log_probs), "there must be as many log_probs as cdfs"
+        assert len(cdfs) == len(
+            parameter_dimensions
+        ), "there must be as many parameter_dimensions as cdfs"
+        n_parameters = sum(parameter_dimensions)
+        parameter_indices = np.cumsum(parameter_dimensions)[:-1]
+        get_split = partial(np.split, indices_or_sections=parameter_indices, axis=1)
+        zip_cdfs = partial(cls.zip_apply, cdfs)
+        zip_icdfs = partial(cls.zip_apply, icdfs)
+        zip_log_probs = partial(cls.zip_apply, log_probs)
+        concatenate = partial(np.concatenate, axis=1)
+        prior = cls(
+            cdf=compose(concatenate, zip_cdfs, get_split),
+            icdf=compose(concatenate, zip_icdfs, get_split),
+            log_prob=compose(concatenate, zip_log_probs, get_split),
+            n_parameters=n_parameters,
+        )
+        prior.distribution = None
+        prior.method = "composite_prior"
+        prior.get_split = get_split
+        prior._state_dict = {
+            "method": prior.method,
+            "cdfs": cdfs,
+            "icdfs": icdfs,
+            "log_probs": log_probs,
+            "parameter_dimensions": parameter_dimensions,
+        }
+        return prior
+
+    @staticmethod
+    def conjugate_tensor_func(
+        function: Callable[
+            [
+                torch.Tensor,
+            ],
+            torch.Tensor,
+        ]
+    ) -> Callable[[np.ndarray,], np.ndarray]:
+        """conjugate a function by converting the input array to a tensor, apply function to the tensor, then convert the output tensor back to an array.
+
+        Args:
+            function: callable which takes a torch tensor
+        """
+        return compose(tensor_to_array, function, array_to_tensor)
+
+    @staticmethod
+    def zip_apply(functions: Sequence[Callable], arguments: Sequence) -> Sequence:
+        return [f(arg) for f, arg in zip(functions, arguments)]
 
     @classmethod
     def from_uv(
@@ -297,6 +358,9 @@ class Prior(StateDictSaveable):
         if method == "__init__":
             kwargs = keyfilter(lambda x: x != "method", state_dict)
             return cls(**kwargs)
+        elif method == "composite_prior":
+            kwargs = keyfilter(lambda x: x != "method", state_dict)
+            return getattr(cls, method)(**kwargs)
         elif method == "from_torch_distribution":
             name = state_dict["name"]
             module = state_dict["module"]
