@@ -26,6 +26,10 @@ def main():
     for nbpath in source.glob("*/"):
         if any([ign in str(nbpath) for ign in IGNORE]):
             continue
+        elif nbpath.is_dir():
+            continue
+        elif nbpath.suffix != ".ipynb":
+            continue
         else:
             target_path = Path(relative_source, f"{nbpath.stem}.ipynb")
             nblink = create_nblink(target_path)
@@ -33,6 +37,7 @@ def main():
             with open(linkpath, "w") as f:
                 print("Creating path for", target_path, "Located at", linkpath)
                 json.dump(nblink, f)
+                f.writelines("\n")
 
 
 if __name__ == "__main__":
