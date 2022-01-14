@@ -5,13 +5,14 @@ from typing import Callable, Tuple
 
 import numpy as np
 import pytest
+import scipy.stats
 import torch
 from scipy import stats
 from scipy.stats._distn_infrastructure import rv_frozen
 from toolz import compose
 from torch.distributions import Normal, Uniform
 
-from swyft.prior import InterpolatedTabulatedDistribution, Prior
+from swyft.prior import InterpolatedTabulatedDistribution, Prior, PriorTruncator
 from swyft.utils import array_to_tensor, tensor_to_array
 
 dimensions = [1, 2, 5]
@@ -296,6 +297,72 @@ class TestSaveLoadPrior:
         # Testing by cdf
         # (icdf or log_prob would also be fine.)
         samples = prior.distribution.sample((1_000,))
+        cdf_true = prior.cdf(samples)
+        cdf_esti = prior_loaded.cdf(samples)
+        assert np.allclose(cdf_true, cdf_esti)
+
+    def test_save_load_composite_prior_torch(self):
+        loc, scale = normal_hyperparameters[0]
+        lower, upper = uniform_hyperparameters[0]
+
+        normal = Normal(loc, scale)
+        uniform = Uniform(lower, upper)
+
+        prior = Prior.composite_prior(
+            cdfs=list(map(Prior.conjugate_tensor_func, [normal.cdf, uniform.cdf])),
+            icdfs=list(map(Prior.conjugate_tensor_func, [normal.icdf, uniform.icdf])),
+            log_probs=list(
+                map(Prior.conjugate_tensor_func, [normal.log_prob, uniform.log_prob])
+            ),
+            parameter_dimensions=[len(loc), len(lower)],
+        )
+
+        # Saving
+        path = (
+            Path(self.directory.name)
+            / f"composite_prior_torch_{prior.__class__.__name__}"
+        )
+        prior.save(path)
+
+        # Loading
+        prior_loaded = Prior.load(path)
+
+        # Testing by cdf
+        # (icdf or log_prob would also be fine.)
+        samples = PriorTruncator(prior, bound=None).sample(1_000)
+        cdf_true = prior.cdf(samples)
+        cdf_esti = prior_loaded.cdf(samples)
+        assert np.allclose(cdf_true, cdf_esti)
+
+    def test_save_load_composite_prior_scipy(self):
+        loc, scale = normal_hyperparameters[0]
+        lower, upper = uniform_hyperparameters[0]
+
+        normal = scipy.stats.norm(loc, scale)
+        uniform = scipy.stats.uniform(lower, upper)
+
+        prior = Prior.composite_prior(
+            cdfs=list(map(Prior.conjugate_tensor_func, [normal.cdf, uniform.cdf])),
+            icdfs=list(map(Prior.conjugate_tensor_func, [normal.ppf, uniform.ppf])),
+            log_probs=list(
+                map(Prior.conjugate_tensor_func, [normal.logpdf, uniform.logpdf])
+            ),
+            parameter_dimensions=[len(loc), len(lower)],
+        )
+
+        # Saving
+        path = (
+            Path(self.directory.name)
+            / f"composite_prior_torch_{prior.__class__.__name__}"
+        )
+        prior.save(path)
+
+        # Loading
+        prior_loaded = Prior.load(path)
+
+        # Testing by cdf
+        # (icdf or log_prob would also be fine.)
+        samples = PriorTruncator(prior, bound=None).sample(1_000)
         cdf_true = prior.cdf(samples)
         cdf_esti = prior_loaded.cdf(samples)
         assert np.allclose(cdf_true, cdf_esti)
