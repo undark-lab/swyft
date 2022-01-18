@@ -1,9 +1,10 @@
-name: Build JOSS paper draft
+name: compile joss tex
+
 on:
   push:
     branches:
-    - main
-  pull_request:
+    - joss-submission-do-not-delete
+
 jobs:
   paper:
     runs-on: ubuntu-latest
