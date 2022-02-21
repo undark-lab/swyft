@@ -20,6 +20,7 @@ import swyft
 from dataclasses import dataclass
 import pytorch_lightning as pl
 from torch.nn import functional as F
+from swyft.inference.marginalratioestimator import get_ntrain_nvalid
 
 from typing import (
     Callable,
@@ -146,14 +147,15 @@ class RectangleBound:
 def get_1d_rect_bounds(samples, th = 1e-6):
     bounds = {}
     for k, v in samples.items():
-        w = v.ratios
+        r = v.ratios
+        r = r - r.max(axis=0).values  # subtract peak
         p = v.values
         #w = v[..., 0]
         #p = v[..., 1]
         all_max = p.max(dim=0).values
         all_min = p.min(dim=0).values
-        constr_min = torch.where(w > np.log(th), p, all_max).min(dim=0).values
-        constr_max = torch.where(w > np.log(th), p, all_min).max(dim=0).values
+        constr_min = torch.where(r > np.log(th), p, all_max).min(dim=0).values
+        constr_max = torch.where(r > np.log(th), p, all_min).max(dim=0).values
         #bound = torch.stack([constr_min, constr_max], dim = -1)
         bound = RectangleBound(constr_min, constr_max)
         bounds[k] = bound
@@ -166,6 +168,13 @@ def append_randomized(z):
     z = torch.cat([z, z[n+idx], z[idx]])
     return z
 
+def append_nonrandomized(z):
+    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
+    n = len(z)//2
+    idx = np.arange(n)
+    z = torch.cat([z, z[n+idx], z[idx]])
+    return z
+
 def valmap(m, d):
     return {k: m(v) for k, v in d.items()}
 
@@ -175,10 +184,13 @@ class SwyftModule(pl.LightningModule):
         self._predict_condition_x = {}
         self._predict_condition_z = {}
         
+    def on_train_start(self):
+        self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
+        
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 30)
-        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer), "monitor": "val_loss"}
+        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 2, factor = 0.25), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _log_ratios(self, x, z):
@@ -188,23 +200,40 @@ class SwyftModule(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, batch_idx)
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, prog_bar=True)
         return loss
-        
-    def _calc_loss(self, batch, batch_idx):
+
+    def _calc_loss(self, batch, batch_idx, randomized = True):
         x, z = batch
-        z = valmap(append_randomized, z)
+        if randomized:
+            z = valmap(append_randomized, z)
+        else:
+            z = valmap(append_nonrandomized, z)
         log_ratios = self._log_ratios(x, z)
         nbatch = len(log_ratios)//2
         y = torch.zeros_like(log_ratios)
         y[:nbatch, ...] = 1
         loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduce = False)
-        loss = loss.sum()
+        loss = loss.sum()/nbatch
         return loss
     
+    def _calc_KL(self, batch, batch_idx):
+        x, z = batch
+        log_ratios = self._log_ratios(x, z)
+        nbatch = len(log_ratios)
+        loss = -log_ratios.sum()/nbatch
+        return loss
+        
     def training_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, batch_idx)
         self.log("train_loss", loss)
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        loss = self._calc_loss(batch, batch_idx, randomized = False)
+        lossKL = self._calc_KL(batch, batch_idx)
+        self.log("hp/JS-div", loss)
+        self.log("hp/KL-div", lossKL)
         return loss
     
     def _set_predict_conditions(self, condition_x, condition_z):
@@ -237,6 +266,16 @@ def persist_to_file(original_func):
     #return decorator
     
 
+def file_cache(fn, file_path):
+    try:
+        cache = torch.load(file_path)
+    except (FileNotFoundError, ValueError):
+        cache = None
+    if cache is None:
+        cache = fn()
+        torch.save(cache, file_path)
+    return cache
+    
     
 def weights_sample(N, values, weights, replacement = True):
     """Weight-based sampling with or without replacement."""
@@ -374,48 +413,70 @@ class DictDataset(torch.utils.data.Dataset):
         z = {k: d[k] for k in z_keys}
         return x, z
     
+class MultiplyDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset, M):
+        self.dataset = dataset
+        self.M = M
+        
+    def __len__(self):
+        return len(self.dataset)*self.M
+    
+    def __getitem__(self, i):
+        return self.dataset[i%self.M]
+    
     
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, store, model = None, batch_size: int = 32):
+    def __init__(self, store, model = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 ):
         super().__init__()
         self.store = store
         self.model = model
         self.batch_size = batch_size
+        self.validation_percentage = validation_percentage
+        self.train_multiply = train_multiply
 
     def setup(self, stage):
         hook = None if self.model is None else self.model.noise        
         self.dataset = DictDataset(self.store, hook = hook)#, x_keys = ['data'], z_keys=['z'])
+        n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
+        self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
+        self.dataset_test = DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size)
+        return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size)
+        return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size)
     
     def predict_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size)
     
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size)
+        
+    
 class SwyftModel:
-    def simulate(self, N, bounds = None, effective_prior = None):
+    def _simulate(self, N, bounds = None, effective_prior = None):
         # TODO: Include conditional priors
         prior_samples = self.prior(N, bounds = bounds)
         if effective_prior:
             for k in effective_prior.keys():
                 samples = effective_prior[k].sample(N)
-                prior_samples.update(k = samples[k])
+                prior_samples[k] = samples[k]
         simulated_samples = dictstoremap(self.slow, prior_samples)
-        samples = dict(**prior_samples, **simulated_samples)
-        return SampleStore(samples)
+        samples_tot = dict(**prior_samples, **simulated_samples)
+        return SampleStore(samples_tot)
     
-    def sample(self, N, bounds = None):
-        sims = self.simulate(N, bounds = bounds)
+    def sample(self, N, bounds = None, effective_prior = None):
+        sims = self._simulate(N, bounds = bounds, effective_prior = effective_prior)
         data = dictstoremap(self.fast, sims)
         out = dict(**data, **sims)
         return SampleStore(out)
     
     def noise(self, S):
+        S = S.copy()
         D = self.fast(S)
-        return dict(**D, **S)
+        S.update(D)
+        return S#dict(**D, **S)
     
     def __call__(self, S):
         D = self.slow(S)
