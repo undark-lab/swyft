@@ -517,7 +517,7 @@ class RatioEstimatorMLP1d(torch.nn.Module):
         super().__init__()
         self.marginals = [(i,) for i in range(z_dim)]
         self.ptrans = swyft.networks.ParameterTransform(
-            len(self.marginals), self.marginals, online_z_score=False
+            len(self.marginals), self.marginals, online_z_score=True
         )
         n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
         n_observation_features = x_dim
