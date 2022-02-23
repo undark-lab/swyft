@@ -91,7 +91,7 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         rho = self.xz_cov/self.x_var**0.5/self.z_var**0.5
         r = -0.5*torch.log(1-rho**2) + rho/(1-rho**2)*xb*zb - 0.5*rho**2/(1-rho**2)*(xb**2 + zb**2)
         #out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
-        out = RatioSamples(z, r, meta = {"type": "Gaussian1d"})
+        out = RatioSamples(z, r, metadata = {"type": "Gaussian1d"})
         return out
     
     
@@ -233,9 +233,9 @@ class SwyftModule(pl.LightningModule):
     
     def test_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, batch_idx, randomized = False)
-        #lossKL = self._calc_KL(batch, batch_idx)
+        lossKL = self._calc_KL(batch, batch_idx)
         self.log("hp/JS-div", loss)
-        #self.log("hp/KL-div", lossKL)
+        self.log("hp/KL-div", lossKL)
         return loss
     
     def _set_predict_conditions(self, condition_x, condition_z):
@@ -245,11 +245,9 @@ class SwyftModule(pl.LightningModule):
     def predict_step(self, batch, batch_idx):
         x, z = batch
         condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
-        #x.update(**condition_x)
+        x.update(**condition_x)
         #z.update(**self._predict_condition_z)
-        out = self(x, z)
-        #return out
-        pass
+        return self(x, z)
     
 # https://stackoverflow.com/questions/16463582/memoize-to-disk-python-persistent-memoization
 #def persist_to_file():
@@ -349,7 +347,7 @@ class SampleStore(dict):
 class RatioSamples:
     values: torch.Tensor
     ratios: torch.Tensor
-    meta: dict = field(default_factory = dict)
+    metadata: dict = field(default_factory = dict)
     
     def __len__(self):
         assert len(self.values) == len(self.ratios), "Inconsistent RatioSamples"
@@ -510,7 +508,7 @@ class MarginalMLP(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         z = self.ptrans(z)
         ratios = self.classifier(x, z)
-        w = RatioSamples(z, ratios, meta = {"type": "MarginalMLP", "marginals": self.marginals})
+        w = RatioSamples(z, ratios, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
         return w
     
 
@@ -519,7 +517,7 @@ class RatioEstimatorMLP1d(torch.nn.Module):
         super().__init__()
         self.marginals = [(i,) for i in range(z_dim)]
         self.ptrans = swyft.networks.ParameterTransform(
-            len(self.marginals), self.marginals, online_z_score=True
+            len(self.marginals), self.marginals, online_z_score=False
         )
         n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
         n_observation_features = x_dim
@@ -535,5 +533,5 @@ class RatioEstimatorMLP1d(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         zt = self.ptrans(z)
         ratios = self.classifier(x, zt)
-        w = RatioSamples(z, ratios, meta = {"type": "MLP1d"})
+        w = RatioSamples(z, ratios, metadata = {"type": "MLP1d"})
         return w
