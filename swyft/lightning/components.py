@@ -17,7 +17,7 @@ from pyrofit.utils.torchutils import _mid_many, unravel_index
 from pyrofit.utils import kNN
 from fft_conv_pytorch import fft_conv, FFTConv2d
 import swyft
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pytorch_lightning as pl
 from torch.nn import functional as F
 from swyft.inference.marginalratioestimator import get_ntrain_nvalid
@@ -61,6 +61,7 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         
     def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         """2-dim Gaussian approximation to marginals and joint, assuming (B, N)."""
+        x, z = equalize_tensors(x, z)
         if self.training or self.x_mean is None:
             # Covariance estimates must be based on joined samples only
             # NOTE: This makes assumptions about the structure of mini batches during training (J, M, M, J, J, M, M, J, ...)
@@ -89,7 +90,8 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         zb = (z-self.z_mean)/self.z_var**0.5
         rho = self.xz_cov/self.x_var**0.5/self.z_var**0.5
         r = -0.5*torch.log(1-rho**2) + rho/(1-rho**2)*xb*zb - 0.5*rho**2/(1-rho**2)*(xb**2 + zb**2)
-        out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
+        #out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
+        out = RatioSamples(z, r, meta = {"type": "Gaussian1d"})
         return out
     
     
@@ -231,9 +233,9 @@ class SwyftModule(pl.LightningModule):
     
     def test_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, batch_idx, randomized = False)
-        lossKL = self._calc_KL(batch, batch_idx)
+        #lossKL = self._calc_KL(batch, batch_idx)
         self.log("hp/JS-div", loss)
-        self.log("hp/KL-div", lossKL)
+        #self.log("hp/KL-div", lossKL)
         return loss
     
     def _set_predict_conditions(self, condition_x, condition_z):
@@ -243,9 +245,11 @@ class SwyftModule(pl.LightningModule):
     def predict_step(self, batch, batch_idx):
         x, z = batch
         condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
-        x.update(**condition_x)
+        #x.update(**condition_x)
         #z.update(**self._predict_condition_z)
-        return self(x, z)
+        out = self(x, z)
+        #return out
+        pass
     
 # https://stackoverflow.com/questions/16463582/memoize-to-disk-python-persistent-memoization
 #def persist_to_file():
@@ -345,6 +349,7 @@ class SampleStore(dict):
 class RatioSamples:
     values: torch.Tensor
     ratios: torch.Tensor
+    meta: dict = field(default_factory = dict)
     
     def __len__(self):
         assert len(self.values) == len(self.ratios), "Inconsistent RatioSamples"
@@ -483,3 +488,52 @@ class SwyftModel:
         D = dict(**D, **S)
         E = self.fast(D)
         return dict(**D, **E)
+
+class MarginalMLP(torch.nn.Module):
+    def __init__(self, marginals, x_dim, dropout = 0.1, hidden_features = 64, num_blocks = 2):
+        super().__init__()
+        self.marginals = marginals
+        self.ptrans = swyft.networks.ParameterTransform(
+            len(marginals), marginals, online_z_score=False
+        )
+        n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
+        n_observation_features = x_dim
+        self.classifier = swyft.networks.MarginalClassifier(
+            n_marginals,
+            n_observation_features + n_block_parameters,
+            hidden_features=hidden_features,
+            dropout_probability = dropout,
+            num_blocks=num_blocks,
+        )
+        
+    def forward(self, x, z):
+        x, z = equalize_tensors(x, z)
+        z = self.ptrans(z)
+        ratios = self.classifier(x, z)
+        w = RatioSamples(z, ratios, meta = {"type": "MarginalMLP", "marginals": self.marginals})
+        return w
+    
+
+class RatioEstimatorMLP1d(torch.nn.Module):
+    def __init__(self, x_dim, z_dim, dropout = 0.1, hidden_features = 64, num_blocks = 2):
+        super().__init__()
+        self.marginals = [(i,) for i in range(z_dim)]
+        self.ptrans = swyft.networks.ParameterTransform(
+            len(self.marginals), self.marginals, online_z_score=True
+        )
+        n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
+        n_observation_features = x_dim
+        self.classifier = swyft.networks.MarginalClassifier(
+            n_marginals,
+            n_observation_features + n_block_parameters,
+            hidden_features=hidden_features,
+            dropout_probability = dropout,
+            num_blocks=num_blocks,
+        )
+        
+    def forward(self, x, z):
+        x, z = equalize_tensors(x, z)
+        zt = self.ptrans(z)
+        ratios = self.classifier(x, zt)
+        w = RatioSamples(z, ratios, meta = {"type": "MLP1d"})
+        return w
