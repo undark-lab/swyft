@@ -250,9 +250,9 @@ class MarginalRatioEstimator(StateDictSaveable):
                 )
                 validation_losses.append(loss_avg)
 
-                if self.epoch == 0 or self.min_loss > validation_loss:
+                if self.epoch == 0 or self.min_loss > loss_avg:
                     fruitless_epoch = 0
-                    self.min_loss = validation_loss
+                    self.min_loss = loss_avg
                     self.best_network_state_dict = self.network.state_dict()
                 else:
                     fruitless_epoch += 1
