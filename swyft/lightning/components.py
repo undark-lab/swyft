@@ -29,7 +29,6 @@ from swyft.inference.marginalratioestimator import get_ntrain_nvalid
 
 class SwyftModel:
     def _simulate(self, N, bounds = None, effective_prior = None):
-        # TODO: Include conditional priors
         prior_samples = self.prior(N, bounds = bounds)
         if effective_prior:
             for k in effective_prior.keys():
@@ -45,25 +44,27 @@ class SwyftModel:
         out = dict(**data, **sims)
         return SampleStore(out)
     
+    # RENAME?
     def noise(self, S):
         S = S.copy()
         D = self.fast(S)
         S.update(D)
-        return S#dict(**D, **S)
-    
-    def __call__(self, S):
-        D = self.slow(S)
-        D = dict(**D, **S)
-        E = self.fast(D)
-        return dict(**D, **E)
+        return SampleStore(S)
+
+#    def __call__(self, S):
+#        D = self.slow(S)
+#        D = dict(**D, **S)
+#        E = self.fast(D)
+#        return dict(**D, **E)
 
 
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, store, model = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 ):
+    def __init__(self, model = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
         self.store = store
         self.model = model
         self.batch_size = batch_size
+        self.num_workers = num_workers
         self.validation_percentage = validation_percentage
         self.train_multiply = train_multiply
 
@@ -75,16 +76,16 @@ class SwyftDataModule(pl.LightningDataModule):
         self.dataset_test = DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size)
+        return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers = self.num_workers)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size)
+        return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size, num_workers = self.num_workers)
     
     def predict_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size)
+        return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
     
     def test_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size)
+        return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers = self.num_workers)
 
 
 class SwyftModule(pl.LightningModule):
@@ -200,6 +201,7 @@ class RectangleBound:
     high: torch.Tensor
 
 
+# RENAME? - WeightedSamples - SwyftRatios
 @dataclass
 class RatioSamples:
     values: torch.Tensor
@@ -233,6 +235,7 @@ class RatioSamples:
 # Helper classes
 ################
 
+# RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
 class SampleStore(dict):
     def __len__(self):
         n = [len(v) for v in self.values()]
@@ -247,6 +250,7 @@ class SampleStore(dict):
             return super().__getitem__(i)
         
 
+# RENAME? RatioStore - SwyftRatioStore
 class RatioSampleStore(dict):
     """Return type of SwyftTrainer"""
     def __len__(self):
@@ -258,9 +262,11 @@ class RatioSampleStore(dict):
         return {k: v.sample(N, replacement = replacement) for k, v in self.items()}
 
 
+# RENAME?
 class DictDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset, x_keys = None, z_keys = None, hook = None):
-        self._dataset = dataset
+    """Simple torch dataset based on SampleStore."""
+    def __init__(self, sample_store, x_keys = None, z_keys = None, hook = None):
+        self._dataset = sample_store
         self._x_keys = x_keys
         self._z_keys = z_keys
         self._hook = hook
@@ -380,6 +386,7 @@ def equalize_tensors(a, b):
         shape[0] = n//m
         return a, b.repeat(*shape)
     
+# RENAME?
 def dictstoremap(model, dictstore):
     """Generate new dictionary."""
     N = len(dictstore)
@@ -397,8 +404,9 @@ def dictstoremap(model, dictstore):
 # Ratio estimator networks
 ##########################
 
-class MarginalMLP(torch.nn.Module):
-    def __init__(self, marginals, x_dim, dropout = 0.1, hidden_features = 64, num_blocks = 2):
+# RENAME?
+class RatioEstimatorMLPnd(torch.nn.Module):
+    def __init__(self, x_dim, marginals, dropout = 0.1, hidden_features = 64, num_blocks = 2):
         super().__init__()
         self.marginals = marginals
         self.ptrans = swyft.networks.ParameterTransform(
