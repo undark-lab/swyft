@@ -162,7 +162,7 @@ class MarginalRatioEstimator(StateDictSaveable):
         scheduler: Optional[Callable] = torch.optim.lr_scheduler.ReduceLROnPlateau,
         scheduler_kwargs: dict = {"factor": 0.1, "patience": 5},
         early_stopping_patience: Optional[int] = 25,
-        max_epochs: int = 2 ** 31 - 1,
+        max_epochs: int = 2**31 - 1,
         nworkers: int = 0,
         non_blocking: bool = True,
         pin_memory: bool = True,
@@ -250,9 +250,9 @@ class MarginalRatioEstimator(StateDictSaveable):
                 )
                 validation_losses.append(loss_avg)
 
-                if self.epoch == 0 or self.min_loss > validation_loss:
+                if self.epoch == 0 or self.min_loss > loss_avg:
                     fruitless_epoch = 0
-                    self.min_loss = validation_loss
+                    self.min_loss = loss_avg
                     self.best_network_state_dict = self.network.state_dict()
                 else:
                     fruitless_epoch += 1

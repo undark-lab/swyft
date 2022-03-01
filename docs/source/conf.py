@@ -105,9 +105,9 @@ source_suffix = [".rst", ".md"]
 master_doc = "index"
 
 # General information about the project.
-project = u"swyft"
-copyright = u"2021, Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
-author = u"Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
+project = "swyft"
+copyright = "2021, Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
+author = "Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -205,7 +205,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "swyft.tex", u"swyft Documentation", u"Christoph Weniger", "manual")
+    (master_doc, "swyft.tex", "swyft Documentation", "Christoph Weniger", "manual")
 ]
 
 
@@ -213,7 +213,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "swyft", u"swyft Documentation", [author], 1)]
+man_pages = [(master_doc, "swyft", "swyft Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -225,7 +225,7 @@ texinfo_documents = [
     (
         master_doc,
         "swyft",
-        u"swyft Documentation",
+        "swyft Documentation",
         author,
         "swyft",
         "One line description of project.",

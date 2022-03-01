@@ -54,7 +54,7 @@ class OnlineStandardizingLayer(nn.Module):
         m2b = (
             x.var(dim=(0,), unbiased=False) * nb
         )  # do not use bessel's correction then multiply by total number of items in batch.
-        m2ab = m2a + m2b + delta ** 2 * na * nb / nab
+        m2ab = m2a + m2b + delta**2 * na * nb / nab
         return nab, xab, m2ab
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -20,7 +20,7 @@ def simulator_FermiV1(a, ox, oy, p1, p2, sigma=0.1):
     diff = np.cos(X + ox) * np.cos(Y + oy) * a + 2
 
     p = np.random.randn(*X.shape) * p1 - 0.3
-    psc = 10 ** p * p2
+    psc = 10**p * p2
     n = np.random.randn(*X.shape) * sigma
     mu = diff * 5 + psc + n
     return mu

@@ -223,10 +223,10 @@ class BallsBound(Bound, StateDictSaveable):
         n_samples = 100
         vol_est = []
         d = X.shape[-1]
-        area = {1: 2 * epsilon, 2: np.pi * epsilon ** 2}[d]
+        area = {1: 2 * epsilon, 2: np.pi * epsilon**2}[d]
         for i in range(n_samples):
             n = np.random.randn(*X.shape)
-            norm = (n ** 2).sum(axis=1) ** 0.5
+            norm = (n**2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
             r = np.random.rand(len(X)) ** (1 / d) * epsilon
             Y = X + n * r.reshape(-1, 1)
@@ -247,7 +247,7 @@ class BallsBound(Bound, StateDictSaveable):
         d = self.X.shape[-1]
         while counter < n_samples:
             n = np.random.randn(*self.X.shape)
-            norm = (n ** 2).sum(axis=1) ** 0.5
+            norm = (n**2).sum(axis=1) ** 0.5
             n = n / norm.reshape(-1, 1)
             r = np.random.rand(len(self.X)) ** (1 / d) * self.epsilon
             Y = self.X + n * r.reshape(-1, 1)

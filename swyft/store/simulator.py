@@ -8,6 +8,7 @@ import traceback
 from operator import getitem
 from typing import Callable, Mapping, Optional, Tuple, Union
 
+import dask
 import dask.array as da
 import numpy as np
 import zarr
@@ -275,14 +276,16 @@ class DaskSimulator(Simulator):
             sim_status[indices.tolist()] = status
 
         else:
-            sources = da.store(
-                sources=sources,
-                targets=targets,
-                regions=(indices.tolist(),),
-                lock=False,
-                compute=False,
-                return_stored=True,
-            )
+            # Avoid Dask graph optimization in store (might cause simulations to be rerun)
+            with dask.config.set({"optimization.fuse.active": False}):
+                sources = da.store(
+                    sources=sources,
+                    targets=targets,
+                    regions=(indices.tolist(),),
+                    lock=False,
+                    compute=False,
+                    return_stored=True,
+                )
 
             # submit computation
             *sources, status = self.client.persist([*sources, status])

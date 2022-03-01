@@ -155,7 +155,7 @@ class MarginalRatioEstimator:
         scheduler: Optional[Callable] = torch.optim.lr_scheduler.ReduceLROnPlateau,
         scheduler_kwargs: dict = {"factor": 0.1, "patience": 5},
         early_stopping_patience: Optional[int] = None,
-        max_epochs: int = 2 ** 31 - 1,
+        max_epochs: int = 2**31 - 1,
         nworkers: int = 0,
         non_blocking: bool = True,
         pin_memory: bool = True,
