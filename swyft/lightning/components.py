@@ -108,7 +108,7 @@ class SwyftModule(pl.LightningModule):
 
     def _log_ratios(self, x, z):
         out = self(x, z)
-        log_ratios = torch.cat([val.ratios.flatten(start_dim = 1) for val in out.values()])
+        log_ratios = torch.cat([val.ratios.flatten(start_dim = 1) for val in out.values()], dim=1)
         return log_ratios
     
     def validation_step(self, batch, batch_idx):
