@@ -23,6 +23,7 @@ import swyft.utils
 from swyft.inference.marginalratioestimator import get_ntrain_nvalid
 
 import zarr
+import fasteners
 
 
 #################################
@@ -552,9 +553,13 @@ class MultiplyDataset(torch.utils.data.Dataset):
 
 
 class ZarrStore:
-    def __init__(self, file_path):
+    def __init__(self, file_path, sync_path = None):
+        if sync_path is None:
+            sync_path = file_path + ".sync"
+        synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self.store = zarr.DirectoryStore(file_path)
-        self.root = zarr.group(store = self.store)
+        self.root = zarr.group(store = self.store, synchronizer = synchronizer)
+        self.lock = fasteners.InterProcessLock(file_path+".lock.file")
             
     def reset_sim_status(self):
         pass
@@ -630,18 +635,19 @@ class ZarrStore:
         if num_sims == 0:
             return num_sims
 
-        samples = m.sample(num_sims)
+        samples = model.sample(num_sims)
         
-        # Reserve slots (not overwrite secure)
-        sim_status = self.root['meta']['sim_status']
-        idx = np.arange(len(sim_status))[sim_status[:]==0][:num_sims]
-        for i in idx:
-            sim_status[i] = 1
-            
-        # Write simulated data
-        data = self.root['data']
-        for j, i in enumerate(idx):
-            for k, v in data.items():
-                data[k][i] = samples[k][j]
-                
+        # Reserve slots
+        with self.lock:
+            sim_status = self.root['meta']['sim_status']
+            idx = np.arange(len(sim_status))[sim_status[:]==0][:num_sims]
+            for i in idx:
+                sim_status[i] = 1
+
+            # Write simulated data
+            data = self.root['data']
+            for j, i in enumerate(idx):
+                for k, v in data.items():
+                    data[k][i] = samples[k][j]
+
         return num_sims
