@@ -22,6 +22,8 @@ import swyft
 import swyft.utils
 from swyft.inference.marginalratioestimator import get_ntrain_nvalid
 
+import zarr
+
 
 #################################
 # Swyft lightning main components
@@ -98,7 +100,7 @@ class SwyftModule(pl.LightningModule):
         self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
         
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
         #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 30)
         lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 2, factor = 0.25), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
@@ -548,3 +550,98 @@ class MultiplyDataset(torch.utils.data.Dataset):
 #def valmap(m, d):
 #    return {k: m(v) for k, v in d.items()}
 
+
+class ZarrStore:
+    def __init__(self, file_path):
+        self.store = zarr.DirectoryStore(file_path)
+        self.root = zarr.group(store = self.store)
+            
+    def reset_sim_status(self):
+        pass
+    
+    def extend(self, N):
+        pass
+        
+    @staticmethod
+    def _get_shapes(model, shapes):
+        if model is None and shapes is not None:
+            pass
+        elif model is not None and shapes is None:
+            sample = model.sample(1)[0]
+            shapes = {k: tuple(v.shape) for k, v in sample.items()}
+        else:
+            raise ValueError("Either shapes or model must be specified (but not both).")
+        return shapes
+    
+    def init(self, N, chunk_size, shapes = None, model = None):
+        #if 'data' in self.root.keys():
+            #return self
+        shapes = self._get_shapes(model, shapes)
+        self._init_shapes(shapes, N, chunk_size)
+        return self
+        
+    def __len__(self):
+        if 'data' not in self.root.keys():
+            return 0
+        keys = self.root['data'].keys()
+        ns = [len(self.root['data'][k]) for k in keys]
+        N = ns[0]
+        assert all([n==N for n in ns])
+        return N
+    
+    def _init_shapes(self, shapes, N, chunk_size):          
+        for k, s in shapes.items():
+            try:
+                self.root.zeros('data/'+k, shape = (N, *s), chunks = (chunk_size, *s), dtype = 'f4')
+            except zarr.errors.ContainsArrayError:
+                assert self.root['data/'+k].shape == (N, *s), "Inconsistent array sizes"
+                assert self.root['data/'+k].chunks == (chunk_size, *s), "Inconsistent chunk sizes"
+        try:
+            self.root.zeros('meta/sim_status', shape = (N, ), chunks = (chunk_size, ), dtype = 'i4')
+        except zarr.errors.ContainsArrayError:
+            assert self.root['meta/sim_status'].shape == (N, ), "Inconsistent array sizes"
+    
+    @property
+    def data(self):
+        return {k: v for k, v in self.root['data'].items()}
+    
+    def numpy(self):
+        return {k: v[:] for k, v in self.root['data'].items()}
+    
+    @property
+    def meta(self):
+        return {k: v for k, v in self.root['meta'].items()}
+    
+    @property
+    def sims_required(self):
+        return sum(self.root['meta']['sim_status'][:] == 0)
+
+    def simulate(self, model, max_sims = None, batch_size = 10):
+        total_sims = 0
+        while self.sims_required > 0:
+            if max_sims is not None and total_sims >= max_sims:
+                break
+            num_sims = self.simulate_batch(model, batch_size)
+            total_sims += num_sims
+
+    def simulate_batch(self, model, batch_size):
+        # Run simulator
+        num_sims = min(batch_size, self.sims_required)
+        if num_sims == 0:
+            return num_sims
+
+        samples = m.sample(num_sims)
+        
+        # Reserve slots (not overwrite secure)
+        sim_status = self.root['meta']['sim_status']
+        idx = np.arange(len(sim_status))[sim_status[:]==0][:num_sims]
+        for i in idx:
+            sim_status[i] = 1
+            
+        # Write simulated data
+        data = self.root['data']
+        for j, i in enumerate(idx):
+            for k, v in data.items():
+                data[k][i] = samples[k][j]
+                
+        return num_sims
