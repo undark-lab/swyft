@@ -663,3 +663,42 @@ class ZarrStore:
                     data[k][i] = samples[k][j]
 
         return num_sims
+
+
+
+#class TorchStore:
+#    def __init__(self, simulator, filepath):
+#        self.simulator = simulator
+#        self.filepath = filepath
+#
+#    def _load(self, filepath):
+#        try:
+#            data = torch.load(filepath)
+#        except (FileNotFoundError, ValueError):
+#            data = None
+#        self._get_length(data)
+#        self.data = data
+#
+#    @staticmethod
+#    def _get_length(data):
+#        if data is None:
+#            return 0
+#        lengths = [len(v) for k, v in data.items()]
+#        N = lengths[0]
+#        assert all([n == N for n in lengths])
+#        return N
+#
+#    def __len__(self):
+#        return self._get_length(self.data)
+#
+#    def _save_data(self):
+#        torch.save(self.data, self.filepath)
+#
+#    def simulate(self, N):
+#        new_data = self.simulator.sample(N)
+#        self.data = new_data
+#        self._save_data()
+#store = TorchStore(simulator, cfg.sims.data_path)
+#store = hydra.utils.instantiate(cfg.store, simulator, cfg.hparams.train_size)
+#store.simulate(cfg.hparams.train_size)
+
