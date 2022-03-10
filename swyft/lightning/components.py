@@ -101,16 +101,16 @@ class SwyftModule(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.save_hyperparameters(cfg.hparams)
+        self.save_hyperparameters(cfg.estimation.hparams)
         self._predict_condition_x = {}
         self._predict_condition_z = {}
         
     def on_train_start(self):
-        self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
+        self.logger.log_hyperparams(self.cfg, {"hp/KL-div": 0, "hp/JS-div": 0})
         
     def configure_optimizers(self):
-        optimizer = hydra.utils.instantiate(self.cfg.optimizer, self.parameters())
-        lr_scheduler = {"scheduler": hydra.utils.instantiate(self.cfg.lr_scheduler, optimizer), "monitor": "val_loss"}
+        optimizer = hydra.utils.instantiate(self.cfg.estimation.optimizer, self.parameters())
+        lr_scheduler = {"scheduler": hydra.utils.instantiate(self.cfg.estimation.lr_scheduler, optimizer), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _log_ratios(self, x, z):
