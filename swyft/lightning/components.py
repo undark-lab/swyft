@@ -92,17 +92,17 @@ class SwyftDataModule(pl.LightningDataModule):
 
 
 class SwyftModule(pl.LightningModule):
-    def __init__(self, lr = 1e-2):
+    def __init__(self, cfg):
         super().__init__()
+        self.save_hyperparameters(cfg)
         self._predict_condition_x = {}
         self._predict_condition_z = {}
-        self._lr = lr
         
     def on_train_start(self):
         self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
         
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self._lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
         #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 30)
         lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 2, factor = 0.25), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
