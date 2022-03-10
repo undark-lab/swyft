@@ -21,6 +21,7 @@ from tqdm import tqdm
 import swyft
 import swyft.utils
 from swyft.inference.marginalratioestimator import get_ntrain_nvalid
+import hydra
 
 import zarr
 import fasteners
@@ -90,11 +91,17 @@ class SwyftDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers = self.num_workers)
 
+    def samples(self, N, random = False):
+        dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size=N, num_workers = 0, shuffle = random)
+        examples = next(iter(dataloader))
+        return SampleStore(examples)
+
 
 class SwyftModule(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
-        self.save_hyperparameters(cfg)
+        self.cfg = cfg
+        self.save_hyperparameters(cfg.hparams)
         self._predict_condition_x = {}
         self._predict_condition_z = {}
         
@@ -102,9 +109,8 @@ class SwyftModule(pl.LightningModule):
         self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
         
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
-        #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 30)
-        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience = 2, factor = 0.25), "monitor": "val_loss"}
+        optimizer = hydra.utils.instantiate(self.cfg.optimizer, self.parameters())
+        lr_scheduler = {"scheduler": hydra.utils.instantiate(self.cfg.lr_scheduler, optimizer), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _log_ratios(self, x, z):
@@ -118,7 +124,8 @@ class SwyftModule(pl.LightningModule):
         return loss
 
     def _calc_loss(self, batch, batch_idx, randomized = True):
-        x, z = batch
+        x = batch
+        z = batch
         if randomized:
             z = valmap(append_randomized, z)
         else:
@@ -132,7 +139,8 @@ class SwyftModule(pl.LightningModule):
         return loss
     
     def _calc_KL(self, batch, batch_idx):
-        x, z = batch
+        x = batch
+        z = batch
         log_ratios = self._log_ratios(x, z)
         nbatch = len(log_ratios)
         loss = -log_ratios.sum()/nbatch
@@ -155,7 +163,8 @@ class SwyftModule(pl.LightningModule):
         self._predict_condition_z = {k: v.unsqueeze(0) for k, v in condition_z.items()}
     
     def predict_step(self, batch, batch_idx):
-        x, z = batch
+        x = batch
+        z = batch
         condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
         x.update(**condition_x)
         #z.update(**self._predict_condition_z)
@@ -269,10 +278,11 @@ class RatioSampleStore(dict):
 # RENAME?
 class DictDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on SampleStore."""
-    def __init__(self, sample_store, x_keys = None, z_keys = None, hook = None):
+    def __init__(self, sample_store, hook = None):
         self._dataset = sample_store
-        self._x_keys = x_keys
-        self._z_keys = z_keys
+        #self._keys = keys
+        #self._x_keys = x_keys
+        #self._z_keys = z_keys
         self._hook = hook
 
     def __len__(self):
@@ -282,11 +292,12 @@ class DictDataset(torch.utils.data.Dataset):
         d = {k: v[i] for k, v in self._dataset.items()}
         if self._hook is not None:
             d = self._hook(d)
-        x_keys = self._x_keys if self._x_keys else d.keys()
-        z_keys = self._z_keys if self._z_keys else d.keys()
-        x = {k: d[k] for k in x_keys}
-        z = {k: d[k] for k in z_keys}
-        return x, z
+        return d
+        #x_keys = self._x_keys if self._x_keys else d.keys()
+        #z_keys = self._z_keys if self._z_keys else d.keys()
+        #x = {k: d[k] for k in x_keys}
+        #z = {k: d[k] for k in z_keys}
+        #return x, z
     
 
 ##################
