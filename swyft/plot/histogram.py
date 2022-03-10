@@ -63,7 +63,7 @@ def hist1d(
     xlim: LimitType = None,
     ylim: LimitType = None,
     truth: Array = None,
-    labels: Sequence[str] = None,
+    labels: Optional[Sequence[str]] = None,
     ticks: bool = True,
     ticklabels: bool = True,
     ticklabelsize: str = "x-small",
