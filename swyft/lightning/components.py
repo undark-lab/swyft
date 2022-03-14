@@ -55,6 +55,11 @@ class SwyftModel:
         S.update(D)
         return SampleStore(S)
 
+    def get_shapes(self):
+        sample = self.sample(1)[0]
+        shapes = {k: tuple(v.shape) for k, v in sample.items()}
+        return shapes
+
 #    def __call__(self, S):
 #        D = self.slow(S)
 #        D = dict(**D, **S)
