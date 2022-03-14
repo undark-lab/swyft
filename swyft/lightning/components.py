@@ -163,8 +163,8 @@ class SwyftModule(pl.LightningModule):
         self._predict_condition_z = {k: v.unsqueeze(0) for k, v in condition_z.items()}
     
     def predict_step(self, batch, batch_idx):
-        x = batch
-        z = batch
+        x = batch.copy()
+        z = batch.copy()
         condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
         x.update(**condition_x)
         #z.update(**self._predict_condition_z)
