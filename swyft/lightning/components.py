@@ -31,6 +31,59 @@ import fasteners
 # Swyft lightning main components
 #################################
 
+class EarlyCompletionException(Exception):
+    pass
+
+class SlotDict(dict):
+    def __init__(self, slots = None, data = {}, raise_exception = False):
+        super().__init__(data)
+        self.slots = slots
+        self.raise_exception = raise_exception
+
+    def needs(self, k):
+        if self.slots is None:
+            return k not in self.keys()
+        else:
+            return k in self.slots and k not in self.keys()
+
+    @property
+    def is_complete(self):
+        if self.slots is None:
+            return False
+        else:
+            return all([k in self.keys() for k in self.slots])
+
+    def __setitem__(self, k, v):
+        if k not in self.keys() and (self.slots is None or k in self.slots):
+            super().__setitem__(k, v)
+        if self.is_complete and self.raise_exception:
+            raise EarlyCompletionException
+
+class SwyftModelForward:
+    def forward(self, slots):
+        raise NotImplementedError
+
+    def __call__(self, requires = None, data = {}):
+        slotdict = SlotDict(requires, data = data, raise_exception = True)
+        try:
+            self.forward(slotdict)
+        except EarlyCompletionException:
+            pass
+        return slotdict
+
+    def get_shapes(self):
+        sample = self()
+        shapes = {k: tuple(v.shape) for k, v in sample.items()}
+        return shapes
+
+    def sample(self, N, requires = None, data = {}):
+        out = []
+        for _ in range(N):
+            out.append(self.__call__(requires, data))
+        out = torch.utils.data.dataloader.default_collate(out)
+        return out
+
+
 class SwyftModel:
     def _simulate(self, N, bounds = None, effective_prior = None):
         prior_samples = self.prior(N, bounds = bounds)
