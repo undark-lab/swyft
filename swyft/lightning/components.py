@@ -21,7 +21,6 @@ from tqdm import tqdm
 import swyft
 import swyft.utils
 from swyft.inference.marginalratioestimator import get_ntrain_nvalid
-import hydra
 
 import zarr
 import fasteners
@@ -156,19 +155,18 @@ class SwyftDataModule(pl.LightningDataModule):
 
 
 class SwyftModule(pl.LightningModule):
-    def __init__(self, cfg):
+    def __init__(self, lr = 1e-3):
         super().__init__()
-        self.cfg = cfg
-        self.save_hyperparameters(cfg.estimation.hparams)
+        self.save_hyperparameters()
         self._predict_condition_x = {}
         self._predict_condition_z = {}
         
     def on_train_start(self):
-        self.logger.log_hyperparams(self.cfg, {"hp/KL-div": 0, "hp/JS-div": 0})
+        self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
         
     def configure_optimizers(self):
-        optimizer = hydra.utils.instantiate(self.cfg.estimation.optimizer, self.parameters())
-        lr_scheduler = {"scheduler": hydra.utils.instantiate(self.cfg.estimation.lr_scheduler, optimizer), "monitor": "val_loss"}
+        optimizer = torch.optim.Adam(self.parameters(), lr = 1e-3)
+        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _log_ratios(self, x, z):
@@ -757,6 +755,5 @@ class ZarrStore:
 #        self.data = new_data
 #        self._save_data()
 #store = TorchStore(simulator, cfg.sims.data_path)
-#store = hydra.utils.instantiate(cfg.store, simulator, cfg.hparams.train_size)
 #store.simulate(cfg.hparams.train_size)
 
