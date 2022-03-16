@@ -25,6 +25,12 @@ import yaml
 
 import zarr
 import fasteners
+from pytorch_lightning import loggers as pl_loggers
+
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+import pytorch_lightning as pl
 
 
 #################################
@@ -119,6 +125,12 @@ class SwyftModel:
 #        E = self.fast(D)
 #        return dict(**D, **E)
 
+def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None):
+    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
+    lr_monitor = LearningRateMonitor(logging_interval="step")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=3, verbose=False, mode="min")
+    checkpoint_callback = ModelCheckpoint(monitor="val_loss")
+    return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
 
 
 class SwyftDataModule(pl.LightningDataModule):
@@ -241,6 +253,9 @@ class SwyftModule(pl.LightningModule):
     def _set_predict_conditions(self, condition_x, condition_z):
         self._predict_condition_x = {k: v.unsqueeze(0) for k, v in condition_x.items()}
         self._predict_condition_z = {k: v.unsqueeze(0) for k, v in condition_z.items()}
+        
+    def set_conditions(self, conditions):
+        self._predict_condition_x = conditions
     
     def predict_step(self, batch, batch_idx):
         x = batch.copy()
