@@ -734,6 +734,9 @@ class ZarrStore:
     def numpy(self):
         return {k: v[:] for k, v in self.root['data'].items()}
     
+    def get_sample_store(self):
+        return SampleStore(self.numpy())
+    
     @property
     def meta(self):
         return {k: v for k, v in self.root['meta'].items()}
