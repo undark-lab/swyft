@@ -32,6 +32,8 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 
+from swyft.networks.standardization import OnlineStandardizingLayer
+
 
 #################################
 # Swyft lightning main components
@@ -84,7 +86,7 @@ class SwyftModelForward:
 
     def sample(self, N, requires = None, data = {}, dtype = torch.float32):
         out = []
-        for _ in range(N):
+        for _ in tqdm(range(N)):
             out.append(self.__call__(requires, data))
         out = torch.utils.data.dataloader.default_collate(out)
         if dtype:
@@ -128,10 +130,10 @@ class SwyftModel:
 #        E = self.fast(D)
 #        return dict(**D, **E)
 
-def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None):
-    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = True)
+def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
+    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
     lr_monitor = LearningRateMonitor(logging_interval="step")
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=3, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=patience, verbose=False, mode="min")
     checkpoint_callback = ModelCheckpoint(monitor="val_loss")
     return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
 
@@ -196,8 +198,7 @@ class SwyftModule(pl.LightningModule):
         #self.lr = lr
         
     def on_train_start(self):
-        pass
-        #self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
+        self.logger.log_hyperparams(self.hparams, {"hp/KL-div": -1, "hp/JS-div": -1})
         
     def on_train_end(self):
         for cb in self.trainer.callbacks:
@@ -251,7 +252,7 @@ class SwyftModule(pl.LightningModule):
         loss = self._calc_loss(batch, batch_idx, randomized = False)
         lossKL = self._calc_KL(batch, batch_idx)
         self.log("hp/JS-div", loss)
-        self.log("hp_metric", loss)
+        #self.log("hp_metric", loss)
         self.log("hp/KL-div", lossKL)
         return loss
     
@@ -357,7 +358,7 @@ class SampleStore(dict):
     
     def __getitem__(self, i):
         """For integers, return 'rows', for string returns 'columns'."""
-        if isinstance(i, int):
+        if isinstance(i, int) or isinstance(i, slice):
             return {k: v[i] for k, v in self.items()}
         else:
             return super().__getitem__(i)
