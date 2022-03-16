@@ -90,7 +90,7 @@ class SwyftModelForward:
         if dtype:
             for k, v in out.items():
                 out[k] = v.type(dtype)
-        return out
+        return SampleStore(out)
 
 
 class SwyftModel:
@@ -129,7 +129,7 @@ class SwyftModel:
 #        return dict(**D, **E)
 
 def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None):
-    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
+    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = True)
     lr_monitor = LearningRateMonitor(logging_interval="step")
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=3, verbose=False, mode="min")
     checkpoint_callback = ModelCheckpoint(monitor="val_loss")
@@ -193,10 +193,11 @@ class SwyftModule(pl.LightningModule):
         self.save_hyperparameters()
         self._predict_condition_x = {}
         self._predict_condition_z = {}
-        self.lr = lr
+        #self.lr = lr
         
     def on_train_start(self):
-        self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
+        pass
+        #self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
         
     def on_train_end(self):
         for cb in self.trainer.callbacks:
@@ -204,7 +205,7 @@ class SwyftModule(pl.LightningModule):
                 cb.to_yaml()
       
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), self.hparams.lr)
         lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
@@ -250,6 +251,7 @@ class SwyftModule(pl.LightningModule):
         loss = self._calc_loss(batch, batch_idx, randomized = False)
         lossKL = self._calc_KL(batch, batch_idx)
         self.log("hp/JS-div", loss)
+        self.log("hp_metric", loss)
         self.log("hp/KL-div", lossKL)
         return loss
     
@@ -270,8 +272,8 @@ class SwyftModule(pl.LightningModule):
         
 
 class SwyftTrainer(pl.Trainer):
-    def infer(self, model, dataloader, condition_x = {}, condition_z = {}):
-        self.model._set_predict_conditions(condition_x, condition_z)
+    def infer(self, model, dataloader, conditions = {}):
+        self.model._set_predict_conditions(conditions, {})
         ratio_batches = self.predict(model, dataloader)
         keys = ratio_batches[0].keys()
         d = {k: RatioSamples(
@@ -377,7 +379,8 @@ class RatioSampleStore(dict):
         return n[0]
     
     def sample(self, N, replacement = True):
-        return {k: v.sample(N, replacement = replacement) for k, v in self.items()}
+        samples = {k: v.sample(N, replacement = replacement) for k, v in self.items()}
+        return SampleStore(samples)
 
 
 # RENAME?
