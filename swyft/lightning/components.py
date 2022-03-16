@@ -60,7 +60,7 @@ class SlotDict(dict):
             return all([k in self.keys() for k in self.slots])
 
     def __setitem__(self, k, v):
-        if k not in self.keys() and (self.slots is None or k in self.slots):
+        if k not in self.keys():# and (self.slots is None or k in self.slots):
             super().__setitem__(k, v)
         if self.is_complete and self.raise_exception:
             raise EarlyCompletionException
@@ -82,11 +82,14 @@ class SwyftModelForward:
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         return shapes
 
-    def sample(self, N, requires = None, data = {}):
+    def sample(self, N, requires = None, data = {}, dtype = torch.float32):
         out = []
         for _ in range(N):
             out.append(self.__call__(requires, data))
         out = torch.utils.data.dataloader.default_collate(out)
+        if dtype:
+            for k, v in out.items():
+                out[k] = v.type(dtype)
         return out
 
 
