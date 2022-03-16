@@ -21,6 +21,7 @@ from tqdm import tqdm
 import swyft
 import swyft.utils
 from swyft.inference.marginalratioestimator import get_ntrain_nvalid
+import yaml
 
 import zarr
 import fasteners
@@ -119,6 +120,7 @@ class SwyftModel:
 #        return dict(**D, **E)
 
 
+
 class SwyftDataModule(pl.LightningDataModule):
     def __init__(self, model = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
@@ -142,6 +144,7 @@ class SwyftDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size, num_workers = self.num_workers)
     
+    # TODO: Deprecate
     def predict_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
     
@@ -154,18 +157,39 @@ class SwyftDataModule(pl.LightningDataModule):
         return SampleStore(examples)
 
 
+def get_best_model(tbl):
+    try:
+        with open(tbl.experiment.get_logdir()+"/checkpoints/best_k_models.yaml") as f:
+            best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
+    except FileNotFoundError:
+        return None
+    val_loss = np.inf
+    path = None
+    for k, v in best_k_models.items():
+        if v < val_loss:
+            path = k
+            val_loss = v
+    return path
+
+
 class SwyftModule(pl.LightningModule):
     def __init__(self, lr = 1e-3):
         super().__init__()
         self.save_hyperparameters()
         self._predict_condition_x = {}
         self._predict_condition_z = {}
+        self.lr = lr
         
     def on_train_start(self):
         self.logger.log_hyperparams(self.hparams, {"hp/KL-div": 0, "hp/JS-div": 0})
         
+    def on_train_end(self):
+        for cb in self.trainer.callbacks:
+            if isinstance(cb, pl.callbacks.model_checkpoint.ModelCheckpoint):
+                cb.to_yaml()
+      
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr = 1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), self.lr)
         lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
