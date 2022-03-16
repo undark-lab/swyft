@@ -148,10 +148,10 @@ class SwyftDataModule(pl.LightningDataModule):
 
     def setup(self, stage):
         hook = None if self.model is None else self.model.noise        
-        self.dataset = DictDataset(self.store, hook = hook)#, x_keys = ['data'], z_keys=['z'])
+        self.dataset = _DictDataset(self.store, hook = hook)#, x_keys = ['data'], z_keys=['z'])
         n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
         self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
-        self.dataset_test = DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
+        self.dataset_test = _DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers = self.num_workers)
@@ -360,6 +360,13 @@ class SampleStore(dict):
         else:
             return super().__getitem__(i)
         
+    def get_dataset(self):
+        return _DictDataset(self)
+    
+    def get_dataloader(self, batch_size = 1):
+        dataset = self.get_dataset()
+        return torch.utils.data.DataLoader(dataset, batch_size = batch_size)
+        
 
 # RENAME? RatioStore - SwyftRatioStore
 class RatioSampleStore(dict):
@@ -374,7 +381,7 @@ class RatioSampleStore(dict):
 
 
 # RENAME?
-class DictDataset(torch.utils.data.Dataset):
+class _DictDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on SampleStore."""
     def __init__(self, sample_store, hook = None):
         self._dataset = sample_store
