@@ -787,7 +787,6 @@ class ZarrStore:
             for i_slice, j_slice in index_slices:
                 sim_status[j_slice[0]:j_slice[1]] = 1
                 for k, v in data.items():
-                    print(k)
                     data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]].numpy()
                 
 #            for i in idx:
