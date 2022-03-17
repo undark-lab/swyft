@@ -672,6 +672,21 @@ class MultiplyDataset(torch.utils.data.Dataset):
 #def valmap(m, d):
 #    return {k: m(v) for k, v in d.items()}
 
+def get_index_slices(idx):
+    """Returns list of enumerated consecutive indices"""
+    idx = np.array(idx)
+    pointer = 0
+    residual_idx = idx
+    slices = []
+    while len(residual_idx) > 0:
+        mask = (residual_idx - residual_idx[0] - np.arange(len(residual_idx)) == 0)
+        slc1 = [residual_idx[mask][0], residual_idx[mask][-1]+1]
+        slc2 = [pointer, pointer+sum(mask)]
+        pointer += sum(mask)
+        slices.append([slc2, slc1])
+        residual_idx = residual_idx[~mask]
+    return slices
+
 
 class ZarrStore:
     def __init__(self, file_path, sync_path = None):
@@ -764,15 +779,27 @@ class ZarrStore:
         # Reserve slots
         with self.lock:
             sim_status = self.root['meta']['sim_status']
-            idx = np.arange(len(sim_status))[sim_status[:]==0][:num_sims]
-            for i in idx:
-                sim_status[i] = 1
-
-            # Write simulated data
             data = self.root['data']
-            for j, i in enumerate(idx):
+            
+            idx = np.arange(len(sim_status))[sim_status[:]==0][:num_sims]
+            index_slices = get_index_slices(idx)
+            
+            for i_slice, j_slice in index_slices:
+                sim_status[j_slice[0]:j_slice[1]] = 1
                 for k, v in data.items():
-                    data[k][i] = samples[k][j]
+                    print(k)
+                    data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]].numpy()
+                
+#            for i in idx:
+#                sim_status[i] = 1
+#
+#            # Write simulated data
+#            data = self.root['data']
+#            print(idx)
+#            for j, i in enumerate(idx):
+#                for k, v in data.items():
+#                    print(k)
+#                    data[k][i] = samples[k][j]
 
         return num_sims
 
