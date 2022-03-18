@@ -39,61 +39,90 @@ from swyft.networks.standardization import OnlineStandardizingLayer
 # Swyft lightning main components
 #################################
 
-class EarlyCompletionException(Exception):
+class CoversTargetException(Exception):
     pass
 
-class SlotDict(dict):
-    def __init__(self, slots = None, data = {}, raise_exception = False):
-        super().__init__(data)
-        self.slots = slots
-        self.raise_exception = raise_exception
+class SwyftTrace(dict):
+    def __init__(self, targets = None, conditions = {}, overwrite = False):
+        super().__init__(conditions)
+        self._targets = targets
+        self._overwrite = overwrite
 
-    def needs(self, k):
-        if self.slots is None:
-            return k not in self.keys()
-        else:
-            return k in self.slots and k not in self.keys()
-
+    def contains_not(self, keys):
+        if isinstance(keys, str):
+            keys = [keys]
+        return not all([k in self.keys() for k in keys])
+        
     @property
-    def is_complete(self):
-        if self.slots is None:
-            return False
-        else:
-            return all([k in self.keys() for k in self.slots])
+    def covers_targets(self):
+        if self._targets is not None:
+            if all([k in self.keys() for k in self._targets]):
+                return True
 
     def __setitem__(self, k, v):
-        if k not in self.keys():# and (self.slots is None or k in self.slots):
+        if k not in self.keys() or self._overwrite:
             super().__setitem__(k, v)
-        if self.is_complete and self.raise_exception:
-            raise EarlyCompletionException
+        if self.covers_targets:
+            raise CoversTargetException
 
 class SwyftModelForward:
-    def forward(self, slots):
+    offline = True
+    online = True
+
+    def forward(self, trace):
         raise NotImplementedError
 
-    def __call__(self, requires = None, data = {}):
-        slotdict = SlotDict(requires, data = data, raise_exception = True)
+    def _run(self, targets = None, conditions = {}, overwrite = False):
+        trace = SwyftTrace(targets, conditions, overwrite = overwrite)
+        if trace.covers_targets:
+            return trace
         try:
-            self.forward(slotdict)
-        except EarlyCompletionException:
+            self.forward(trace)
+        except CoversTargetException:
             pass
-        return slotdict
-
-    def get_shapes(self):
-        sample = self()
-        shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        return shapes
-
-    def sample(self, N, requires = None, data = {}, dtype = torch.float32):
+        return trace
+    
+    def online_resample(self, samples, dtype = torch.float32):
+        _offline = self.offline
+        self.offline = False
+        _online = self.online
+        self.online = True
         out = []
-        for _ in tqdm(range(N)):
-            out.append(self.__call__(requires, data))
+        for i in tqdm(range(len(samples))):
+            result = self._run(conditions = samples[i], targets = None, overwrite = True)
+            result = {k: self._to_tensor(v) for k, v in result.items()}
+            out.append(result)
+        self.offline = _offline
+        self.online = _online
+        return self._collate_output(out, dtype)
+    
+    @staticmethod
+    def _collate_output(out, dtype):
         out = torch.utils.data.dataloader.default_collate(out)
         if dtype:
             for k, v in out.items():
                 out[k] = v.type(dtype)
         return SampleStore(out)
 
+    def get_shapes(self):
+        sample = self()
+        shapes = {k: tuple(v.shape) for k, v in sample.items()}
+        return shapes
+
+    @staticmethod
+    def _to_tensor(v):
+        if isinstance(v, np.ndarray):
+            v = torch.from_numpy(v)
+        return v
+
+    def sample(self, N, targets = None, conditions = {}, dtype = torch.float32):
+        out = []
+        for _ in tqdm(range(N)):
+            result = self._run(targets, conditions)
+            result = {k: self._to_tensor(v) for k, v in result.items()}
+            out.append(result)
+        return self._collate_output(out, dtype)
+    
 
 class SwyftModel:
     def _simulate(self, N, bounds = None, effective_prior = None):
