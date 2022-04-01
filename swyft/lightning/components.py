@@ -127,7 +127,14 @@ class SwyftModelForward:
             result = {k: self._to_tensor(v) for k, v in result.items()}
             out.append(result)
         return self._collate_output(out, dtype)
-    
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        result = self._run()
+        return {k: self._to_tensor(v, self.dtype) for k, v in result.items()}
+
 
 class SwyftModel:
     def _simulate(self, N, bounds = None, effective_prior = None):
