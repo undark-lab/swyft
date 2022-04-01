@@ -11,11 +11,6 @@ class TorchStore:
         self.store_path = store_path
         self.simulator = simulator
         self.samples = None
-        if os.path.exists(self.store_path):
-            raise RuntimeError(
-                "A store already exists at this path. TorchStores should not "
-                "be reused as bounds will differ for different training runs."
-            )
 
     def simulate(self, n: int, force_add: bool = False, verbose: bool = True):
         """
