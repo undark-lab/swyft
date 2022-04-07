@@ -66,10 +66,8 @@ class SwyftTrace(dict):
         if self.covers_targets:
             raise CoversTargetException
 
-class SwyftModelForward:
-    offline = True
-    online = True
 
+class SwyftModelForward:
     @abstractmethod
     def forward(self, trace):
         raise NotImplementedError
@@ -83,23 +81,15 @@ class SwyftModelForward:
             return trace
         try:
             self.forward(trace)
+            self.forward_afterburner(trace)
         except CoversTargetException:
             pass
         return trace
     
-    def online_resample(self, samples, dtype = torch.float32):
-        _offline = self.offline
-        self.offline = False
-        _online = self.online
-        self.online = True
-        out = []
-        for i in tqdm(range(len(samples))):
-            result = self._run(conditions = samples[i], targets = None, overwrite = True)
-            result = {k: self._to_tensor(v) for k, v in result.items()}
-            out.append(result)
-        self.offline = _offline
-        self.online = _online
-        return self._collate_output(out, dtype)
+    def apply_afterburner(self, samples, dtype = torch.float32):
+        trace = SwyftTrace(None, conditions = samples, overwrite = True)
+        self.forward_afterburner(trace)
+        return {k: self._to_tensor(v) for k, v in trace.items()}
     
     @staticmethod
     def _collate_output(out, dtype):
@@ -180,17 +170,17 @@ def tensorboard_config(save_dir = "./lightning_logs", name = None, version = Non
 
 
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, model = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
+    def __init__(self, simulator = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
         self.store = store
-        self.model = model
+        self.simulator = simulator
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.validation_percentage = validation_percentage
         self.train_multiply = train_multiply
 
     def setup(self, stage):
-        hook = None if self.model is None else self.model.noise        
+        hook = None if self.simulator is None else self.simulator.apply_afterburner
         self.dataset = _DictDataset(self.store, hook = hook)#, x_keys = ['data'], z_keys=['z'])
         n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
         self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
@@ -393,7 +383,7 @@ class RatioSamples:
 # RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
 class SampleStore(dict):
     def __len__(self):
-        n = [len(v) for v in self.values()]
+        n = [len(v) for v in self.values()]I think I will likely anyway 
         assert all([x == n[0] for x in n]), "Inconsistent lengths in SampleStore"
         return n[0]
     
