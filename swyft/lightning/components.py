@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from toolz.dicttoolz import valmap
 from typing import (
@@ -67,11 +68,12 @@ class SwyftTrace(dict):
 
 
 class SwyftModelForward:
+    @abstractmethod
     def forward(self, trace):
         raise NotImplementedError
 
     def forward_afterburner(self, trace):
-        pass
+        return trace
 
     def _run(self, targets = None, conditions = {}, overwrite = False):
         trace = SwyftTrace(targets, conditions, overwrite = overwrite)
@@ -106,7 +108,7 @@ class SwyftModelForward:
     def _to_tensor(v):
         if isinstance(v, np.ndarray):
             v = torch.from_numpy(v)
-        return v
+        return v.cpu()
 
     def sample(self, N, targets = None, conditions = {}, dtype = torch.float32):
         out = []
@@ -115,6 +117,13 @@ class SwyftModelForward:
             result = {k: self._to_tensor(v) for k, v in result.items()}
             out.append(result)
         return self._collate_output(out, dtype)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        result = self._run()
+        return {k: self._to_tensor(v, self.dtype) for k, v in result.items()}
 
 
 class SwyftModel:
@@ -183,9 +192,9 @@ class SwyftDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size, num_workers = self.num_workers)
     
-    # TODO: Deprecate
-    def predict_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
+    # # TODO: Deprecate
+    # def predict_dataloader(self):
+    #     return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
     
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers = self.num_workers)
@@ -296,7 +305,7 @@ class SwyftModule(pl.LightningModule):
 
 class SwyftTrainer(pl.Trainer):
     def infer(self, model, dataloader, conditions = {}):
-        self.model._set_predict_conditions(conditions, {})
+        model._set_predict_conditions(conditions, {})
         ratio_batches = self.predict(model, dataloader)
         keys = ratio_batches[0].keys()
         d = {k: RatioSamples(
@@ -304,7 +313,7 @@ class SwyftTrainer(pl.Trainer):
                 torch.cat([r[k].ratios for r in ratio_batches])
                 ) for k in keys
             }
-        self.model._set_predict_conditions({}, {})  # Set it back to no conditioning
+        model._set_predict_conditions({}, {})  # Set it back to no conditioning
         return RatioSampleStore(**d)
     
 
@@ -374,7 +383,7 @@ class RatioSamples:
 # RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
 class SampleStore(dict):
     def __len__(self):
-        n = [len(v) for v in self.values()]
+        n = [len(v) for v in self.values()]I think I will likely anyway 
         assert all([x == n[0] for x in n]), "Inconsistent lengths in SampleStore"
         return n[0]
     
