@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import math
 from dataclasses import dataclass, field
 from toolz.dicttoolz import valmap
 from typing import (
@@ -383,7 +384,7 @@ class RatioSamples:
 # RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
 class SampleStore(dict):
     def __len__(self):
-        n = [len(v) for v in self.values()]I think I will likely anyway 
+        n = [len(v) for v in self.values()] 
         assert all([x == n[0] for x in n]), "Inconsistent lengths in SampleStore"
         return n[0]
     
@@ -772,10 +773,22 @@ class ZarrStore:
             self.root.zeros('meta/sim_status', shape = (N, ), chunks = (chunk_size, ), dtype = 'i4')
         except zarr.errors.ContainsArrayError:
             assert self.root['meta/sim_status'].shape == (N, ), "Inconsistent array sizes"
+        try:
+            assert self.chunk_size == chunk_size, "Inconsistent chunk size"
+        except KeyError:
+            self.data.attrs['chunk_size'] = chunk_size
     
+#    @property
+#    def data(self):
+#        return {k: v for k, v in self.root['data'].items()}
+
+    @property
+    def chunk_size(self):
+        return self.data.attrs['chunk_size']
+
     @property
     def data(self):
-        return {k: v for k, v in self.root['data'].items()}
+        return self.root['data']
     
     def numpy(self):
         return {k: v[:] for k, v in self.root['data'].items()}
@@ -832,6 +845,48 @@ class ZarrStore:
 #                    data[k][i] = samples[k][j]
 
         return num_sims
+
+    def get_dataset(self):
+        return ZarrStoreIterableDataset(self)
+    
+    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True):
+        ds = self.get_dataset()
+        dl = torch.utils.data.DataLoader(ds, num_workers = num_workers, batch_size = batch_size, drop_last = drop_last, pin_memory = pin_memory)
+        return dl
+
+
+class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
+    def __init__(self, zarr_store : ZarrStore):
+        self.zs = zarr_store
+        self.n_samples = len(self.zs)
+        self.chunk_size = self.zs.chunk_size
+        self.n_chunks = int(math.ceil(self.n_samples/float(self.chunk_size)))
+      
+    @staticmethod
+    def get_idx(n_chunks, worker_info):
+        if worker_info is not None:
+            num_workers = worker_info.num_workers
+            worker_id = worker_info.id
+            n_chunks_per_worker = int(math.ceil(n_chunks/float(num_workers)))
+            idx = [worker_id*n_chunks_per_worker, min((worker_id+1)*n_chunks_per_worker, n_chunks)]
+            idx = np.random.permutation(range(*idx))
+        else:
+            idx = np.random.permutation(n_chunks)
+        return idx
+    
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        idx = self.get_idx(self.n_chunks, worker_info)
+        for i0 in idx:
+            # Read in chunks
+            data_chunk = {}
+            for k in self.zs.data.keys():
+                data_chunk[k] = self.zs.data[k][i0*self.chunk_size:(i0+1)*self.chunk_size]
+            n = len(data_chunk[k])
+                
+            # Return separate samples
+            for i in np.random.permutation(n):
+                yield {k: v[i] for k, v in data_chunk.items()}
 
 
 
