@@ -61,14 +61,24 @@ class SwyftTrace(dict):
             if all([k in self.keys() for k in self._targets]):
                 return True
 
+    # TODO: Deprecate
     def __setitem__(self, k, v):
         if k not in self.keys() or self._overwrite:
             super().__setitem__(k, v)
         if self.covers_targets:
             raise CoversTargetException
 
+    def record(self, k, v):
+        if k not in self.keys() or self._overwrite:
+            v = v() if callable(v) else v
+            super().__setitem__(k, v)
+        if self.covers_targets:
+            raise CoversTargetException
+        return self[k]
 
-class SwyftModelForward:
+
+
+class SwyftSimulator:
     @abstractmethod
     def forward(self, trace):
         raise NotImplementedError
@@ -125,6 +135,9 @@ class SwyftModelForward:
     def __next__(self):
         result = self._run()
         return {k: self._to_tensor(v, self.dtype) for k, v in result.items()}
+
+# TODO: Deprecate SwyftModel and SwyftModelForward
+SwyftModelForward = SwyftSimulator
 
 
 class SwyftModel:
@@ -316,7 +329,7 @@ class SwyftTrainer(pl.Trainer):
             }
         model._set_predict_conditions({}, {})  # Set it back to no conditioning
         return RatioSampleStore(**d)
-    
+
 
 ####################
 # Helper dataclasses
