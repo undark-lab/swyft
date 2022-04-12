@@ -859,19 +859,24 @@ class ZarrStore:
 
         return num_sims
 
-    def get_dataset(self):
-        return ZarrStoreIterableDataset(self)
+    def get_dataset(self, idx_range = None):
+        return ZarrStoreIterableDataset(self, idx_range = idx_range)
     
-    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True):
-        ds = self.get_dataset()
+    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None):
+        ds = self.get_dataset(idx_range = idx_range)
         dl = torch.utils.data.DataLoader(ds, num_workers = num_workers, batch_size = batch_size, drop_last = drop_last, pin_memory = pin_memory)
         return dl
 
 
 class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
-    def __init__(self, zarr_store : ZarrStore):
+    def __init__(self, zarr_store : ZarrStore, idx_range = None):
         self.zs = zarr_store
-        self.n_samples = len(self.zs)
+        if idx_range is None:
+            self.n_samples = len(self.zs)
+            self.offset = 0
+        else:
+            self.offset = idx_range[0]
+            self.n_samples = idx_range[1] - idx_range[0]
         self.chunk_size = self.zs.chunk_size
         self.n_chunks = int(math.ceil(self.n_samples/float(self.chunk_size)))
       
@@ -890,11 +895,12 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
         idx = self.get_idx(self.n_chunks, worker_info)
+        offset = self.offset
         for i0 in idx:
             # Read in chunks
             data_chunk = {}
             for k in self.zs.data.keys():
-                data_chunk[k] = self.zs.data[k][i0*self.chunk_size:(i0+1)*self.chunk_size]
+                data_chunk[k] = self.zs.data[k][offset+i0*self.chunk_size:offset+(i0+1)*self.chunk_size]
             n = len(data_chunk[k])
                 
             # Return separate samples
