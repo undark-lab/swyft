@@ -257,6 +257,7 @@ class SwyftModule(pl.LightningModule):
 
     def _log_ratios(self, x, z):
         out = self(x, z)
+        out = {k: v for k, v in out.items() if k[:4] != 'aux_'}
         log_ratios = torch.cat([val.ratios.flatten(start_dim = 1) for val in out.values()], dim=1)
         return log_ratios
     
@@ -325,7 +326,7 @@ class SwyftTrainer(pl.Trainer):
         d = {k: RatioSamples(
                 torch.cat([r[k].values for r in ratio_batches]),
                 torch.cat([r[k].ratios for r in ratio_batches])
-                ) for k in keys
+                ) for k in keys if k[:4] != "aux_"
             }
         model._set_predict_conditions({}, {})  # Set it back to no conditioning
         return RatioSampleStore(**d)
@@ -859,17 +860,17 @@ class ZarrStore:
 
         return num_sims
 
-    def get_dataset(self, idx_range = None):
-        return ZarrStoreIterableDataset(self, idx_range = idx_range)
+    def get_dataset(self, idx_range = None, hook = None):
+        return ZarrStoreIterableDataset(self, idx_range = idx_range, hook = hook)
     
-    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None):
-        ds = self.get_dataset(idx_range = idx_range)
+    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None, hook = None):
+        ds = self.get_dataset(idx_range = idx_range, hook = hook)
         dl = torch.utils.data.DataLoader(ds, num_workers = num_workers, batch_size = batch_size, drop_last = drop_last, pin_memory = pin_memory)
         return dl
 
 
 class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
-    def __init__(self, zarr_store : ZarrStore, idx_range = None):
+    def __init__(self, zarr_store : ZarrStore, idx_range = None, hook = None):
         self.zs = zarr_store
         if idx_range is None:
             self.n_samples = len(self.zs)
@@ -879,6 +880,7 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             self.n_samples = idx_range[1] - idx_range[0]
         self.chunk_size = self.zs.chunk_size
         self.n_chunks = int(math.ceil(self.n_samples/float(self.chunk_size)))
+        self.hook = hook
       
     @staticmethod
     def get_idx(n_chunks, worker_info):
@@ -905,7 +907,10 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
                 
             # Return separate samples
             for i in np.random.permutation(n):
-                yield {k: v[i] for k, v in data_chunk.items()}
+                out = {k: v[i] for k, v in data_chunk.items()}
+                if self.hook:
+                    out = self.hook(out)
+                yield out
 
 
 
