@@ -50,10 +50,15 @@ class SwyftTrace(dict):
         self._targets = targets
         self._overwrite = overwrite
 
+    # TODO: Deprecate
     def contains_not(self, keys):
+        print("WARNING: To be deprecated. Use `contains` instead.")
+        return not self.contains(keys)
+    
+    def contains(self, keys):
         if isinstance(keys, str):
             keys = [keys]
-        return not all([k in self.keys() for k in keys])
+        return all([k in self.keys() for k in keys])
         
     @property
     def covers_targets(self):
@@ -63,18 +68,31 @@ class SwyftTrace(dict):
 
     # TODO: Deprecate
     def __setitem__(self, k, v):
+        print("WARNING: To be deprecated. Use `record` instead.")
         if k not in self.keys() or self._overwrite:
             super().__setitem__(k, v)
         if self.covers_targets:
             raise CoversTargetException
 
-    def record(self, k, v):
+    def record(self, k, v, *args, **kwargs):
         if k not in self.keys() or self._overwrite:
-            v = v() if callable(v) else v
+            v = v(*args, **kwargs) if callable(v) else v
             super().__setitem__(k, v)
         if self.covers_targets:
             raise CoversTargetException
         return self[k]
+
+    def lazy_record(self, k, v, *args, **kwargs):
+        fnc = lambda: self.record(k, v, *args, **kwargs)
+        cache = [None]
+        if self._targets is not None and k in self._targets:
+            cache[0] = fnc()
+        def wrapper(cache = cache):
+            if cache[0] is None:
+                cache[0] = fnc()
+            return cache[0]
+        return wrapper
+
 
 
 
@@ -87,6 +105,7 @@ class SwyftSimulator:
         return trace
 
     def _run(self, targets = None, conditions = {}, overwrite = False):
+        conditions = conditions() if callable(conditions) else conditions
         trace = SwyftTrace(targets, conditions, overwrite = overwrite)
         if trace.covers_targets:
             return trace
@@ -235,7 +254,7 @@ def get_best_model(tbl):
 
 
 class SwyftModule(pl.LightningModule):
-    def __init__(self, lr = 1e-3):
+    def __init__(self, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
         super().__init__()
         self.save_hyperparameters()
         self._predict_condition_x = {}
@@ -252,7 +271,8 @@ class SwyftModule(pl.LightningModule):
       
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.hparams.lr)
-        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer), "monitor": "val_loss"}
+        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, factor=self.hparams.lrs_factor, patience=self.hparams.lrs_patience), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _log_ratios(self, x, z):
