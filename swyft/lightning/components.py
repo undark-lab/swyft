@@ -37,13 +37,6 @@ import pytorch_lightning as pl
 from swyft.networks.standardization import OnlineStandardizingLayer
 
 
-#################################
-# Swyft lightning main components
-#################################
-
-class CoversTargetException(Exception):
-    pass
-
 class SwyftTrace(dict):
     def __init__(self, targets = None, conditions = {}):
         super().__init__(conditions)
@@ -52,54 +45,48 @@ class SwyftTrace(dict):
     def __repr__(self):
         return "SwyftTrace("+super().__repr__()+")"
 
-    # TODO: Deprecate
-    def contains_not(self, keys):
-        print("WARNING: To be deprecated. Use `contains` instead.")
-        return not self.contains(keys)
-    
-    def contains(self, keys):
-        if isinstance(keys, str):
-            keys = [keys]
-        return all([k in self.keys() for k in keys])
-        
     @property
     def covers_targets(self):
-        if self._targets is not None:
-            if all([k in self.keys() for k in self._targets]):
-                return True
+        return (self._targets is not None 
+                and all([k in self.keys() for k in self._targets]))
 
-    # TODO: Deprecate
-    def __setitem__(self, k, v):
-        print("WARNING: To be deprecated. Use `record` instead.")
-        if k not in self.keys():
-            super().__setitem__(k, v)
-        if self.covers_targets:
-            raise CoversTargetException
+    def sample(self, name, fn, *args, **kwargs):
+        assert callable(fn), "Second argument must be a function."
+        lazy_value = SwyftLazyValue(self, name, fn, *args, **kwargs)
+        if self._targets is None or name in self._targets:
+            lazy_value.evaluate()
+        return lazy_value
 
-    def record(self, k, v, *args, **kwargs):
-        # TODO: Deprecate
-        if not callable(v):
-            print("WARNING: Second argument should be a function.  Variables deprecated soon.")
-        if k not in self.keys():
-            v = v(*args, **kwargs) if callable(v) else v
-            super().__setitem__(k, v)
-        if self.covers_targets:
-            raise CoversTargetException
-        return self[k]
 
-    def lazy_record(self, k, v, *args, **kwargs):
-        # TODO: Deprecate
-        if not callable(v):
-            print("WARNING: Second argument should be a function.  Variables deprecated soon.")
-        fnc = lambda: self.record(k, v, *args, **kwargs)
-        cache = [None]
-        if self._targets is not None and k in self._targets:
-            cache[0] = fnc()
-        def wrapper(cache = cache):
-            if cache[0] is None:
-                cache[0] = fnc()
-            return cache[0]
-        return wrapper
+class SwyftLazyValue:
+    def __init__(self, trace, name, fn, *args, **kwargs):
+        self._trace = trace
+        self._name = name
+        self._fn = fn
+        self._args = args
+        self._kwargs = kwargs
+
+    def __repr__(self):
+        value = self._trace[self._name] if self._name in self._trace.keys() else "None"
+        return f"SwyftLazyValue{self._name, value, self._fn, self._args, self._kwargs}"
+
+    def evaluate(self):
+        if self._name not in self._trace.keys():
+            args = (arg.evaluate() if isinstance(arg, SwyftLazyValue) else arg for arg in self._args)
+            kwargs = {k: v.evaluate() if isinstance(v, SwyftLazyValue) else v for k, v in self._kwargs.items()}
+            self._trace[self._name] = self._fn(*args, **kwargs)
+        return self._trace[self._name]
+
+
+def collate_output(out):
+    keys = out[0].keys()
+    result = {}
+    for key in keys:
+        if isinstance(out[0][key], torch.Tensor):
+            result[key] = torch.stack([x[key] for x in out])
+        else:
+            result[key] = np.stack([x[key] for x in out])
+    return result
 
 
 class SwyftSimulator:
@@ -114,134 +101,60 @@ class SwyftSimulator:
         return sample
 
     def __call__(self, targets = None, conditions = {}):
-        # Evaluate conditions if callable
         conditions = conditions() if callable(conditions) else conditions
 
         conditions = self.on_before_forward(conditions)
         trace = SwyftTrace(targets, conditions)
         if not trace.covers_targets:
-            try:
-                self.forward(trace)
-            except CoversTargetException:
-                pass
+            self.forward(trace)
+            #try:
+            #    self.forward(trace)
+            #except CoversTargetException:
+            #    pass
+        if targets is not None and not trace.covers_targets:
+            raise ValueError("Missing simulation targets.")
         result = self.on_after_forward(dict(trace))
 
         return result
     
-#    def apply_afterburner(self, samples, dtype = torch.float32):
-#        print("Warning: To be deprecated.")
-#        trace = SwyftTrace(None, conditions = samples)
-#        self.forward_afterburner(trace)
-#        return {k: self._to_tensor(v) for k, v in trace.items()}
-#    
-#    @staticmethod
-#    def _collate_output(out, dtype):
-#        out = torch.utils.data.dataloader.default_collate(out)
-#        #if dtype:
-#        #    for k, v in out.items():
-#        #        out[k] = v.type(dtype)
-#        return SampleStore(out)
-
-    @staticmethod
-    def _collate_output(out):
-        keys = out[0].keys()
-        result = {}
-        for key in keys:
-            if isinstance(out[0][key], torch.Tensor):
-                result[key] = torch.stack([x[key] for x in out])
-            else:
-                result[key] = np.stack([x[key] for x in out])
-        return result
-
     def get_shapes_and_dtypes(self, targets = None):
         sample = self(targets = targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-#    @staticmethod
-#    def _to_tensor(v):
-#        return v
-#        if isinstance(v, np.ndarray):
-#            v = torch.from_numpy(v)
-#        return v.cpu()
-
     def sample(self, N, targets = None, conditions = {}):
         out = []
         for _ in tqdm(range(N)):
             result = self.__call__(targets, conditions)
             out.append(result)
-        out = self._collate_output(out)
+        out = collate_output(out)
         out = SampleStore(out)
         return out
 
-    def __iter__(self):
-        return self
+    def get_resampler(self, targets):
+        return SwyftSimulatorResampler(self, targets)
 
-    def __next__(self):
-        return self.__call__()
-    
-    def get_resampler(self, targets, pre_hook = None, post_hook = None):
-        return SwyftSimulatorResampler(self, targets, pre_hook = pre_hook, post_hook = post_hook)
+    def get_iterator(self, targets = None, conditions = {}):
+        def iterator():
+            while True:
+                yield self.__call__(targets = targets, conditions = conditions)
+
+        return iterator
     
     
 class SwyftSimulatorResampler:
-    def __init__(self, simulator, targets, pre_hook = None, post_hook = None):
+    def __init__(self, simulator, targets):
         self._simulator = simulator
         self._targets = targets
-        self._pre_hook = pre_hook
-        self._post_hook = post_hook
         
     def __call__(self, sample):
         conditions = sample.copy()
         for k in self._targets:
             conditions.pop(k)
-        if self._pre_hook is not None:
-            conditions = self._pre_hook(conditions)
         sims = self._simulator(conditions = conditions, targets = self._targets)
-        if self._post_hook is not None:
-            sims = self._post_hook(sims)
         return sims
     
-
-# TODO: Deprecate SwyftModel and SwyftModelForward
-SwyftModelForward = SwyftSimulator
-
-
-class SwyftModel:
-    def _simulate(self, N, bounds = None, effective_prior = None):
-        prior_samples = self.prior(N, bounds = bounds)
-        if effective_prior:
-            for k in effective_prior.keys():
-                samples = effective_prior[k].sample(N)
-                prior_samples[k] = samples[k]
-        simulated_samples = dictstoremap(self.slow, prior_samples)
-        samples_tot = dict(**prior_samples, **simulated_samples)
-        return SampleStore(samples_tot)
-    
-    def sample(self, N, bounds = None, effective_prior = None):
-        sims = self._simulate(N, bounds = bounds, effective_prior = effective_prior)
-        data = dictstoremap(self.fast, sims)
-        out = dict(**data, **sims)
-        return SampleStore(out)
-    
-    # RENAME?
-    def noise(self, S):
-        S = S.copy()
-        D = self.fast(S)
-        S.update(D)
-        return SampleStore(S)
-
-    def get_shapes(self):
-        sample = self.sample(1)[0]
-        shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        return shapes
-
-#    def __call__(self, S):
-#        D = self.slow(S)
-#        D = dict(**D, **S)
-#        E = self.fast(D)
-#        return dict(**D, **E)
 
 def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
     tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
@@ -252,18 +165,17 @@ def tensorboard_config(save_dir = "./lightning_logs", name = None, version = Non
 
 
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, post_train_data_hook = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
+    def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
         self.store = store
-        self.post_train_data_hook = post_train_data_hook
+        self.on_after_load_sample = on_after_load_sample
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.validation_percentage = validation_percentage
         self.train_multiply = train_multiply
 
     def setup(self, stage):
-        #hook = None if self.simulator is None else self.simulator.apply_afterburner
-        self.dataset = _DictDataset(self.store, post_hook = self.post_train_data_hook)#, x_keys = ['data'], z_keys=['z'])
+        self.dataset = _DictDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
         n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
         self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
         self.dataset_test = _DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
@@ -505,20 +417,20 @@ class RatioSampleStore(dict):
 # RENAME?
 class _DictDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on SampleStore."""
-    def __init__(self, sample_store, post_hook = None):
+    def __init__(self, sample_store, on_after_load_sample = None):
         self._dataset = sample_store
         #self._keys = keys
         #self._x_keys = x_keys
         #self._z_keys = z_keys
-        self._hook = post_hook
+        self._on_after_load_sample = on_after_load_sample
 
     def __len__(self):
         return len(self._dataset[list(self._dataset.keys())[0]])
     
     def __getitem__(self, i):
         d = {k: v[i] for k, v in self._dataset.items()}
-        if self._hook is not None:
-            d = self._hook(d)
+        if self._on_after_load_sample is not None:
+            d = self._on_after_load_sample(d)
         return d
         #x_keys = self._x_keys if self._x_keys else d.keys()
         #z_keys = self._z_keys if self._z_keys else d.keys()
@@ -787,9 +699,6 @@ class MultiplyDataset(torch.utils.data.Dataset):
         return self.dataset[i%self.M]
         
 
-#def valmap(m, d):
-#    return {k: m(v) for k, v in d.items()}
-
 def get_index_slices(idx):
     """Returns list of enumerated consecutive indices"""
     idx = np.array(idx)
@@ -858,10 +767,6 @@ class ZarrStore:
         except KeyError:
             self.data.attrs['chunk_size'] = chunk_size
 
-#    @property
-#    def data(self):
-#        return {k: v for k, v in self.root['data'].items()}
-
     @property
     def chunk_size(self):
         return self.data.attrs['chunk_size']
@@ -913,30 +818,19 @@ class ZarrStore:
                 for k, v in data.items():
                     data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]]
                 
-#            for i in idx:
-#                sim_status[i] = 1
-#
-#            # Write simulated data
-#            data = self.root['data']
-#            print(idx)
-#            for j, i in enumerate(idx):
-#                for k, v in data.items():
-#                    print(k)
-#                    data[k][i] = samples[k][j]
-
         return num_sims
 
-    def get_dataset(self, idx_range = None, post_hook = None):
-        return ZarrStoreIterableDataset(self, idx_range = idx_range, post_hook = post_hook)
+    def get_dataset(self, idx_range = None, on_after_load_sample = None):
+        return ZarrStoreIterableDataset(self, idx_range = idx_range, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None, post_hook = None):
-        ds = self.get_dataset(idx_range = idx_range, post_hook = post_hook)
+    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None, on_after_load_sample = None):
+        ds = self.get_dataset(idx_range = idx_range, on_after_load_sample = on_after_load_sample)
         dl = torch.utils.data.DataLoader(ds, num_workers = num_workers, batch_size = batch_size, drop_last = drop_last, pin_memory = pin_memory)
         return dl
 
 
 class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
-    def __init__(self, zarr_store : ZarrStore, idx_range = None, post_hook = None):
+    def __init__(self, zarr_store : ZarrStore, idx_range = None, on_after_load_sample = None):
         self.zs = zarr_store
         if idx_range is None:
             self.n_samples = len(self.zs)
@@ -946,7 +840,7 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             self.n_samples = idx_range[1] - idx_range[0]
         self.chunk_size = self.zs.chunk_size
         self.n_chunks = int(math.ceil(self.n_samples/float(self.chunk_size)))
-        self.post_hook = post_hook
+        self.on_after_load_sample = on_after_load_sample
       
     @staticmethod
     def get_idx(n_chunks, worker_info):
@@ -974,46 +868,9 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             # Return separate samples
             for i in np.random.permutation(n):
                 out = {k: v[i] for k, v in data_chunk.items()}
-                if self.post_hook:
-                    out = self.post_hook(out)
+                if self.on_after_load_sample:
+                    out = self.on_after_load_sample(out)
                 yield out
-
-
-
-#class TorchStore:
-#    def __init__(self, simulator, filepath):
-#        self.simulator = simulator
-#        self.filepath = filepath
-#
-#    def _load(self, filepath):
-#        try:
-#            data = torch.load(filepath)
-#        except (FileNotFoundError, ValueError):
-#            data = None
-#        self._get_length(data)
-#        self.data = data
-#
-#    @staticmethod
-#    def _get_length(data):
-#        if data is None:
-#            return 0
-#        lengths = [len(v) for k, v in data.items()]
-#        N = lengths[0]
-#        assert all([n == N for n in lengths])
-#        return N
-#
-#    def __len__(self):
-#        return self._get_length(self.data)
-#
-#    def _save_data(self):
-#        torch.save(self.data, self.filepath)
-#
-#    def simulate(self, N):
-#        new_data = self.simulator.sample(N)
-#        self.data = new_data
-#        self._save_data()
-#store = TorchStore(simulator, cfg.sims.data_path)
-#store.simulate(cfg.hparams.train_size)
 
 
 def to_numpy(x, single_precision = False):
