@@ -45,15 +45,22 @@ class CoversTargetException(Exception):
     pass
 
 class SwyftTrace(dict):
-    def __init__(self, targets = None, conditions = {}, overwrite = False):
+    def __init__(self, targets = None, conditions = {}):
         super().__init__(conditions)
         self._targets = targets
-        self._overwrite = overwrite
 
+    def __repr__(self):
+        return "SwyftTrace("+super().__repr__()+")"
+
+    # TODO: Deprecate
     def contains_not(self, keys):
+        print("WARNING: To be deprecated. Use `contains` instead.")
+        return not self.contains(keys)
+    
+    def contains(self, keys):
         if isinstance(keys, str):
             keys = [keys]
-        return not all([k in self.keys() for k in keys])
+        return all([k in self.keys() for k in keys])
         
     @property
     def covers_targets(self):
@@ -63,78 +70,139 @@ class SwyftTrace(dict):
 
     # TODO: Deprecate
     def __setitem__(self, k, v):
-        if k not in self.keys() or self._overwrite:
+        print("WARNING: To be deprecated. Use `record` instead.")
+        if k not in self.keys():
             super().__setitem__(k, v)
         if self.covers_targets:
             raise CoversTargetException
 
-    def record(self, k, v):
-        if k not in self.keys() or self._overwrite:
-            v = v() if callable(v) else v
+    def record(self, k, v, *args, **kwargs):
+        # TODO: Deprecate
+        if not callable(v):
+            print("WARNING: Second argument should be a function.  Variables deprecated soon.")
+        if k not in self.keys():
+            v = v(*args, **kwargs) if callable(v) else v
             super().__setitem__(k, v)
         if self.covers_targets:
             raise CoversTargetException
         return self[k]
 
+    def lazy_record(self, k, v, *args, **kwargs):
+        # TODO: Deprecate
+        if not callable(v):
+            print("WARNING: Second argument should be a function.  Variables deprecated soon.")
+        fnc = lambda: self.record(k, v, *args, **kwargs)
+        cache = [None]
+        if self._targets is not None and k in self._targets:
+            cache[0] = fnc()
+        def wrapper(cache = cache):
+            if cache[0] is None:
+                cache[0] = fnc()
+            return cache[0]
+        return wrapper
 
 
 class SwyftSimulator:
+    def on_before_forward(self, sample):
+        return sample
+
     @abstractmethod
     def forward(self, trace):
         raise NotImplementedError
 
-    def forward_afterburner(self, trace):
-        return trace
+    def on_after_forward(self, sample):
+        return sample
 
-    def _run(self, targets = None, conditions = {}, overwrite = False):
-        trace = SwyftTrace(targets, conditions, overwrite = overwrite)
-        if trace.covers_targets:
-            return trace
-        try:
-            self.forward(trace)
-            self.forward_afterburner(trace)
-        except CoversTargetException:
-            pass
-        return trace
+    def __call__(self, targets = None, conditions = {}):
+        # Evaluate conditions if callable
+        conditions = conditions() if callable(conditions) else conditions
+
+        conditions = self.on_before_forward(conditions)
+        trace = SwyftTrace(targets, conditions)
+        if not trace.covers_targets:
+            try:
+                self.forward(trace)
+            except CoversTargetException:
+                pass
+        result = self.on_after_forward(dict(trace))
+
+        return result
     
-    def apply_afterburner(self, samples, dtype = torch.float32):
-        trace = SwyftTrace(None, conditions = samples, overwrite = True)
-        self.forward_afterburner(trace)
-        return {k: self._to_tensor(v) for k, v in trace.items()}
-    
+#    def apply_afterburner(self, samples, dtype = torch.float32):
+#        print("Warning: To be deprecated.")
+#        trace = SwyftTrace(None, conditions = samples)
+#        self.forward_afterburner(trace)
+#        return {k: self._to_tensor(v) for k, v in trace.items()}
+#    
+#    @staticmethod
+#    def _collate_output(out, dtype):
+#        out = torch.utils.data.dataloader.default_collate(out)
+#        #if dtype:
+#        #    for k, v in out.items():
+#        #        out[k] = v.type(dtype)
+#        return SampleStore(out)
+
     @staticmethod
-    def _collate_output(out, dtype):
-        out = torch.utils.data.dataloader.default_collate(out)
-        if dtype:
-            for k, v in out.items():
-                out[k] = v.type(dtype)
-        return SampleStore(out)
+    def _collate_output(out):
+        keys = out[0].keys()
+        result = {}
+        for key in keys:
+            if isinstance(out[0][key], torch.Tensor):
+                result[key] = torch.stack([x[key] for x in out])
+            else:
+                result[key] = np.stack([x[key] for x in out])
+        return result
 
-    def get_shapes(self):
-        sample = self()
+    def get_shapes_and_dtypes(self, targets = None):
+        sample = self(targets = targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        return shapes
+        dtypes = {k: v.dtype for k, v in sample.items()}
+        return shapes, dtypes
 
-    @staticmethod
-    def _to_tensor(v):
-        if isinstance(v, np.ndarray):
-            v = torch.from_numpy(v)
-        return v.cpu()
+#    @staticmethod
+#    def _to_tensor(v):
+#        return v
+#        if isinstance(v, np.ndarray):
+#            v = torch.from_numpy(v)
+#        return v.cpu()
 
-    def sample(self, N, targets = None, conditions = {}, dtype = torch.float32):
+    def sample(self, N, targets = None, conditions = {}):
         out = []
         for _ in tqdm(range(N)):
-            result = self._run(targets, conditions)
-            result = {k: self._to_tensor(v) for k, v in result.items()}
+            result = self.__call__(targets, conditions)
             out.append(result)
-        return self._collate_output(out, dtype)
+        out = self._collate_output(out)
+        out = SampleStore(out)
+        return out
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        result = self._run()
-        return {k: self._to_tensor(v, self.dtype) for k, v in result.items()}
+        return self.__call__()
+    
+    def get_resampler(self, targets, pre_hook = None, post_hook = None):
+        return SwyftSimulatorResampler(self, targets, pre_hook = pre_hook, post_hook = post_hook)
+    
+    
+class SwyftSimulatorResampler:
+    def __init__(self, simulator, targets, pre_hook = None, post_hook = None):
+        self._simulator = simulator
+        self._targets = targets
+        self._pre_hook = pre_hook
+        self._post_hook = post_hook
+        
+    def __call__(self, sample):
+        conditions = sample.copy()
+        for k in self._targets:
+            conditions.pop(k)
+        if self._pre_hook is not None:
+            conditions = self._pre_hook(conditions)
+        sims = self._simulator(conditions = conditions, targets = self._targets)
+        if self._post_hook is not None:
+            sims = self._post_hook(sims)
+        return sims
+    
 
 # TODO: Deprecate SwyftModel and SwyftModelForward
 SwyftModelForward = SwyftSimulator
@@ -184,18 +252,18 @@ def tensorboard_config(save_dir = "./lightning_logs", name = None, version = Non
 
 
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, simulator = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
+    def __init__(self, post_train_data_hook = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
         self.store = store
-        self.simulator = simulator
+        self.post_train_data_hook = post_train_data_hook
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.validation_percentage = validation_percentage
         self.train_multiply = train_multiply
 
     def setup(self, stage):
-        hook = None if self.simulator is None else self.simulator.apply_afterburner
-        self.dataset = _DictDataset(self.store, hook = hook)#, x_keys = ['data'], z_keys=['z'])
+        #hook = None if self.simulator is None else self.simulator.apply_afterburner
+        self.dataset = _DictDataset(self.store, post_hook = self.post_train_data_hook)#, x_keys = ['data'], z_keys=['z'])
         n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
         self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
         self.dataset_test = _DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
@@ -235,7 +303,7 @@ def get_best_model(tbl):
 
 
 class SwyftModule(pl.LightningModule):
-    def __init__(self, lr = 1e-3):
+    def __init__(self, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
         super().__init__()
         self.save_hyperparameters()
         self._predict_condition_x = {}
@@ -252,7 +320,8 @@ class SwyftModule(pl.LightningModule):
       
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.hparams.lr)
-        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer), "monitor": "val_loss"}
+        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, factor=self.hparams.lrs_factor, patience=self.hparams.lrs_patience), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _log_ratios(self, x, z):
@@ -415,6 +484,9 @@ class SampleStore(dict):
     def get_dataloader(self, batch_size = 1):
         dataset = self.get_dataset()
         return torch.utils.data.DataLoader(dataset, batch_size = batch_size)
+    
+    def to_numpy(self, single_precision = True):
+        return to_numpy(self, single_precision = single_precision)
         
 
 # RENAME? RatioStore - SwyftRatioStore
@@ -433,12 +505,12 @@ class RatioSampleStore(dict):
 # RENAME?
 class _DictDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on SampleStore."""
-    def __init__(self, sample_store, hook = None):
+    def __init__(self, sample_store, post_hook = None):
         self._dataset = sample_store
         #self._keys = keys
         #self._x_keys = x_keys
         #self._z_keys = z_keys
-        self._hook = hook
+        self._hook = post_hook
 
     def __len__(self):
         return len(self._dataset[list(self._dataset.keys())[0]])
@@ -744,27 +816,16 @@ class ZarrStore:
         self.lock = fasteners.InterProcessLock(file_path+".lock.file")
             
     def reset_sim_status(self):
-        pass
+        raise NotImplementedError
     
     def extend(self, N):
-        pass
+        raise NotImplementedError
         
-    @staticmethod
-    def _get_shapes(model, shapes):
-        if model is None and shapes is not None:
-            pass
-        elif model is not None and shapes is None:
-            sample = model.sample(1)[0]
-            shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        else:
-            raise ValueError("Either shapes or model must be specified (but not both).")
-        return shapes
-    
-    def init(self, N, chunk_size, shapes = None, model = None):
-        #if 'data' in self.root.keys():
-            #return self
-        shapes = self._get_shapes(model, shapes)
-        self._init_shapes(shapes, N, chunk_size)
+    def init(self, N, chunk_size, shapes = None, dtypes = None):
+        if len(self) > 0:
+            print("WARNING: Already initialized.")
+            return self
+        self._init_shapes(shapes, dtypes, N, chunk_size)
         return self
         
     def __len__(self):
@@ -776,13 +837,18 @@ class ZarrStore:
         assert all([n==N for n in ns])
         return N
     
-    def _init_shapes(self, shapes, N, chunk_size):          
-        for k, s in shapes.items():
+    # TODO: Remove consistency checks
+    def _init_shapes(self, shapes, dtypes, N, chunk_size):          
+        """Initializes shapes, or checks consistency."""
+        for k in shapes.keys():
+            s = shapes[k]
+            dtype = dtypes[k]
             try:
-                self.root.zeros('data/'+k, shape = (N, *s), chunks = (chunk_size, *s), dtype = 'f4')
+                self.root.zeros('data/'+k, shape = (N, *s), chunks = (chunk_size, *s), dtype = dtype)
             except zarr.errors.ContainsArrayError:
                 assert self.root['data/'+k].shape == (N, *s), "Inconsistent array sizes"
                 assert self.root['data/'+k].chunks == (chunk_size, *s), "Inconsistent chunk sizes"
+                assert self.root['data/'+k].dtype == dtype, "Inconsistent dtype"
         try:
             self.root.zeros('meta/sim_status', shape = (N, ), chunks = (chunk_size, ), dtype = 'i4')
         except zarr.errors.ContainsArrayError:
@@ -791,7 +857,7 @@ class ZarrStore:
             assert self.chunk_size == chunk_size, "Inconsistent chunk size"
         except KeyError:
             self.data.attrs['chunk_size'] = chunk_size
-    
+
 #    @property
 #    def data(self):
 #        return {k: v for k, v in self.root['data'].items()}
@@ -818,21 +884,21 @@ class ZarrStore:
     def sims_required(self):
         return sum(self.root['meta']['sim_status'][:] == 0)
 
-    def simulate(self, model, max_sims = None, batch_size = 10):
+    def simulate(self, simulator, max_sims = None, batch_size = 10):
         total_sims = 0
         while self.sims_required > 0:
             if max_sims is not None and total_sims >= max_sims:
                 break
-            num_sims = self.simulate_batch(model, batch_size)
+            num_sims = self.simulate_batch(simulator, batch_size)
             total_sims += num_sims
 
-    def simulate_batch(self, model, batch_size):
+    def simulate_batch(self, simulator, batch_size):
         # Run simulator
         num_sims = min(batch_size, self.sims_required)
         if num_sims == 0:
             return num_sims
 
-        samples = model.sample(num_sims)
+        samples = simulator.sample(num_sims)
         
         # Reserve slots
         with self.lock:
@@ -845,7 +911,7 @@ class ZarrStore:
             for i_slice, j_slice in index_slices:
                 sim_status[j_slice[0]:j_slice[1]] = 1
                 for k, v in data.items():
-                    data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]].numpy()
+                    data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]]
                 
 #            for i in idx:
 #                sim_status[i] = 1
@@ -949,3 +1015,39 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
 #store = TorchStore(simulator, cfg.sims.data_path)
 #store.simulate(cfg.hparams.train_size)
 
+
+def to_numpy(x, single_precision = False):
+    if isinstance(x, torch.Tensor):
+        if not single_precision:
+            return x.detach().cpu().numpy()
+        else:
+            x = x.detach().cpu()
+            if x.dtype == torch.float64:
+                x = x.float().numpy()
+            else:
+                x = x.numpy()
+            return x
+    elif isinstance(x, SampleStore):
+        return SampleStore({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
+    elif isinstance(x, dict):
+        return {k: to_numpy(v, single_precision = single_precision) for k, v in x.items()}
+    elif isinstance(x, np.ndarray):
+        if not single_precision:
+            return x
+        else:
+            if x.dtype == np.float64:
+                x = np.float32(x)
+            return x
+    else:
+        return x
+
+def to_numpy32(x):
+    return to_numpy(x, single_precision = True)
+    
+def to_torch(x):
+    if isinstance(x, SampleStore):
+        return SampleStore({k: to_torch(v) for k, v in x.items()})
+    elif isinstance(x, dict):
+        return {k: to_torch(v) for k, v in x.items()}
+    else:
+        return torch.as_tensor(x)
