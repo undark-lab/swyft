@@ -49,6 +49,9 @@ class SwyftTrace(dict):
         super().__init__(conditions)
         self._targets = targets
 
+    def __repr__(self):
+        return "SwyftTrace("+super().__repr__()+")"
+
     # TODO: Deprecate
     def contains_not(self, keys):
         print("WARNING: To be deprecated. Use `contains` instead.")
@@ -100,30 +103,36 @@ class SwyftTrace(dict):
 
 
 class SwyftSimulator:
+    def on_before_forward(self, sample):
+        return sample
+
     @abstractmethod
     def forward(self, trace):
         raise NotImplementedError
 
-    def forward_afterburner(self, trace):
-        return trace
+    def on_after_forward(self, sample):
+        return sample
 
     def __call__(self, targets = None, conditions = {}):
+        # Evaluate conditions if callable
         conditions = conditions() if callable(conditions) else conditions
+
+        conditions = self.on_before_forward(conditions)
         trace = SwyftTrace(targets, conditions)
         if not trace.covers_targets:
             try:
                 self.forward(trace)
-                #self.forward_afterburner(trace)
             except CoversTargetException:
                 pass
-        result = {k: self._to_tensor(v) for k, v in trace.items()}
+        result = self.on_after_forward(dict(trace))
+
         return result
     
-    def apply_afterburner(self, samples, dtype = torch.float32):
-        print("Warning: To be deprecated.")
-        trace = SwyftTrace(None, conditions = samples)
-        self.forward_afterburner(trace)
-        return {k: self._to_tensor(v) for k, v in trace.items()}
+#    def apply_afterburner(self, samples, dtype = torch.float32):
+#        print("Warning: To be deprecated.")
+#        trace = SwyftTrace(None, conditions = samples)
+#        self.forward_afterburner(trace)
+#        return {k: self._to_tensor(v) for k, v in trace.items()}
 #    
 #    @staticmethod
 #    def _collate_output(out, dtype):
@@ -144,17 +153,18 @@ class SwyftSimulator:
                 result[key] = np.stack([x[key] for x in out])
         return result
 
-    def get_shapes(self):
-        sample = self()
+    def get_shapes_and_dtypes(self, targets = None):
+        sample = self(targets = targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        return shapes
+        dtypes = {k: v.dtype for k, v in sample.items()}
+        return shapes, dtypes
 
-    @staticmethod
-    def _to_tensor(v):
-        return v
-        if isinstance(v, np.ndarray):
-            v = torch.from_numpy(v)
-        return v.cpu()
+#    @staticmethod
+#    def _to_tensor(v):
+#        return v
+#        if isinstance(v, np.ndarray):
+#            v = torch.from_numpy(v)
+#        return v.cpu()
 
     def sample(self, N, targets = None, conditions = {}):
         out = []
@@ -806,27 +816,16 @@ class ZarrStore:
         self.lock = fasteners.InterProcessLock(file_path+".lock.file")
             
     def reset_sim_status(self):
-        pass
+        raise NotImplementedError
     
     def extend(self, N):
-        pass
+        raise NotImplementedError
         
-    @staticmethod
-    def _get_shapes(model, shapes):
-        if model is None and shapes is not None:
-            pass
-        elif model is not None and shapes is None:
-            sample = model.sample(1)[0]
-            shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        else:
-            raise ValueError("Either shapes or model must be specified (but not both).")
-        return shapes
-    
-    def init(self, N, chunk_size, shapes = None, model = None):
-        #if 'data' in self.root.keys():
-            #return self
-        shapes = self._get_shapes(model, shapes)
-        self._init_shapes(shapes, N, chunk_size)
+    def init(self, N, chunk_size, shapes = None, dtypes = None):
+        if len(self) > 0:
+            print("WARNING: Already initialized.")
+            return self
+        self._init_shapes(shapes, dtypes, N, chunk_size)
         return self
         
     def __len__(self):
@@ -838,13 +837,18 @@ class ZarrStore:
         assert all([n==N for n in ns])
         return N
     
-    def _init_shapes(self, shapes, N, chunk_size):          
-        for k, s in shapes.items():
+    # TODO: Remove consistency checks
+    def _init_shapes(self, shapes, dtypes, N, chunk_size):          
+        """Initializes shapes, or checks consistency."""
+        for k in shapes.keys():
+            s = shapes[k]
+            dtype = dtypes[k]
             try:
-                self.root.zeros('data/'+k, shape = (N, *s), chunks = (chunk_size, *s), dtype = 'f4')
+                self.root.zeros('data/'+k, shape = (N, *s), chunks = (chunk_size, *s), dtype = dtype)
             except zarr.errors.ContainsArrayError:
                 assert self.root['data/'+k].shape == (N, *s), "Inconsistent array sizes"
                 assert self.root['data/'+k].chunks == (chunk_size, *s), "Inconsistent chunk sizes"
+                assert self.root['data/'+k].dtype == dtype, "Inconsistent dtype"
         try:
             self.root.zeros('meta/sim_status', shape = (N, ), chunks = (chunk_size, ), dtype = 'i4')
         except zarr.errors.ContainsArrayError:
@@ -853,7 +857,7 @@ class ZarrStore:
             assert self.chunk_size == chunk_size, "Inconsistent chunk size"
         except KeyError:
             self.data.attrs['chunk_size'] = chunk_size
-    
+
 #    @property
 #    def data(self):
 #        return {k: v for k, v in self.root['data'].items()}
@@ -880,21 +884,21 @@ class ZarrStore:
     def sims_required(self):
         return sum(self.root['meta']['sim_status'][:] == 0)
 
-    def simulate(self, model, max_sims = None, batch_size = 10):
+    def simulate(self, simulator, max_sims = None, batch_size = 10):
         total_sims = 0
         while self.sims_required > 0:
             if max_sims is not None and total_sims >= max_sims:
                 break
-            num_sims = self.simulate_batch(model, batch_size)
+            num_sims = self.simulate_batch(simulator, batch_size)
             total_sims += num_sims
 
-    def simulate_batch(self, model, batch_size):
+    def simulate_batch(self, simulator, batch_size):
         # Run simulator
         num_sims = min(batch_size, self.sims_required)
         if num_sims == 0:
             return num_sims
 
-        samples = model.sample(num_sims)
+        samples = simulator.sample(num_sims)
         
         # Reserve slots
         with self.lock:
@@ -907,7 +911,7 @@ class ZarrStore:
             for i_slice, j_slice in index_slices:
                 sim_status[j_slice[0]:j_slice[1]] = 1
                 for k, v in data.items():
-                    data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]].numpy()
+                    data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]]
                 
 #            for i in idx:
 #                sim_status[i] = 1
@@ -1012,7 +1016,7 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
 #store.simulate(cfg.hparams.train_size)
 
 
-def to_numpy(x, single_precision = True):
+def to_numpy(x, single_precision = False):
     if isinstance(x, torch.Tensor):
         if not single_precision:
             return x.detach().cpu().numpy()
@@ -1036,11 +1040,14 @@ def to_numpy(x, single_precision = True):
             return x
     else:
         return x
+
+def to_numpy32(x):
+    return to_numpy(x, single_precision = True)
     
-def to_tensor(x):
+def to_torch(x):
     if isinstance(x, SampleStore):
-        return SampleStore({k: to_tensor(v) for k, v in x.items()})
+        return SampleStore({k: to_torch(v) for k, v in x.items()})
     elif isinstance(x, dict):
-        return {k: to_tensor(v) for k, v in x.items()}
+        return {k: to_torch(v) for k, v in x.items()}
     else:
         return torch.as_tensor(x)
