@@ -926,17 +926,17 @@ class ZarrStore:
 
         return num_sims
 
-    def get_dataset(self, idx_range = None, hook = None):
-        return ZarrStoreIterableDataset(self, idx_range = idx_range, hook = hook)
+    def get_dataset(self, idx_range = None, post_hook = None):
+        return ZarrStoreIterableDataset(self, idx_range = idx_range, post_hook = post_hook)
     
-    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None, hook = None):
-        ds = self.get_dataset(idx_range = idx_range, hook = hook)
+    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None, post_hook = None):
+        ds = self.get_dataset(idx_range = idx_range, post_hook = post_hook)
         dl = torch.utils.data.DataLoader(ds, num_workers = num_workers, batch_size = batch_size, drop_last = drop_last, pin_memory = pin_memory)
         return dl
 
 
 class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
-    def __init__(self, zarr_store : ZarrStore, idx_range = None, hook = None):
+    def __init__(self, zarr_store : ZarrStore, idx_range = None, post_hook = None):
         self.zs = zarr_store
         if idx_range is None:
             self.n_samples = len(self.zs)
@@ -946,7 +946,7 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             self.n_samples = idx_range[1] - idx_range[0]
         self.chunk_size = self.zs.chunk_size
         self.n_chunks = int(math.ceil(self.n_samples/float(self.chunk_size)))
-        self.hook = hook
+        self.post_hook = post_hook
       
     @staticmethod
     def get_idx(n_chunks, worker_info):
@@ -974,8 +974,8 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             # Return separate samples
             for i in np.random.permutation(n):
                 out = {k: v[i] for k, v in data_chunk.items()}
-                if self.hook:
-                    out = self.hook(out)
+                if self.post_hook:
+                    out = self.post_hook(out)
                 yield out
 
 
