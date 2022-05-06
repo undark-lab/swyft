@@ -45,6 +45,10 @@ class SwyftTrace(dict):
     def __repr__(self):
         return "SwyftTrace("+super().__repr__()+")"
 
+    def __setitem__(self, k, v):
+        if k not in self.keys():
+            super().__setitem__(k, v)
+
     @property
     def covers_targets(self):
         return (self._targets is not None 
@@ -52,30 +56,43 @@ class SwyftTrace(dict):
 
     def sample(self, name, fn, *args, **kwargs):
         assert callable(fn), "Second argument must be a function."
-        lazy_value = SwyftLazyValue(self, name, fn, *args, **kwargs)
-        if self._targets is None or name in self._targets:
-            lazy_value.evaluate()
-        return lazy_value
+        if isinstance(name, list):
+            lazy_values = [SwyftLazyValue(self, k, name, fn, *args, **kwargs) for k in name]
+            if self._targets is None or any([k in self._targets for k in name]):
+                lazy_values[0].evaluate()
+            return tuple(lazy_values)
+        else:
+            lazy_value = SwyftLazyValue(self, name, name, fn, *args, **kwargs)
+            if self._targets is None or name in self._targets:
+                lazy_value.evaluate()
+            return lazy_value
 
 
 class SwyftLazyValue:
-    def __init__(self, trace, name, fn, *args, **kwargs):
+    def __init__(self, trace, this_name, fn_out_names, fn, *args, **kwargs):
         self._trace = trace
-        self._name = name
+        self._this_name = this_name
+        self._fn_out_names = fn_out_names
         self._fn = fn
         self._args = args
         self._kwargs = kwargs
 
     def __repr__(self):
-        value = self._trace[self._name] if self._name in self._trace.keys() else "None"
-        return f"SwyftLazyValue{self._name, value, self._fn, self._args, self._kwargs}"
+        value = self._trace[self._this_name] if self._this_name in self._trace.keys() else "None"
+        return f"SwyftLazyValue{self._this_name, value, self._fn, self._args, self._kwargs}"
 
     def evaluate(self):
-        if self._name not in self._trace.keys():
+        if self._this_name not in self._trace.keys():
             args = (arg.evaluate() if isinstance(arg, SwyftLazyValue) else arg for arg in self._args)
             kwargs = {k: v.evaluate() if isinstance(v, SwyftLazyValue) else v for k, v in self._kwargs.items()}
-            self._trace[self._name] = self._fn(*args, **kwargs)
-        return self._trace[self._name]
+            result = self._fn(*args, **kwargs)
+            if not isinstance(self._fn_out_names, list):
+                self._trace[self._fn_out_names] = result
+            else:
+                for out_name, value in zip(self._fn_out_names, result):
+                    print(out_name)
+                    self._trace[out_name] = value
+        return self._trace[self._this_name]
 
 
 def collate_output(out):
