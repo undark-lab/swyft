@@ -41,6 +41,7 @@ class SwyftTrace(dict):
     def __init__(self, targets = None, conditions = {}):
         super().__init__(conditions)
         self._targets = targets
+        self._prefix = ""
 
     def __repr__(self):
         return "SwyftTrace("+super().__repr__()+")"
@@ -54,21 +55,40 @@ class SwyftTrace(dict):
         return (self._targets is not None 
                 and all([k in self.keys() for k in self._targets]))
 
-    def sample(self, name, fn, *args, **kwargs):
+    def sample(self, names, fn, *args, **kwargs):
         assert callable(fn), "Second argument must be a function."
-        if isinstance(name, list):
-            lazy_values = [SwyftLazyValue(self, k, name, fn, *args, **kwargs) for k in name]
-            if self._targets is None or any([k in self._targets for k in name]):
+        if isinstance(names, list):
+            names = [self._prefix + n for n in names]
+            lazy_values = [LazyValue(self, k, names, fn, *args, **kwargs) for k in names]
+            if self._targets is None or any([k in self._targets for k in names]):
                 lazy_values[0].evaluate()
             return tuple(lazy_values)
-        else:
-            lazy_value = SwyftLazyValue(self, name, name, fn, *args, **kwargs)
+        elif isinstance(names, str):
+            name = self._prefix + names
+            lazy_value = LazyValue(self, name, name, fn, *args, **kwargs)
             if self._targets is None or name in self._targets:
                 lazy_value.evaluate()
             return lazy_value
+        else:
+            raise ValueError
+
+    def prefix(self, prefix):
+        return TracePrefixContextManager(self, prefix)
 
 
-class SwyftLazyValue:
+class TracePrefixContextManager:
+    def __init__(self, trace, prefix):
+        self._trace = trace
+        self._prefix = prefix
+
+    def __enter__(self):
+        self._prefix, self._trace._prefix = self._trace._prefix, self._prefix + self._trace._prefix
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self._trace._prefix = self._prefix
+
+
+class LazyValue:
     def __init__(self, trace, this_name, fn_out_names, fn, *args, **kwargs):
         self._trace = trace
         self._this_name = this_name
@@ -79,12 +99,12 @@ class SwyftLazyValue:
 
     def __repr__(self):
         value = self._trace[self._this_name] if self._this_name in self._trace.keys() else "None"
-        return f"SwyftLazyValue{self._this_name, value, self._fn, self._args, self._kwargs}"
+        return f"LazyValue{self._this_name, value, self._fn, self._args, self._kwargs}"
 
     def evaluate(self):
         if self._this_name not in self._trace.keys():
-            args = (arg.evaluate() if isinstance(arg, SwyftLazyValue) else arg for arg in self._args)
-            kwargs = {k: v.evaluate() if isinstance(v, SwyftLazyValue) else v for k, v in self._kwargs.items()}
+            args = (arg.evaluate() if isinstance(arg, LazyValue) else arg for arg in self._args)
+            kwargs = {k: v.evaluate() if isinstance(v, LazyValue) else v for k, v in self._kwargs.items()}
             result = self._fn(*args, **kwargs)
             if not isinstance(self._fn_out_names, list):
                 self._trace[self._fn_out_names] = result
@@ -741,11 +761,17 @@ class ZarrStore:
         self.root = zarr.group(store = self.store, synchronizer = synchronizer)
         self.lock = fasteners.InterProcessLock(file_path+".lock.file")
             
-    def reset_sim_status(self):
-        raise NotImplementedError
-    
-    def extend(self, N):
-        raise NotImplementedError
+    def set_length(self, N, clubber = False):
+        """Resize store.  N >= current store length."""
+        if N < len(self) and not clubber:
+            raise ValueError(
+                """New length shorter than current store length.
+                You can use clubber = True if you know what your are doing."""
+                )
+        for k in self.data.keys():
+            shape = self.data[k].shape
+            self.data[k].resize(N, *shape[1:])
+        self.root['meta/sim_status'].resize(N,)
         
     def init(self, N, chunk_size, shapes = None, dtypes = None):
         if len(self) > 0:
@@ -806,21 +832,21 @@ class ZarrStore:
     def sims_required(self):
         return sum(self.root['meta']['sim_status'][:] == 0)
 
-    def simulate(self, simulator, max_sims = None, batch_size = 10):
+    def simulate(self, sample_fn, max_sims = None, batch_size = 10):
         total_sims = 0
         while self.sims_required > 0:
             if max_sims is not None and total_sims >= max_sims:
                 break
-            num_sims = self.simulate_batch(simulator, batch_size)
+            num_sims = self._simulate_batch(sample_fn, batch_size)
             total_sims += num_sims
 
-    def simulate_batch(self, simulator, batch_size):
+    def _simulate_batch(self, sample_fn, batch_size):
         # Run simulator
         num_sims = min(batch_size, self.sims_required)
         if num_sims == 0:
             return num_sims
 
-        samples = simulator.sample(num_sims)
+        samples = sample_fn(num_sims)
         
         # Reserve slots
         with self.lock:
