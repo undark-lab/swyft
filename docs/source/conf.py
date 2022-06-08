@@ -66,6 +66,18 @@ nbsphinx_allow_errors = True
 # autodoc_default_flags = ['members']
 # autosummary_generate = True
 
+# This is processed by Jinja2 and inserted before each notebook
+# idea taken from: https://github.com/stellargraph/stellargraph/pull/1460/files
+nbsphinx_prolog = r"""
+.. raw:: html
+    <div>
+      <p><a href="{{ env.docname.rsplit('/', 1).pop() }}.ipynb" class="btn">Download this notebook</a></p>
+    </div>
+"""
+
+nbsphinx_epilog = nbsphinx_prolog  # also insert after each notebook
+
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
