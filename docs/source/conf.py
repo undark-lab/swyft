@@ -70,8 +70,10 @@ nbsphinx_allow_errors = True
 # idea taken from: https://github.com/stellargraph/stellargraph/pull/1460/files
 nbsphinx_prolog = r"""
 .. raw:: html
-    <div>
-      <p><a href="{{ env.docname.rsplit('/', 1).pop() }}.ipynb" class="btn">Download this notebook</a></p>
+    <div class="admonition info">
+        <p>
+        <a href="{{ env.docname.rsplit('/', 1).pop() }}.ipynb" class="btn">Download this notebook</a></p>
+        </p>
     </div>
 """
 
