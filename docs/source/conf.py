@@ -119,10 +119,8 @@ nbsphinx_prolog = (
 
     .. nbinfo::
         This page was generated from `{{ docpath }}`_.
-        {{ docpath.split()[0] }}
-        {{ '\ '.join(docpath.split()) }}
 
-    .. _{{ docpath }}: https://github.com/undark-lab/swyft/blob/ """
+    .. _{{ docpath }}: https://github.com/undark-lab/swyft/blob/"""
     + git_rev
     + r"{{ '\ '.join(docpath.split()) }}"  # it is required to join and split because spaces must be escaped in rst!!
 )
