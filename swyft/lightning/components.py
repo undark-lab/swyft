@@ -101,6 +101,10 @@ class LazyValue:
         value = self._trace[self._this_name] if self._this_name in self._trace.keys() else "None"
         return f"LazyValue{self._this_name, value, self._fn, self._args, self._kwargs}"
 
+    @property
+    def value(self):
+        return self.evaluate()
+
     def evaluate(self):
         if self._this_name not in self._trace.keys():
             args = (arg.evaluate() if isinstance(arg, LazyValue) else arg for arg in self._args)
@@ -257,8 +261,7 @@ class SwyftModule(pl.LightningModule):
         self.save_hyperparameters()
         self._predict_condition_x = {}
         self._predict_condition_z = {}
-        #self.lr = lr
-        
+
     def on_train_start(self):
         self.logger.log_hyperparams(self.hparams, {"hp/KL-div": -1, "hp/JS-div": -1})
         
@@ -280,23 +283,49 @@ class SwyftModule(pl.LightningModule):
         return log_ratios
     
     def validation_step(self, batch, batch_idx):
-        loss = self._calc_loss(batch, batch_idx)
+        loss = self._calc_loss(batch, randomized = False)
         self.log("val_loss", loss, prog_bar=True)
         return loss
 
-    def _calc_loss(self, batch, batch_idx, randomized = True):
-        x = batch
-        z = batch
-        if randomized:
-            z = valmap(append_randomized, z)
-        else:
-            z = valmap(append_nonrandomized, z)
-        log_ratios = self._log_ratios(x, z)
-        nbatch = len(log_ratios)//2
+#    # TODO: Deprecate eventually
+#    def _calc_loss(self, batch, batch_idx, randomized = True):
+#        x = batch
+#        z = batch
+#        if randomized:
+#            z = valmap(append_randomized, z)
+#        else:
+#            z = valmap(append_nonrandomized, z)
+#        log_ratios = self._log_ratios(x, z)
+#        nbatch = len(log_ratios)//2
+#        y = torch.zeros_like(log_ratios)
+#        y[:nbatch, ...] = 1
+#        loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduce = False)
+#        loss = loss.sum()/nbatch
+#        return loss
+
+    def _calc_loss(self, batch, randomized = True):
+        if isinstance(batch, list):  # multiple dataloaders provided, using second one for contrastive samples
+            A = batch[0]
+            B = batch[1]
+        else:  # only one dataloader provided, using same samples for constrative samples
+            A = batch
+            B = valmap(roll, A)
+
+        # Concatenate positive samples and negative (contrastive) examples
+        x = A
+        z = {}
+        for key in B:
+            z[key] = torch.cat([A[key], B[key]])
+
+        num_pos = len(list(x.values())[0])          # Number of positive examples
+        num_neg = len(list(z.values())[0])-num_pos  # Number of negative examples
+
+        log_ratios = self._log_ratios(x, z)  # Generates concatenated flattened list of all estimated log ratios
         y = torch.zeros_like(log_ratios)
-        y[:nbatch, ...] = 1
-        loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduce = False)
-        loss = loss.sum()/nbatch
+        y[:num_pos, ...] = 1
+        pos_weight = torch.ones_like(log_ratios[0])*num_neg/num_pos
+        loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduction = 'none', pos_weight = pos_weight)
+        loss = loss.sum()/num_neg  # Calculates batched-averaged loss
         return loss
     
     def _calc_KL(self, batch, batch_idx):
@@ -308,12 +337,12 @@ class SwyftModule(pl.LightningModule):
         return loss
         
     def training_step(self, batch, batch_idx):
-        loss = self._calc_loss(batch, batch_idx)
+        loss = self._calc_loss(batch)
         self.log("train_loss", loss)
         return loss
     
     def test_step(self, batch, batch_idx):
-        loss = self._calc_loss(batch, batch_idx, randomized = False)
+        loss = self._calc_loss(batch, randomized = False)
         lossKL = self._calc_KL(batch, batch_idx)
         self.log("hp/JS-div", loss)
         #self.log("hp_metric", loss)
@@ -422,17 +451,19 @@ class SampleStore(dict):
     
     def __getitem__(self, i):
         """For integers, return 'rows', for string returns 'columns'."""
-        if isinstance(i, int) or isinstance(i, slice):
+        if isinstance(i, int):
             return {k: v[i] for k, v in self.items()}
+        elif isinstance(i, slice):
+            return SampleStore({k: v[i] for k, v in self.items()})
         else:
             return super().__getitem__(i)
         
-    def get_dataset(self):
-        return _DictDataset(self)
+    def get_dataset(self, on_after_load_sample = None):
+        return _DictDataset(self, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, batch_size = 1):
-        dataset = self.get_dataset()
-        return torch.utils.data.DataLoader(dataset, batch_size = batch_size)
+    def get_dataloader(self, batch_size = 2, shuffle = False, on_after_load_sample = None):
+        dataset = self.get_dataset(on_after_load_sample = on_after_load_sample)
+        return torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = shuffle)
     
     def to_numpy(self, single_precision = True):
         return to_numpy(self, single_precision = single_precision)
@@ -498,13 +529,22 @@ def get_1d_rect_bounds(samples, th = 1e-6):
     return bounds
     
 def append_randomized(z):
+    # Append randomized samples, e.g.: 1, 2, 3, 4 -> 1, 2, 3, 4, 2, 4, 3, 1
     assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
     n = len(z)//2
     idx = torch.randperm(n)
     z = torch.cat([z, z[n+idx], z[idx]])
     return z
 
+def randomize(z):
+    idx = torch.randperm(len(z))
+    return z[idx]
+
+def roll(z):
+    return torch.roll(z, 1, dims = 0)
+
 def append_nonrandomized(z):
+    # Append swapped samples: z1, z2, z3, z4 --> z1, z2, z3, z4, z3, z4, z1, z2
     assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
     n = len(z)//2
     idx = np.arange(n)
