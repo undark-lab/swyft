@@ -27,6 +27,7 @@ import yaml
 
 import zarr
 import fasteners
+from dataclasses import dataclass
 from pytorch_lightning import loggers as pl_loggers
 
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -390,6 +391,27 @@ class SwyftTrainer(pl.Trainer):
                 ) for k in keys if k[:4] != "aux_"
             }
         return RatioSampleStore(**d)
+    
+    def estimate_mass(self, model, A, B, batch_size = 1024):
+        repeat = len(B)//batch_size + (len(B)%batch_size>0)
+        pred0 = self.infer(model, A.get_dataloader(batch_size=32), A.get_dataloader(batch_size=32))
+        pred1 = self.infer(model, A.get_dataloader(batch_size=1, repeat = repeat), B.get_dataloader(batch_size = batch_size))
+        n0 = len(pred0)
+        out = {}
+        for k, v in pred1.items():
+            ratios = v.ratios.reshape(n0, -1, *v.ratios.shape[1:])
+            vs = []
+            ms = []
+            for i in range(n0):
+                ratio0 = pred0[k].ratios[i]
+                value0 = pred0[k].values[i]
+                m = calc_mass(ratio0, ratios[i])
+                vs.append(value0)
+                ms.append(m)
+            masses = torch.stack(ms, dim = 0)
+            values = torch.stack(vs, dim = 0)
+            out[k] = PriorMass(values, masses)
+        return out
 
 #    def infer(self, model, dataloader, conditions = {}):
 #        model._set_predict_conditions(conditions, {})
@@ -486,8 +508,10 @@ class SampleStore(dict):
     def get_dataset(self, on_after_load_sample = None):
         return _DictDataset(self, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None):
+    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None, repeat = None):
         dataset = self.get_dataset(on_after_load_sample = on_after_load_sample)
+        if repeat is not None:
+            dataset = RepeatDataset(dataset, repeat = repeat)
         return torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = shuffle)
     
     def to_numpy(self, single_precision = True):
@@ -512,9 +536,6 @@ class _DictDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on SampleStore."""
     def __init__(self, sample_store, on_after_load_sample = None):
         self._dataset = sample_store
-        #self._keys = keys
-        #self._x_keys = x_keys
-        #self._z_keys = z_keys
         self._on_after_load_sample = on_after_load_sample
 
     def __len__(self):
@@ -530,6 +551,17 @@ class _DictDataset(torch.utils.data.Dataset):
         #x = {k: d[k] for k in x_keys}
         #z = {k: d[k] for k in z_keys}
         #return x, z
+
+class RepeatDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset, repeat):
+        self._dataset = dataset
+        self._repeat = repeat
+
+    def __len__(self):
+        return len(self._dataset)*self._repeat
+
+    def __getitem__(self, i):
+        return self._dataset[i//self._repeat]
     
 
 ##################
@@ -1016,3 +1048,15 @@ def to_torch(x):
         return {k: to_torch(v) for k, v in x.items()}
     else:
         return torch.as_tensor(x)
+    
+    
+@dataclass
+class PriorMass:
+    value: None
+    mass: None
+
+def calc_mass(r0, r):
+    p = torch.exp(r - r.max(axis=0).values)
+    p /= p.sum(axis=0)
+    m = r > r0
+    return (p*m).sum(axis=0)
