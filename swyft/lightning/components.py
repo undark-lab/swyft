@@ -33,6 +33,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
+from pytorch_lightning.trainer.supporters import CombinedLoader
 
 from swyft.networks.standardization import OnlineStandardizingLayer
 
@@ -340,7 +341,7 @@ class SwyftModule(pl.LightningModule):
         loss = self._calc_loss(batch)
         self.log("train_loss", loss)
         return loss
-    
+
     def test_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, randomized = False)
         lossKL = self._calc_KL(batch, batch_idx)
@@ -356,27 +357,51 @@ class SwyftModule(pl.LightningModule):
     def set_conditions(self, conditions):
         self._predict_condition_x = conditions
     
-    def predict_step(self, batch, batch_idx):
-        x = batch.copy()
-        z = batch.copy()
-        condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
-        x.update(**condition_x)
-        #z.update(**self._predict_condition_z)
-        return self(x, z)
+#    def predict_step(self, batch, batch_idx):
+#        x = batch.copy()
+#        z = batch.copy()
+#        condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
+#        x.update(**condition_x)
+#        #z.update(**self._predict_condition_z)
+#        return self(x, z)
+ 
+    def predict_step(self, batch, *args, **kwargs):
+        A = batch[0]
+        B = batch[1]
+        return self(A, B)
         
 
 class SwyftTrainer(pl.Trainer):
-    def infer(self, model, dataloader, conditions = {}):
-        model._set_predict_conditions(conditions, {})
-        ratio_batches = self.predict(model, dataloader)
+    def infer(self, model, A, B):
+        if isinstance(A, dict):
+            dl1 = SampleStore({k: [v] for k, v in A.items()}).get_dataloader(batch_size = 1)
+        else:
+            dl1 = A
+        if isinstance(B, dict):
+            dl2 = SampleStore({k: [v] for k, v in B.items()}).get_dataloader(batch_size = 1)
+        else:
+            dl2 = B
+        dl = CombinedLoader([dl1, dl2], mode = 'max_size_cycle')
+        ratio_batches = self.predict(model, dl)
         keys = ratio_batches[0].keys()
         d = {k: RatioSamples(
                 torch.cat([r[k].values for r in ratio_batches]),
                 torch.cat([r[k].ratios for r in ratio_batches])
                 ) for k in keys if k[:4] != "aux_"
             }
-        model._set_predict_conditions({}, {})  # Set it back to no conditioning
         return RatioSampleStore(**d)
+
+#    def infer(self, model, dataloader, conditions = {}):
+#        model._set_predict_conditions(conditions, {})
+#        ratio_batches = self.predict(model, dataloader)
+#        keys = ratio_batches[0].keys()
+#        d = {k: RatioSamples(
+#                torch.cat([r[k].values for r in ratio_batches]),
+#                torch.cat([r[k].ratios for r in ratio_batches])
+#                ) for k in keys if k[:4] != "aux_"
+#            }
+#        model._set_predict_conditions({}, {})  # Set it back to no conditioning
+#        return RatioSampleStore(**d)
 
 
 ####################
@@ -461,7 +486,7 @@ class SampleStore(dict):
     def get_dataset(self, on_after_load_sample = None):
         return _DictDataset(self, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, batch_size = 2, shuffle = False, on_after_load_sample = None):
+    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None):
         dataset = self.get_dataset(on_after_load_sample = on_after_load_sample)
         return torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = shuffle)
     
