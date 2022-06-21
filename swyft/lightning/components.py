@@ -39,14 +39,23 @@ from pytorch_lightning.trainer.supporters import CombinedLoader
 from swyft.networks.standardization import OnlineStandardizingLayer
 
 
-class SwyftTrace(dict):
+class Trace(dict):
+    """Defines the computational graph (DAG) and keeps track of simulation results.
+    """
     def __init__(self, targets = None, conditions = {}):
+        """Instantiate Trace instante.
+
+        Args:
+            targets: Optional list of target sample variables. If provided, execution is stopped after those targets are evaluated. If `None`, all variables in the DAG will be evaluated.
+            conditions: Optional `dict` or Callable. If a `dict`, sample variables will be conditioned to the corresponding values.  If Callable, it will be evaulated and it is expected to return a `dict`.
+        """
+
         super().__init__(conditions)
         self._targets = targets
         self._prefix = ""
 
     def __repr__(self):
-        return "SwyftTrace("+super().__repr__()+")"
+        return "Trace("+super().__repr__()+")"
 
     def __setitem__(self, k, v):
         if k not in self.keys():
@@ -58,6 +67,16 @@ class SwyftTrace(dict):
                 and all([k in self.keys() for k in self._targets]))
 
     def sample(self, names, fn, *args, **kwargs):
+        """Register sampling function.
+
+        Args:
+            names: Name or list of names of sampling variables.
+            fn: Callable that returns the (list of) sampling variable(s).
+            *args, **kwargs: Arguments and keywords arguments that are passed to `fn` upon evaluation.  LazyValues will be automatically evaluated if necessary.
+
+        Returns:
+            LazyValue sample.
+        """
         assert callable(fn), "Second argument must be a function."
         if isinstance(names, list):
             names = [self._prefix + n for n in names]
@@ -91,7 +110,18 @@ class TracePrefixContextManager:
 
 
 class LazyValue:
+    """Provides lazy evaluation functionality.
+    """
     def __init__(self, trace, this_name, fn_out_names, fn, *args, **kwargs):
+        """Instantiates LazyValue object.
+
+        Args:
+            trace: Trace instance (to be populated with sample).
+            this_name: Name of this the variable that this LazyValue represents.
+            fn_out_names: Name or list of names of variables that `fn` returns.
+            fn: Callable that returns sample or list of samples.
+            args, kwargs: Arguments and keyword arguments provided to `fn` upon evaluation.
+        """
         self._trace = trace
         self._this_name = this_name
         self._fn_out_names = fn_out_names
@@ -105,9 +135,15 @@ class LazyValue:
 
     @property
     def value(self):
+        """Value of this object."""
         return self.evaluate()
 
     def evaluate(self):
+        """Trigger evaluation of function.
+
+        Returns:
+            Value of `this_name`.
+        """
         if self._this_name not in self._trace.keys():
             args = (arg.evaluate() if isinstance(arg, LazyValue) else arg for arg in self._args)
             kwargs = {k: v.evaluate() if isinstance(v, LazyValue) else v for k, v in self._kwargs.items()}
@@ -133,21 +169,26 @@ def collate_output(out):
 
 
 class SwyftSimulator:
+    """Handles simulations."""
     def on_before_forward(self, sample):
+        """Apply transformations to conditions."""
         return sample
 
     @abstractmethod
     def forward(self, trace):
+        """Main function to overwrite.
+        """
         raise NotImplementedError
 
     def on_after_forward(self, sample):
+        """Apply transformation to generated samples."""
         return sample
 
     def __call__(self, targets = None, conditions = {}):
         conditions = conditions() if callable(conditions) else conditions
 
         conditions = self.on_before_forward(conditions)
-        trace = SwyftTrace(targets, conditions)
+        trace = Trace(targets, conditions)
         if not trace.covers_targets:
             self.forward(trace)
             #try:
@@ -161,12 +202,27 @@ class SwyftSimulator:
         return result
     
     def get_shapes_and_dtypes(self, targets = None):
+        """Return shapes and data-types of sample variables.
+
+        Args:
+            targets: Target sample variables to simulate.
+
+        Return:
+            dictionary of shapes, dictionary of dtypes
+        """
         sample = self(targets = targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
     def sample(self, N, targets = None, conditions = {}):
+        """Sample from the simulator.
+
+        Args:
+            N: int, number of samples to generate
+            targets: Optional list of target sample variables to generate. If `None`, all targets are simulated.
+            conditions: Dict or Callable, conditions sample variables.
+        """
         out = []
         for _ in tqdm(range(N)):
             result = self.__call__(targets, conditions)
@@ -176,9 +232,23 @@ class SwyftSimulator:
         return out
 
     def get_resampler(self, targets):
+        """Generates a resampler. Useful for noise hooks etc.
+
+        Args:
+            targets: List of target variables to simulate
+
+        Returns:
+            SwyftSimulatorResampler instance.
+        """
         return SwyftSimulatorResampler(self, targets)
 
     def get_iterator(self, targets = None, conditions = {}):
+        """Generates an iterator. Useful for iterative sampling.
+
+        Args:
+            targets: Optional list of target sample variables.
+            conditions: Dict or Callable.
+        """
         def iterator():
             while True:
                 yield self.__call__(targets = targets, conditions = conditions)
@@ -187,11 +257,26 @@ class SwyftSimulator:
     
     
 class SwyftSimulatorResampler:
+    """Handles rerunning part of the simulator. Typically used for on-the-fly calculations during training."""
     def __init__(self, simulator, targets):
+        """Instantiates SwyftSimulatorResampler
+
+        Args:
+            simulator: The simulator object
+            targets: List of target sample variables that will be resampled
+        """
         self._simulator = simulator
         self._targets = targets
         
     def __call__(self, sample):
+        """Resamples.
+
+        Args:
+            sample: Sample dict
+
+        Returns:
+            sample with resampled sites
+        """
         conditions = sample.copy()
         for k in self._targets:
             conditions.pop(k)
@@ -200,6 +285,17 @@ class SwyftSimulatorResampler:
     
 
 def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
+    """Generates convenience configuration for Trainer object.
+
+    Args:
+        save_dir: Save-directory for tensorboard logs
+        name: tensorboard logs name
+        version: tensorboard logs version
+        patience: early-stopping patience
+
+    Returns:
+        Configuration dictionary
+    """
     tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
     lr_monitor = LearningRateMonitor(logging_interval="step")
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=patience, verbose=False, mode="min")
@@ -207,6 +303,7 @@ def tensorboard_config(save_dir = "./lightning_logs", name = None, version = Non
     return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
 
 
+# TODO: DEPRECATE?
 class SwyftDataModule(pl.LightningDataModule):
     def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
@@ -243,6 +340,14 @@ class SwyftDataModule(pl.LightningDataModule):
 
 
 def get_best_model(tbl):
+    """Get best model from tensorboard log. Useful for reloading trained networks.
+
+    Args:
+        tbl: Tensorboard log instance
+
+    Returns:
+        path to best model
+    """
     try:
         with open(tbl.experiment.get_logdir()+"/checkpoints/best_k_models.yaml") as f:
             best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
@@ -258,7 +363,15 @@ def get_best_model(tbl):
 
 
 class SwyftModule(pl.LightningModule):
+    """Handles training of ratio estimators."""
     def __init__(self, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
+        """Instantiates SwyftModule.
+
+        Args:
+            lr: learning rate
+            lrs_factor: learning rate decay
+            lrs_patience: learning rate decay patience
+        """
         super().__init__()
         self.save_hyperparameters()
         self._predict_condition_x = {}
@@ -373,7 +486,17 @@ class SwyftModule(pl.LightningModule):
         
 
 class SwyftTrainer(pl.Trainer):
+    """Training of SwyftModule, a thin layer around lightning.Trainer."""
     def infer(self, model, A, B):
+        """Run through model in inference mode.
+
+        Args:
+            A: sample or dataloader for samples A.
+            B: sample or dataloader for samples B.
+
+        Returns:
+            Concatenated network output
+        """
         if isinstance(A, dict):
             dl1 = SampleStore({k: [v] for k, v in A.items()}).get_dataloader(batch_size = 1)
         else:
@@ -393,6 +516,17 @@ class SwyftTrainer(pl.Trainer):
         return RatioSampleStore(**d)
     
     def estimate_mass(self, model, A, B, batch_size = 1024):
+        """Estimate empirical mass.
+
+        Args:
+            model: network
+            A: truth samples
+            B: prior samples
+            batch_size: batch sized used during network evaluation
+
+        Returns:
+            Dict of PriorMass objects.
+        """
         repeat = len(B)//batch_size + (len(B)%batch_size>0)
         pred0 = self.infer(model, A.get_dataloader(batch_size=32), A.get_dataloader(batch_size=32))
         pred1 = self.infer(model, A.get_dataloader(batch_size=1, repeat = repeat), B.get_dataloader(batch_size = batch_size))
