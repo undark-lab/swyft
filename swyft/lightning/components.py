@@ -313,6 +313,7 @@ class SwyftDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.validation_percentage = validation_percentage
         self.train_multiply = train_multiply
+        print("Deprecation warning: Use dataloaders directly rathe than this data module for transparency.")
 
     def setup(self, stage):
         self.dataset = _DictDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
@@ -402,22 +403,6 @@ class SwyftModule(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         return loss
 
-#    # TODO: Deprecate eventually
-#    def _calc_loss(self, batch, batch_idx, randomized = True):
-#        x = batch
-#        z = batch
-#        if randomized:
-#            z = valmap(append_randomized, z)
-#        else:
-#            z = valmap(append_nonrandomized, z)
-#        log_ratios = self._log_ratios(x, z)
-#        nbatch = len(log_ratios)//2
-#        y = torch.zeros_like(log_ratios)
-#        y[:nbatch, ...] = 1
-#        loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduce = False)
-#        loss = loss.sum()/nbatch
-#        return loss
-
     def _calc_loss(self, batch, randomized = True):
         if isinstance(batch, list):  # multiple dataloaders provided, using second one for contrastive samples
             A = batch[0]
@@ -471,14 +456,6 @@ class SwyftModule(pl.LightningModule):
     def set_conditions(self, conditions):
         self._predict_condition_x = conditions
     
-#    def predict_step(self, batch, batch_idx):
-#        x = batch.copy()
-#        z = batch.copy()
-#        condition_x = swyft.utils.dict_to_device(self._predict_condition_x, self.device)
-#        x.update(**condition_x)
-#        #z.update(**self._predict_condition_z)
-#        return self(x, z)
- 
     def predict_step(self, batch, *args, **kwargs):
         A = batch[0]
         B = batch[1]
@@ -546,18 +523,6 @@ class SwyftTrainer(pl.Trainer):
             values = torch.stack(vs, dim = 0)
             out[k] = PriorMass(values, masses)
         return out
-
-#    def infer(self, model, dataloader, conditions = {}):
-#        model._set_predict_conditions(conditions, {})
-#        ratio_batches = self.predict(model, dataloader)
-#        keys = ratio_batches[0].keys()
-#        d = {k: RatioSamples(
-#                torch.cat([r[k].values for r in ratio_batches]),
-#                torch.cat([r[k].ratios for r in ratio_batches])
-#                ) for k in keys if k[:4] != "aux_"
-#            }
-#        model._set_predict_conditions({}, {})  # Set it back to no conditioning
-#        return RatioSampleStore(**d)
 
 
 ####################
