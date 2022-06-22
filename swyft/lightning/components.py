@@ -39,9 +39,9 @@ from pytorch_lightning.trainer.supporters import CombinedLoader
 from swyft.networks.standardization import OnlineStandardizingLayer
 
 
-################
-# SwyftSimulator
-################
+###########
+# Simulator
+###########
 
 def to_numpy(x, single_precision = False):
     if isinstance(x, torch.Tensor):
@@ -54,8 +54,8 @@ def to_numpy(x, single_precision = False):
             else:
                 x = x.numpy()
             return x
-    elif isinstance(x, SampleStore):
-        return SampleStore({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
+    elif isinstance(x, Samples):
+        return Samples({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
     elif isinstance(x, dict):
         return {k: to_numpy(v, single_precision = single_precision) for k, v in x.items()}
     elif isinstance(x, np.ndarray):
@@ -72,8 +72,8 @@ def to_numpy32(x):
     return to_numpy(x, single_precision = True)
     
 def to_torch(x):
-    if isinstance(x, SampleStore):
-        return SampleStore({k: to_torch(v) for k, v in x.items()})
+    if isinstance(x, Samples):
+        return Samples({k: to_torch(v) for k, v in x.items()})
     elif isinstance(x, dict):
         return {k: to_torch(v) for k, v in x.items()}
     else:
@@ -210,7 +210,7 @@ def collate_output(out):
     return result
 
 
-class SwyftSimulator:
+class Simulator:
     """Handles simulations."""
     def on_before_forward(self, sample):
         """Apply transformations to conditions."""
@@ -270,7 +270,7 @@ class SwyftSimulator:
             result = self.__call__(targets, conditions)
             out.append(result)
         out = collate_output(out)
-        out = SampleStore(out)
+        out = Samples(out)
         return out
 
     def get_resampler(self, targets):
@@ -280,9 +280,9 @@ class SwyftSimulator:
             targets: List of target variables to simulate
 
         Returns:
-            SwyftSimulatorResampler instance.
+            SimulatorResampler instance.
         """
-        return SwyftSimulatorResampler(self, targets)
+        return SimulatorResampler(self, targets)
 
     def get_iterator(self, targets = None, conditions = {}):
         """Generates an iterator. Useful for iterative sampling.
@@ -298,10 +298,10 @@ class SwyftSimulator:
         return iterator
     
     
-class SwyftSimulatorResampler:
+class SimulatorResampler:
     """Handles rerunning part of the simulator. Typically used for on-the-fly calculations during training."""
     def __init__(self, simulator, targets):
-        """Instantiates SwyftSimulatorResampler
+        """Instantiates SimulatorResampler
 
         Args:
             simulator: The simulator object
@@ -446,22 +446,22 @@ class SwyftTrainer(pl.Trainer):
             Concatenated network output
         """
         if isinstance(A, dict):
-            dl1 = SampleStore({k: [v] for k, v in A.items()}).get_dataloader(batch_size = 1)
+            dl1 = Samples({k: [v] for k, v in A.items()}).get_dataloader(batch_size = 1)
         else:
             dl1 = A
         if isinstance(B, dict):
-            dl2 = SampleStore({k: [v] for k, v in B.items()}).get_dataloader(batch_size = 1)
+            dl2 = Samples({k: [v] for k, v in B.items()}).get_dataloader(batch_size = 1)
         else:
             dl2 = B
         dl = CombinedLoader([dl1, dl2], mode = 'max_size_cycle')
         ratio_batches = self.predict(model, dl)
         keys = ratio_batches[0].keys()
-        d = {k: RatioSamples(
+        d = {k: Ratios(
                 torch.cat([r[k].values for r in ratio_batches]),
                 torch.cat([r[k].ratios for r in ratio_batches])
                 ) for k in keys if k[:4] != "aux_"
             }
-        return RatioSampleStore(**d)
+        return SampleRatios(**d)
     
     def estimate_mass(self, model, A, B, batch_size = 1024):
         """Estimate empirical mass.
@@ -473,7 +473,7 @@ class SwyftTrainer(pl.Trainer):
             batch_size: batch sized used during network evaluation
 
         Returns:
-            Dict of PriorMass objects.
+            Dict of PosteriorMass objects.
         """
         repeat = len(B)//batch_size + (len(B)%batch_size>0)
         pred0 = self.infer(model, A.get_dataloader(batch_size=32), A.get_dataloader(batch_size=32))
@@ -492,27 +492,41 @@ class SwyftTrainer(pl.Trainer):
                 ms.append(m)
             masses = torch.stack(ms, dim = 0)
             values = torch.stack(vs, dim = 0)
-            out[k] = PriorMass(values, masses)
+            out[k] = PosteriorMass(values, masses)
         return out
 
 
 @dataclass
-class PriorMass:
-    value: None
-    mass: None
+class PosteriorMass:
+    """Handles masses and the corresponding parameter values."""
+    values: None
+    masses: None
 
-# TODO: RENAME? - WeightedSamples - SwyftRatios
 @dataclass
-class RatioSamples:
+class Ratios:
+    """Handles ratios and the corresponding parameter values.
+    
+    A dictionary of Ratios is expected to be returned by ratio estimation networks.
+
+    Args:
+        values: tensor of values for which the ratios were estimated, (nbatch, *shape_ratios, *shape_params)
+        ratios: tensor of estimated ratios, (nbatch, *shape_ratios)
+    """
     values: torch.Tensor
     ratios: torch.Tensor
     metadata: dict = field(default_factory = dict)
     
     def __len__(self):
-        assert len(self.values) == len(self.ratios), "Inconsistent RatioSamples"
+        """Number of stored ratios."""
+        assert len(self.values) == len(self.ratios), "Inconsistent Ratios"
         return len(self.values)
     
     def weights(self, normalize = False):
+        """Calculate weights based on ratios.
+
+        Args:
+            normalize: If true, normalize weights to sum to one.  If false, return weights = exp(ratios).
+        """
         ratios = self.ratios
         if normalize:
             ratio_max = ratios.max(axis=0).values
@@ -524,6 +538,12 @@ class RatioSamples:
         return weights
     
     def sample(self, N, replacement = True):
+        """Subsample values based on normalized weights.
+
+        Args:
+            N: Number of samples to generate
+            replacement: Sample with replacement.  Default is true, which corresponds to generating samples from the posterior.
+        """
         weights = self.weights(normalize = True)
         if not replacement and N > len(self):
             N = len(self)
@@ -644,11 +664,11 @@ def get_1d_rect_bounds(samples, th = 1e-6):
 # Stores
 ########
 
-# TODO: RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
-class SampleStore(dict):
+class Samples(dict):
+    """Handles storing samples in memory.  Samples are stored as dictionary of arrays/tensors with num of samples as first dimension."""
     def __len__(self):
         n = [len(v) for v in self.values()] 
-        assert all([x == n[0] for x in n]), "Inconsistent lengths in SampleStore"
+        assert all([x == n[0] for x in n]), "Inconsistent lengths in Samples"
         return n[0]
     
     def __getitem__(self, i):
@@ -656,39 +676,54 @@ class SampleStore(dict):
         if isinstance(i, int):
             return {k: v[i] for k, v in self.items()}
         elif isinstance(i, slice):
-            return SampleStore({k: v[i] for k, v in self.items()})
+            return Samples({k: v[i] for k, v in self.items()})
         else:
             return super().__getitem__(i)
         
     def get_dataset(self, on_after_load_sample = None):
-        return _DictDataset(self, on_after_load_sample = on_after_load_sample)
+        """Generator function for SamplesDataset object.
+
+        Args:
+            on_after_load_sample: Callable, that is applied to individual samples on the fly.
+
+        Returns:
+            SamplesDataset
+        """
+        return SamplesDataset(self, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None, repeat = None):
+    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None, repeat = None)
+        """Generator function to directly generate a dataloader object.
+
+        Args:
+            batch_size: batch_size for dataloader
+            shuffle: shuffle for dataloader
+            on_after_load_sample: see `get_dataset`
+            repeat: If not None, Wrap dataset in RepeatDatasetWrapper
+        """
         dataset = self.get_dataset(on_after_load_sample = on_after_load_sample)
         if repeat is not None:
-            dataset = RepeatDataset(dataset, repeat = repeat)
+            dataset = RepeatDatasetWrapper(dataset, repeat = repeat)
         return torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = shuffle)
     
     def to_numpy(self, single_precision = True):
         return to_numpy(self, single_precision = single_precision)
         
 
-# RENAME? RatioStore - SwyftRatioStore
-class RatioSampleStore(dict):
-    """Return type of SwyftTrainer"""
+# TODO: This is the return type of ratio estimation networks. Maybe make use of that somehow?
+class SampleRatios(dict):
+    """Return type of infer operation of SwyftTrainer"""
     def __len__(self):
         n = [len(v) for v in self.values()]
-        assert all([x == n[0] for x in n]), "Inconsistent lengths in SampleStore"
+        assert all([x == n[0] for x in n]), "Inconsistent lengths in Samples"
         return n[0]
     
     def sample(self, N, replacement = True):
         samples = {k: v.sample(N, replacement = replacement) for k, v in self.items()}
-        return SampleStore(samples)
+        return Samples(samples)
 
 
-# RENAME?
-class _DictDataset(torch.utils.data.Dataset):
-    """Simple torch dataset based on SampleStore."""
+class SamplesDataset(torch.utils.data.Dataset):
+    """Simple torch dataset based on Samples."""
     def __init__(self, sample_store, on_after_load_sample = None):
         self._dataset = sample_store
         self._on_after_load_sample = on_after_load_sample
@@ -701,13 +736,9 @@ class _DictDataset(torch.utils.data.Dataset):
         if self._on_after_load_sample is not None:
             d = self._on_after_load_sample(d)
         return d
-        #x_keys = self._x_keys if self._x_keys else d.keys()
-        #z_keys = self._z_keys if self._z_keys else d.keys()
-        #x = {k: d[k] for k in x_keys}
-        #z = {k: d[k] for k in z_keys}
-        #return x, z
 
-class RepeatDataset(torch.utils.data.Dataset):
+
+class RepeatDatasetWrapper(torch.utils.data.Dataset):
     def __init__(self, dataset, repeat):
         self._dataset = dataset
         self._repeat = repeat
@@ -785,7 +816,7 @@ class RepeatDataset(torch.utils.data.Dataset):
 #        out.append(x)
 #    out = torch.utils.data.dataloader.default_collate(out) # using torch internal functionality for this, yay!
 #    out = {k: v.cpu() for k, v in out.items()}
-#    return SampleStore(out)
+#    return Samples(out)
 
     
     
@@ -816,8 +847,7 @@ def equalize_tensors(a, b):
         shape[0] = n//m
         return a, b.repeat(*shape)
     
-
-# RENAME?
+# TODO: Introduce RatioEstimatorDense
 class RatioEstimatorMLPnd(torch.nn.Module):
     def __init__(self, x_dim, marginals, dropout = 0.1, hidden_features = 64, num_blocks = 2):
         super().__init__()
@@ -839,7 +869,7 @@ class RatioEstimatorMLPnd(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         z = self.ptrans(z)
         ratios = self.classifier(x, z)
-        w = RatioSamples(z, ratios, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
+        w = Ratios(z, ratios, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
         return w
     
 
@@ -864,7 +894,7 @@ class RatioEstimatorMLP1d(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         zt = self.ptrans(z).detach()
         ratios = self.classifier(x, zt)
-        w = RatioSamples(z, ratios, metadata = {"type": "MLP1d"})
+        w = Ratios(z, ratios, metadata = {"type": "MLP1d"})
         return w
 
 
@@ -880,6 +910,7 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         
     def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         """2-dim Gaussian approximation to marginals and joint, assuming (B, N)."""
+        print("Warning: deprecated, might be broken")
         x, z = equalize_tensors(x, z)
         if self.training or self.x_mean is None:
             # Covariance estimates must be based on joined samples only
@@ -910,7 +941,7 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         rho = self.xz_cov/self.x_var**0.5/self.z_var**0.5
         r = -0.5*torch.log(1-rho**2) + rho/(1-rho**2)*xb*zb - 0.5*rho**2/(1-rho**2)*(xb**2 + zb**2)
         #out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
-        out = RatioSamples(z, r, metadata = {"type": "Gaussian1d"})
+        out = Ratios(z, r, metadata = {"type": "Gaussian1d"})
         return out
 
 
@@ -979,6 +1010,7 @@ def get_index_slices(idx):
         residual_idx = residual_idx[~mask]
     return slices
 
+# TODO: Deprecate
 class SwyftDataModule(pl.LightningDataModule):
     def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
@@ -991,10 +1023,10 @@ class SwyftDataModule(pl.LightningDataModule):
         print("Deprecation warning: Use dataloaders directly rathe than this data module for transparency.")
 
     def setup(self, stage):
-        self.dataset = _DictDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
+        self.dataset = SamplesDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
         n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
         self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
-        self.dataset_test = _DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
+        self.dataset_test = SamplesDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers = self.num_workers)
@@ -1012,8 +1044,7 @@ class SwyftDataModule(pl.LightningDataModule):
     def samples(self, N, random = False):
         dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size=N, num_workers = 0, shuffle = random)
         examples = next(iter(dataloader))
-        return SampleStore(examples)
-
+        return Samples(examples)
 
 
 class ZarrStore:
@@ -1086,7 +1117,7 @@ class ZarrStore:
         return {k: v[:] for k, v in self.root['data'].items()}
     
     def get_sample_store(self):
-        return SampleStore(self.numpy())
+        return Samples(self.numpy())
     
     @property
     def meta(self):
