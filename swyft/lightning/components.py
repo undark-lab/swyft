@@ -691,7 +691,7 @@ class Samples(dict):
         """
         return SamplesDataset(self, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None, repeat = None)
+    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None, repeat = None):
         """Generator function to directly generate a dataloader object.
 
         Args:
