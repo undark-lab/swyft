@@ -39,6 +39,47 @@ from pytorch_lightning.trainer.supporters import CombinedLoader
 from swyft.networks.standardization import OnlineStandardizingLayer
 
 
+################
+# SwyftSimulator
+################
+
+def to_numpy(x, single_precision = False):
+    if isinstance(x, torch.Tensor):
+        if not single_precision:
+            return x.detach().cpu().numpy()
+        else:
+            x = x.detach().cpu()
+            if x.dtype == torch.float64:
+                x = x.float().numpy()
+            else:
+                x = x.numpy()
+            return x
+    elif isinstance(x, SampleStore):
+        return SampleStore({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
+    elif isinstance(x, dict):
+        return {k: to_numpy(v, single_precision = single_precision) for k, v in x.items()}
+    elif isinstance(x, np.ndarray):
+        if not single_precision:
+            return x
+        else:
+            if x.dtype == np.float64:
+                x = np.float32(x)
+            return x
+    else:
+        return x
+
+def to_numpy32(x):
+    return to_numpy(x, single_precision = True)
+    
+def to_torch(x):
+    if isinstance(x, SampleStore):
+        return SampleStore({k: to_torch(v) for k, v in x.items()})
+    elif isinstance(x, dict):
+        return {k: to_torch(v) for k, v in x.items()}
+    else:
+        return torch.as_tensor(x)
+    
+
 class Trace(dict):
     """Defines the computational graph (DAG) and keeps track of simulation results.
     """
@@ -158,6 +199,7 @@ class LazyValue:
 
 
 def collate_output(out):
+    """Turn list of tensors/arrays-value dicts into dict of collated tensors or arrays"""
     keys = out[0].keys()
     result = {}
     for key in keys:
@@ -282,86 +324,11 @@ class SwyftSimulatorResampler:
             conditions.pop(k)
         sims = self._simulator(conditions = conditions, targets = self._targets)
         return sims
-    
-
-def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
-    """Generates convenience configuration for Trainer object.
-
-    Args:
-        save_dir: Save-directory for tensorboard logs
-        name: tensorboard logs name
-        version: tensorboard logs version
-        patience: early-stopping patience
-
-    Returns:
-        Configuration dictionary
-    """
-    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
-    lr_monitor = LearningRateMonitor(logging_interval="step")
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=patience, verbose=False, mode="min")
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss")
-    return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
 
 
-# TODO: DEPRECATE?
-class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
-        super().__init__()
-        self.store = store
-        self.on_after_load_sample = on_after_load_sample
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.validation_percentage = validation_percentage
-        self.train_multiply = train_multiply
-        print("Deprecation warning: Use dataloaders directly rathe than this data module for transparency.")
-
-    def setup(self, stage):
-        self.dataset = _DictDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
-        n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
-        self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
-        self.dataset_test = _DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
-
-    def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers = self.num_workers)
-
-    def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size, num_workers = self.num_workers)
-    
-    # # TODO: Deprecate
-    # def predict_dataloader(self):
-    #     return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
-    
-    def test_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers = self.num_workers)
-
-    def samples(self, N, random = False):
-        dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size=N, num_workers = 0, shuffle = random)
-        examples = next(iter(dataloader))
-        return SampleStore(examples)
-
-
-def get_best_model(tbl):
-    """Get best model from tensorboard log. Useful for reloading trained networks.
-
-    Args:
-        tbl: Tensorboard log instance
-
-    Returns:
-        path to best model
-    """
-    try:
-        with open(tbl.experiment.get_logdir()+"/checkpoints/best_k_models.yaml") as f:
-            best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
-    except FileNotFoundError:
-        return None
-    val_loss = np.inf
-    path = None
-    for k, v in best_k_models.items():
-        if v < val_loss:
-            path = k
-            val_loss = v
-    return path
-
+#############
+# SwyftModule
+#############
 
 class SwyftModule(pl.LightningModule):
     """Handles training of ratio estimators."""
@@ -409,7 +376,7 @@ class SwyftModule(pl.LightningModule):
             B = batch[1]
         else:  # only one dataloader provided, using same samples for constrative samples
             A = batch
-            B = valmap(roll, A)
+            B = valmap(lambda z: torch.roll(z, 1, dims = 0), A)
 
         # Concatenate positive samples and negative (contrastive) examples
         x = A
@@ -460,7 +427,11 @@ class SwyftModule(pl.LightningModule):
         A = batch[0]
         B = batch[1]
         return self(A, B)
-        
+
+
+##############
+# SwyftTrainer
+##############
 
 class SwyftTrainer(pl.Trainer):
     """Training of SwyftModule, a thin layer around lightning.Trainer."""
@@ -525,36 +496,12 @@ class SwyftTrainer(pl.Trainer):
         return out
 
 
-####################
-# Helper dataclasses
-####################
-
 @dataclass
-class MeanStd:
-    """Store mean and standard deviation"""
-    mean: torch.Tensor
-    std: torch.Tensor
+class PriorMass:
+    value: None
+    mass: None
 
-    def from_samples(samples, weights = None):
-        """
-        Estimate mean and std deviation of samples by averaging over first dimension.
-        Supports weights>=0 with weights.shape = samples.shape
-        """
-        if weights is None:
-            weights = torch.ones_like(samples)
-        mean = (samples*weights).sum(axis=0)/weights.sum(axis=0)
-        res = samples - mean
-        var = (res*res*weights).sum(axis=0)/weights.sum(axis=0)
-        return MeanStd(mean = mean, std = var**0.5)
-
-
-@dataclass
-class RectangleBound:
-    low: torch.Tensor
-    high: torch.Tensor
-
-
-# RENAME? - WeightedSamples - SwyftRatios
+# TODO: RENAME? - WeightedSamples - SwyftRatios
 @dataclass
 class RatioSamples:
     values: torch.Tensor
@@ -584,11 +531,120 @@ class RatioSamples:
         return samples
 
 
-################
-# Helper classes
-################
+def calc_mass(r0, r):
+    p = torch.exp(r - r.max(axis=0).values)
+    p /= p.sum(axis=0)
+    m = r > r0
+    return (p*m).sum(axis=0)
 
-# RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
+def weights_sample(N, values, weights, replacement = True):
+    """Weight-based sampling with or without replacement."""
+    sw = weights.shape
+    sv = values.shape
+    assert sw == sv[:len(sw)], "Overlapping left-handed weights and values shapes do not match: %s vs %s"%(str(sv), str(sw))
+    
+    w = weights.view(weights.shape[0], -1)
+    idx = torch.multinomial(w.T, N, replacement = replacement).T
+    si = tuple(1 for _ in range(len(sv)-len(sw)))
+    idx = idx.view(N, *sw[1:], *si)
+    idx = idx.expand(N, *sv[1:])
+    
+    samples = torch.gather(values, 0, idx)
+    return samples
+
+def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
+    """Generates convenience configuration for Trainer object.
+
+    Args:
+        save_dir: Save-directory for tensorboard logs
+        name: tensorboard logs name
+        version: tensorboard logs version
+        patience: early-stopping patience
+
+    Returns:
+        Configuration dictionary
+    """
+    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
+    lr_monitor = LearningRateMonitor(logging_interval="step")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=patience, verbose=False, mode="min")
+    checkpoint_callback = ModelCheckpoint(monitor="val_loss")
+    return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
+
+def get_best_model(tbl):
+    """Get best model from tensorboard log. Useful for reloading trained networks.
+
+    Args:
+        tbl: Tensorboard log instance
+
+    Returns:
+        path to best model
+    """
+    try:
+        with open(tbl.experiment.get_logdir()+"/checkpoints/best_k_models.yaml") as f:
+            best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
+    except FileNotFoundError:
+        return None
+    val_loss = np.inf
+    path = None
+    for k, v in best_k_models.items():
+        if v < val_loss:
+            path = k
+            val_loss = v
+    return path
+
+
+########
+# Bounds
+########
+
+@dataclass
+class MeanStd:
+    """Store mean and standard deviation"""
+    mean: torch.Tensor
+    std: torch.Tensor
+
+    def from_samples(samples, weights = None):
+        """
+        Estimate mean and std deviation of samples by averaging over first dimension.
+        Supports weights>=0 with weights.shape = samples.shape
+        """
+        if weights is None:
+            weights = torch.ones_like(samples)
+        mean = (samples*weights).sum(axis=0)/weights.sum(axis=0)
+        res = samples - mean
+        var = (res*res*weights).sum(axis=0)/weights.sum(axis=0)
+        return MeanStd(mean = mean, std = var**0.5)
+
+
+@dataclass
+class RectangleBound:
+    low: torch.Tensor
+    high: torch.Tensor
+
+
+def get_1d_rect_bounds(samples, th = 1e-6):
+    bounds = {}
+    for k, v in samples.items():
+        r = v.ratios
+        r = r - r.max(axis=0).values  # subtract peak
+        p = v.values
+        #w = v[..., 0]
+        #p = v[..., 1]
+        all_max = p.max(dim=0).values
+        all_min = p.min(dim=0).values
+        constr_min = torch.where(r > np.log(th), p, all_max).min(dim=0).values
+        constr_max = torch.where(r > np.log(th), p, all_min).max(dim=0).values
+        #bound = torch.stack([constr_min, constr_max], dim = -1)
+        bound = RectangleBound(constr_min, constr_max)
+        bounds[k] = bound
+    return bounds
+
+
+########
+# Stores
+########
+
+# TODO: RENAME? Dict: Str -> Tensor (N, event_shape), list {k: value}
 class SampleStore(dict):
     def __len__(self):
         n = [len(v) for v in self.values()] 
@@ -667,89 +723,76 @@ class RepeatDataset(torch.utils.data.Dataset):
 # Helper functions
 ##################
 
-def get_1d_rect_bounds(samples, th = 1e-6):
-    bounds = {}
-    for k, v in samples.items():
-        r = v.ratios
-        r = r - r.max(axis=0).values  # subtract peak
-        p = v.values
-        #w = v[..., 0]
-        #p = v[..., 1]
-        all_max = p.max(dim=0).values
-        all_min = p.min(dim=0).values
-        constr_min = torch.where(r > np.log(th), p, all_max).min(dim=0).values
-        constr_max = torch.where(r > np.log(th), p, all_min).max(dim=0).values
-        #bound = torch.stack([constr_min, constr_max], dim = -1)
-        bound = RectangleBound(constr_min, constr_max)
-        bounds[k] = bound
-    return bounds
     
-def append_randomized(z):
-    # Append randomized samples, e.g.: 1, 2, 3, 4 -> 1, 2, 3, 4, 2, 4, 3, 1
-    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
-    n = len(z)//2
-    idx = torch.randperm(n)
-    z = torch.cat([z, z[n+idx], z[idx]])
-    return z
+#def append_randomized(z):
+#    # Append randomized samples, e.g.: 1, 2, 3, 4 -> 1, 2, 3, 4, 2, 4, 3, 1
+#    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
+#    n = len(z)//2
+#    idx = torch.randperm(n)
+#    z = torch.cat([z, z[n+idx], z[idx]])
+#    return z
 
-def randomize(z):
-    idx = torch.randperm(len(z))
-    return z[idx]
+#def randomize(z):
+#    idx = torch.randperm(len(z))
+#    return z[idx]
 
-def roll(z):
-    return torch.roll(z, 1, dims = 0)
+#def roll(z):
+#    return torch.roll(z, 1, dims = 0)
 
-def append_nonrandomized(z):
-    # Append swapped samples: z1, z2, z3, z4 --> z1, z2, z3, z4, z3, z4, z1, z2
-    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
-    n = len(z)//2
-    idx = np.arange(n)
-    z = torch.cat([z, z[n+idx], z[idx]])
-    return z
+#def append_nonrandomized(z):
+#    # Append swapped samples: z1, z2, z3, z4 --> z1, z2, z3, z4, z3, z4, z1, z2
+#    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
+#    n = len(z)//2
+#    idx = np.arange(n)
+#    z = torch.cat([z, z[n+idx], z[idx]])
+#    return z
 
-# https://stackoverflow.com/questions/16463582/memoize-to-disk-python-persistent-memoization
-#def persist_to_file():
-def persist_to_file(original_func):
-        def new_func(*args, file_path = None, **kwargs):
-            cache = None
-            if file_path is not None:
-                try:
-                    cache = torch.load(file_path)
-                except (FileNotFoundError, ValueError):
-                    pass
-            if cache is None:
-                cache = original_func(*args, **kwargs)
-                if file_path is not None:
-                    torch.save(cache, file_path)
-            return cache
-        return new_func
-    #return decorator
+## https://stackoverflow.com/questions/16463582/memoize-to-disk-python-persistent-memoization
+##def persist_to_file():
+#def persist_to_file(original_func):
+#        def new_func(*args, file_path = None, **kwargs):
+#            cache = None
+#            if file_path is not None:
+#                try:
+#                    cache = torch.load(file_path)
+#                except (FileNotFoundError, ValueError):
+#                    pass
+#            if cache is None:
+#                cache = original_func(*args, **kwargs)
+#                if file_path is not None:
+#                    torch.save(cache, file_path)
+#            return cache
+#        return new_func
+#    #return decorator
+#    
+#def file_cache(fn, file_path):
+#    try:
+#        cache = torch.load(file_path)
+#    except (FileNotFoundError, ValueError):
+#        cache = None
+#    if cache is None:
+#        cache = fn()
+#        torch.save(cache, file_path)
+#    return cache
     
-def file_cache(fn, file_path):
-    try:
-        cache = torch.load(file_path)
-    except (FileNotFoundError, ValueError):
-        cache = None
-    if cache is None:
-        cache = fn()
-        torch.save(cache, file_path)
-    return cache
+## RENAME?
+#def dictstoremap(model, dictstore):
+#    """Generate new dictionary."""
+#    N = len(dictstore)
+#    out = []
+#    for i in tqdm(range(N)):
+#        x = model(dictstore[i])
+#        out.append(x)
+#    out = torch.utils.data.dataloader.default_collate(out) # using torch internal functionality for this, yay!
+#    out = {k: v.cpu() for k, v in out.items()}
+#    return SampleStore(out)
+
     
-def weights_sample(N, values, weights, replacement = True):
-    """Weight-based sampling with or without replacement."""
-    sw = weights.shape
-    sv = values.shape
-    assert sw == sv[:len(sw)], "Overlapping left-handed weights and values shapes do not match: %s vs %s"%(str(sv), str(sw))
     
-    w = weights.view(weights.shape[0], -1)
-    idx = torch.multinomial(w.T, N, replacement = replacement).T
-    si = tuple(1 for _ in range(len(sv)-len(sw)))
-    idx = idx.view(N, *sw[1:], *si)
-    idx = idx.expand(N, *sv[1:])
-    
-    samples = torch.gather(values, 0, idx)
-    return samples
-    
+##########################
+# Ratio estimator networks
+##########################
+
 def equalize_tensors(a, b):
     n, m = len(a), len(b)
     if n == m:
@@ -773,23 +816,6 @@ def equalize_tensors(a, b):
         shape[0] = n//m
         return a, b.repeat(*shape)
     
-# RENAME?
-def dictstoremap(model, dictstore):
-    """Generate new dictionary."""
-    N = len(dictstore)
-    out = []
-    for i in tqdm(range(N)):
-        x = model(dictstore[i])
-        out.append(x)
-    out = torch.utils.data.dataloader.default_collate(out) # using torch internal functionality for this, yay!
-    out = {k: v.cpu() for k, v in out.items()}
-    return SampleStore(out)
-
-    
-    
-##########################
-# Ratio estimator networks
-##########################
 
 # RENAME?
 class RatioEstimatorMLPnd(torch.nn.Module):
@@ -892,45 +918,51 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
 # Obsolete?
 ###########
 
-class SimpleDataset(torch.utils.data.Dataset):
-    def __init__(self, **kwargs):
-        self._data = kwargs
-    
-    def __len__(self):
-        k = list(self._data.keys())[0]
-        return len(self._data[k])
-    
-    def __getitem__(self, i):
-        obs = {k: v[i] for k, v in self._data.items()}
-        v = u = self._data['v'][i]
-        return (obs, v, u)
+#class SimpleDataset(torch.utils.data.Dataset):
+#    def __init__(self, **kwargs):
+#        self._data = kwargs
+#    
+#    def __len__(self):
+#        k = list(self._data.keys())[0]
+#        return len(self._data[k])
+#    
+#    def __getitem__(self, i):
+#        obs = {k: v[i] for k, v in self._data.items()}
+#        v = u = self._data['v'][i]
+#        return (obs, v, u)
 
 
-def subsample_posterior(N, z, replacement = True):
-    # Supports only 1-dim posteriors so far
-    shape = z.shape
-    z = z.view(shape[0], -1, shape[-1])
-    w = z[..., 0]
-    p = z[..., 1]
-    wm = w.max(axis=0).values
-    w = torch.exp(w-wm)
-    idx = torch.multinomial(w.T, N, replacement = replacement).T
-    samples = torch.gather(p, 0, idx)
-    samples = samples.view(N, *shape[1:-1])
-    return samples
+#def subsample_posterior(N, z, replacement = True):
+#    # Supports only 1-dim posteriors so far
+#    shape = z.shape
+#    z = z.view(shape[0], -1, shape[-1])
+#    w = z[..., 0]
+#    p = z[..., 1]
+#    wm = w.max(axis=0).values
+#    w = torch.exp(w-wm)
+#    idx = torch.multinomial(w.T, N, replacement = replacement).T
+#    samples = torch.gather(p, 0, idx)
+#    samples = samples.view(N, *shape[1:-1])
+#    return samples
 
 
-class MultiplyDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset, M):
-        self.dataset = dataset
-        self.M = M
+#class MultiplyDataset(torch.utils.data.Dataset):
+#    def __init__(self, dataset, M):
+#        self.dataset = dataset
+#        self.M = M
+#        
+#    def __len__(self):
+#        return len(self.dataset)*self.M
+#    
+#    def __getitem__(self, i):
+#        return self.dataset[i%self.M]
         
-    def __len__(self):
-        return len(self.dataset)*self.M
-    
-    def __getitem__(self, i):
-        return self.dataset[i%self.M]
-        
+
+
+###################
+# Zarr-based Stores
+###################
+
 
 def get_index_slices(idx):
     """Returns list of enumerated consecutive indices"""
@@ -946,6 +978,42 @@ def get_index_slices(idx):
         slices.append([slc2, slc1])
         residual_idx = residual_idx[~mask]
     return slices
+
+class SwyftDataModule(pl.LightningDataModule):
+    def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
+        super().__init__()
+        self.store = store
+        self.on_after_load_sample = on_after_load_sample
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.validation_percentage = validation_percentage
+        self.train_multiply = train_multiply
+        print("Deprecation warning: Use dataloaders directly rathe than this data module for transparency.")
+
+    def setup(self, stage):
+        self.dataset = _DictDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
+        n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
+        self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
+        self.dataset_test = _DictDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers = self.num_workers)
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size, num_workers = self.num_workers)
+    
+    # # TODO: Deprecate
+    # def predict_dataloader(self):
+    #     return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
+    
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers = self.num_workers)
+
+    def samples(self, N, random = False):
+        dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size=N, num_workers = 0, shuffle = random)
+        examples = next(iter(dataloader))
+        return SampleStore(examples)
+
 
 
 class ZarrStore:
@@ -1111,51 +1179,3 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
                     out = self.on_after_load_sample(out)
                 yield out
 
-
-def to_numpy(x, single_precision = False):
-    if isinstance(x, torch.Tensor):
-        if not single_precision:
-            return x.detach().cpu().numpy()
-        else:
-            x = x.detach().cpu()
-            if x.dtype == torch.float64:
-                x = x.float().numpy()
-            else:
-                x = x.numpy()
-            return x
-    elif isinstance(x, SampleStore):
-        return SampleStore({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
-    elif isinstance(x, dict):
-        return {k: to_numpy(v, single_precision = single_precision) for k, v in x.items()}
-    elif isinstance(x, np.ndarray):
-        if not single_precision:
-            return x
-        else:
-            if x.dtype == np.float64:
-                x = np.float32(x)
-            return x
-    else:
-        return x
-
-def to_numpy32(x):
-    return to_numpy(x, single_precision = True)
-    
-def to_torch(x):
-    if isinstance(x, SampleStore):
-        return SampleStore({k: to_torch(v) for k, v in x.items()})
-    elif isinstance(x, dict):
-        return {k: to_torch(v) for k, v in x.items()}
-    else:
-        return torch.as_tensor(x)
-    
-    
-@dataclass
-class PriorMass:
-    value: None
-    mass: None
-
-def calc_mass(r0, r):
-    p = torch.exp(r - r.max(axis=0).values)
-    p /= p.sum(axis=0)
-    m = r > r0
-    return (p*m).sum(axis=0)
