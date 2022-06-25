@@ -44,6 +44,7 @@ from swyft.networks.standardization import OnlineStandardizingLayer
 ###########
 
 def to_numpy(x, single_precision = False):
+
     if isinstance(x, torch.Tensor):
         if not single_precision:
             return x.detach().cpu().numpy()
@@ -193,7 +194,6 @@ class LazyValue:
                 self._trace[self._fn_out_names] = result
             else:
                 for out_name, value in zip(self._fn_out_names, result):
-                    print(out_name)
                     self._trace[out_name] = value
         return self._trace[self._this_name]
 
@@ -226,7 +226,7 @@ class Simulator:
         """Apply transformation to generated samples."""
         return sample
 
-    def __call__(self, targets = None, conditions = {}):
+    def _run(self, targets = None, conditions = {}):
         conditions = conditions() if callable(conditions) else conditions
 
         conditions = self.on_before_forward(conditions)
@@ -257,7 +257,7 @@ class Simulator:
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-    def sample(self, N, targets = None, conditions = {}):
+    def __call__(self, N = None, targets = None, conditions = {}):
         """Sample from the simulator.
 
         Args:
@@ -265,9 +265,12 @@ class Simulator:
             targets: Optional list of target sample variables to generate. If `None`, all targets are simulated.
             conditions: Dict or Callable, conditions sample variables.
         """
+        if N is None:
+            return self._run(targets, conditions)
+
         out = []
         for _ in tqdm(range(N)):
-            result = self.__call__(targets, conditions)
+            result = self._run(targets, conditions)
             out.append(result)
         out = collate_output(out)
         out = Samples(out)
@@ -293,7 +296,7 @@ class Simulator:
         """
         def iterator():
             while True:
-                yield self.__call__(targets = targets, conditions = conditions)
+                yield self._run(targets = targets, conditions = conditions)
 
         return iterator
     
@@ -435,7 +438,7 @@ class SwyftModule(pl.LightningModule):
 
 class SwyftTrainer(pl.Trainer):
     """Training of SwyftModule, a thin layer around lightning.Trainer."""
-    def infer(self, model, A, B):
+    def infer(self, model, A, B, return_sample_ratios = True):
         """Run through model in inference mode.
 
         Args:
@@ -455,13 +458,16 @@ class SwyftTrainer(pl.Trainer):
             dl2 = B
         dl = CombinedLoader([dl1, dl2], mode = 'max_size_cycle')
         ratio_batches = self.predict(model, dl)
-        keys = ratio_batches[0].keys()
-        d = {k: Ratios(
-                torch.cat([r[k].values for r in ratio_batches]),
-                torch.cat([r[k].ratios for r in ratio_batches])
-                ) for k in keys if k[:4] != "aux_"
-            }
-        return SampleRatios(**d)
+        if return_sample_ratios:
+            keys = ratio_batches[0].keys()
+            d = {k: Ratios(
+                    torch.cat([r[k].values for r in ratio_batches]),
+                    torch.cat([r[k].ratios for r in ratio_batches])
+                    ) for k in keys if k[:4] != "aux_"
+                }
+            return SampleRatios(**d)
+        else:
+            return ratio_batches
     
     def estimate_mass(self, model, A, B, batch_size = 1024):
         """Estimate empirical mass.
@@ -1083,6 +1089,19 @@ class ZarrStore:
         N = ns[0]
         assert all([n==N for n in ns])
         return N
+
+    def keys(self):
+        return list(self.data.keys())
+
+    def __getitem__(self, i):
+        if isinstance(i, int):
+            return {k: self.data[k][i] for k in self.keys()}
+        elif isinstance(i, slice):
+            return Samples({k: self.data[k][i] for k in self.keys()})
+        elif isinstance(i, str):
+            return self.data[i]
+        else:
+            raise ValueError
     
     # TODO: Remove consistency checks
     def _init_shapes(self, shapes, dtypes, N, chunk_size):          
