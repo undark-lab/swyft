@@ -84,17 +84,19 @@ def to_torch(x):
 class Trace(dict):
     """Defines the computational graph (DAG) and keeps track of simulation results.
     """
-    def __init__(self, targets = None, conditions = {}):
+    def __init__(self, targets = None, conditions = {}, log_prob = False):
         """Instantiate Trace instante.
 
         Args:
             targets: Optional list of target sample variables. If provided, execution is stopped after those targets are evaluated. If `None`, all variables in the DAG will be evaluated.
             conditions: Optional `dict` or Callable. If a `dict`, sample variables will be conditioned to the corresponding values.  If Callable, it will be evaulated and it is expected to return a `dict`.
+            log_prob: Boolean. Collect log_prob values if available. Default False.
         """
 
         super().__init__(conditions)
         self._targets = targets
         self._prefix = ""
+        self._eval_log_probs = log_prob
 
     def __repr__(self):
         return "Trace("+super().__repr__()+")"
@@ -120,15 +122,21 @@ class Trace(dict):
             LazyValue sample.
         """
         assert callable(fn), "Second argument must be a function."
+        return self._sample(names, fn, False, *args, **kwargs)
+
+    def sample_dist(self, names, fn, *args, **kwargs):
+        return self._sample(names, fn, True, *args, **kwargs)
+
+    def _sample(self, names, fn, dist, *args, **kwargs):
         if isinstance(names, list):
             names = [self._prefix + n for n in names]
-            lazy_values = [LazyValue(self, k, names, fn, *args, **kwargs) for k in names]
+            lazy_values = [LazyValue(self, k, names, fn, dist, *args, **kwargs) for k in names]
             if self._targets is None or any([k in self._targets for k in names]):
                 lazy_values[0].evaluate()
             return tuple(lazy_values)
         elif isinstance(names, str):
             name = self._prefix + names
-            lazy_value = LazyValue(self, name, name, fn, *args, **kwargs)
+            lazy_value = LazyValue(self, name, name, fn, dist, *args, **kwargs)
             if self._targets is None or name in self._targets:
                 lazy_value.evaluate()
             return lazy_value
@@ -154,17 +162,19 @@ class TracePrefixContextManager:
 class LazyValue:
     """Provides lazy evaluation functionality.
     """
-    def __init__(self, trace, this_name, fn_out_names, fn, *args, **kwargs):
+    def __init__(self, trace, this_name, fn_out_names, fn, dist, *args, **kwargs):
         """Instantiates LazyValue object.
 
         Args:
             trace: Trace instance (to be populated with sample).
             this_name: Name of this the variable that this LazyValue represents.
             fn_out_names: Name or list of names of variables that `fn` returns.
-            fn: Callable that returns sample or list of samples.
+            fn: Callable or object that (upon instantiation) returns sample or list of samples.
+            dist: Type of fn: Callable (false) or distribution (true)
             args, kwargs: Arguments and keyword arguments provided to `fn` upon evaluation.
         """
         self._trace = trace
+        self._dist = dist
         self._this_name = this_name
         self._fn_out_names = fn_out_names
         self._fn = fn
@@ -186,15 +196,27 @@ class LazyValue:
         Returns:
             Value of `this_name`.
         """
+        instance = None
         if self._this_name not in self._trace.keys():
             args = (arg.evaluate() if isinstance(arg, LazyValue) else arg for arg in self._args)
             kwargs = {k: v.evaluate() if isinstance(v, LazyValue) else v for k, v in self._kwargs.items()}
-            result = self._fn(*args, **kwargs)
+            if not self._dist:
+                result = self._fn(*args, **kwargs)
+            else:
+                instance = self._fn(*args, **kwargs)
+                result = instance.sample()
             if not isinstance(self._fn_out_names, list):
                 self._trace[self._fn_out_names] = result
             else:
                 for out_name, value in zip(self._fn_out_names, result):
                     self._trace[out_name] = value
+        if self._trace._eval_log_probs and self._this_name and self._dist:
+            if instance is None:
+                args = (arg.evaluate() if isinstance(arg, LazyValue) else arg for arg in self._args)
+                kwargs = {k: v.evaluate() if isinstance(v, LazyValue) else v for k, v in self._kwargs.items()}
+                instance = self._fn(*args, **kwargs)
+            result = instance.log_prob(self._trace[self._this_name])
+            self._trace[self._this_name + ":log_prob"] = result
         return self._trace[self._this_name]
 
 
@@ -226,11 +248,11 @@ class Simulator:
         """Apply transformation to generated samples."""
         return sample
 
-    def _run(self, targets = None, conditions = {}):
+    def _run(self, targets = None, conditions = {}, log_prob = False):
         conditions = conditions() if callable(conditions) else conditions
 
         conditions = self.on_before_forward(conditions)
-        trace = Trace(targets, conditions)
+        trace = Trace(targets, conditions, log_prob)
         if not trace.covers_targets:
             self.forward(trace)
             #try:
@@ -257,7 +279,7 @@ class Simulator:
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-    def __call__(self, N = None, targets = None, conditions = {}):
+    def __call__(self, N = None, targets = None, conditions = {}, log_prob = False):
         """Sample from the simulator.
 
         Args:
@@ -266,11 +288,11 @@ class Simulator:
             conditions: Dict or Callable, conditions sample variables.
         """
         if N is None:
-            return self._run(targets, conditions)
+            return self._run(targets, conditions, log_prob = log_prob)
 
         out = []
         for _ in tqdm(range(N)):
-            result = self._run(targets, conditions)
+            result = self._run(targets, conditions, log_prob = log_prob)
             out.append(result)
         out = collate_output(out)
         out = Samples(out)
@@ -374,6 +396,8 @@ class SwyftModule(pl.LightningModule):
         return loss
 
     def _calc_loss(self, batch, randomized = True):
+        """Calculate batch-averaged loss summed over ratio estimators.
+        """
         if isinstance(batch, list):  # multiple dataloaders provided, using second one for contrastive samples
             A = batch[0]
             B = batch[1]
@@ -394,9 +418,14 @@ class SwyftModule(pl.LightningModule):
         y = torch.zeros_like(log_ratios)
         y[:num_pos, ...] = 1
         pos_weight = torch.ones_like(log_ratios[0])*num_neg/num_pos
-        loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduction = 'none', pos_weight = pos_weight)
-        loss = loss.sum()/num_neg  # Calculates batched-averaged loss
-        return loss
+        #loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduction = 'none', pos_weight = pos_weight)
+        #print(loss.sum())
+        loss = -pos_weight*y*torch.log(torch.sigmoid(log_ratios)+1e-10) - (1-y)*torch.log(torch.sigmoid(-log_ratios)+1e-10)
+        #print(loss.sum())
+        #qwerty
+        num_ratios = loss.shape[1]
+        loss = loss.sum()/num_neg  # Calculates batch-averaged loss
+        return loss - 2*np.log(2.)*num_ratios
     
     def _calc_KL(self, batch, batch_idx):
         x = batch
