@@ -1067,7 +1067,7 @@ class ZarrStore:
         self.root = zarr.group(store = self.store, synchronizer = synchronizer)
         self.lock = fasteners.InterProcessLock(file_path+".lock.file")
             
-    def set_length(self, N, clubber = False):
+    def reset_length(self, N, clubber = False):
         """Resize store.  N >= current store length."""
         if N < len(self) and not clubber:
             raise ValueError(
