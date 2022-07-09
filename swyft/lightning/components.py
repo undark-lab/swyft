@@ -257,13 +257,14 @@ class Simulator:
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-    def __call__(self, N = None, targets = None, conditions = {}):
+    def __call__(self, N = None, targets = None, conditions = {}, exclude = []):
         """Sample from the simulator.
 
         Args:
             N: int, number of samples to generate
             targets: Optional list of target sample variables to generate. If `None`, all targets are simulated.
             conditions: Dict or Callable, conditions sample variables.
+            exclude: List of parameters that are excluded from the returned samples.
         """
         if N is None:
             return self._run(targets, conditions)
@@ -273,6 +274,8 @@ class Simulator:
             result = self._run(targets, conditions)
             out.append(result)
         out = collate_output(out)
+        for key in exclude:
+            out.pop(key, None)
         out = Samples(out)
         return out
 
@@ -885,11 +888,11 @@ class RatioEstimatorMLPnd(torch.nn.Module):
     
 
 class RatioEstimatorMLP1d(torch.nn.Module):
-    def __init__(self, x_dim, z_dim, dropout = 0.1, hidden_features = 64, num_blocks = 2):
+    def __init__(self, x_dim, z_dim, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
         super().__init__()
         self.marginals = [(i,) for i in range(z_dim)]
         self.ptrans = swyft.networks.ParameterTransform(
-            len(self.marginals), self.marginals, online_z_score=True
+            len(self.marginals), self.marginals, online_z_score=ptrans_online_z_score
         )
         n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
         n_observation_features = x_dim
@@ -899,6 +902,7 @@ class RatioEstimatorMLP1d(torch.nn.Module):
             hidden_features=hidden_features,
             dropout_probability = dropout,
             num_blocks=num_blocks,
+            use_batch_norm = use_batch_norm
         )
         
     def forward(self, x, z):
