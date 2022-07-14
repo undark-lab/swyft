@@ -1,7 +1,3 @@
-from abc import abstractmethod
-import math
-from dataclasses import dataclass, field
-from toolz.dicttoolz import valmap
 from typing import (
     Callable,
     Dict,
@@ -13,39 +9,11 @@ from typing import (
     TypeVar,
     Union,
 )
+
+from dataclasses import dataclass
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.nn import functional as F
-from torch.utils.data import random_split
-import pytorch_lightning as pl
-from tqdm import tqdm
-import swyft
-import swyft.utils
-from swyft.inference.marginalratioestimator import get_ntrain_nvalid
-import yaml
 
-import zarr
-import fasteners
-from dataclasses import dataclass
-from pytorch_lightning import loggers as pl_loggers
-
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
-from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-import pytorch_lightning as pl
-from pytorch_lightning.trainer.supporters import CombinedLoader
-
-from swyft.networks.standardization import OnlineStandardizingLayer
-
-
-
-
-
-
-########
-# Bounds
-########
 
 @dataclass
 class MeanStd:
@@ -88,5 +56,4 @@ def get_1d_rect_bounds(samples, th = 1e-6):
         bound = RectangleBound(constr_min, constr_max)
         bounds[k] = bound
     return bounds
-
 

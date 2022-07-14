@@ -1,5 +1,3 @@
-from abc import abstractmethod
-import math
 from dataclasses import dataclass, field
 from toolz.dicttoolz import valmap
 from typing import (
@@ -15,28 +13,18 @@ from typing import (
 )
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.nn import functional as F
 from torch.utils.data import random_split
+
 import pytorch_lightning as pl
-from tqdm import tqdm
-import swyft
-import swyft.utils
-from swyft.inference.marginalratioestimator import get_ntrain_nvalid
-import yaml
-
-import zarr
-import fasteners
-from dataclasses import dataclass
 from pytorch_lightning import loggers as pl_loggers
-
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
-from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-import pytorch_lightning as pl
 from pytorch_lightning.trainer.supporters import CombinedLoader
 
-from swyft.networks.standardization import OnlineStandardizingLayer
+import yaml
+
+from swyft.lightning.samples import *
 
 
 class SwyftModule(pl.LightningModule):
