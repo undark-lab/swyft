@@ -12,7 +12,7 @@ from typing import (
 import numpy as np
 import torch
 import torch.nn as nn
-import swyft
+import swyft.networks
 
 from swyft.lightning.core import *
 
