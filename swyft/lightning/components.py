@@ -272,10 +272,10 @@ class Simulator:
         out = []
         for _ in tqdm(range(N)):
             result = self._run(targets, conditions)
+            for key in exclude:
+                result.pop(key, None)
             out.append(result)
         out = collate_output(out)
-        for key in exclude:
-            out.pop(key, None)
         out = Samples(out)
         return out
 
