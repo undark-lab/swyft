@@ -764,76 +764,6 @@ class RepeatDatasetWrapper(torch.utils.data.Dataset):
         return self._dataset[i//self._repeat]
     
 
-##################
-# Helper functions
-##################
-
-    
-#def append_randomized(z):
-#    # Append randomized samples, e.g.: 1, 2, 3, 4 -> 1, 2, 3, 4, 2, 4, 3, 1
-#    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
-#    n = len(z)//2
-#    idx = torch.randperm(n)
-#    z = torch.cat([z, z[n+idx], z[idx]])
-#    return z
-
-#def randomize(z):
-#    idx = torch.randperm(len(z))
-#    return z[idx]
-
-#def roll(z):
-#    return torch.roll(z, 1, dims = 0)
-
-#def append_nonrandomized(z):
-#    # Append swapped samples: z1, z2, z3, z4 --> z1, z2, z3, z4, z3, z4, z1, z2
-#    assert len(z)%2 == 0, "Cannot expand odd batch dimensions."
-#    n = len(z)//2
-#    idx = np.arange(n)
-#    z = torch.cat([z, z[n+idx], z[idx]])
-#    return z
-
-## https://stackoverflow.com/questions/16463582/memoize-to-disk-python-persistent-memoization
-##def persist_to_file():
-#def persist_to_file(original_func):
-#        def new_func(*args, file_path = None, **kwargs):
-#            cache = None
-#            if file_path is not None:
-#                try:
-#                    cache = torch.load(file_path)
-#                except (FileNotFoundError, ValueError):
-#                    pass
-#            if cache is None:
-#                cache = original_func(*args, **kwargs)
-#                if file_path is not None:
-#                    torch.save(cache, file_path)
-#            return cache
-#        return new_func
-#    #return decorator
-#    
-#def file_cache(fn, file_path):
-#    try:
-#        cache = torch.load(file_path)
-#    except (FileNotFoundError, ValueError):
-#        cache = None
-#    if cache is None:
-#        cache = fn()
-#        torch.save(cache, file_path)
-#    return cache
-    
-## RENAME?
-#def dictstoremap(model, dictstore):
-#    """Generate new dictionary."""
-#    N = len(dictstore)
-#    out = []
-#    for i in tqdm(range(N)):
-#        x = model(dictstore[i])
-#        out.append(x)
-#    out = torch.utils.data.dataloader.default_collate(out) # using torch internal functionality for this, yay!
-#    out = {k: v.cpu() for k, v in out.items()}
-#    return Samples(out)
-
-    
-    
 ##########################
 # Ratio estimator networks
 ##########################
@@ -958,51 +888,6 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         #out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
         out = Ratios(z, r, metadata = {"type": "Gaussian1d"})
         return out
-
-
-###########
-# Obsolete?
-###########
-
-#class SimpleDataset(torch.utils.data.Dataset):
-#    def __init__(self, **kwargs):
-#        self._data = kwargs
-#    
-#    def __len__(self):
-#        k = list(self._data.keys())[0]
-#        return len(self._data[k])
-#    
-#    def __getitem__(self, i):
-#        obs = {k: v[i] for k, v in self._data.items()}
-#        v = u = self._data['v'][i]
-#        return (obs, v, u)
-
-
-#def subsample_posterior(N, z, replacement = True):
-#    # Supports only 1-dim posteriors so far
-#    shape = z.shape
-#    z = z.view(shape[0], -1, shape[-1])
-#    w = z[..., 0]
-#    p = z[..., 1]
-#    wm = w.max(axis=0).values
-#    w = torch.exp(w-wm)
-#    idx = torch.multinomial(w.T, N, replacement = replacement).T
-#    samples = torch.gather(p, 0, idx)
-#    samples = samples.view(N, *shape[1:-1])
-#    return samples
-
-
-#class MultiplyDataset(torch.utils.data.Dataset):
-#    def __init__(self, dataset, M):
-#        self.dataset = dataset
-#        self.M = M
-#        
-#    def __len__(self):
-#        return len(self.dataset)*self.M
-#    
-#    def __getitem__(self, i):
-#        return self.dataset[i%self.M]
-        
 
 
 ###################
