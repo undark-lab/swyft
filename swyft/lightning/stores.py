@@ -14,7 +14,6 @@ import numpy as np
 import torch
 from torch.utils.data import random_split
 import pytorch_lightning as pl
-from swyft.inference.marginalratioestimator import get_ntrain_nvalid
 import zarr
 import fasteners
 
@@ -24,6 +23,44 @@ import fasteners
 ###################
 # Zarr-based Stores
 ###################
+
+def get_ntrain_nvalid(
+    validation_amount: Union[float, int], len_dataset: int
+) -> Tuple[int, int]:
+    """Divide a dataset into a training and validation set.
+
+    Args:
+        validation_amount: percentage or number of elements in the validation set
+        len_dataset: total length of the dataset
+
+    Raises:
+        TypeError: When the validation_amount is neither a float or int.
+
+    Returns:
+        (n_train, n_valid)
+    """
+    assert validation_amount > 0
+    if isinstance(validation_amount, float):
+        percent_validation = validation_amount
+        percent_train = 1.0 - percent_validation
+        n_valid, n_train = split_length_by_percentage(
+            len_dataset, (percent_validation, percent_train)
+        )
+        if n_valid % 2 != 0:
+            n_valid += 1
+            n_train -= 1
+    elif isinstance(validation_amount, int):
+        n_valid = validation_amount
+        n_train = len_dataset - n_valid
+        assert n_train > 0
+
+        if n_valid % 2 != 0:
+            n_valid += 1
+            n_train -= 1
+    else:
+        raise TypeError("validation_amount must be int or float")
+    return n_train, n_valid
+
 
 
 def get_index_slices(idx):

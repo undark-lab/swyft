@@ -14,8 +14,6 @@ import torch
 import torch.nn as nn
 import swyft
 
-from swyft.networks.standardization import OnlineStandardizingLayer
-
 from swyft.lightning.core import *
 
 
