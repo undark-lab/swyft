@@ -1,4 +1,4 @@
-*swyft*
+*swyft v0.4alpha*
 =======
 
 .. image:: https://badge.fury.io/py/swyft.svg
