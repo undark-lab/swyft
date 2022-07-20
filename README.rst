@@ -35,6 +35,10 @@
 ..    :target: https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb
 ..    :alt: colab
 
+
+.. image:: https://joss.theoj.org/papers/10.21105/joss.04205/status.svg
+   :target: https://doi.org/10.21105/joss.04205
+
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.5752734.svg
    :target: https://doi.org/10.5281/zenodo.5752734
 
