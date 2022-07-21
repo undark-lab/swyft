@@ -1,8 +1,21 @@
 Citation
 -------------
-If you use *swyft* in scientific publications, please include both of the following citations.
+If you use *swyft* in scientific publications, please include all of the following citations.
 
 .. code-block:: bibtex
+
+   @article{Miller2022,
+      doi = {10.21105/joss.04205},
+      url = {https://doi.org/10.21105/joss.04205},
+      year = {2022},
+      publisher = {The Open Journal},
+      volume = {7},
+      number = {75},
+      pages = {4205},
+      author = {Benjamin Kurt Miller and Alex Cole and Christoph Weniger and Francesco Nattino and Ou Ku and Meiert W. Grootes},
+      title = {swyft: Truncated Marginal Neural Ratio Estimation in Python},
+      journal = {Journal of Open Source Software}
+   }
 
    @article{miller2021truncated,
       title={Truncated Marginal Neural Ratio Estimation},
