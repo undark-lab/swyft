@@ -1,6 +1,8 @@
 *swyft*
 =======
 
+For a new (more flexible) version of swyft based on pytorch-lightning see: https://github.com/undark-lab/swyft/tree/lightning
+
 .. image:: https://badge.fury.io/py/swyft.svg
    :target: https://badge.fury.io/py/swyft
    :alt: PyPI version
