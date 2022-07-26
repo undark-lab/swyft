@@ -1,6 +1,8 @@
 *swyft v0.4alpha*
 =======
 
+For a new (more flexible) version of swyft based on pytorch-lightning see: https://github.com/undark-lab/swyft/tree/lightning
+
 .. image:: https://badge.fury.io/py/swyft.svg
    :target: https://badge.fury.io/py/swyft
    :alt: PyPI version
@@ -34,6 +36,10 @@
 .. .. image:: https://colab.research.google.com/assets/colab-badge.svg
 ..    :target: https://colab.research.google.com/github/undark-lab/swyft/blob/master/notebooks/Quickstart.ipynb
 ..    :alt: colab
+
+
+.. image:: https://joss.theoj.org/papers/10.21105/joss.04205/status.svg
+   :target: https://doi.org/10.21105/joss.04205
 
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.5752734.svg
    :target: https://doi.org/10.5281/zenodo.5752734

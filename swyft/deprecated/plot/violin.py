@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Sequence
 
 import pandas as pd
 import seaborn as sns
@@ -36,6 +36,7 @@ def violin(
     marginals: MarginalToArray,
     axes: Axes = None,
     palette: str = "muted",
+    labels: Optional[Sequence[str]] = None,
 ) -> Axes:
     """create a seaborn violin plot
 
@@ -43,6 +44,7 @@ def violin(
         marginals: marginals from the estimator, must be samples (NOT weighted samples)
         axes: matplotlib axes
         palette: seaborn palette
+        labels: the string labels for the parameters.
 
     Returns:
         Axes
@@ -57,4 +59,6 @@ def violin(
         inner="quartile",
         ax=axes,
     )
+    if labels is not None:
+        ax.set_xticklabels(labels)
     return ax
