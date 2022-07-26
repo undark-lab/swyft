@@ -1,6 +1,7 @@
 *swyft lightning*
 =======
 
+
 .. image:: https://badge.fury.io/py/swyft.svg
    :target: https://badge.fury.io/py/swyft
    :alt: PyPI version
@@ -39,8 +40,10 @@
 .. image:: https://joss.theoj.org/papers/10.21105/joss.04205/status.svg
    :target: https://doi.org/10.21105/joss.04205
 
+
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.5752734.svg
    :target: https://doi.org/10.5281/zenodo.5752734
+
 
 *swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
 a hyper-efficient, simulation-based inference technique for complex data and expensive simulators.
@@ -57,8 +60,8 @@ a hyper-efficient, simulation-based inference technique for complex data and exp
 
 * estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically require fewer simulations than the corresponding joint.
 * performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
-* seamless reuses simulations drawn from previous analyses, even with different priors.
-* integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy.
+* seamless reuses simulations drawn from previous analyses, even with different priors. (not yet supported in swyft lightning, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
+* integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy. (not yet supported in swyft lightning, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
 
 *swyft* is designed to solve the Bayesian inverse problem when the user has access to a simulator that stochastically maps parameters to observational data.
 In scientific settings, a cost-benefit analysis often favors approximating the posterior marginality; *swyft* provides this functionality.
