@@ -12,6 +12,10 @@ from typing import (
 import numpy as np
 import torch
 
+class Sample(dict):
+    def __repr__(self):
+        return "Sample("+super().__repr__()+")"
+
 
 class Samples(dict):
     """Handles storing samples in memory.  Samples are stored as dictionary of arrays/tensors with num of samples as first dimension."""
@@ -19,6 +23,9 @@ class Samples(dict):
         n = [len(v) for v in self.values()] 
         assert all([x == n[0] for x in n]), "Inconsistent lengths in Samples"
         return n[0]
+
+    def __repr__(self):
+        return "Samples("+super().__repr__()+")"
     
     def __getitem__(self, i):
         """For integers, return 'rows', for string returns 'columns'."""
