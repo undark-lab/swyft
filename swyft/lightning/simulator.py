@@ -20,7 +20,15 @@ from swyft.lightning.samples import *
 # Simulator
 ###########
 
-def to_numpy(x, single_precision = False):
+def to_numpy(*args, single_precision = False):
+    if len(args) > 1:
+        result = []
+        for arg in args:
+            r = to_numpy(arg, single_precision = single_precision)
+            result.append(r)
+        return tuple(result)
+
+    x = args[0]
 
     if isinstance(x, torch.Tensor):
         if not single_precision:
@@ -34,6 +42,10 @@ def to_numpy(x, single_precision = False):
             return x
     elif isinstance(x, Samples):
         return Samples({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
+    elif isinstance(x, tuple):
+        return tuple(to_numpy(v, single_precision = single_precision) for v in x)
+    elif isinstance(x, list):
+        return [to_numpy(v, single_precision = single_precision) for v in x]
     elif isinstance(x, dict):
         return {k: to_numpy(v, single_precision = single_precision) for k, v in x.items()}
     elif isinstance(x, np.ndarray):
@@ -46,8 +58,8 @@ def to_numpy(x, single_precision = False):
     else:
         return x
 
-def to_numpy32(x):
-    return to_numpy(x, single_precision = True)
+def to_numpy32(*args):
+    return to_numpy(*args, single_precision = True)
     
 def to_torch(x):
     if isinstance(x, Samples):
@@ -234,7 +246,11 @@ class Simulator:
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-    def __call__(self, N = None, targets = None, conditions = {}, exclude = []):
+    def __call__(self, trace):
+        result = self.forward(trace)
+        return result
+
+    def sample(self, N = None, targets = None, conditions = {}, exclude = []):
         """Sample from the simulator.
 
         Args:
@@ -244,7 +260,7 @@ class Simulator:
             exclude: List of parameters that are excluded from the returned samples.
         """
         if N is None:
-            return self._run(targets, conditions)
+            return Sample(self._run(targets, conditions))
 
         out = []
         for _ in tqdm(range(N)):
