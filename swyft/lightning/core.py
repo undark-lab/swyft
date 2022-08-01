@@ -133,22 +133,27 @@ class SwyftModule(pl.LightningModule):
 
 class SwyftTrainer(pl.Trainer):
     """Training of SwyftModule, a thin layer around lightning.Trainer."""
-    def infer(self, model, A, B, return_sample_ratios = True):
+    def infer(self, model, A, B, return_sample_ratios = True, batch_size = 1024):
         """Run through model in inference mode.
 
         Args:
-            A: sample or dataloader for samples A.
-            B: sample or dataloader for samples B.
+            A: Sample, Samples, or dataloader for samples A.
+            B: Sample, Samples, or dataloader for samples B.
+            batch_size: batch_size used for Samples provided.
 
         Returns:
             Concatenated network output
         """
-        if isinstance(A, dict):
+        if isinstance(A, Sample):
             dl1 = Samples({k: [v] for k, v in A.items()}).get_dataloader(batch_size = 1)
+        elif isinstance(A, Samples):
+            dl1 = A.get_dataloader(batch_size = batch_size)
         else:
             dl1 = A
-        if isinstance(B, dict):
+        if isinstance(B, Sample):
             dl2 = Samples({k: [v] for k, v in B.items()}).get_dataloader(batch_size = 1)
+        elif isinstance(B, Samples):
+            dl2 = B.get_dataloader(batch_size = batch_size)
         else:
             dl2 = B
         dl = CombinedLoader([dl1, dl2], mode = 'max_size_cycle')
@@ -221,8 +226,12 @@ class Ratios:
         """Number of stored ratios."""
         assert len(self.values) == len(self.ratios), "Inconsistent Ratios"
         return len(self.values)
+
+    @property
+    def weights(self):
+        return self.get_weights(normalize = True)
     
-    def weights(self, normalize = False):
+    def get_weights(self, normalize = False):
         """Calculate weights based on ratios.
 
         Args:
