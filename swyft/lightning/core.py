@@ -56,11 +56,17 @@ class SwyftModule(pl.LightningModule):
             optimizer, factor=self.hparams.lrs_factor, patience=self.hparams.lrs_patience), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
-    def _log_ratios(self, x, z):
+    def _logratios(self, x, z):
         out = self(x, z)
-        out = {k: v for k, v in out.items() if k[:4] != 'aux_'}
-        log_ratios = torch.cat([val.ratios.flatten(start_dim = 1) for val in out.values()], dim=1)
-        return log_ratios
+        if isinstance(out, dict):
+            out = {k: v for k, v in out.items() if k[:4] != 'aux_'}
+            logratios = torch.cat([val.logratios.flatten(start_dim = 1) for val in out.values()], dim=1)
+        elif isinstance(out, list):
+            out = [v for v in out if hasattr(v, 'logratios')]
+            logratios = torch.cat([val.logratios.flatten(start_dim = 1) for val in out], dim=1)
+        else:
+            logratios = out.logratios.flatten(start_dim = 1)
+        return logratios
     
     def validation_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, randomized = False)
@@ -88,11 +94,11 @@ class SwyftModule(pl.LightningModule):
         num_pos = len(list(x.values())[0])          # Number of positive examples
         num_neg = len(list(z.values())[0])-num_pos  # Number of negative examples
 
-        log_ratios = self._log_ratios(x, z)  # Generates concatenated flattened list of all estimated log ratios
-        y = torch.zeros_like(log_ratios)
+        logratios = self._logratios(x, z)  # Generates concatenated flattened list of all estimated log ratios
+        y = torch.zeros_like(logratios)
         y[:num_pos, ...] = 1
-        pos_weight = torch.ones_like(log_ratios[0])*num_neg/num_pos
-        loss = F.binary_cross_entropy_with_logits(log_ratios, y, reduction = 'none', pos_weight = pos_weight)
+        pos_weight = torch.ones_like(logratios[0])*num_neg/num_pos
+        loss = F.binary_cross_entropy_with_logits(logratios, y, reduction = 'none', pos_weight = pos_weight)
         num_ratios = loss.shape[1]
         loss = loss.sum()/num_neg  # Calculates batched-averaged loss
         return loss - 2*np.log(2.)*num_ratios
@@ -100,9 +106,9 @@ class SwyftModule(pl.LightningModule):
     def _calc_KL(self, batch, batch_idx):
         x = batch
         z = batch
-        log_ratios = self._log_ratios(x, z)
-        nbatch = len(log_ratios)
-        loss = -log_ratios.sum()/nbatch
+        logratios = self._logratios(x, z)
+        nbatch = len(logratios)
+        loss = -logratios.sum()/nbatch
         return loss
         
     def training_step(self, batch, batch_idx):
@@ -159,13 +165,31 @@ class SwyftTrainer(pl.Trainer):
         dl = CombinedLoader([dl1, dl2], mode = 'max_size_cycle')
         ratio_batches = self.predict(model, dl)
         if return_sample_ratios:
-            keys = ratio_batches[0].keys()
-            d = {k: Ratios(
-                    torch.cat([r[k].values for r in ratio_batches]),
-                    torch.cat([r[k].ratios for r in ratio_batches])
-                    ) for k in keys if k[:4] != "aux_"
-                }
-            return SampleRatios(**d)
+            if isinstance(ratio_batches[0], dict):
+                keys = ratio_batches[0].keys()
+                d = {k: LogRatioSamples(
+                        torch.cat([r[k].params for r in ratio_batches]),
+                        torch.cat([r[k].logratios for r in ratio_batches]),
+                        ratio_batches[0][k].parnames
+                        ) for k in keys if k[:4] != "aux_"
+                    }
+                return SampleRatios(**d)
+            elif isinstance(ratio_batches[0], list):
+                d = [LogRatioSamples(
+                        torch.cat([r[i].params for r in ratio_batches]),
+                        torch.cat([r[i].logratios for r in ratio_batches]),
+                        ratio_batches[0][i].parnames
+                        ) for i in range(len(ratio_batches[0]))
+                        if hasattr(ratio_batches[0][i], 'logratios')  # Should we better check for Ratio class?
+                    ]
+                return d
+            else:
+                d = LogRatioSamples(
+                        torch.cat([r.params for r in ratio_batches]),
+                        torch.cat([r.logratios for r in ratio_batches]),
+                        ratio_batches[0].parnames
+                        ) 
+                return d
         else:
             return ratio_batches
     
@@ -209,8 +233,8 @@ class PosteriorMass:
     masses: None
 
 @dataclass
-class Ratios:
-    """Handles ratios and the corresponding parameter values.
+class LogRatioSamples:
+    """Handles logratios and the corresponding parameter values.
     
     A dictionary of Ratios is expected to be returned by ratio estimation networks.
 
@@ -218,29 +242,44 @@ class Ratios:
         values: tensor of values for which the ratios were estimated, (nbatch, *shape_ratios, *shape_params)
         ratios: tensor of estimated ratios, (nbatch, *shape_ratios)
     """
-    values: torch.Tensor
-    ratios: torch.Tensor
+    params: torch.Tensor
+    logratios: torch.Tensor
+    parnames: np.array
     metadata: dict = field(default_factory = dict)
+
+    @property
+    def ratios(self):
+        print("WARNING: Deprecated")
+        return self.logratios
+
+    @property
+    def values(self):
+        print("WARNING: Deprecated")
+        return self.params
     
     def __len__(self):
         """Number of stored ratios."""
-        assert len(self.values) == len(self.ratios), "Inconsistent Ratios"
-        return len(self.values)
+        assert len(self.params) == len(self.ratios), "Inconsistent Ratios"
+        return len(self.params)
 
     @property
     def weights(self):
-        return self.get_weights(normalize = True)
+        return self._get_weights(normalize = True)
+
+    @property
+    def unnormalized_weights(self):
+        return self._get_weights(normalize = False)
     
-    def get_weights(self, normalize = False):
+    def _get_weights(self, normalize = False):
         """Calculate weights based on ratios.
 
         Args:
             normalize: If true, normalize weights to sum to one.  If false, return weights = exp(ratios).
         """
-        ratios = self.ratios
+        logratios = self.logratios
         if normalize:
-            ratio_max = ratios.max(axis=0).values
-            weights = torch.exp(ratios-ratio_max)
+            logratio_max = logratios.max(axis=0).values
+            weights = torch.exp(logratios-logratio_max)
             weights_total = weights.sum(axis=0)
             weights = weights/weights_total*len(weights)
         else:
@@ -248,17 +287,22 @@ class Ratios:
         return weights
     
     def sample(self, N, replacement = True):
-        """Subsample values based on normalized weights.
+        """Subsample params based on normalized weights.
 
         Args:
             N: Number of samples to generate
             replacement: Sample with replacement.  Default is true, which corresponds to generating samples from the posterior.
         """
-        weights = self.weights(normalize = True)
+        weights = self.weights#(normalize = True)
         if not replacement and N > len(self):
             N = len(self)
-        samples = weights_sample(N, self.values, weights, replacement = replacement)
+        samples = weights_sample(N, self.params, weights, replacement = replacement)
         return samples
+
+#    def (self, i):
+#        v = self.params[:,i].numpy()
+#        w = self.weights[:,i].numpy()
+#        return v, w
 
 
 def calc_mass(r0, r):
