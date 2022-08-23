@@ -39,6 +39,37 @@ def equalize_tensors(a, b):
         shape = [1 for _ in range(b.dim())]
         shape[0] = n//m
         return a, b.repeat(*shape)
+
+
+class LogRatioEstimator_Ndim(torch.nn.Module):
+    def __init__(self, num_features, marginals, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2):
+        super().__init__()
+        self.marginals = marginals
+        self.ptrans = swyft.networks.ParameterTransform(
+            len(marginals), marginals, online_z_score=False
+        )
+        n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
+        n_observation_features = num_features
+        self.classifier = swyft.networks.MarginalClassifier(
+            n_marginals,
+            n_observation_features + n_block_parameters,
+            hidden_features=hidden_features,
+            dropout_probability = dropout,
+            num_blocks=num_blocks,
+        )
+        if isinstance(varnames, str):
+            basename = varnames
+            varnames = []
+            for marg in marginals:
+                varnames.append([basename + "[%i]"%i for i in marg])
+        self.varnames = varnames
+        
+    def forward(self, x, z):
+        x, z = equalize_tensors(x, z)
+        z = self.ptrans(z)
+        ratios = self.classifier(x, z)
+        w = LogRatioSamples(z, ratios, np.array(self.varnames), metadata = {"type": "MarginalMLP", "marginals": self.marginals})
+        return w
     
 # TODO: Introduce RatioEstimatorDense
 class RatioEstimatorMLPnd(torch.nn.Module):
@@ -62,12 +93,21 @@ class RatioEstimatorMLPnd(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         z = self.ptrans(z)
         ratios = self.classifier(x, z)
-        w = Ratios(z, ratios, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
+        w = LogRatioSamples(z, ratios, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
         return w
     
-
+# TODO: Deprecated class (reason: Change of name)
 class RatioEstimatorMLP1d(torch.nn.Module):
-    def __init__(self, x_dim, z_dim, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
+    def __init__(self, x_dim, z_dim, varname = None, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
+        """
+        Default module for estimating 1-dim marginal posteriors.
+
+        Args:
+            x_dim: Length of feature vector.
+            z_dim: Length of parameter vector.
+            varnames: List of name of parameter vector. If a single string is provided, indices are attached automatically.
+        """
+        print("WARNING: Deprecated, use LogRatioEstimator_1dim instead.")
         super().__init__()
         self.marginals = [(i,) for i in range(z_dim)]
         self.ptrans = swyft.networks.ParameterTransform(
@@ -83,12 +123,54 @@ class RatioEstimatorMLP1d(torch.nn.Module):
             num_blocks=num_blocks,
             use_batch_norm = use_batch_norm
         )
+        if isinstance(varnames, list):
+            self.varnames = np.array(varnames)
+        else:
+            self.varnames = np.array([varnames + "[%i]"%i for i in range(z_dim)])
         
     def forward(self, x, z):
         x, z = equalize_tensors(x, z)
         zt = self.ptrans(z).detach()
-        ratios = self.classifier(x, zt)
-        w = Ratios(z, ratios, metadata = {"type": "MLP1d"})
+        logratios = self.classifier(x, zt)
+        w = LogRatioSamples(z, logratios, self.varnames, metadata = {"type": "MLP1d"})
+        return w
+
+
+class LogRatioEstimator_1dim(torch.nn.Module):
+    def __init__(self, num_features, num_params, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
+        """
+        Default module for estimating 1-dim marginal posteriors.
+
+        Args:
+            num_features: Length of feature vector.
+            num_params: Length of parameter vector.
+            varnames: List of name of parameter vector. If a single string is provided, indices are attached automatically.
+        """
+        super().__init__()
+        self.marginals = [(i,) for i in range(num_params)]
+        self.ptrans = swyft.networks.ParameterTransform(
+            len(self.marginals), self.marginals, online_z_score=ptrans_online_z_score
+        )
+        n_marginals, n_block_parameters = self.ptrans.marginal_block_shape
+        n_observation_features = num_features
+        self.classifier = swyft.networks.MarginalClassifier(
+            n_marginals,
+            n_observation_features + n_block_parameters,
+            hidden_features=hidden_features,
+            dropout_probability = dropout,
+            num_blocks=num_blocks,
+            use_batch_norm = use_batch_norm
+        )
+        if isinstance(varnames, list):
+            self.varnames = np.array(varnames)
+        else:
+            self.varnames = np.array([varnames + "[%i]"%i for i in range(num_params)])
+        
+    def forward(self, x, z):
+        x, z = equalize_tensors(x, z)
+        zt = self.ptrans(z).detach()
+        logratios = self.classifier(x, zt)
+        w = LogRatioSamples(z, logratios, self.varnames, metadata = {"type": "MLP1d"})
         return w
 
 
@@ -135,7 +217,7 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         rho = self.xz_cov/self.x_var**0.5/self.z_var**0.5
         r = -0.5*torch.log(1-rho**2) + rho/(1-rho**2)*xb*zb - 0.5*rho**2/(1-rho**2)*(xb**2 + zb**2)
         #out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
-        out = Ratios(z, r, metadata = {"type": "Gaussian1d"})
+        out = LogRatioSamples(z, r, metadata = {"type": "Gaussian1d"})
         return out
 
 
