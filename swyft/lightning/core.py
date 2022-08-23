@@ -304,6 +304,13 @@ class LogRatioSamples:
 #        w = self.weights[:,i].numpy()
 #        return v, w
 
+    def get_matching_weighted_samples(self, *args):
+        for i, pars in enumerate(self.parnames):
+            if all(x in pars for x in args):
+                idx = [list(pars).index(x) for x in args]
+                return self.params[:,i, idx], self.weights[:,i]
+        return None
+
 
 def calc_mass(r0, r):
     p = torch.exp(r - r.max(axis=0).values)
