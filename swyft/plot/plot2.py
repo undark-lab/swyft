@@ -312,6 +312,7 @@ def corner(
     contours_1d: bool = True,
     fig=None,
     labeler=None,
+    smooth=None,
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -378,7 +379,7 @@ def corner(
             # 2-dim plots
             if j < i:
                 ret = plot_2d(
-                    logratios, parnames[j], parnames[i], ax=ax, color=color, bins=bins
+                    logratios, parnames[j], parnames[i], ax=ax, color=color, bins=bins, smooth = smooth
                 )
 #                if truth is not None:
 #                    ax.axvline(truth[parnames[j]], color="r")
@@ -392,6 +393,7 @@ def corner(
                     color=color,
                     bins=bins,
                     contours=contours_1d,
+                    smooth = smooth
                 )
 #                if truth is not None:
 #                    ax.axvline(truth[pois[i]], ls=":", color="r")
