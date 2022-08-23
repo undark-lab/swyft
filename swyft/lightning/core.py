@@ -61,7 +61,7 @@ class SwyftModule(pl.LightningModule):
         if isinstance(out, dict):
             out = {k: v for k, v in out.items() if k[:4] != 'aux_'}
             logratios = torch.cat([val.logratios.flatten(start_dim = 1) for val in out.values()], dim=1)
-        elif isinstance(out, list):
+        elif isinstance(out, list) or isinstance(out, tuple):
             out = [v for v in out if hasattr(v, 'logratios')]
             logratios = torch.cat([val.logratios.flatten(start_dim = 1) for val in out], dim=1)
         else:
@@ -174,7 +174,7 @@ class SwyftTrainer(pl.Trainer):
                         ) for k in keys if k[:4] != "aux_"
                     }
                 return SampleRatios(**d)
-            elif isinstance(ratio_batches[0], list):
+            elif isinstance(ratio_batches[0], list) or isinstance(ratio_batches[0], tuple):
                 d = [LogRatioSamples(
                         torch.cat([r[i].params for r in ratio_batches]),
                         torch.cat([r[i].logratios for r in ratio_batches]),
@@ -283,7 +283,7 @@ class LogRatioSamples:
             weights_total = weights.sum(axis=0)
             weights = weights/weights_total*len(weights)
         else:
-            weights = torch.exp(ratios)
+            weights = torch.exp(logratios)
         return weights
     
     def sample(self, N, replacement = True):
