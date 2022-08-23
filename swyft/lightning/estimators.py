@@ -162,15 +162,15 @@ class LogRatioEstimator_1dim(torch.nn.Module):
             use_batch_norm = use_batch_norm
         )
         if isinstance(varnames, list):
-            self.varnames = np.array(varnames)
+            self.varnames = np.array([[v] for v in varnames])
         else:
-            self.varnames = np.array([varnames + "[%i]"%i for i in range(num_params)])
+            self.varnames = np.array([[varnames + "[%i]"%i] for i in range(num_params)])
         
     def forward(self, x, z):
         x, z = equalize_tensors(x, z)
         zt = self.ptrans(z).detach()
         logratios = self.classifier(x, zt)
-        w = LogRatioSamples(z, logratios, self.varnames, metadata = {"type": "MLP1d"})
+        w = LogRatioSamples(z.unsqueeze(-1), logratios, self.varnames, metadata = {"type": "MLP1d"})
         return w
 
 
