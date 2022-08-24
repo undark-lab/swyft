@@ -208,29 +208,41 @@ class SwyftTrainer(pl.Trainer):
         repeat = len(B)//batch_size + (len(B)%batch_size>0)
         pred0 = self.infer(model, A.get_dataloader(batch_size=32), A.get_dataloader(batch_size=32))
         pred1 = self.infer(model, A.get_dataloader(batch_size=1, repeat = repeat), B.get_dataloader(batch_size = batch_size))
-        n0 = len(pred0)
-        out = {}
-        for k, v in pred1.items():
-            ratios = v.ratios.reshape(n0, -1, *v.ratios.shape[1:])
+
+        def get_pms(p0, p1):
+            n0 = len(p0)
+            ratios = p1.logratios.reshape(n0, -1, *p1.logratios.shape[1:])
             vs = []
             ms = []
             for i in range(n0):
-                ratio0 = pred0[k].ratios[i]
-                value0 = pred0[k].values[i]
+                ratio0 = p0.logratios[i]
+                value0 = p0.params[i]
                 m = calc_mass(ratio0, ratios[i])
                 vs.append(value0)
                 ms.append(m)
             masses = torch.stack(ms, dim = 0)
-            values = torch.stack(vs, dim = 0)
-            out[k] = PosteriorMass(values, masses)
+            params = torch.stack(vs, dim = 0)
+            out = PosteriorMassSamples(params, masses, pred0.parnames)
+            return out
+
+        if isinstance(pred0, tuple):
+            out = tuple([get_pms(pred0[i], pred1[i]) for i in range(len(pred0))])
+        elif isinstance(pred0, list):
+            out = [get_pms(pred0[i], pred1[i]) for i in range(len(pred0))]
+        elif isinstance(pred0, dict):
+            out = {k: get_pms(pred0[k], pred1[k]) for k in pred0.keys()}
+        else:
+            out = get_pms(pred0, pred1)
+
         return out
 
 
 @dataclass
-class PosteriorMass:
+class PosteriorMassSamples:
     """Handles masses and the corresponding parameter values."""
-    values: None
-    masses: None
+    params: torch.Tensor
+    masses: torch.Tensor
+    parnames: np.array
 
 @dataclass
 class LogRatioSamples:
@@ -249,17 +261,17 @@ class LogRatioSamples:
 
     @property
     def ratios(self):
-        print("WARNING: Deprecated")
+        print("WARNING: 'ratios' deprecated")
         return self.logratios
 
     @property
     def values(self):
-        print("WARNING: Deprecated")
+        print("WARNING: 'values' deprecated")
         return self.params
     
     def __len__(self):
         """Number of stored ratios."""
-        assert len(self.params) == len(self.ratios), "Inconsistent Ratios"
+        assert len(self.params) == len(self.logratios), "Inconsistent Ratios"
         return len(self.params)
 
     @property
