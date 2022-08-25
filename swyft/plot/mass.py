@@ -89,7 +89,7 @@ def get_empirical_z_score(
     confidences = 1 - get_alpha(nominal_z_scores)
 
     # determine what counts as a success for us
-    n_not_containing_truth = np.sum(empirical_mass[:, None] < confidences, axis=0)
+    n_not_containing_truth = np.sum(empirical_mass[..., None] < confidences, axis=0)
 
     # compute the properties of the mean and Jeffery's interval
     mean = n_not_containing_truth / n

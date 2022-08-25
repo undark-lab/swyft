@@ -223,7 +223,7 @@ class SwyftTrainer(pl.Trainer):
                 ms.append(m)
             masses = torch.stack(ms, dim = 0)
             params = torch.stack(vs, dim = 0)
-            out = PosteriorMassSamples(params, masses, pred0.parnames)
+            out = PosteriorMassSamples(params, masses, p0.parnames)
             return out
 
         if isinstance(pred0, tuple):
@@ -251,7 +251,18 @@ class PosteriorMassSamples:
                 return self.masses[:,i]
         return None
 
-    def get_z_score(self, max_z_score = 3.5, n_bins = 50, interval_z_score = 1.0):
+    def get_z_scores(self):
+        out = {}
+        for i, pars in enumerate(self.parnames):
+            pars = tuple(pars)
+            m = self.masses[:,i]
+            z0, z1, z2 = get_empirical_z_score(m, 3.5, 50, 1.0)
+            out[pars] = np.array([np.interp([1.0, 2.0, 3.0], z0, z2[:,0]),
+                np.interp([1.0, 2.0, 3.0], z0, z1), np.interp([1.0, 2.0, 3.0],
+                    z0, z2[:,1])]).T
+        return out
+
+    def get_matching_z_score(self, *args, max_z_score = 3.5, n_bins = 50, interval_z_score = 1.0):
         """Calculate empirical z-score of highest-density posterior interval.
 
         Args:
@@ -262,13 +273,15 @@ class PosteriorMassSamples:
         Returns:
             Array with z-score (..., n_bins, 4)
         """
-        z0, z1, z2 = get_empirical_z_score(self.masses, max_z_score, n_bins, interval_z_score)
+        m = self.get_matching_masses(*args)
+        if m is None:
+            return None
+        z0, z1, z2 = get_empirical_z_score(m, max_z_score, n_bins, interval_z_score)
         z0 = np.tile(z0, (*z1.shape[:-1], 1))
         z0 = np.reshape(z0, (*z0.shape, 1))
         z1 = z1.reshape(*z1.shape, 1)
         z = np.concatenate([z0, z1, z2], axis=-1)
         return z
-
 
 
 @dataclass
