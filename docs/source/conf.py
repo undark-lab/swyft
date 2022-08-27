@@ -206,7 +206,8 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+#html_theme = 'alabaster'
+html_theme = 'classic'
 # html_theme = 'scrolls'
 #html_theme = "sphinx_rtd_theme"
 #html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
@@ -231,14 +232,14 @@ html_static_path = ["nstatic"]
 # refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
 html_sidebars = {
     "**": [
-        "about.html",
-        "navigation.html",
-        "relations.html",  # needs 'show_related': True theme option to display
-        "searchbox.html",
-        "donate.html",
+#        "about.html",
+#        "navigation.html",
+#        "relations.html",  # needs 'show_related': True theme option to display
+#        "searchbox.html",
+#        "donate.html",
     ]
 }
-
+#
 
 # -- Options for HTMLHelp output ------------------------------------------
 
