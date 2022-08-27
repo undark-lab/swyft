@@ -8,5 +8,6 @@ You may find the tutorial notebooks here.
    :maxdepth: 1
    :glob:
 
-   notebooks/Quickstart
-   notebooks/Examples*
+   notebooks/0A*
+   notebooks/0B*
+   notebooks/0C*
