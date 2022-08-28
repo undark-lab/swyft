@@ -48,13 +48,18 @@
 *swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
 a hyper-efficient, simulation-based inference technique for complex data and expensive simulators.
 
-* **Documentation & installation**: https://swyft.readthedocs.io/en/latest/
-* **Example usage**: https://swyft.readthedocs.io/en/latest/tutorial-notebooks.html
+.. note::
+   As of v0.4.0, swyft will be based on pytorch-lightning, and the entire API
+   will be overhauled.  Right now v0.4.0 is still in pre-release, and
+   documentation is not yet fully updated.
+
+* **Documentation & installation**: https://swyft.readthedocs.io/en/lightning/
+* **Example usage**: https://swyft.readthedocs.io/en/lightning/tutorial-notebooks.html
 * **Source code**: https://github.com/undark-lab/swyft
 * **Support & discussion**: https://github.com/undark-lab/swyft/discussions
 * **Bug reports**: https://github.com/undark-lab/swyft/issues
-* **Contributing**: https://swyft.readthedocs.io/en/latest/contributing-link.html
-* **Citation**: https://swyft.readthedocs.io/en/latest/citation.html
+* **Contributing**: https://swyft.readthedocs.io/en/lightning/contributing-link.html
+* **Citation**: https://swyft.readthedocs.io/en/lightning/citation.html
 
 *swyft*:
 

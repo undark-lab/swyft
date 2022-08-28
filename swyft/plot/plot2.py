@@ -37,6 +37,8 @@ def plot_2d(
     cmap = 'gray_r',
     smooth = None,
 ):
+    """Plot 2-dimensional posteriors.
+    """
     if not isinstance(logratios, list):
         logratios = [logratios,]
 
@@ -92,6 +94,8 @@ def plot_1d(
     contours=True,
     smooth=None,
 ):
+    """Plot 1-dimensional posteriors.
+    """
     if not isinstance(logratios, list):
         logratios = [logratios,]
 
