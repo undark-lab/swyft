@@ -2,6 +2,23 @@ Installation
 ===============
 
 
+github
+---------
+If you want the lastest lightning development version, it is also possible to install *swyft* from github.
+To do so, run the command:
+
+.. code-block:: bash
+
+  pip install git+https://github.com/undark-lab/swyft.git@lightning
+
+
+.. note::
+
+   Right now only installation directly from github works for swyft lightning.
+   pip will install the v0.3.x version.
+
+
+
 pip
 --------
 **After installing** `pytorch <https://pytorch.org/get-started/locally/>`_, please run the command:
@@ -9,17 +26,6 @@ pip
 .. code-block:: bash
 
   pip install swyft
-
-
-
-github
----------
-If you want the lastest version, it is also possible to install *swyft* from github.
-To do so, run the command:
-
-.. code-block:: bash
-
-  pip install git+https://github.com/undark-lab/swyft.git
 
 
 develop
