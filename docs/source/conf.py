@@ -25,15 +25,16 @@ import os
 #import sphinx_rtd_theme
 from pkg_resources import get_distribution
 
-# autodoc_mock_imports = [
-#     "pylab",
-#     "tqdm",
-#     "numcodecs",
-#     "zarr",
-#     "numpy",
-#     "torch",
-#     "scipy",
-# ]
+autodoc_mock_imports = [
+     "numpy",
+     "pylab",
+     "tqdm",
+     "numcodecs",
+     "zarr",
+     "torch",
+     "pytorch_lightning",
+     "scipy",
+]
 
 
 # -- Custom project information --------------------------------------------------------
