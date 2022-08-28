@@ -25,6 +25,8 @@ import os
 #import sphinx_rtd_theme
 from pkg_resources import get_distribution
 
+import numpy
+
 autodoc_mock_imports = [
      "numpy",
      "pylab",
