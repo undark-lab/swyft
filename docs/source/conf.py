@@ -36,6 +36,7 @@ autodoc_mock_imports = [
      "torch",
      "pytorch_lightning",
      "scipy",
+     "torchist",
 ]
 
 
