@@ -171,8 +171,8 @@ master_doc = "index"
 
 # General information about the project.
 project = "swyft"
-copyright = "2021, Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
-author = "Benjamin Kurt Miller, Christoph Weniger, Alex Cole"
+copyright = "2022, Alex Cole, Benjamin Kurt Miller, Christoph Weniger"
+author = "Alex Cole, Benjamin Kurt Miller, Christoph Weniger"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
