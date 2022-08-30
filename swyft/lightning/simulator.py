@@ -241,7 +241,7 @@ class Simulator:
         Return:
             dictionary of shapes, dictionary of dtypes
         """
-        sample = self(targets = targets)
+        sample = self.sample(targets = targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes

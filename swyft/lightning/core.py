@@ -81,7 +81,8 @@ class SwyftModule(pl.LightningModule):
     def _calc_loss(self, batch, randomized = True):
         """Calcualte batch-averaged loss summed over ratio estimators.
 
-        Note: The expected loss for an untrained classifier (with f = 0) is subtracted.  The initial loss is hence usually close to zero.
+        Note: The expected loss for an untrained classifier (with f = 0) is
+        subtracted.  The initial loss is hence usually close to zero.
         """
         if isinstance(batch, list):  # multiple dataloaders provided, using second one for contrastive samples
             A = batch[0]

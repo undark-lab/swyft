@@ -16,6 +16,7 @@ from torch.utils.data import random_split
 import pytorch_lightning as pl
 import zarr
 import fasteners
+import swyft
 
 
 
@@ -208,12 +209,14 @@ class ZarrStore:
     def sims_required(self):
         return sum(self.root['meta']['sim_status'][:] == 0)
 
-    def simulate(self, sample_fn, max_sims = None, batch_size = 10):
+    def simulate(self, sampler, max_sims = None, batch_size = 10):
         total_sims = 0
+        if isinstance(sampler, swyft.Simulator):
+            sampler = sampler.sample
         while self.sims_required > 0:
             if max_sims is not None and total_sims >= max_sims:
                 break
-            num_sims = self._simulate_batch(sample_fn, batch_size)
+            num_sims = self._simulate_batch(sampler, batch_size)
             total_sims += num_sims
 
     def _simulate_batch(self, sample_fn, batch_size):
