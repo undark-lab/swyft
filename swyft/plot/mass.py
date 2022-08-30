@@ -112,8 +112,8 @@ def plot_empirical_z_score(
     sigma_color: str = "red",
     xlim: Optional[Tuple[float, float]] = None,
     ylim: Optional[Tuple[float, float]] = None,
-    xlabel: Optional[str] = "Nominal coverage [z-score]",
-    ylabel: Optional[str] = "Empirical coverage [z-score]",
+    xlabel: Optional[str] = r"Empirical coverage [$z_p$]",
+    ylabel: Optional[str] = r"Nominal credibility [$z_p$]",
     diagonal_text: bool = False,
 ) -> Axes:
     """target a particular matplotlib Axes and produce an empirical coverage test plot with Jeffrey's interval

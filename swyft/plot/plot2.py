@@ -393,23 +393,30 @@ def corner(
 
             # 2-dim plots
             if j < i:
-                ret = plot_2d(
-                    logratios, parnames[j], parnames[i], ax=ax, color=color, bins=bins, smooth = smooth
-                )
+                try:
+                    ret = plot_2d(
+                        logratios, parnames[j], parnames[i], ax=ax, color=color, bins=bins, smooth = smooth
+                    )
+                except swyft.SwyftParameterError:
+                    pass
 #                if truth is not None:
 #                    ax.axvline(truth[parnames[j]], color="r")
 #                    ax.axhline(truth[parnames[i]], color="r")
 #                diagnostics[(pois[j], pois[i])] = ret
             if j == i:
-                ret = plot_1d(
-                    logratios,
-                    parnames[i],
-                    ax=ax,
-                    color=color,
-                    bins=bins,
-                    contours=contours_1d,
-                    smooth = smooth
-                )
+                try:
+                    ret = plot_1d(
+                        logratios,
+                        parnames[i],
+                        ax=ax,
+                        color=color,
+                        bins=bins,
+                        contours=contours_1d,
+                        smooth = smooth
+                    )
+                except swyft.SwyftParameterError:
+                    pass
+
 #                if truth is not None:
 #                    ax.axvline(truth[pois[i]], ls=":", color="r")
 #                diagnostics[(pois[i],)] = ret
@@ -434,10 +441,21 @@ if __name__ == "__main__":
     pass
 
 
-def plot_estimated_coverage(coverage_samples, *args, ax = None):
+def plot_zz(coverage_samples, *args, ax = None):
     cov = swyft.estimate_coverage(coverage_samples, *args)
     ax = ax if ax else plt.gca()
     swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
+
+def plot_pp(coverage_samples, *args, ax = None):
+    cov = swyft.estimate_coverage(coverage_samples, *args)
+    alphas = 1-swyft.plot.mass.get_alpha(cov)
+    ax = ax if ax else plt.gca()
+    ax.fill_between(alphas[:,0], alphas[:,2], alphas[:,3], color = '0.8')
+    ax.plot(alphas[:,0], alphas[:,1], 'k')
+    plt.plot([0, 1], [0, 1], 'g--')
+    plt.xlabel("Nominal credibility [$1-p$]")
+    plt.ylabel("Empirical coverage [$1-p$]")
+    #swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
     
     
 #def plot_scores(mass):
