@@ -25,7 +25,11 @@ from pytorch_lightning.trainer.supporters import CombinedLoader
 import yaml
 
 from swyft.lightning.samples import *
-from swyft.plot.mass import get_empirical_z_score
+from swyft.plot.mass import get_empirical_z_score, plot_empirical_z_score
+
+import scipy
+from scipy.ndimage import gaussian_filter1d, gaussian_filter
+import torchist
 
 
 class SwyftModule(pl.LightningModule):
@@ -193,8 +197,8 @@ class SwyftTrainer(pl.Trainer):
                 return d
         else:
             return ratio_batches
-    
-    def estimate_mass(self, model, A, B, batch_size = 1024):
+
+    def test_coverage(self, model, A, B, batch_size = 1024):
         """Estimate empirical mass.
 
         Args:
@@ -204,15 +208,16 @@ class SwyftTrainer(pl.Trainer):
             batch_size: batch sized used during network evaluation
 
         Returns:
-            Dict of PosteriorMass objects.
+            Dict of CoverageSamples objects.
         """
+        print("WARNING: This estimates the mass of highest-likelihood intervals.")
         repeat = len(B)//batch_size + (len(B)%batch_size>0)
         pred0 = self.infer(model, A.get_dataloader(batch_size=32), A.get_dataloader(batch_size=32))
         pred1 = self.infer(model, A.get_dataloader(batch_size=1, repeat = repeat), B.get_dataloader(batch_size = batch_size))
 
         def get_pms(p0, p1):
             n0 = len(p0)
-            ratios = p1.logratios.reshape(n0, -1, *p1.logratios.shape[1:])
+            ratios = p1.logratios.reshape(n0, -1, *p1.logratios.shape[1:])  # (n_examples, n_samples_per_example, *per_event_ratio_shape)
             vs = []
             ms = []
             for i in range(n0):
@@ -223,7 +228,7 @@ class SwyftTrainer(pl.Trainer):
                 ms.append(m)
             masses = torch.stack(ms, dim = 0)
             params = torch.stack(vs, dim = 0)
-            out = PosteriorMassSamples(params, masses, p0.parnames)
+            out = CoverageSamples(params, masses, p0.parnames)
             return out
 
         if isinstance(pred0, tuple):
@@ -236,53 +241,82 @@ class SwyftTrainer(pl.Trainer):
             out = get_pms(pred0, pred1)
 
         return out
-
+    
 
 @dataclass
-class PosteriorMassSamples:
-    """Handles masses and the corresponding parameter values."""
+class CoverageSamples:
+    """Handles estimated probability masses from coverage samples."""
     params: torch.Tensor
-    masses: torch.Tensor
+    prob_masses: torch.Tensor
     parnames: np.array
 
-    def get_matching_masses(self, *args):
+    def _get_matching_masses(self, *args):
         for i, pars in enumerate(self.parnames):
             if set(pars) == set(args):
-                return self.masses[:,i]
+                return self.prob_masses[:,i]
         return None
 
-    def get_z_scores(self):
-        out = {}
-        for i, pars in enumerate(self.parnames):
-            pars = tuple(pars)
-            m = self.masses[:,i]
-            z0, z1, z2 = get_empirical_z_score(m, 3.5, 50, 1.0)
-            out[pars] = np.array([np.interp([1.0, 2.0, 3.0], z0, z2[:,0]),
-                np.interp([1.0, 2.0, 3.0], z0, z1), np.interp([1.0, 2.0, 3.0],
-                    z0, z2[:,1])]).T
-        return out
+#    def estimate_coverage_dict(self):
+#        out = {}
+#        for i, pars in enumerate(self.parnames):
+#            pars = tuple(pars)
+#            m = self.prob_masses[:,i]
+#            z0, z1, z2 = get_empirical_z_score(m, 3.5, 50, 1.0)
+#            out[pars] = np.array([np.interp([1.0, 2.0, 3.0], z0, z2[:,0]),
+#                np.interp([1.0, 2.0, 3.0], z0, z1), np.interp([1.0, 2.0, 3.0],
+#                    z0, z2[:,1])]).T
+#        return out
 
-    def get_matching_z_score(self, *args, max_z_score = 3.5, n_bins = 50, interval_z_score = 1.0):
-        """Calculate empirical z-score of highest-density posterior interval.
+    def estimate_coverage(self, *args, z_max = 3.5, bins = 50):
+        """Estimate expected coverage of credible intervals.
 
         Args:
-            max_z_score: upper limit (default 3.5)
-            n_bins (int): number of bins used when tabulating z-score
-            interval_z_score: interval used for calculating statistical z-score uncertainties
+            z_max: upper limit (default 3.5)
+            bins (int): number of bins used when tabulating z-score
 
         Returns:
-            Array with z-score (..., n_bins, 4)
+            Array (bins, 4): [nominal z, empirical z, low_err empirical z, hi_err empirical z]
         """
-        m = self.get_matching_masses(*args)
+        m = self._get_matching_masses(*args)
         if m is None:
-            return None
-        z0, z1, z2 = get_empirical_z_score(m, max_z_score, n_bins, interval_z_score)
+            raise SwyftParameterError("Requested parameters not available:", *args)
+        z0, z1, z2 = get_empirical_z_score(m, z_max, bins, interval_z_score = 1.0)
         z0 = np.tile(z0, (*z1.shape[:-1], 1))
         z0 = np.reshape(z0, (*z0.shape, 1))
         z1 = z1.reshape(*z1.shape, 1)
         z = np.concatenate([z0, z1, z2], axis=-1)
         return z
 
+def _collection_select(coll, err, fn, *args, **kwargs):
+    if isinstance(coll, list):
+        for item in coll:
+            try:
+                return _collection_select(item, err, fn, *args, **kwargs)
+            except SwyftParameterError:
+                pass
+    elif isinstance(coll, tuple):
+        for item in coll:
+            try:
+                return _collection_select(item, err, fn, *args, **kwargs)
+            except SwyftParameterError:
+                pass
+    elif isinstance(coll, dict):
+        for item in coll.values():
+            try:
+                return _collection_select(item, err, fn, *args, **kwargs)
+            except SwyftParameterError:
+                pass
+    else:
+        try:
+            bar = getattr(coll, fn) if fn else coll
+            return bar(*args, **kwargs)
+        except SwyftParameterError:
+            pass
+    raise SwyftParameterError(err)
+
+def estimate_coverage(coverage_samples, *args, z_max = 3.5, bins = 50):
+    return _collection_select(coverage_samples, "Requested parameters not available: %s"%(args,),
+            "estimate_coverage", *args, z_max = z_max, bins = bins)
 
 @dataclass
 class LogRatioSamples:
@@ -344,24 +378,36 @@ class LogRatioSamples:
         Args:
             N: Number of samples to generate
             replacement: Sample with replacement.  Default is true, which corresponds to generating samples from the posterior.
+
+        Returns:
+            Tensor with samples (n_samples, ..., n_param_dims)
         """
-        weights = self.weights#(normalize = True)
+        weights = self.weights
         if not replacement and N > len(self):
             N = len(self)
         samples = weights_sample(N, self.params, weights, replacement = replacement)
         return samples
 
-#    def (self, i):
-#        v = self.params[:,i].numpy()
-#        w = self.weights[:,i].numpy()
-#        return v, w
+def get_weighted_samples(loglike, *args):
+    """Returns weighted samples for particular parameter combination.
 
-    def get_matching_weighted_samples(self, *args):
-        for i, pars in enumerate(self.parnames):
+    Args:
+        *args: Parameter names
+
+    Returns:
+        (parameter tensor, weight tensor)
+    """
+    if not(isinstance(loglike, list) or isinstance(loglike, tuple)):
+        loglike = [loglike]
+    for l in loglike:
+        for i, pars in enumerate(l.parnames):
             if all(x in pars for x in args):
                 idx = [list(pars).index(x) for x in args]
-                return self.params[:,i, idx], self.weights[:,i]
-        return None
+                return l.params[:,i, idx], l.weights[:,i]
+    raise SwyftParameterError("Requested parameters not available:", *args)
+
+class SwyftParameterError(Exception):
+    pass
 
 
 def calc_mass(r0, r):
@@ -425,3 +471,56 @@ def get_best_model(tbl):
             val_loss = v
     return path
 
+def pdf_from_weighted_samples(v, w, bins = 50, smooth = 0, v_aux = None):
+    """Take weighted samples and turn them into a pdf on a grid.
+    
+    Args:
+        bins
+    """
+    ndim = v.shape[-1]
+    if v_aux is None:
+        return weighted_smoothed_histogramdd(v, w, bins = bins, smooth = smooth)
+    else:
+        h, xy = weighted_smoothed_histogramdd(v_aux, None, bins = bins, smooth = smooth)
+        if ndim == 2:
+            X, Y = np.meshgrid(xy[:,0], xy[:,1])
+            n = len(xy)
+            out = scipy.interpolate.griddata(v, w, (X.flatten(), Y.flatten()), method = 'cubic', fill_value = 0.).reshape(n, n)
+            return out, xy
+        elif ndim == 1:
+            out = scipy.interpolate.griddata(v[:,0], w, xy[:,0], method = 'cubic', fill_value = 0.)
+            return out, xy
+        else:
+            raise KeyError("Not supported")
+    
+def weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
+    ndim = v.shape[-1]
+    if ndim == 1:
+        low, upp = v.min(), v.max()
+        h =  torchist.histogramdd(v, bins, weights = w, low = low, upp = upp)
+        edges = torch.linspace(low, upp, bins+1)
+        x = (edges[1:] + edges[:-1])/2
+        if smooth > 0:
+            h = torch.tensor(gaussian_filter1d(h, smooth))
+        return h, x.unsqueeze(-1)
+    elif ndim == 2:
+        low = v.min(axis=0).values
+        upp = v.max(axis=0).values
+        h = torchist.histogramdd(v, bins = bins, weights = w, low = low, upp = upp)
+        x = torch.linspace(low[0], upp[0], bins+1)
+        y = torch.linspace(low[1], upp[1], bins+1)
+        x = (x[1:] + x[:-1])/2
+        y = (y[1:] + y[:-1])/2
+        xy = torch.vstack([x, y]).T
+        if smooth > 0:
+            h = torch.tensor(gaussian_filter(h*1., smooth))
+        return h, xy
+    
+    
+def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
+    z, w = get_weighted_samples(loglike, *args)
+    if aux is not None:
+        z_aux, _ = get_weighted_samples(aux, *args)
+    else:
+        z_aux = None
+    return pdf_from_weighted_samples(z, w, bins = bins, smooth = smooth, v_aux = z_aux)

@@ -2,6 +2,7 @@ import numpy as np
 import pylab as plt
 from scipy.integrate import simps
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
+import swyft
 
 
 def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
@@ -35,52 +36,57 @@ def plot_2d(
     bins=100,
     color="k",
     cmap = 'gray_r',
-    smooth = None,
+    smooth = 0.,
 ):
     """Plot 2-dimensional posteriors.
     """
-    if not isinstance(logratios, list):
-        logratios = [logratios,]
+    counts, xy = swyft.get_pdf(logratios, parname1, parname2, bins = bins, smooth = smooth)
+    xbins = xy[:,0]
+    ybins = xy[:,1]
+#    if not isinstance(logratios, list):
+#        logratios = [logratios,]
+#
+#    samples = None
+#    for s in logratios:
+#        weighted_samples = s.get_matching_weighted_samples(parname1, parname2)
+#        if weighted_samples is not None:
+#            samples, weights = weighted_samples
+#    if samples is None:
+#        return
 
-    samples = None
-    for s in logratios:
-        weighted_samples = s.get_matching_weighted_samples(parname1, parname2)
-        if weighted_samples is not None:
-            samples, weights = weighted_samples
-    if samples is None:
-        return
+#    # FIXME: use interpolation when grid_interpolate == True
+#    x = samples[:,0].numpy()
+#    y = samples[:,1].numpy()
+#    w = weights.numpy()
+#    counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap=cmap)
+#    if smooth is not None:
+#        counts = gaussian_filter(counts, smooth)
 
-
-    # FIXME: use interpolation when grid_interpolate == True
-    x = samples[:,0].numpy()
-    y = samples[:,1].numpy()
-    w = weights.numpy()
-    counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap=cmap)
-    if smooth is not None:
-        counts = gaussian_filter(counts, smooth)
     levels = sorted(get_HDI_thresholds(counts))
-    try:
-        ax.contour(
-            counts.T,
-            extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
-            levels=levels,
-            linestyles=[":", "--", "-"],
-            colors=color,
-        )
-    except ValueError:
-        print("WARNING: 2-dim contours not well-defined.")
-    ax.set_xlim([x.min(), x.max()])
-    ax.set_ylim([y.min(), y.max()])
+    ax.contour(
+        counts.T,
+        extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
+        levels=levels,
+        linestyles=[":", "--", "-"],
+        colors=color,
+    )
+    ax.imshow(
+        counts.T,
+        extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
+        cmap = cmap
+    )
+    ax.set_xlim([xbins.min(), xbins.max()])
+    ax.set_ylim([ybins.min(), ybins.max()])
 
-    xm = (xbins[:-1] + xbins[1:]) / 2
-    ym = (ybins[:-1] + ybins[1:]) / 2
-
-    cx = counts.sum(axis=1)
-    cy = counts.sum(axis=0)
-
-    mean = (sum(xm * cx) / sum(cx), sum(ym * cy) / sum(cy))
-
-    return dict(mean=mean, mode=None, HDI1=None, HDI2=None, HDI3=None, entropy=None)
+#    xm = (xbins[:-1] + xbins[1:]) / 2
+#    ym = (ybins[:-1] + ybins[1:]) / 2
+#
+#    cx = counts.sum(axis=1)
+#    cy = counts.sum(axis=0)
+#
+#    mean = (sum(xm * cx) / sum(cx), sum(ym * cy) / sum(cy))
+#
+#    return dict(mean=mean, mode=None, HDI1=None, HDI2=None, HDI3=None, entropy=None)
 
 
 def plot_1d(
@@ -92,46 +98,51 @@ def plot_1d(
     bins=100,
     color="k",
     contours=True,
-    smooth=None,
+    smooth=0.,
 ):
     """Plot 1-dimensional posteriors.
     """
-    if not isinstance(logratios, list):
-        logratios = [logratios,]
+#    samples, weights, = swyft.get_weighted_samples(logratios, parname)
 
-    samples = None
-    for s in logratios:
-        weighted_samples = s.get_matching_weighted_samples(parname)
-        if weighted_samples is not None:
-            samples, weights = weighted_samples
-    if samples is None:
-        return
+#    if not isinstance(logratios, list):
+#        logratios = [logratios,]
+#
+#    samples = None
+#    for s in logratios:
+#        weighted_samples = s.get_matching_weighted_samples(parname)
+#        if weighted_samples is not None:
+#            samples, weights = weighted_samples
+#    if samples is None:
+#        return
 
-    x = samples[:,0].numpy()
-    w = weights.numpy()
+    v, zm = swyft.get_pdf(logratios, parname, bins = bins, smooth = smooth)
+    zm = zm[:,0]
 
-    v, e = np.histogram(x, weights=w, bins=bins, density=True)
-    zm = (e[1:] + e[:-1]) / 2
-    if smooth is not None:
-        v = gaussian_filter1d(v, smooth)
+#    x = samples[:,0].numpy()
+#    w = weights.numpy()
+#
+#    v, e = np.histogram(x, weights=w, bins=bins, density=True)
+#    zm = (e[1:] + e[:-1]) / 2
+#    if smooth is not None:
+#        v = gaussian_filter1d(v, smooth)
 
     levels = sorted(get_HDI_thresholds(v))
     if contours:
         contour1d(zm, v, levels, ax=ax, color=color)
     ax.plot(zm, v, color=color)
-    ax.set_xlim([x.min(), x.max()])
+    ax.set_xlim([zm.min(), zm.max()])
     ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
 
-    # Diagnostics
-    mean = sum(w * x) / sum(w)
-    mode = zm[v == v.max()][0]
-    int2 = zm[v > levels[2]].min(), zm[v > levels[2]].max()
-    int1 = zm[v > levels[1]].min(), zm[v > levels[1]].max()
-    int0 = zm[v > levels[0]].min(), zm[v > levels[0]].max()
-    entropy = -simps(v * np.log(v), zm)
-    return dict(
-        mean=mean, mode=mode, HDI1=int2, HDI2=int1, HDI3=int0, entropy=entropy
-    )
+#    # Diagnostics
+#    mean = sum(w * x) / sum(w)
+#    mode = zm[v == v.max()][0]
+#    int2 = zm[v > levels[2]].min(), zm[v > levels[2]].max()
+#    int1 = zm[v > levels[1]].min(), zm[v > levels[1]].max()
+#    int0 = zm[v > levels[0]].min(), zm[v > levels[0]].max()
+#    entropy = -simps(v * np.log(v), zm)
+#    return dict(
+#        mean=mean, mode=mode, HDI1=int2, HDI2=int1, HDI3=int0, entropy=entropy
+#    )
 
 
 def plot_posterior(
@@ -316,7 +327,7 @@ def corner(
     contours_1d: bool = True,
     fig=None,
     labeler=None,
-    smooth=None,
+    smooth=0.,
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -421,3 +432,23 @@ def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 
 if __name__ == "__main__":
     pass
+
+
+def plot_estimated_coverage(coverage_samples, *args, ax = None):
+    cov = swyft.estimate_coverage(coverage_samples, *args)
+    ax = ax if ax else plt.gca()
+    swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
+    
+    
+#def plot_scores(mass):
+#    s = mass.get_z_scores()
+#    for j, k in enumerate(s.keys()):
+#        for i in [0, 1, 2]:
+#            y = s[k][i,1]
+#            yerr = np.array([s[k][i,2]-y, y-s[k][i,0]]).reshape(2, 1)
+#            plt.errorbar(j, [y], yerr = yerr, marker='.', color='k')
+#    labels = [list(v) for v in s.keys()]
+#    plt.xticks(range(len(labels)), labels)
+#    plt.axhline(1., color='k', ls=':')
+#    plt.axhline(2., color='k', ls=':')
+#    plt.axhline(3., color='k', ls=':')
