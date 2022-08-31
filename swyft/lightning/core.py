@@ -33,12 +33,17 @@ import torchist
 
 
 class SwyftModule(pl.LightningModule):
-    """Handles training of ratio estimators."""
     def __init__(self, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
-        """Instantiates SwyftModule.
+        r"""
 
-        Args:
-            lr: learning rate
+        Handles training of logratio estimators.
+
+        Arguments:
+
+            lr: The learning rate to use:
+
+                - ``float''. Use this value as initial learning rate.
+
             lrs_factor: learning rate decay
             lrs_patience: learning rate decay patience
         """
