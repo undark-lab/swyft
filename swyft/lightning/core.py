@@ -33,38 +33,77 @@ import torchist
 
 
 class SwyftModule(pl.LightningModule):
-    def __init__(self, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
+    def __init__(self, 
+            lr: float = 1e-3,
+            lrs_factor: float = 0.1,
+            lr_monitor: bool = True,
+            early_stopping: bool = True,
+            early_stopping_patience: int = 3,
+            lrs_patience: int = 5
+            ):
         r"""
 
         Handles training of logratio estimators.
 
+        The main way to use a ``SwyftModule''.
+
         Arguments:
 
-            lr: The learning rate to use:
-
-                - ``float''. Use this value as initial learning rate.
-
-            lrs_factor: learning rate decay
-            lrs_patience: learning rate decay patience
+            lr: The initial learning rate.
+            lrs_factor: The learning rate decay.
+            lrs_patience: The learning rate decay patience.
         """
         super().__init__()
-        self.save_hyperparameters()
-        self._predict_condition_x = {}
-        self._predict_condition_z = {}
+        self._swyft_module_config = dict(lr = lr, lrs_factor = lrs_factor, lr_monitor = lr_monitor,
+                lrs_patience = lrs_patience, early_stopping = early_stopping,
+                early_stopping_patience = early_stopping_patience)
+        #self.save_hyperparameters()
+#        self._predict_condition_x = {}
+#        self._predict_condition_z = {}
 
     def on_train_start(self):
-        self.logger.log_hyperparams(self.hparams, {"hp/KL-div": -1, "hp/JS-div": -1})
+        pass
+        #self.logger.log_hyperparams(self.hparams, {"hp/KL-div": -1, "hp/JS-div": -1})
+
+    def configure_callbacks(self):
+        callbacks = []
+        if self._swyft_module_config["lr_monitor"]:
+            callbacks.append(LearningRateMonitor())
+        if self._swyft_module_config["early_stopping"]:
+            early_stop = EarlyStopping(monitor="val_loss", min_delta=0.0,
+                    patience=self._swyft_module_config["early_stopping_patience"],
+                    verbose=False, mode="min")
+            callbacks.append(early_stop)
+        return callbacks
         
     def on_train_end(self):
-        for cb in self.trainer.callbacks:
-            if isinstance(cb, pl.callbacks.model_checkpoint.ModelCheckpoint):
-                cb.to_yaml()
-      
+        pass
+
+        # TODO: Convenience
+#        for cb in self.trainer.callbacks:
+#            if isinstance(cb, pl.callbacks.model_checkpoint.ModelCheckpoint):
+#                cb.to_yaml()  # Saves path of best_k_models to yaml file
+
+
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), self.hparams.lr)
+        lr = self._swyft_module_config["lr"]
+        lrs_patience = self._swyft_module_config["lrs_patience"]
+        lrs_factor = self._swyft_module_config["lrs_factor"]
+
+        optimizer = torch.optim.Adam(self.parameters(), lr)
         lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=self.hparams.lrs_factor, patience=self.hparams.lrs_patience), "monitor": "val_loss"}
+            optimizer, factor=lrs_factor, patience=lrs_patience), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
+      
+#    def configure_optimizers(self):
+#        return default_optimizers(self.parameters())
+#        optimizer = torch.optim.Adam(self.parameters(), self.hparams.lr)
+#
+#        # TODO: Convenience
+#        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+#            optimizer, factor=self.hparams.lrs_factor, patience=self.hparams.lrs_patience), "monitor": "val_loss"}
+#
+#        return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
 
     def _logratios(self, x, z):
         out = self(x, z)
@@ -80,7 +119,7 @@ class SwyftModule(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, randomized = False)
-        self.log("val_loss", loss, prog_bar=True)
+        self.log("val_loss", loss, prog_bar=True, on_step = False, on_epoch = True)
         return loss
 
     def _calc_loss(self, batch, randomized = True):
@@ -115,6 +154,7 @@ class SwyftModule(pl.LightningModule):
         return loss - 2*np.log(2.)*num_ratios
     
     def _calc_KL(self, batch, batch_idx):
+        # TODO: Convenience
         x = batch
         z = batch
         logratios = self._logratios(x, z)
@@ -124,28 +164,33 @@ class SwyftModule(pl.LightningModule):
         
     def training_step(self, batch, batch_idx):
         loss = self._calc_loss(batch)
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_step = True, on_epoch = False)
         return loss
 
     def test_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, randomized = False)
-        lossKL = self._calc_KL(batch, batch_idx)
-        self.log("hp/JS-div", loss)
-        #self.log("hp_metric", loss)
-        self.log("hp/KL-div", lossKL)
+        self.log("test_loss", loss, on_epoch = True, on_step = False)
+
+        #self.log("hp_metric", loss, on_step = False, on_epoch = True)
+
+        #self.log("hp/JS-div", loss)
+        #lossKL = self._calc_KL(batch, batch_idx)
+        #self.log("hp/KL-div", lossKL)
+
         return loss
     
-    def _set_predict_conditions(self, condition_x, condition_z):
-        self._predict_condition_x = {k: v.unsqueeze(0) for k, v in condition_x.items()}
-        self._predict_condition_z = {k: v.unsqueeze(0) for k, v in condition_z.items()}
+#    def _set_predict_conditions(self, condition_x, condition_z):
+#        self._predict_condition_x = {k: v.unsqueeze(0) for k, v in condition_x.items()}
+#        self._predict_condition_z = {k: v.unsqueeze(0) for k, v in condition_z.items()}
         
-    def set_conditions(self, conditions):
-        self._predict_condition_x = conditions
+#    def set_conditions(self, conditions):
+#        self._predict_condition_x = conditions
     
     def predict_step(self, batch, *args, **kwargs):
         A = batch[0]
         B = batch[1]
         return self(A, B)
+
 
 
 class SwyftTrainer(pl.Trainer):
@@ -437,6 +482,7 @@ def weights_sample(N, values, weights, replacement = True):
     samples = torch.gather(values, 0, idx)
     return samples
 
+
 def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
     """Generates convenience configuration for Trainer object.
 
@@ -454,6 +500,28 @@ def tensorboard_config(save_dir = "./lightning_logs", name = None, version = Non
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=patience, verbose=False, mode="min")
     checkpoint_callback = ModelCheckpoint(monitor="val_loss")
     return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
+
+def best_from_yaml(filepath):
+    """Get best model from tensorboard log. Useful for reloading trained networks.
+
+    Args:
+        filepath: Filename of yaml file (assumed to be saved with to_yaml from ModelCheckpoint)
+
+    Returns:
+        path to best model
+    """
+    try:
+        with open(filepath) as f:
+            best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
+    except FileNotFoundError:
+        return None
+    val_loss = np.inf
+    path = None
+    for k, v in best_k_models.items():
+        if v < val_loss:
+            path = k
+            val_loss = v
+    return path
 
 def get_best_model(tbl):
     """Get best model from tensorboard log. Useful for reloading trained networks.
@@ -521,6 +589,8 @@ def weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
         if smooth > 0:
             h = torch.tensor(gaussian_filter(h*1., smooth))
         return h, xy
+
+
     
     
 def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
@@ -530,3 +600,41 @@ def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
     else:
         z_aux = None
     return pdf_from_weighted_samples(z, w, bins = bins, smooth = smooth, v_aux = z_aux)
+
+
+#def default_optimizers(parameters, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
+#    optimizer = torch.optim.Adam(parameters, lr)
+#
+#    lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+#        optimizer, factor=lrs_factor, patience=lrs_patience), "monitor": "val_loss"}
+#
+#    return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
+#
+#def default_callbacks(
+#        lr_monitor = True,
+#        early_stopping = True, 
+#        early_stopping_patience = 2, 
+#        model_checkpoint = True,
+#        save_last = True, save_top_k = 1, save_weights_only = False):
+#    """Generates convenience configuration for Trainer object.
+#
+#    Args:
+#        save_dir: Save-directory for tensorboard logs
+#        name: tensorboard logs name
+#        version: tensorboard logs version
+#        patience: early-stopping patience
+#
+#    Returns:
+#        Configuration dictionary
+#    """
+#    callbacks = []
+#    if lr_monitor:
+#        callbacks.append(LearningRateMonitor())
+#    if early_stopping:
+#        early_stop = EarlyStopping(monitor="val_loss", min_delta=0.0,
+#                patience=early_stopping_patience, verbose=False, mode="min")
+#        callbacks.append(early_stop)
+#    if model_checkpoint:
+#        checkpoint = ModelCheckpoint(monitor="val_loss", save_last = save_last, save_top_k = save_top_k, save_weights_only = save_weights_only)
+#        callbacks.append(checkpoint)
+#    return callbacks
