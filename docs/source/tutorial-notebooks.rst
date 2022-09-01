@@ -14,3 +14,5 @@ You may find the tutorial notebooks here.
    notebooks/0C*
    notebooks/0D*
    notebooks/0E*
+   notebooks/0F*
+   notebooks/0G*
