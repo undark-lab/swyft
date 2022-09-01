@@ -31,6 +31,8 @@ import scipy
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import torchist
 
+import scipy.stats
+
 
 class SwyftModule(pl.LightningModule):
     def __init__(self, 
@@ -338,6 +340,32 @@ class CoverageSamples:
         z = np.concatenate([z0, z1, z2], axis=-1)
         return z
 
+def _collection_mask(coll, mask_fn):
+    def mask(item):
+        if isinstance(item, list) or isinstance(item, tuple) or isinstance(item, dict):
+            return True
+        return mask_fn(item)
+
+    if isinstance(coll, list):
+        return [_collection_mask(item, mask_fn) for item in coll if mask(item)]
+    elif isinstance(coll, tuple):
+        return tuple([_collection_mask(item, mask_fn) for item in coll if mask(item)])
+    elif isinstance(coll, dict):
+        return {k: _collection_mask(item, mask_fn) for k, item in coll.items() if mask(item)}
+    else:
+        return coll if mask(coll) else None
+
+def _collection_map(coll, map_fn):
+    if isinstance(coll, list):
+        return [_collection_map(item, map_fn) for item in coll]
+    elif isinstance(coll, tuple):
+        return tuple([_collection_map(item, map_fn) for item in coll])
+    elif isinstance(coll, dict):
+        return {k: _collection_map(item, map_fn) for k, item in coll.items()}
+    else:
+        return map_fn(coll)
+
+
 def _collection_select(coll, err, fn, *args, **kwargs):
     if isinstance(coll, list):
         for item in coll:
@@ -638,3 +666,17 @@ def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
 #        checkpoint = ModelCheckpoint(monitor="val_loss", save_last = save_last, save_top_k = save_top_k, save_weights_only = save_weights_only)
 #        callbacks.append(checkpoint)
 #    return callbacks
+
+class RectBoundSampler:
+    def __init__(self, distr, bounds = None):
+        self._distr = distr
+        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
+            s = distr.rvs()
+            self._u_low = s*0. if bounds is None else distr.cdf(bounds[...,0])
+            self._u_high = s*0. + 1. if bounds is None else distr.cdf(bounds[...,1])
+            self._distr = distr
+        
+    def __call__(self):
+        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
+            u = scipy.stats.uniform(loc = self._u_low, scale = self._u_high-self._u_low).rvs()
+            return self._distr.ppf(u)
