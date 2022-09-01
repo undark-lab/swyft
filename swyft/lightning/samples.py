@@ -65,19 +65,6 @@ class Samples(dict):
         return to_numpy(self, single_precision = single_precision)
         
 
-# TODO: This is the return type of ratio estimation networks. Maybe make use of that somehow?
-class SampleRatios(dict):
-    """Return type of infer operation of SwyftTrainer"""
-    def __len__(self):
-        n = [len(v) for v in self.values()]
-        assert all([x == n[0] for x in n]), "Inconsistent lengths in Samples"
-        return n[0]
-    
-    def sample(self, N, replacement = True):
-        samples = {k: v.sample(N, replacement = replacement) for k, v in self.items()}
-        return Samples(samples)
-
-
 class SamplesDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on Samples."""
     def __init__(self, sample_store, on_after_load_sample = None):
