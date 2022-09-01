@@ -14,10 +14,8 @@ from typing import (
 import numpy as np
 import torch
 from torch.nn import functional as F
-from torch.utils.data import random_split
 
 import pytorch_lightning as pl
-from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.trainer.supporters import CombinedLoader
@@ -31,7 +29,12 @@ import scipy
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import torchist
 
-import scipy.stats
+
+# Main classes
+
+
+class SwyftParameterError(Exception):
+    pass
 
 
 class SwyftModule(pl.LightningModule):
@@ -59,13 +62,6 @@ class SwyftModule(pl.LightningModule):
         self._swyft_module_config = dict(lr = lr, lrs_factor = lrs_factor, lr_monitor = lr_monitor,
                 lrs_patience = lrs_patience, early_stopping = early_stopping,
                 early_stopping_patience = early_stopping_patience)
-        #self.save_hyperparameters()
-#        self._predict_condition_x = {}
-#        self._predict_condition_z = {}
-
-    def on_train_start(self):
-        pass
-        #self.logger.log_hyperparams(self.hparams, {"hp/KL-div": -1, "hp/JS-div": -1})
 
     def configure_callbacks(self):
         callbacks = []
@@ -78,15 +74,6 @@ class SwyftModule(pl.LightningModule):
             callbacks.append(early_stop)
         return callbacks
         
-    def on_train_end(self):
-        pass
-
-        # TODO: Convenience
-#        for cb in self.trainer.callbacks:
-#            if isinstance(cb, pl.callbacks.model_checkpoint.ModelCheckpoint):
-#                cb.to_yaml()  # Saves path of best_k_models to yaml file
-
-
     def configure_optimizers(self):
         lr = self._swyft_module_config["lr"]
         lrs_patience = self._swyft_module_config["lrs_patience"]
@@ -97,16 +84,6 @@ class SwyftModule(pl.LightningModule):
             optimizer, factor=lrs_factor, patience=lrs_patience), "monitor": "val_loss"}
         return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
       
-#    def configure_optimizers(self):
-#        return default_optimizers(self.parameters())
-#        optimizer = torch.optim.Adam(self.parameters(), self.hparams.lr)
-#
-#        # TODO: Convenience
-#        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-#            optimizer, factor=self.hparams.lrs_factor, patience=self.hparams.lrs_patience), "monitor": "val_loss"}
-#
-#        return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
-
     def _logratios(self, x, z):
         out = self(x, z)
         if isinstance(out, dict):
@@ -155,15 +132,6 @@ class SwyftModule(pl.LightningModule):
         loss = loss.sum()/num_neg  # Calculates batched-averaged loss
         return loss - 2*np.log(2.)*num_ratios
     
-    def _calc_KL(self, batch, batch_idx):
-        # TODO: Convenience
-        x = batch
-        z = batch
-        logratios = self._logratios(x, z)
-        nbatch = len(logratios)
-        loss = -logratios.sum()/nbatch
-        return loss
-        
     def training_step(self, batch, batch_idx):
         loss = self._calc_loss(batch)
         self.log("train_loss", loss, on_step = True, on_epoch = False)
@@ -172,27 +140,12 @@ class SwyftModule(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, randomized = False)
         self.log("test_loss", loss, on_epoch = True, on_step = False)
-
-        #self.log("hp_metric", loss, on_step = False, on_epoch = True)
-
-        #self.log("hp/JS-div", loss)
-        #lossKL = self._calc_KL(batch, batch_idx)
-        #self.log("hp/KL-div", lossKL)
-
         return loss
-    
-#    def _set_predict_conditions(self, condition_x, condition_z):
-#        self._predict_condition_x = {k: v.unsqueeze(0) for k, v in condition_x.items()}
-#        self._predict_condition_z = {k: v.unsqueeze(0) for k, v in condition_z.items()}
-        
-#    def set_conditions(self, conditions):
-#        self._predict_condition_x = conditions
     
     def predict_step(self, batch, *args, **kwargs):
         A = batch[0]
         B = batch[1]
         return self(A, B)
-
 
 
 class SwyftTrainer(pl.Trainer):
@@ -309,17 +262,6 @@ class CoverageSamples:
                 return self.prob_masses[:,i]
         return None
 
-#    def estimate_coverage_dict(self):
-#        out = {}
-#        for i, pars in enumerate(self.parnames):
-#            pars = tuple(pars)
-#            m = self.prob_masses[:,i]
-#            z0, z1, z2 = get_empirical_z_score(m, 3.5, 50, 1.0)
-#            out[pars] = np.array([np.interp([1.0, 2.0, 3.0], z0, z2[:,0]),
-#                np.interp([1.0, 2.0, 3.0], z0, z1), np.interp([1.0, 2.0, 3.0],
-#                    z0, z2[:,1])]).T
-#        return out
-
     def estimate_coverage(self, *args, z_max = 3.5, bins = 50):
         """Estimate expected coverage of credible intervals.
 
@@ -340,62 +282,6 @@ class CoverageSamples:
         z = np.concatenate([z0, z1, z2], axis=-1)
         return z
 
-def _collection_mask(coll, mask_fn):
-    def mask(item):
-        if isinstance(item, list) or isinstance(item, tuple) or isinstance(item, dict):
-            return True
-        return mask_fn(item)
-
-    if isinstance(coll, list):
-        return [_collection_mask(item, mask_fn) for item in coll if mask(item)]
-    elif isinstance(coll, tuple):
-        return tuple([_collection_mask(item, mask_fn) for item in coll if mask(item)])
-    elif isinstance(coll, dict):
-        return {k: _collection_mask(item, mask_fn) for k, item in coll.items() if mask(item)}
-    else:
-        return coll if mask(coll) else None
-
-def _collection_map(coll, map_fn):
-    if isinstance(coll, list):
-        return [_collection_map(item, map_fn) for item in coll]
-    elif isinstance(coll, tuple):
-        return tuple([_collection_map(item, map_fn) for item in coll])
-    elif isinstance(coll, dict):
-        return {k: _collection_map(item, map_fn) for k, item in coll.items()}
-    else:
-        return map_fn(coll)
-
-
-def _collection_select(coll, err, fn, *args, **kwargs):
-    if isinstance(coll, list):
-        for item in coll:
-            try:
-                return _collection_select(item, err, fn, *args, **kwargs)
-            except SwyftParameterError:
-                pass
-    elif isinstance(coll, tuple):
-        for item in coll:
-            try:
-                return _collection_select(item, err, fn, *args, **kwargs)
-            except SwyftParameterError:
-                pass
-    elif isinstance(coll, dict):
-        for item in coll.values():
-            try:
-                return _collection_select(item, err, fn, *args, **kwargs)
-            except SwyftParameterError:
-                pass
-    else:
-        try:
-            bar = getattr(coll, fn) if fn else coll
-            return bar(*args, **kwargs)
-        except SwyftParameterError:
-            pass
-    raise SwyftParameterError(err)
-
-def estimate_coverage(coverage_samples, *args, z_max = 3.5, bins = 50):
-    return _collection_select(coverage_samples, "Requested parameters not available: %s"%(args,),
-            "estimate_coverage", *args, z_max = z_max, bins = bins)
 
 @dataclass
 class LogRatioSamples:
@@ -467,6 +353,70 @@ class LogRatioSamples:
         samples = weights_sample(N, self.params, weights, replacement = replacement)
         return samples
 
+
+# Utilitiy
+
+def _collection_mask(coll, mask_fn):
+    def mask(item):
+        if isinstance(item, list) or isinstance(item, tuple) or isinstance(item, dict):
+            return True
+        return mask_fn(item)
+
+    if isinstance(coll, list):
+        return [_collection_mask(item, mask_fn) for item in coll if mask(item)]
+    elif isinstance(coll, tuple):
+        return tuple([_collection_mask(item, mask_fn) for item in coll if mask(item)])
+    elif isinstance(coll, dict):
+        return {k: _collection_mask(item, mask_fn) for k, item in coll.items() if mask(item)}
+    else:
+        return coll if mask(coll) else None
+
+def _collection_map(coll, map_fn):
+    if isinstance(coll, list):
+        return [_collection_map(item, map_fn) for item in coll]
+    elif isinstance(coll, tuple):
+        return tuple([_collection_map(item, map_fn) for item in coll])
+    elif isinstance(coll, dict):
+        return {k: _collection_map(item, map_fn) for k, item in coll.items()}
+    else:
+        return map_fn(coll)
+
+
+def _collection_select(coll, err, fn, *args, **kwargs):
+    if isinstance(coll, list):
+        for item in coll:
+            try:
+                return _collection_select(item, err, fn, *args, **kwargs)
+            except SwyftParameterError:
+                pass
+    elif isinstance(coll, tuple):
+        for item in coll:
+            try:
+                return _collection_select(item, err, fn, *args, **kwargs)
+            except SwyftParameterError:
+                pass
+    elif isinstance(coll, dict):
+        for item in coll.values():
+            try:
+                return _collection_select(item, err, fn, *args, **kwargs)
+            except SwyftParameterError:
+                pass
+    else:
+        try:
+            bar = getattr(coll, fn) if fn else coll
+            return bar(*args, **kwargs)
+        except SwyftParameterError:
+            pass
+    raise SwyftParameterError(err)
+
+
+# Convenience
+
+def estimate_coverage(coverage_samples, *args, z_max = 3.5, bins = 50):
+    return _collection_select(coverage_samples, "Requested parameters not available: %s"%(args,),
+            "estimate_coverage", *args, z_max = z_max, bins = bins)
+
+
 def get_weighted_samples(loglike, *args):
     """Returns weighted samples for particular parameter combination.
 
@@ -484,10 +434,6 @@ def get_weighted_samples(loglike, *args):
                 idx = [list(pars).index(x) for x in args]
                 return l.params[:,i, idx], l.weights[:,i]
     raise SwyftParameterError("Requested parameters not available:", *args)
-
-class SwyftParameterError(Exception):
-    pass
-
 
 def calc_mass(r0, r):
     p = torch.exp(r - r.max(axis=0).values)
@@ -510,25 +456,6 @@ def weights_sample(N, values, weights, replacement = True):
     samples = torch.gather(values, 0, idx)
     return samples
 
-
-def tensorboard_config(save_dir = "./lightning_logs", name = None, version = None, patience = 3):
-    """Generates convenience configuration for Trainer object.
-
-    Args:
-        save_dir: Save-directory for tensorboard logs
-        name: tensorboard logs name
-        version: tensorboard logs version
-        patience: early-stopping patience
-
-    Returns:
-        Configuration dictionary
-    """
-    tbl = pl_loggers.TensorBoardLogger(save_dir = save_dir, name = name, version = version, default_hp_metric = False)
-    lr_monitor = LearningRateMonitor(logging_interval="step")
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.0, patience=patience, verbose=False, mode="min")
-    checkpoint_callback = ModelCheckpoint(monitor="val_loss")
-    return dict(logger = tbl, callbacks = [lr_monitor, early_stop_callback, checkpoint_callback])
-
 def best_from_yaml(filepath):
     """Get best model from tensorboard log. Useful for reloading trained networks.
 
@@ -540,28 +467,6 @@ def best_from_yaml(filepath):
     """
     try:
         with open(filepath) as f:
-            best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
-    except FileNotFoundError:
-        return None
-    val_loss = np.inf
-    path = None
-    for k, v in best_k_models.items():
-        if v < val_loss:
-            path = k
-            val_loss = v
-    return path
-
-def get_best_model(tbl):
-    """Get best model from tensorboard log. Useful for reloading trained networks.
-
-    Args:
-        tbl: Tensorboard log instance
-
-    Returns:
-        path to best model
-    """
-    try:
-        with open(tbl.experiment.get_logdir()+"/checkpoints/best_k_models.yaml") as f:
             best_k_models = yaml.load(f, Loader = yaml.FullLoader)    
     except FileNotFoundError:
         return None
@@ -618,9 +523,6 @@ def weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
             h = torch.tensor(gaussian_filter(h*1., smooth))
         return h, xy
 
-
-    
-    
 def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
     z, w = get_weighted_samples(loglike, *args)
     if aux is not None:
@@ -629,54 +531,3 @@ def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
         z_aux = None
     return pdf_from_weighted_samples(z, w, bins = bins, smooth = smooth, v_aux = z_aux)
 
-
-#def default_optimizers(parameters, lr = 1e-3, lrs_factor = 0.1, lrs_patience = 5):
-#    optimizer = torch.optim.Adam(parameters, lr)
-#
-#    lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-#        optimizer, factor=lrs_factor, patience=lrs_patience), "monitor": "val_loss"}
-#
-#    return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
-#
-#def default_callbacks(
-#        lr_monitor = True,
-#        early_stopping = True, 
-#        early_stopping_patience = 2, 
-#        model_checkpoint = True,
-#        save_last = True, save_top_k = 1, save_weights_only = False):
-#    """Generates convenience configuration for Trainer object.
-#
-#    Args:
-#        save_dir: Save-directory for tensorboard logs
-#        name: tensorboard logs name
-#        version: tensorboard logs version
-#        patience: early-stopping patience
-#
-#    Returns:
-#        Configuration dictionary
-#    """
-#    callbacks = []
-#    if lr_monitor:
-#        callbacks.append(LearningRateMonitor())
-#    if early_stopping:
-#        early_stop = EarlyStopping(monitor="val_loss", min_delta=0.0,
-#                patience=early_stopping_patience, verbose=False, mode="min")
-#        callbacks.append(early_stop)
-#    if model_checkpoint:
-#        checkpoint = ModelCheckpoint(monitor="val_loss", save_last = save_last, save_top_k = save_top_k, save_weights_only = save_weights_only)
-#        callbacks.append(checkpoint)
-#    return callbacks
-
-class RectBoundSampler:
-    def __init__(self, distr, bounds = None):
-        self._distr = distr
-        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
-            s = distr.rvs()
-            self._u_low = s*0. if bounds is None else distr.cdf(bounds[...,0])
-            self._u_high = s*0. + 1. if bounds is None else distr.cdf(bounds[...,1])
-            self._distr = distr
-        
-    def __call__(self):
-        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
-            u = scipy.stats.uniform(loc = self._u_low, scale = self._u_high-self._u_low).rvs()
-            return self._distr.ppf(u)

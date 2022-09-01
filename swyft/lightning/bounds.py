@@ -15,6 +15,8 @@ import numpy as np
 import torch
 import swyft
 
+import scipy.stats
+
 
 @dataclass
 class MeanStd:
@@ -77,3 +79,18 @@ def get_rect_bounds(logratios, threshold = 1e-6):
         bounds = rect_bounds_from_tensors(logratios.params, logratios.logratios, threshold = threshold)
         return RectangleBounds(params = bounds, parnames = logratios.parnames)
     return swyft.lightning.core._collection_map(logratios, lambda x: map_fn(x))
+
+
+class RectBoundSampler:
+    def __init__(self, distr, bounds = None):
+        self._distr = distr
+        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
+            s = distr.rvs()
+            self._u_low = s*0. if bounds is None else distr.cdf(bounds[...,0])
+            self._u_high = s*0. + 1. if bounds is None else distr.cdf(bounds[...,1])
+            self._distr = distr
+        
+    def __call__(self):
+        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
+            u = scipy.stats.uniform(loc = self._u_low, scale = self._u_high-self._u_low).rvs()
+            return self._distr.ppf(u)
