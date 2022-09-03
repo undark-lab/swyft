@@ -321,5 +321,5 @@ class SimulatorResampler:
         conditions = sample.copy()
         for k in self._targets:
             conditions.pop(k)
-        sims = self._simulator(conditions = conditions, targets = self._targets)
+        sims = self._simulator.sample(conditions = conditions, targets = self._targets)
         return sims
