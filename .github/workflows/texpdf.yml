@@ -4,6 +4,9 @@ on:
   push:
     branches:
     - joss-submission-do-not-delete
+  workflow_dispatch:
+    branches:
+    - joss-submission-do-not-delete
 
 jobs:
   paper:
