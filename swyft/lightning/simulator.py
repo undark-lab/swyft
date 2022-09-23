@@ -199,7 +199,7 @@ def collate_output(out):
     return result
 
 
-class Simulator:
+class SimulatorOld:
     """Handles simulations."""
     def on_before_forward(self, sample):
         """Apply transformations to conditions.
@@ -339,3 +339,211 @@ class SimulatorResampler:
             conditions.pop(k)
         sims = self._simulator.sample(conditions = conditions, targets = self._targets)
         return sims
+
+
+class Node:
+    """Provides lazy evaluation functionality.
+    """
+    def __init__(self, parname, mult_parnames, fn, *inputs):
+        """Instantiates LazyValue object.
+
+        Args:
+            trace: Trace instance (to be populated with sample).
+            this_name: Name of the variable that this LazyValue represents.
+            fn_out_names: Name or list of names of variables that `fn` returns.
+            fn: Callable that returns sample or list of samples.
+            args, kwargs: Arguments and keyword arguments provided to `fn` upon evaluation.
+        """
+        self._parname = parname
+        self._mult_parnames = mult_parnames
+        self._fn = fn
+        self._inputs = inputs
+
+    def __repr__(self):
+        return f"Node{self._parname, self._fn, self._inputs}"
+
+    def evaluate(self, trace):
+        if self._parname in trace.keys():  # Nothing to do
+            return trace[self._parname]
+        else:
+            args = (arg.evaluate(trace) if isinstance(arg, Node) else arg for arg in self._inputs)
+            result = self._fn(*args)
+            if self._mult_parnames is None:
+                trace[self._parname] = result
+            else:
+                for parname, value in zip(self._mult_parnames, result):
+                    trace[parname] = value
+            return trace[self._parname]
+        
+class Switch:
+    """Provides lazy evaluation functionality.
+    """
+    def __init__(self, parname, options, choice):
+        self._parname = parname
+        self._options = options
+        self._choice = choice
+
+    def evaluate(self, trace):
+        if self._parname in trace.keys():  # Nothing to do
+            return trace[self._parname]
+        else:
+            choice = self._choice.evaluate(trace)
+            choice = int(choice)  # type-cast if possible
+            result = self._options[choice].evaluate(trace)
+            trace[self._parname] = result
+            return result
+
+class Graph:
+    """Defines the computational graph (DAG) and keeps track of simulation results.
+    """
+    def __init__(self):
+        self.nodes = {}
+        self._prefix = ""
+
+    def __repr__(self):
+        return "Graph("+self.nodes.__repr__()+")"
+
+    def __setitem__(self, key, value):
+        if key not in self.nodes.keys():
+            self.nodes.__setitem__(key, value)
+            
+    def keys(self):
+        return self.nodes.keys()
+            
+    def __getitem__(self, key):
+        return self.nodes[key]
+
+    def node(self, parnames, fn, *args):
+        """Register sampling function.
+
+        Args:
+            parnames: Name or list of names of sampling variables.
+            fn: Callable that returns the (list of) sampling variable(s).
+            *args: Arguments and keywords arguments that are passed to `fn` upon evaluation.  LazyValues will be automatically evaluated if necessary.
+
+        Returns:
+            Node or tuple of nodes.
+        """
+        assert callable(fn), "Second argument must be a function."
+        if isinstance(parnames, str):
+            parnames = self._prefix + parnames
+            node = Node(parnames, None, fn, *args)
+            self.nodes[parnames] = node
+            return node
+        else:
+            parnames = [self._prefix + n for n in parnames]
+            nodes = tuple(Node(parname, parnames, fn, *args) for parname in parnames)
+            for i, parname in enumerate(parnames):
+                self.nodes[parname] = nodes[i]
+            return nodes
+    
+    def switch(self, parname, options, choice):
+        self.nodes[parname] = Switch(parname, options, choice)
+        
+    def prefix(self, prefix):
+        return GraphPrefixContextManager(self, prefix)
+    
+
+class GraphPrefixContextManager:
+    def __init__(self, graph, prefix):
+        self._graph = graph
+        self._prefix = prefix
+
+    def __enter__(self):
+        self._prefix, self._graph._prefix = self._graph._prefix, self._prefix + self._graph._prefix
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self._graph._prefix = self._prefix
+        
+        
+
+class Simulator:
+    """Handles simulations."""
+    def __init__(self):
+        self.graph = None
+#        self.build_graph(self.graph)
+        
+    def transform_conditions(self, conditions):
+        return conditions
+    
+    def build(self, graph):
+        raise NotImplementedError("Missing!")
+
+    def transform_samples(self, sample):
+        """Apply transformation to generated sam💡ples.
+        """
+        return sample
+
+    def _run(self, targets = None, conditions = {}):
+        if self.graph is None:
+            self.graph = Graph()
+            self.build(self.graph)
+        conditions = conditions() if callable(conditions) else conditions
+        conditions = self.transform_conditions(conditions)
+        trace = dict(conditions)
+        if targets is None:
+            targets = self.graph.keys()
+        for target in targets:
+            self.graph[target].evaluate(trace)
+        result = self.transform_samples(trace)
+        return result
+    
+    def get_shapes_and_dtypes(self, targets = None):
+        """Return shapes and data-types of sample variables.
+
+        Args:
+            targets: Target sample variables to simulate.
+
+        Return:
+            dictionary of shapes, dictionary of dtypes
+        """
+        sample = self.sample(targets = targets)
+        shapes = {k: tuple(v.shape) for k, v in sample.items()}
+        dtypes = {k: v.dtype for k, v in sample.items()}
+        return shapes, dtypes
+
+    def sample(self, N = None, targets = None, conditions = {}, exclude = []):
+        """Sample from the simulator.
+
+        Args:
+            N: int, number of samples to generate
+            targets: Optional list of target sample variables to generate. If `None`, all targets are simulated.
+            conditions: Dict or Callable, conditions sample variables.
+            exclude: List of parameters that are excluded from the returned samples.
+        """
+        if N is None:
+            return Sample(self._run(targets, conditions))
+
+        out = []
+        for _ in tqdm(range(N)):
+            result = self._run(targets, conditions)
+            for key in exclude:
+                result.pop(key, None)
+            out.append(result)
+        out = collate_output(out)
+        out = Samples(out)
+        return out
+
+    def get_resampler(self, targets):
+        """Generates a resampler. Useful for noise hooks etc.
+
+        Args:
+            targets: List of target variables to simulate
+
+        Returns:
+            SimulatorResampler instance.
+        """
+        return SimulatorResampler(self, targets)
+
+    def get_iterator(self, targets = None, conditions = {}):
+        """Generates an iterator. Useful for iterative sampling.
+
+        Args:
+            targets: Optional list of target sample variables.
+            conditions: Dict or Callable.
+        """
+        def iterator():
+            while True:
+                yield self._run(targets = targets, conditions = conditions)
+
+        return iterator

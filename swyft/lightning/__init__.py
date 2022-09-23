@@ -15,6 +15,6 @@ __all__ = [
     "Samples",
     "SwyftDataModule",
     "OptimizerInit",
-    "AdamOptimizerInit"
+    "AdamOptimizerInit",
 ]
 
