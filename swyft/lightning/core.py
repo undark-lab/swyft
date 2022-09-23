@@ -19,6 +19,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.trainer.supporters import CombinedLoader
+from pytorch_lightning.cli import instantiate_class
 
 import yaml
 
@@ -33,56 +34,58 @@ import torchist
 # Main classes
 
 
+class OptimizerInit:
+    def __init__(self, optim_constructor = torch.optim.Adam, optim_args = {"lr": 1e-3},
+                 scheduler_constructor = torch.optim.lr_scheduler.ReduceLROnPlateau,
+                scheduler_args = {"factor": 0.3, "patience": 5}):
+        self.optim_constructor = optim_constructor
+        self.optim_args = optim_args
+        self.scheduler_constructor = scheduler_constructor
+        self.scheduler_args = scheduler_args
+        
+    def __call__(self, params):
+        optimizer = self.optim_constructor(params, **self.optim_args)
+        lr_scheduler = {"scheduler": self.scheduler_constructor(
+            optimizer, **self.scheduler_args), "monitor": "val_loss"}
+        return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
+    
+    
+class AdamOptimizerInit(OptimizerInit):
+    def __init__(self, lr = 1e-3, lrs_factor = 0.3, lrs_patience = 5):
+        super().__init__(
+            optim_constructor = torch.optim.Adam,
+            optim_args = {"lr": lr},
+            scheduler_constructor = torch.optim.lr_scheduler.ReduceLROnPlateau,
+            scheduler_args = {"factor": lrs_factor, "patience": lrs_patience}
+        )
+
+
 class SwyftParameterError(Exception):
     pass
 
 
 class SwyftModule(pl.LightningModule):
-    def __init__(self, 
-            lr: float = 1e-3,
-            lrs_factor: float = 0.1,
-            lr_monitor: bool = True,
-            early_stopping: bool = True,
-            early_stopping_patience: int = 3,
-            lrs_patience: int = 5
-            ):
+    def __init__(self):
         r"""
-
         Handles training of logratio estimators.
-
-        The main way to use a ``SwyftModule''.
-
-        Arguments:
-
-            lr: The initial learning rate.
-            lrs_factor: The learning rate decay.
-            lrs_patience: The learning rate decay patience.
         """
         super().__init__()
-        self._swyft_module_config = dict(lr = lr, lrs_factor = lrs_factor, lr_monitor = lr_monitor,
-                lrs_patience = lrs_patience, early_stopping = early_stopping,
-                early_stopping_patience = early_stopping_patience)
+        self.optimizer_init = AdamOptimizerInit()
 
-    def configure_callbacks(self):
-        callbacks = []
-        if self._swyft_module_config["lr_monitor"]:
-            callbacks.append(LearningRateMonitor())
-        if self._swyft_module_config["early_stopping"]:
-            early_stop = EarlyStopping(monitor="val_loss", min_delta=0.0,
-                    patience=self._swyft_module_config["early_stopping_patience"],
-                    verbose=False, mode="min")
-            callbacks.append(early_stop)
-        return callbacks
-        
+#    def configure_callbacks(self):
+#        callbacks = []
+#        if self._swyft_module_config["lr_monitor"]:
+#            callbacks.append(LearningRateMonitor())
+#        if self._swyft_module_config["early_stopping"]:
+#            early_stop = EarlyStopping(monitor="val_loss", min_delta=0.0,
+#                    patience=self._swyft_module_config["early_stopping_patience"],
+#                    verbose=False, mode="min")
+#            callbacks.append(early_stop)
+#        return callbacks
+
     def configure_optimizers(self):
-        lr = self._swyft_module_config["lr"]
-        lrs_patience = self._swyft_module_config["lrs_patience"]
-        lrs_factor = self._swyft_module_config["lrs_factor"]
-
-        optimizer = torch.optim.Adam(self.parameters(), lr)
-        lr_scheduler = {"scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=lrs_factor, patience=lrs_patience), "monitor": "val_loss"}
-        return dict(optimizer = optimizer, lr_scheduler = lr_scheduler)
+        return self.optimizer_init(self.parameters())
+ 
       
     def _logratios(self, x, z):
         out = self(x, z)

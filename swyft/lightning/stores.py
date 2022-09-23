@@ -80,7 +80,7 @@ def get_index_slices(idx):
     return slices
 
 # TODO: Deprecate
-class SwyftDataModule(pl.LightningDataModule):
+class SwyftDataModule_deprecated(pl.LightningDataModule):
     def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
         super().__init__()
         self.store = store

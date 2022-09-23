@@ -12,6 +12,9 @@ __all__ = [
     "PosteriorMassSamples",
     "LogRatioSamples",
     "Sample",
-    "Samples"
+    "Samples",
+    "SwyftDataModule",
+    "OptimizerInit",
+    "AdamOptimizerInit"
 ]
 

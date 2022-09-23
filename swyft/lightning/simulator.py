@@ -202,8 +202,14 @@ def collate_output(out):
 class Simulator:
     """Handles simulations."""
     def on_before_forward(self, sample):
-        """Apply transformations to conditions."""
+        """Apply transformations to conditions.
+
+        DEPRECATED: Use `transform_conditions` instead
+        """
         return sample
+
+    def transform_conditions(self, conditions):
+        return conditions
 
     @abstractmethod
     def forward(self, trace):
@@ -212,13 +218,22 @@ class Simulator:
         raise NotImplementedError
 
     def on_after_forward(self, sample):
-        """Apply transformation to generated samples."""
+        """Apply transformation to generated samples.
+
+        DEPRECATEDE: Use `transform_samples` instead
+        """
+        return sample
+
+    def transform_samples(self, sample):
+        """Apply transformation to generated samples.
+        """
         return sample
 
     def _run(self, targets = None, conditions = {}):
         conditions = conditions() if callable(conditions) else conditions
 
         conditions = self.on_before_forward(conditions)
+        conditions = self.transform_conditions(conditions)
         trace = Trace(targets, conditions)
         if not trace.covers_targets:
             self.forward(trace)
@@ -229,6 +244,7 @@ class Simulator:
         if targets is not None and not trace.covers_targets:
             raise ValueError("Missing simulation targets.")
         result = self.on_after_forward(dict(trace))
+        result = self.transform_samples(result)
 
         return result
     

@@ -11,10 +11,57 @@ from typing import (
 )
 import numpy as np
 import torch
+import pytorch_lightning as pl
 
 class Sample(dict):
     def __repr__(self):
         return "Sample("+super().__repr__()+")"
+    
+
+class SwyftDataModule(pl.LightningDataModule):
+    def __init__(self, samples, lengths = None, fractions = None,
+                 batch_size: int = 32, num_workers: int = 0, shuffle: bool = True):
+        super().__init__()
+        self.samples = samples
+        if lengths is not None and fractions is None:
+            self.lengths = lengths
+        elif lengths is None and fractions is not None:
+            self.lengths = self._get_lengths(fractions, len(samples))
+        else:
+            raise ValueError("Either lenghts or fraction must be set, but not both.")
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+        
+    
+    @staticmethod
+    def _get_lengths(fractions, N):
+        fractions = np.array(fractions)
+        fractions /= sum(fractions)
+        mu = N*fractions
+        n = np.floor(mu)
+        n[0] += N - sum(n)
+        return [int(v) for v in n]
+
+    def setup(self, stage: str):
+        dataset = self.samples.get_dataset()
+        splits = torch.utils.data.random_split(dataset, self.lengths)
+        self.dataset_train, self.dataset_val, self.dataset_test = splits
+
+    def train_dataloader(self):
+        dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size = self.batch_size,
+                shuffle = self.shuffle, num_workers = self.num_workers)
+        return dataloader
+
+    def val_dataloader(self):
+        dataloader = torch.utils.data.DataLoader(self.dataset_val, batch_size = self.batch_size,
+                shuffle = False, num_workers = self.num_workers)
+        return dataloader
+
+    def test_dataloader(self):
+        dataloader = torch.utils.data.DataLoader(self.dataset_test, batch_size = self.batch_size,
+                shuffle = False, num_workers = self.num_workers)
+        return dataloader
 
 
 class Samples(dict):
@@ -47,7 +94,8 @@ class Samples(dict):
         """
         return SamplesDataset(self, on_after_load_sample = on_after_load_sample)
     
-    def get_dataloader(self, batch_size = 1, shuffle = False, on_after_load_sample = None, repeat = None):
+    def get_dataloader(self, batch_size = 1, shuffle = False,
+            on_after_load_sample = None, repeat = None, num_workers = 0):
         """Generator function to directly generate a dataloader object.
 
         Args:
@@ -59,7 +107,8 @@ class Samples(dict):
         dataset = self.get_dataset(on_after_load_sample = on_after_load_sample)
         if repeat is not None:
             dataset = RepeatDatasetWrapper(dataset, repeat = repeat)
-        return torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = shuffle)
+        return torch.utils.data.DataLoader(dataset, batch_size = batch_size,
+                shuffle = shuffle, num_workers = num_workers)
     
     def to_numpy(self, single_precision = True):
         return to_numpy(self, single_precision = single_precision)
