@@ -12,6 +12,7 @@ from typing import (
 import numpy as np
 import torch
 import pytorch_lightning as pl
+import swyft
 
 class Sample(dict):
     def __repr__(self):
@@ -19,21 +20,20 @@ class Sample(dict):
     
 
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, samples, lengths = None, fractions = None,
-                 batch_size: int = 32, num_workers: int = 0, shuffle: bool = True):
+    def __init__(self, data, lengths = None, fractions = None,
+                 batch_size: int = 32, num_workers: int = 0, shuffle: bool = False):
         super().__init__()
-        self.samples = samples
+        self.data = data
         if lengths is not None and fractions is None:
             self.lengths = lengths
         elif lengths is None and fractions is not None:
-            self.lengths = self._get_lengths(fractions, len(samples))
+            self.lengths = self._get_lengths(fractions, len(data))
         else:
             raise ValueError("Either lenghts or fraction must be set, but not both.")
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle = shuffle
         
-    
     @staticmethod
     def _get_lengths(fractions, N):
         fractions = np.array(fractions)
@@ -44,9 +44,19 @@ class SwyftDataModule(pl.LightningDataModule):
         return [int(v) for v in n]
 
     def setup(self, stage: str):
-        dataset = self.samples.get_dataset()
-        splits = torch.utils.data.random_split(dataset, self.lengths)
-        self.dataset_train, self.dataset_val, self.dataset_test = splits
+        if isinstance(self.data, Samples):
+            dataset = self.data.get_dataset()
+            splits = torch.utils.data.random_split(dataset, self.lengths)
+            self.dataset_train, self.dataset_val, self.dataset_test = splits
+        elif isinstance(self.data, swyft.ZarrStore):
+            idxr1 = (0, self.lengths[1])
+            idxr2 = (self.lengths[1], self.lengths[1]+self.lengths[2])
+            idxr3 = (self.lengths[1]+self.lengths[2], len(self.data))
+            self.dataset_train = self.data.get_dataset(idx_range = idxr1, on_after_load_sample = None)
+            self.dataset_val = self.data.get_dataset(idx_range = idxr2, on_after_load_sample = None)
+            self.dataset_test = self.data.get_dataset(idx_range = idxr3, on_after_load_sample = None)
+        else:
+            raise ValueError
 
     def train_dataloader(self):
         dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size = self.batch_size,
