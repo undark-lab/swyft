@@ -222,8 +222,12 @@ html_theme = "sphinx_rtd_theme"
 # documentation.
 #
 html_theme_options = {
-    "titles_only": True,
+    "titles_only": False,
+    "logo_only": False,
+    "style_nav_header_background": '#595959',
 }
+
+html_logo = "_static/img/swyft_logo_wide.png"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
