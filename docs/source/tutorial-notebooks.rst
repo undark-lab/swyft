@@ -1,7 +1,10 @@
-Tutorial notebooks
-==================
+Tutorials
+=========
 
-You may find the tutorial notebooks here.
+Welcome!  You can find here a collection of tutorials that introduce the basic
+functionalites of Swyft.  If anything is unclear, don't hesistate to ask
+questions `here <https://github.com/undark-lab/swyft/discussions>`_.
+
 
 .. toctree::
    :caption: Notebooks:

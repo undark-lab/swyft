@@ -12,7 +12,6 @@
    swyft
    install
    tutorial-notebooks
-   videos
    autodoc
    contributing-link
    citation
