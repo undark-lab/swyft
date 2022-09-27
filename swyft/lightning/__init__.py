@@ -7,6 +7,7 @@ from swyft.lightning.samples import *
 
 __all__ = [
     "Simulator",
+    "get_pdf",
     "SwyftModule",
     "SwyftTrainer",
     "PosteriorMassSamples",

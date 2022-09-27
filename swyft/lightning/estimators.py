@@ -68,7 +68,7 @@ class LogRatioEstimator_Ndim(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         z = self.ptrans(z)
         ratios = self.classifier(x, z)
-        w = LogRatioSamples(z, ratios, np.array(self.varnames), metadata = {"type": "MarginalMLP", "marginals": self.marginals})
+        w = LogRatioSamples(ratios, z, np.array(self.varnames), metadata = {"type": "MarginalMLP", "marginals": self.marginals})
         return w
     
 # TODO: Introduce RatioEstimatorDense
@@ -93,7 +93,7 @@ class RatioEstimatorMLPnd(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         z = self.ptrans(z)
         ratios = self.classifier(x, z)
-        w = LogRatioSamples(z, ratios, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
+        w = LogRatioSamples(ratios, z, metadata = {"type": "MarginalMLP", "marginals": self.marginals})
         return w
     
 # TODO: Deprecated class (reason: Change of name)
@@ -132,7 +132,7 @@ class RatioEstimatorMLP1d(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         zt = self.ptrans(z).detach()
         logratios = self.classifier(x, zt)
-        w = LogRatioSamples(z, logratios, self.varnames, metadata = {"type": "MLP1d"})
+        w = LogRatioSamples(logratios, z, self.varnames, metadata = {"type": "MLP1d"})
         return w
 
 
@@ -170,7 +170,7 @@ class LogRatioEstimator_1dim(torch.nn.Module):
         x, z = equalize_tensors(x, z)
         zt = self.ptrans(z).detach()
         logratios = self.classifier(x, zt)
-        w = LogRatioSamples(z.unsqueeze(-1), logratios, self.varnames, metadata = {"type": "MLP1d"})
+        w = LogRatioSamples(logratios, z.unsqueeze(-1), self.varnames, metadata = {"type": "MLP1d"})
         return w
 
 
@@ -217,7 +217,7 @@ class RatioEstimatorGaussian1d(torch.nn.Module):
         rho = self.xz_cov/self.x_var**0.5/self.z_var**0.5
         r = -0.5*torch.log(1-rho**2) + rho/(1-rho**2)*xb*zb - 0.5*rho**2/(1-rho**2)*(xb**2 + zb**2)
         #out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
-        out = LogRatioSamples(z, r, metadata = {"type": "Gaussian1d"})
+        out = LogRatioSamples(r, z, metadata = {"type": "Gaussian1d"})
         return out
 
 

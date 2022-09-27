@@ -10,6 +10,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    Any,
 )
 import numpy as np
 import torch
@@ -182,16 +183,16 @@ class SwyftTrainer(pl.Trainer):
             if isinstance(ratio_batches[0], dict):
                 keys = ratio_batches[0].keys()
                 d = {k: LogRatioSamples(
-                        torch.cat([r[k].params for r in ratio_batches]),
                         torch.cat([r[k].logratios for r in ratio_batches]),
+                        torch.cat([r[k].params for r in ratio_batches]),
                         ratio_batches[0][k].parnames
                         ) for k in keys if k[:4] != "aux_"
                     }
                 return SampleRatios(**d)
             elif isinstance(ratio_batches[0], list) or isinstance(ratio_batches[0], tuple):
                 d = [LogRatioSamples(
-                        torch.cat([r[i].params for r in ratio_batches]),
                         torch.cat([r[i].logratios for r in ratio_batches]),
+                        torch.cat([r[i].params for r in ratio_batches]),
                         ratio_batches[0][i].parnames
                         ) for i in range(len(ratio_batches[0]))
                         if hasattr(ratio_batches[0][i], 'logratios')  # Should we better check for Ratio class?
@@ -199,8 +200,8 @@ class SwyftTrainer(pl.Trainer):
                 return d
             else:
                 d = LogRatioSamples(
-                        torch.cat([r.params for r in ratio_batches]),
                         torch.cat([r.logratios for r in ratio_batches]),
+                        torch.cat([r.params for r in ratio_batches]),
                         ratio_batches[0].parnames
                         ) 
                 return d
@@ -288,18 +289,18 @@ class CoverageSamples:
 
 @dataclass
 class LogRatioSamples:
-    """Handles logratios and the corresponding parameter values.
+    r"""Dataclass for storing samples of estimated log-ratio values in Swyft.
     
-    A dictionary of Ratios is expected to be returned by ratio estimation networks.
-
     Args:
-        values: tensor of values for which the ratios were estimated, (nbatch, *shape_ratios, *shape_params)
-        ratios: tensor of estimated ratios, (nbatch, *shape_ratios)
+        logratios: Estimated log-ratios, :math:`(\text{minibatch}, *\text{logratios_shape})`
+        params: Corresponding parameter valuess, :math:`(\text{minibatch}, *\text{logratios_shape}, *\text{params_shape})`
+	parnames: Array of parameter names, :math:`(*\text{logratios_shape})`
+	metadata: Optional meta-data from inference network etc.
     """
-    params: torch.Tensor
     logratios: torch.Tensor
+    params: torch.Tensor
     parnames: np.array
-    metadata: dict = field(default_factory = dict)
+    metadata: Union[dict[str, Any], None] # = field(default_factory = dict)
 
     @property
     def ratios(self):
@@ -312,23 +313,25 @@ class LogRatioSamples:
         return self.params
     
     def __len__(self):
-        """Number of stored ratios."""
+        """Returns number of stored ratios (minibatch size)."""
         assert len(self.params) == len(self.logratios), "Inconsistent Ratios"
         return len(self.params)
 
     @property
     def weights(self):
+        print("WARNING: weights is deprecated.")
         return self._get_weights(normalize = True)
 
     @property
     def unnormalized_weights(self):
+        print("WARNING: unnormalized_weights is deprecated.")
         return self._get_weights(normalize = False)
     
-    def _get_weights(self, normalize = False):
+    def _get_weights(self, normalize: bool = False):
         """Calculate weights based on ratios.
 
         Args:
-            normalize: If true, normalize weights to sum to one.  If false, return weights = exp(ratios).
+            normalize: If true, normalize weights to sum to one.  If false, return weights = exp(logratios).
         """
         logratios = self.logratios
         if normalize:
@@ -350,7 +353,8 @@ class LogRatioSamples:
         Returns:
             Tensor with samples (n_samples, ..., n_param_dims)
         """
-        weights = self.weights
+        print("WARNING: sample method is deprecated.")
+        weights = self._get_weights(normalized = True)
         if not replacement and N > len(self):
             N = len(self)
         samples = weights_sample(N, self.params, weights, replacement = replacement)
@@ -435,7 +439,7 @@ def get_weighted_samples(loglike, *args):
         for i, pars in enumerate(l.parnames):
             if all(x in pars for x in args):
                 idx = [list(pars).index(x) for x in args]
-                return l.params[:,i, idx], l.weights[:,i]
+                return l.params[:,i, idx], l._get_weights[:,i]
     raise SwyftParameterError("Requested parameters not available:", *args)
 
 def calc_mass(r0, r):
@@ -528,11 +532,21 @@ def weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
             h = torch.tensor(gaussian_filter(h*1., smooth))
         return h, xy
 
-def get_pdf(loglike, *args, aux = None, bins = 50, smooth = 0):
-    z, w = get_weighted_samples(loglike, *args)
+def get_pdf(logratios, *args, aux = None, bins: int = 50, smooth: float = 0.):
+    """Generate binned PDF based on input 
+
+    Args:
+        logratios: Collection of LogRatioSamples objects.
+        *args: Parameter names
+        bins: Number of bins
+        smooth: Apply Gaussian smoothing
+
+    Returns:
+        np.array, np.array: Returns parameter grid and densities.
+    """
+    z, w = get_weighted_samples(logratios, *args)
     if aux is not None:
         z_aux, _ = get_weighted_samples(aux, *args)
     else:
         z_aux = None
     return pdf_from_weighted_samples(z, w, bins = bins, smooth = smooth, v_aux = z_aux)
-
