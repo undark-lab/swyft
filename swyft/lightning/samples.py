@@ -15,12 +15,27 @@ import pytorch_lightning as pl
 import swyft
 
 class Sample(dict):
+    """In Swyft, a 'sample' is a dictionary 
+    with string-type keys and tensor/array-type values."""
     def __repr__(self):
         return "Sample("+super().__repr__()+")"
     
 
 class SwyftDataModule(pl.LightningDataModule):
-    def __init__(self, data, lengths = None, fractions = None,
+    """DataModule to handle simulated data.
+
+    Args:
+        data: Simulation data
+        lenghts: List of number of samples used for [training, validation, testing].
+        fractions: Fraction of samples used for [training, validation, testing].
+        batch_size: Minibatch size.
+        num_workers: Number of workers for dataloader.
+        shuffle: Shuffle training data.
+
+    Returns:
+        pytorch_lightning.LightningDataModule
+    """
+    def __init__(self, data, lengths: Union[Sequence[int], None] = None, fractions: Union[Sequence[float], None] = None,
                  batch_size: int = 32, num_workers: int = 0, shuffle: bool = False):
         super().__init__()
         self.data = data
@@ -75,8 +90,12 @@ class SwyftDataModule(pl.LightningDataModule):
 
 
 class Samples(dict):
-    """Handles storing samples in memory.  Samples are stored as dictionary of arrays/tensors with num of samples as first dimension."""
+    """Handles memory-based samples in Swyft.  Samples are stored as dictionary
+    of arrays/tensors with number of samples as first dimension. This class
+    provides a few convenience methods for accessing the samples."""
+
     def __len__(self):
+        """Number of samples."""
         n = [len(v) for v in self.values()] 
         assert all([x == n[0] for x in n]), "Inconsistent lengths in Samples"
         return n[0]
@@ -106,7 +125,7 @@ class Samples(dict):
     
     def get_dataloader(self, batch_size = 1, shuffle = False,
             on_after_load_sample = None, repeat = None, num_workers = 0):
-        """Generator function to directly generate a dataloader object.
+        """(Deprecated) Generator function to directly generate a dataloader object.
 
         Args:
             batch_size: batch_size for dataloader
@@ -114,14 +133,15 @@ class Samples(dict):
             on_after_load_sample: see `get_dataset`
             repeat: If not None, Wrap dataset in RepeatDatasetWrapper
         """
+        print("WARNING: Deprecated")
         dataset = self.get_dataset(on_after_load_sample = on_after_load_sample)
         if repeat is not None:
             dataset = RepeatDatasetWrapper(dataset, repeat = repeat)
         return torch.utils.data.DataLoader(dataset, batch_size = batch_size,
                 shuffle = shuffle, num_workers = num_workers)
     
-    def to_numpy(self, single_precision = True):
-        return to_numpy(self, single_precision = single_precision)
+#    def to_numpy(self, single_precision = True):
+#        return to_numpy(self, single_precision = single_precision)
         
 
 class SamplesDataset(torch.utils.data.Dataset):

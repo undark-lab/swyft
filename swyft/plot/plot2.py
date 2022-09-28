@@ -442,11 +442,13 @@ if __name__ == "__main__":
 
 
 def plot_zz(coverage_samples, *args, ax = None):
+    """Make a zz plot."""
     cov = swyft.estimate_coverage(coverage_samples, *args)
     ax = ax if ax else plt.gca()
     swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
 
 def plot_pp(coverage_samples, *args, ax = None):
+    """Make a pp plot."""
     cov = swyft.estimate_coverage(coverage_samples, *args)
     alphas = 1-swyft.plot.mass.get_alpha(cov)
     ax = ax if ax else plt.gca()

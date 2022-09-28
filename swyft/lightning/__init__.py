@@ -6,6 +6,7 @@ from swyft.lightning.simulator import *
 from swyft.lightning.samples import *
 
 __all__ = [
+    "LogRatioSamples",
     "Simulator",
     "get_pdf",
     "get_weighted_samples",
@@ -13,7 +14,6 @@ __all__ = [
     "SwyftModule",
     "SwyftTrainer",
     "PosteriorMassSamples",
-    "LogRatioSamples",
     "Sample",
     "Samples",
     "SwyftDataModule",
@@ -21,5 +21,9 @@ __all__ = [
     "AdamOptimizerInit",
     "CoverageSamples",
     "estimate_coverage",
+    "equalize_tensors",
+    "LogRatioEstimator_Ndim",
+    "LogRatioEstimator_1dim",
+    "LogRatioEstimator_1dim_Gaussian",
 ]
 

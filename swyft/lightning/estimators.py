@@ -18,6 +18,7 @@ from swyft.lightning.core import *
 
 
 def equalize_tensors(a, b):
+    """Equalize tensors, for matching minibatch size of A and B."""
     n, m = len(a), len(b)
     if n == m:
         return a, b
@@ -42,6 +43,7 @@ def equalize_tensors(a, b):
 
 
 class LogRatioEstimator_Ndim(torch.nn.Module):
+    """Channeled MLPs for estimating multi-dimensional posteriors."""
     def __init__(self, num_features, marginals, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2):
         super().__init__()
         self.marginals = marginals
@@ -137,7 +139,12 @@ class RatioEstimatorMLP1d(torch.nn.Module):
 
 
 class LogRatioEstimator_1dim(torch.nn.Module):
-    def __init__(self, num_features, num_params, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
+    """Channeled MLPs for estimating one-dimensional posteriors.
+
+    Args:
+        num_features: Number of features
+    """
+    def __init__(self, num_features: int, num_params, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
         """
         Default module for estimating 1-dim marginal posteriors.
 
@@ -174,7 +181,8 @@ class LogRatioEstimator_1dim(torch.nn.Module):
         return w
 
 
-class RatioEstimatorGaussian1d(torch.nn.Module):
+class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
+    """Estimating posteriors assuming that they are Gaussian."""
     def __init__(self, momentum = 0.1):
         super().__init__()
         self.momentum = momentum        
