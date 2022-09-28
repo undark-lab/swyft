@@ -233,7 +233,7 @@ class SwyftTrainer(pl.Trainer):
             for i in range(n0):
                 ratio0 = p0.logratios[i]
                 value0 = p0.params[i]
-                m = calc_mass(ratio0, ratios[i])
+                m = _calc_mass(ratio0, ratios[i])
                 vs.append(value0)
                 ms.append(m)
             masses = torch.stack(ms, dim = 0)
@@ -300,65 +300,65 @@ class LogRatioSamples:
     logratios: torch.Tensor
     params: torch.Tensor
     parnames: np.array
-    metadata: Union[dict[str, Any], None] # = field(default_factory = dict)
+    metadata: dict[str, Any] = field(default_factory = dict)
 
-    @property
-    def ratios(self):
-        print("WARNING: 'ratios' deprecated")
-        return self.logratios
+#    @property
+#    def ratios(self):
+#        print("WARNING: 'ratios' deprecated")
+#        return self.logratios
 
-    @property
-    def values(self):
-        print("WARNING: 'values' deprecated")
-        return self.params
+#    @property
+#    def values(self):
+#        print("WARNING: 'values' deprecated")
+#        return self.params
     
     def __len__(self):
         """Returns number of stored ratios (minibatch size)."""
         assert len(self.params) == len(self.logratios), "Inconsistent Ratios"
         return len(self.params)
 
-    @property
-    def weights(self):
-        print("WARNING: weights is deprecated.")
-        return self._get_weights(normalize = True)
+#    @property
+#    def weights(self):
+#        print("WARNING: weights is deprecated.")
+#        return self._get_weights(normalize = True)
 
-    @property
-    def unnormalized_weights(self):
-        print("WARNING: unnormalized_weights is deprecated.")
-        return self._get_weights(normalize = False)
+#    @property
+#    def unnormalized_weights(self):
+#        print("WARNING: unnormalized_weights is deprecated.")
+#        return self._get_weights(normalize = False)
+
+#    def _get_weights(self, normalize: bool = False):
+#        """Calculate weights based on ratios.
+#
+#        Args:
+#            normalize: If true, normalize weights to sum to one.  If false, return weights = exp(logratios).
+#        """
+#        logratios = self.logratios
+#        if normalize:
+#            logratio_max = logratios.max(axis=0).values
+#            weights = torch.exp(logratios-logratio_max)
+#            weights_total = weights.sum(axis=0)
+#            weights = weights/weights_total*len(weights)
+#        else:
+#            weights = torch.exp(logratios)
+#        return weights
     
-    def _get_weights(self, normalize: bool = False):
-        """Calculate weights based on ratios.
-
-        Args:
-            normalize: If true, normalize weights to sum to one.  If false, return weights = exp(logratios).
-        """
-        logratios = self.logratios
-        if normalize:
-            logratio_max = logratios.max(axis=0).values
-            weights = torch.exp(logratios-logratio_max)
-            weights_total = weights.sum(axis=0)
-            weights = weights/weights_total*len(weights)
-        else:
-            weights = torch.exp(logratios)
-        return weights
-    
-    def sample(self, N, replacement = True):
-        """Subsample params based on normalized weights.
-
-        Args:
-            N: Number of samples to generate
-            replacement: Sample with replacement.  Default is true, which corresponds to generating samples from the posterior.
-
-        Returns:
-            Tensor with samples (n_samples, ..., n_param_dims)
-        """
-        print("WARNING: sample method is deprecated.")
-        weights = self._get_weights(normalized = True)
-        if not replacement and N > len(self):
-            N = len(self)
-        samples = weights_sample(N, self.params, weights, replacement = replacement)
-        return samples
+#    def sample(self, N, replacement = True):
+#        """Subsample params based on normalized weights.
+#
+#        Args:
+#            N: Number of samples to generate
+#            replacement: Sample with replacement.  Default is true, which corresponds to generating samples from the posterior.
+#
+#        Returns:
+#            Tensor with samples (n_samples, ..., n_param_dims)
+#        """
+#        print("WARNING: sample method is deprecated.")
+#        weights = self._get_weights(normalized = True)
+#        if not replacement and N > len(self):
+#            N = len(self)
+#        samples = weights_sample(N, self.params, weights, replacement = replacement)
+#        return samples
 
 
 # Utilitiy
@@ -424,44 +424,47 @@ def estimate_coverage(coverage_samples, *args, z_max = 3.5, bins = 50):
             "estimate_coverage", *args, z_max = z_max, bins = bins)
 
 
-def get_weighted_samples(loglike, *args):
+def get_weighted_samples(lrs_coll, params: Union[str, Sequence[str]]):
     """Returns weighted samples for particular parameter combination.
 
     Args:
-        *args: Parameter names
+        params: (List of) parameter names
 
     Returns:
-        (parameter tensor, weight tensor)
+        (torch.Tensor, torch.Tensor): Parameter and weight tensors
     """
-    if not(isinstance(loglike, list) or isinstance(loglike, tuple)):
-        loglike = [loglike]
-    for l in loglike:
+    params = params if isinstance(params, list) else [params]
+    if not(isinstance(lrs_coll, list) or isinstance(lrs_coll, tuple)):
+        lrs_coll = [lrs_coll]
+    for l in lrs_coll:
         for i, pars in enumerate(l.parnames):
-            if all(x in pars for x in args):
-                idx = [list(pars).index(x) for x in args]
-                return l.params[:,i, idx], l._get_weights[:,i]
-    raise SwyftParameterError("Requested parameters not available:", *args)
+            if all(x in pars for x in params):
+                idx = [list(pars).index(x) for x in params]
+                params = l.params[:,i, idx]
+                weights = _get_weights(l.logratios, normalize = True)[:,i]
+                return params, weights
+    raise SwyftParameterError("Requested parameters not available:", *params)
 
-def calc_mass(r0, r):
+def _calc_mass(r0, r):
     p = torch.exp(r - r.max(axis=0).values)
     p /= p.sum(axis=0)
     m = r > r0
     return (p*m).sum(axis=0)
 
-def weights_sample(N, values, weights, replacement = True):
-    """Weight-based sampling with or without replacement."""
-    sw = weights.shape
-    sv = values.shape
-    assert sw == sv[:len(sw)], "Overlapping left-handed weights and values shapes do not match: %s vs %s"%(str(sv), str(sw))
-    
-    w = weights.view(weights.shape[0], -1)
-    idx = torch.multinomial(w.T, N, replacement = replacement).T
-    si = tuple(1 for _ in range(len(sv)-len(sw)))
-    idx = idx.view(N, *sw[1:], *si)
-    idx = idx.expand(N, *sv[1:])
-    
-    samples = torch.gather(values, 0, idx)
-    return samples
+#def weights_sample(N, values, weights, replacement = True):
+#    """Weight-based sampling with or without replacement."""
+#    sw = weights.shape
+#    sv = values.shape
+#    assert sw == sv[:len(sw)], "Overlapping left-handed weights and values shapes do not match: %s vs %s"%(str(sv), str(sw))
+#    
+#    w = weights.view(weights.shape[0], -1)
+#    idx = torch.multinomial(w.T, N, replacement = replacement).T
+#    si = tuple(1 for _ in range(len(sv)-len(sw)))
+#    idx = idx.view(N, *sw[1:], *si)
+#    idx = idx.expand(N, *sv[1:])
+#    
+#    samples = torch.gather(values, 0, idx)
+#    return samples
 
 def best_from_yaml(filepath):
     """Get best model from tensorboard log. Useful for reloading trained networks.
@@ -485,7 +488,7 @@ def best_from_yaml(filepath):
             val_loss = v
     return path
 
-def pdf_from_weighted_samples(v, w, bins = 50, smooth = 0, v_aux = None):
+def _pdf_from_weighted_samples(v, w, bins = 50, smooth = 0, v_aux = None):
     """Take weighted samples and turn them into a pdf on a grid.
     
     Args:
@@ -532,21 +535,38 @@ def weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
             h = torch.tensor(gaussian_filter(h*1., smooth))
         return h, xy
 
-def get_pdf(logratios, *args, aux = None, bins: int = 50, smooth: float = 0.):
+def get_pdf(lrs_coll, params: Union[str, Sequence[str]], aux = None, bins: int = 50, smooth: float = 0.):
     """Generate binned PDF based on input 
 
     Args:
-        logratios: Collection of LogRatioSamples objects.
-        *args: Parameter names
+        lrs_coll: Collection of LogRatioSamples objects.
+        params: Parameter names
         bins: Number of bins
         smooth: Apply Gaussian smoothing
 
     Returns:
-        np.array, np.array: Returns parameter grid and densities.
+        np.array, np.array: Returns densities and parameter grid.
     """
-    z, w = get_weighted_samples(logratios, *args)
+    z, w = get_weighted_samples(lrs_coll, params)
     if aux is not None:
-        z_aux, _ = get_weighted_samples(aux, *args)
+        z_aux, _ = get_weighted_samples(aux, params)
     else:
         z_aux = None
-    return pdf_from_weighted_samples(z, w, bins = bins, smooth = smooth, v_aux = z_aux)
+    return _pdf_from_weighted_samples(z, w, bins = bins, smooth = smooth, v_aux = z_aux)
+
+
+def _get_weights(logratios, normalize: bool = False):
+    """Calculate weights based on ratios.
+
+    Args:
+        normalize: If true, normalize weights to sum to one.  If false, return weights = exp(logratios).
+    """
+    if normalize:
+        logratio_max = logratios.max(axis=0).values
+        weights = torch.exp(logratios-logratio_max)
+        weights_total = weights.sum(axis=0)
+        weights = weights/weights_total*len(weights)
+    else:
+        weights = torch.exp(logratios)
+    return weights
+    

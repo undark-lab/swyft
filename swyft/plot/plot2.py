@@ -40,7 +40,7 @@ def plot_2d(
 ):
     """Plot 2-dimensional posteriors.
     """
-    counts, xy = swyft.get_pdf(logratios, parname1, parname2, bins = bins, smooth = smooth)
+    counts, xy = swyft.get_pdf(logratios, [parname1, parname2], bins = bins, smooth = smooth)
     xbins = xy[:,0]
     ybins = xy[:,1]
 #    if not isinstance(logratios, list):

@@ -8,6 +8,8 @@ from swyft.lightning.samples import *
 __all__ = [
     "Simulator",
     "get_pdf",
+    "get_weighted_samples",
+    "best_from_yaml",
     "SwyftModule",
     "SwyftTrainer",
     "PosteriorMassSamples",
