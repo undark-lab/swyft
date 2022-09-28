@@ -19,5 +19,7 @@ __all__ = [
     "SwyftDataModule",
     "OptimizerInit",
     "AdamOptimizerInit",
+    "CoverageSamples",
+    "estimate_coverage",
 ]
 

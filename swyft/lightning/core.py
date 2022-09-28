@@ -266,7 +266,7 @@ class CoverageSamples:
                 return self.prob_masses[:,i]
         return None
 
-    def estimate_coverage(self, *args, z_max = 3.5, bins = 50):
+    def estimate_coverage(self, params, z_max = 3.5, bins = 50):
         """Estimate expected coverage of credible intervals.
 
         Args:
@@ -276,9 +276,9 @@ class CoverageSamples:
         Returns:
             Array (bins, 4): [nominal z, empirical z, low_err empirical z, hi_err empirical z]
         """
-        m = self._get_matching_masses(*args)
+        m = self._get_matching_masses(params)
         if m is None:
-            raise SwyftParameterError("Requested parameters not available:", *args)
+            raise SwyftParameterError("Requested parameters not available:", params)
         z0, z1, z2 = get_empirical_z_score(m, z_max, bins, interval_z_score = 1.0)
         z0 = np.tile(z0, (*z1.shape[:-1], 1))
         z0 = np.reshape(z0, (*z0.shape, 1))
@@ -419,9 +419,9 @@ def _collection_select(coll, err, fn, *args, **kwargs):
 
 # Convenience
 
-def estimate_coverage(coverage_samples, *args, z_max = 3.5, bins = 50):
-    return _collection_select(coverage_samples, "Requested parameters not available: %s"%(args,),
-            "estimate_coverage", *args, z_max = z_max, bins = bins)
+def estimate_coverage(coverage_samples, params, z_max = 3.5, bins = 50):
+    return _collection_select(coverage_samples, "Requested parameters not available: %s"%(params,),
+            "estimate_coverage", params, z_max = z_max, bins = bins)
 
 
 def get_weighted_samples(lrs_coll, params: Union[str, Sequence[str]]):
