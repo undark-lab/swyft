@@ -16,7 +16,6 @@ import swyft.networks
 
 from swyft.lightning.core import *
 
-
 def equalize_tensors(a, b):
     """Equalize tensors, for matching minibatch size of A and B."""
     n, m = len(a), len(b)
@@ -74,7 +73,7 @@ class LogRatioEstimator_Ndim(torch.nn.Module):
         return w
     
 # TODO: Introduce RatioEstimatorDense
-class RatioEstimatorMLPnd(torch.nn.Module):
+class _RatioEstimatorMLPnd(torch.nn.Module):
     def __init__(self, x_dim, marginals, dropout = 0.1, hidden_features = 64, num_blocks = 2):
         super().__init__()
         self.marginals = marginals
@@ -99,7 +98,7 @@ class RatioEstimatorMLPnd(torch.nn.Module):
         return w
     
 # TODO: Deprecated class (reason: Change of name)
-class RatioEstimatorMLP1d(torch.nn.Module):
+class _RatioEstimatorMLP1d(torch.nn.Module):
     def __init__(self, x_dim, z_dim, varname = None, varnames = None, dropout = 0.1, hidden_features = 64, num_blocks = 2, use_batch_norm = True, ptrans_online_z_score = True):
         """
         Default module for estimating 1-dim marginal posteriors.
