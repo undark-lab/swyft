@@ -36,9 +36,17 @@ import torchist
 
 
 class OptimizerInit:
-    def __init__(self, optim_constructor = torch.optim.Adam, optim_args = {"lr": 1e-3},
+    """Handles initializing optimizier and schedulers in Swyft.
+
+    Args:
+        optim_constructor: Constructor for torch optimizer.
+        optim_args: Optimizer arguments
+        scheduler_constructor: Constructor for learning rate scheduler
+        scheduler_args: Scheduler arguments
+    """
+    def __init__(self, optim_constructor = torch.optim.Adam, optim_args: Dict = {"lr": 1e-3},
                  scheduler_constructor = torch.optim.lr_scheduler.ReduceLROnPlateau,
-                scheduler_args = {"factor": 0.3, "patience": 5}):
+                scheduler_args: Dict = {"factor": 0.3, "patience": 5}):
         self.optim_constructor = optim_constructor
         self.optim_args = optim_args
         self.scheduler_constructor = scheduler_constructor
@@ -52,7 +60,16 @@ class OptimizerInit:
     
     
 class AdamOptimizerInit(OptimizerInit):
-    def __init__(self, lr = 1e-3, lrs_factor = 0.3, lrs_patience = 5):
+    """Base class: OptimizerInit
+
+    Optimizer initialization with Adam optimizer and ReduceLROnPlateau scheduler.
+    
+    Args:
+        lr: Initial learning rate
+        lrs_factor: Learning ratio schedule decay factor
+        lrs_patience: Learning ratio schedule decay patience
+    """
+    def __init__(self, lr: float = 1e-3, lrs_factor: float = 0.3, lrs_patience: int = 5):
         super().__init__(
             optim_constructor = torch.optim.Adam,
             optim_args = {"lr": lr},
@@ -62,32 +79,45 @@ class AdamOptimizerInit(OptimizerInit):
 
 
 class SwyftParameterError(Exception):
+    """General parameter error in Swyft."""
     pass
 
 
 class SwyftModule(pl.LightningModule):
+    r"""This is the central Swyft LightningModule for handling the training of logratio estimators.
+
+    Derived classes are supposed to overwrite the `forward` method in order to implement specific inference tasks.
+
+    The attribute `optimizer_init` points to the optimizer initializer (default is `AdamOptimizerInit`).
+
+    .. note::
+
+       The forward method takes as arguments the sample batches `A` and `B`,
+       which typically include all sample variables.  Joined samples correspond to
+       A=B, whereas marginal samples correspond to samples A != B.
+
+    Example usage:
+
+    .. code-block:: python
+
+       class MyNetwork(swyft.SwyftModule):
+           def __init__(self):
+               self.optimizer_init = AdamOptimizerInit(lr = 1e-4)
+               self.mlp = swyft.LogRatioEstimator_1dim(4, 4)
+
+           def forward(A, B);
+               x = A['x']
+               z = A['z']
+               logratios = self.mlp(x, z)
+               return logratios
+    """
     def __init__(self):
-        r"""
-        Handles training of logratio estimators.
-        """
         super().__init__()
         self.optimizer_init = AdamOptimizerInit()
-
-#    def configure_callbacks(self):
-#        callbacks = []
-#        if self._swyft_module_config["lr_monitor"]:
-#            callbacks.append(LearningRateMonitor())
-#        if self._swyft_module_config["early_stopping"]:
-#            early_stop = EarlyStopping(monitor="val_loss", min_delta=0.0,
-#                    patience=self._swyft_module_config["early_stopping_patience"],
-#                    verbose=False, mode="min")
-#            callbacks.append(early_stop)
-#        return callbacks
 
     def configure_optimizers(self):
         return self.optimizer_init(self.parameters())
  
-      
     def _logratios(self, x, z):
         out = self(x, z)
         if isinstance(out, dict):
@@ -153,13 +183,24 @@ class SwyftModule(pl.LightningModule):
 
 
 class SwyftTrainer(pl.Trainer):
-    """Training of SwyftModule, a thin layer around lightning.Trainer."""
-    def infer(self, model, A, B, return_sample_ratios = True, batch_size = 1024):
+    """Base class: pytorch_lightning.Trainer
+
+    It provides training functionality for swyft.SwyftModule. The functionality
+    is identical to `pytorch_lightning.Trainer`, see corresponding documentation
+    for more details.
+
+    Two additional methods are defined:
+
+    - `infer` for performing parameter inference tasks with a trained network
+    - `test_coverage` for performing coverage tests
+    """
+    def infer(self, model, A, B, return_sample_ratios: bool = True, batch_size: int = 1024):
         """Run through model in inference mode.
 
         Args:
             A: Sample, Samples, or dataloader for samples A.
             B: Sample, Samples, or dataloader for samples B.
+            return_sample_ratios: If true (default), return results as collated collection of `LogRatioSamples` objects.  Otherwise, return batches.
             batch_size: batch_size used for Samples provided.
 
         Returns:
@@ -503,9 +544,9 @@ def _pdf_from_weighted_samples(v, w, bins = 50, smooth = 0, v_aux = None):
     """
     ndim = v.shape[-1]
     if v_aux is None:
-        return weighted_smoothed_histogramdd(v, w, bins = bins, smooth = smooth)
+        return _weighted_smoothed_histogramdd(v, w, bins = bins, smooth = smooth)
     else:
-        h, xy = weighted_smoothed_histogramdd(v_aux, None, bins = bins, smooth = smooth)
+        h, xy = _weighted_smoothed_histogramdd(v_aux, None, bins = bins, smooth = smooth)
         if ndim == 2:
             X, Y = np.meshgrid(xy[:,0], xy[:,1])
             n = len(xy)
@@ -517,7 +558,7 @@ def _pdf_from_weighted_samples(v, w, bins = 50, smooth = 0, v_aux = None):
         else:
             raise KeyError("Not supported")
     
-def weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
+def _weighted_smoothed_histogramdd(v, w, bins = 50, smooth = 0):
     ndim = v.shape[-1]
     if ndim == 1:
         low, upp = v.min(), v.max()
