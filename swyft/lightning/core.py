@@ -238,7 +238,7 @@ class SwyftTrainer(pl.Trainer):
                 ms.append(m)
             masses = torch.stack(ms, dim = 0)
             params = torch.stack(vs, dim = 0)
-            out = CoverageSamples(params, masses, p0.parnames)
+            out = CoverageSamples(masses, params, p0.parnames)
             return out
 
         if isinstance(pred0, tuple):
@@ -255,9 +255,15 @@ class SwyftTrainer(pl.Trainer):
 
 @dataclass
 class CoverageSamples:
-    """Handles estimated probability masses from coverage samples."""
-    params: torch.Tensor
+    r"""Dataclass for storing probability masses samples from coverage tests.
+
+    Args:
+        prob_masses: Tensor of probability masses in the range [0, 1], :math:`(\text{minibatch}, *\text{logratios_shape})`
+        params: Corresponding parameter valuess, :math:`(\text{minibatch}, *\text{logratios_shape}, *\text{params_shape})`
+	parnames: Array of parameter names, :math:`(*\text{logratios_shape})`
+    """
     prob_masses: torch.Tensor
+    params: torch.Tensor
     parnames: np.array
 
     def _get_matching_masses(self, *args):
@@ -266,17 +272,18 @@ class CoverageSamples:
                 return self.prob_masses[:,i]
         return None
 
-    def estimate_coverage(self, params, z_max = 3.5, bins = 50):
-        """Estimate expected coverage of credible intervals.
+    def estimate_coverage(self, parnames: Union[str, Sequence[str]], z_max: float = 3.5, bins: int = 50):
+        """Estimate expected coverage of credible intervals on a grid of credibility values.
 
         Args:
-            z_max: upper limit (default 3.5)
+            parnames: Names of parameters
+            z_max: upper limit on the credibility level (default 3.5)
             bins (int): number of bins used when tabulating z-score
 
         Returns:
-            Array (bins, 4): [nominal z, empirical z, low_err empirical z, hi_err empirical z]
+            np.array (bins, 4): Array columns correspond to [nominal z, empirical z, low_err empirical z, hi_err empirical z]
         """
-        m = self._get_matching_masses(params)
+        m = self._get_matching_masses(parnames)
         if m is None:
             raise SwyftParameterError("Requested parameters not available:", params)
         z0, z1, z2 = get_empirical_z_score(m, z_max, bins, interval_z_score = 1.0)

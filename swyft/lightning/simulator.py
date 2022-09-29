@@ -458,7 +458,24 @@ class GraphPrefixContextManager:
         
 
 class Simulator:
-    """Handles simulations."""
+    r"""Base class for defining a simulator in Swyft.
+
+    This class provides a framework for the definition of the computational graph of the simulation model, and methods for its efficient execution. The computational graph is build in terms of labeled notes in the `build' method. This method is only ev
+
+
+    Example usage:
+    
+    .. code-block:: python
+       
+       class MySim(swyft.Simulator):
+           def __init__(self):
+               super().__init__()
+               self.transform_samples = swyft.to_numpy32
+       
+           def build(self, graph):
+               z = graph.node('z', lambda: np.random.rand(1))
+               x = graph.node('x', lambda z: z + np.random.randn(1)*0.1, z)
+    """
     def __init__(self):
         self.graph = None
 #        self.build_graph(self.graph)
@@ -466,11 +483,33 @@ class Simulator:
     def transform_conditions(self, conditions):
         return conditions
     
-    def build(self, graph):
+    def build(self, graph: Graph):
+        """To be overwritten in derived classes (see example usage above).
+
+        .. note::
+
+	   This method only runs *once* after Simulator instantiation, during the generation of the very first
+           sample. Afterwards, the graph object itself (and the
+           functions its nodes point to) is used for performing computations.
+
+        Args:
+            graph: Graph object instance, to be populated with nodes during method execution.
+
+        Returns:
+            None
+        """
         raise NotImplementedError("Missing!")
 
-    def transform_samples(self, sample):
-        """Apply transformation to generated sam💡ples.
+    def transform_samples(self, sample: Sample):
+        """Hook for applying transformation to generated samples.  Should be overwritten by user.
+
+        A typical use-case is to change the data-type of the samples to single precision (if applicable).  Swyft provides some convenience functions that can be used in this case. See above `to_numpy32' for an example.
+        
+        Args:
+            sample: Input sample
+        
+        Returns:
+            Sample: Transformed sample.
         """
         return sample
 
@@ -488,28 +527,33 @@ class Simulator:
         result = self.transform_samples(trace)
         return result
     
-    def get_shapes_and_dtypes(self, targets = None):
-        """Return shapes and data-types of sample variables.
+    def get_shapes_and_dtypes(self, targets: Optional[Sequence[str]] = None):
+        """This function run the simulator once and collects information about
+        shapes and data-types of the nodes of the computational graph.
 
         Args:
-            targets: Target sample variables to simulate.
+            targets: Optional list of target sample variables.  If None, the full simulation model is run.
 
         Return:
-            dictionary of shapes, dictionary of dtypes
+            (Dict, Dict): Dictionary of shapes and dictionary of dtypes
         """
         sample = self.sample(targets = targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-    def sample(self, N = None, targets = None, conditions = {}, exclude = []):
+    def sample(self, N: Optional[int] = None, targets: Optional[Sequence[str]] = None,
+        conditions: Union[Dict, Callable] = {}, exclude: Optional[Sequence[str]] = []):
         """Sample from the simulator.
 
         Args:
-            N: int, number of samples to generate
+            N: Number of samples to generate.  If None, a single sample without sample dimension is returned.
             targets: Optional list of target sample variables to generate. If `None`, all targets are simulated.
-            conditions: Dict or Callable, conditions sample variables.
-            exclude: List of parameters that are excluded from the returned samples.
+	    conditions: Dict or Callable, conditions on sample variables.  A
+                callable will be executed separately for each sample and is expected to return
+                a dictionary with conditions.
+	    exclude: Optional list of parameters that are excluded from the
+                returned samples.  Can be used to reduce memory consumption.
         """
         if N is None:
             return Sample(self._run(targets, conditions))
