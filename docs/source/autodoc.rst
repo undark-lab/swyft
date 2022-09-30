@@ -10,41 +10,32 @@ Core components
   :special-members: __len__, __getitem__
 
 
-Ratio estimators
-----------------
+Inference networks
+------------------
 
 .. automodule:: swyft.lightning.estimators
   :members:
   :special-members: __len__, __getitem__
 
 
-Simulator
----------
+Simulator definition
+--------------------
 
 .. automodule:: swyft.lightning.simulator
   :members:
   :special-members: __len__, __getitem__
 
 
-Samples
--------
+Simulation data
+---------------
 
-.. automodule:: swyft.lightning.samples
+.. automodule:: swyft.lightning.data
   :members:
   :special-members: __len__, __getitem__
 
 
-Datastore
----------
-
-.. automodule:: swyft.lightning.store
-  :members:
-  :special-members: __len__, __getitem__
-
-
-
-Truncation utilities
---------------------
+Truncation bounds
+-----------------
 
 .. automodule:: swyft.lightning.bounds
   :members:
