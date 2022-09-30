@@ -17,6 +17,7 @@ import pytorch_lightning as pl
 import zarr
 import fasteners
 import swyft
+from swyft.lightning.simulator import Samples, Sample
 
 
 

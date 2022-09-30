@@ -24,7 +24,8 @@ from pytorch_lightning.cli import instantiate_class
 
 import yaml
 
-from swyft.lightning.samples import *
+from swyft.lightning.data import *
+import swyft.lightning.simulator
 from swyft.plot.mass import get_empirical_z_score
 
 import scipy
@@ -370,8 +371,8 @@ def to_numpy(*args, single_precision=False):
             else:
                 x = x.numpy()
             return x
-    elif isinstance(x, Samples):
-        return Samples(
+    elif isinstance(x, swyft.lightning.simulator.Samples):
+        return swyft.lightning.simulator.Samples(
             {k: to_numpy(v, single_precision=single_precision) for k, v in x.items()}
         )
     elif isinstance(x, tuple):
@@ -396,8 +397,8 @@ def to_numpy32(*args):
 
 
 def to_torch(x):
-    if isinstance(x, Samples):
-        return Samples({k: to_torch(v) for k, v in x.items()})
+    if isinstance(x, swyft.lightning.simulator.Samples):
+        return swyft.lightning.simulator.Samples({k: to_torch(v) for k, v in x.items()})
     elif isinstance(x, dict):
         return {k: to_torch(v) for k, v in x.items()}
     else:

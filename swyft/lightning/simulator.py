@@ -13,7 +13,9 @@ from typing import (
 import numpy as np
 import torch
 from tqdm import tqdm
-from swyft.lightning.samples import *
+import swyft
+import swyft.lightning.data
+from swyft.lightning.data import *
 from swyft.lightning.utils import collate_output
 
 
@@ -62,7 +64,7 @@ class Samples(dict):
         Returns:
             SamplesDataset
         """
-        return SamplesDataset(self, on_after_load_sample=on_after_load_sample)
+        return swyft.lightning.data.SamplesDataset(self, on_after_load_sample=on_after_load_sample)
 
     def get_dataloader(
         self,
@@ -83,7 +85,7 @@ class Samples(dict):
         print("WARNING: Deprecated")
         dataset = self.get_dataset(on_after_load_sample=on_after_load_sample)
         if repeat is not None:
-            dataset = RepeatDatasetWrapper(dataset, repeat=repeat)
+            dataset = swyft.lightning.data.RepeatDatasetWrapper(dataset, repeat=repeat)
         return torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
         )

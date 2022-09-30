@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 import swyft
+import swyft.lightning.utils
 import scipy.stats
 
 @dataclass
@@ -57,7 +58,7 @@ def get_rect_bounds(logratios, threshold: float = 1e-6):
         lrs_coll: Collection of LogRatioSample objects
         threshold: Threshold value for likelihood ratios.
     """
-    logratios = swyft.lightning.core._collection_mask(
+    logratios = swyft.lightning.utils._collection_mask(
         logratios, lambda x: isinstance(x, swyft.lightning.core.LogRatioSamples)
     )
 
@@ -67,7 +68,7 @@ def get_rect_bounds(logratios, threshold: float = 1e-6):
         )
         return RectangleBounds(params=bounds, parnames=logratios.parnames)
 
-    return swyft.lightning.core._collection_map(logratios, lambda x: map_fn(x))
+    return swyft.lightning.utils._collection_map(logratios, lambda x: map_fn(x))
 
 
 class RectBoundSampler:

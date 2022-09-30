@@ -24,7 +24,7 @@ from pytorch_lightning.cli import instantiate_class
 
 import yaml
 
-from swyft.lightning.samples import *
+from swyft.lightning.data import *
 from swyft.plot.mass import get_empirical_z_score
 from swyft.lightning.utils import OptimizerInit, AdamOptimizerInit, SwyftParameterError
 

@@ -3,6 +3,7 @@ import pylab as plt
 from scipy.integrate import simps
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 import swyft
+import swyft.lightning.utils
 
 
 def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
@@ -39,7 +40,7 @@ def plot_2d(
     smooth=0.0,
 ):
     """Plot 2-dimensional posteriors."""
-    counts, xy = swyft.get_pdf(
+    counts, xy = swyft.lightning.utils.get_pdf(
         logratios, [parname1, parname2], bins=bins, smooth=smooth
     )
     xbins = xy[:, 0]
@@ -114,7 +115,7 @@ def plot_1d(
     #    if samples is None:
     #        return
 
-    v, zm = swyft.get_pdf(logratios, parname, bins=bins, smooth=smooth)
+    v, zm = swyft.lightning.utils.get_pdf(logratios, parname, bins=bins, smooth=smooth)
     zm = zm[:, 0]
 
     #    x = samples[:,0].numpy()
