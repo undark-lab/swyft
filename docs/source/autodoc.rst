@@ -34,6 +34,14 @@ Simulation data
   :special-members: __len__, __getitem__
 
 
+Utility functions
+-----------------
+
+.. automodule:: swyft.lightning.utils
+  :members:
+  :special-members: __len__, __getitem__
+
+
 Truncation bounds
 -----------------
 

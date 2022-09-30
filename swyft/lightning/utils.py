@@ -240,9 +240,10 @@ def get_weighted_samples(lrs_coll, params: Union[str, Sequence[str]]):
 #    return samples
 
 
-def estimate_coverage(coverage_samples, params, z_max=3.5, bins=50):
+def estimate_coverage(cs_coll, params, z_max=3.5, bins=50):
+    """Estimate coverage from collection of coverage_samples objects."""
     return _collection_select(
-        coverage_samples,
+        cs_coll,
         "Requested parameters not available: %s" % (params,),
         "estimate_coverage",
         params,
