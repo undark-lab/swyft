@@ -28,15 +28,15 @@ from pkg_resources import get_distribution
 import numpy
 
 autodoc_mock_imports = [
-     "numpy",
-     "pylab",
-     "tqdm",
-     "numcodecs",
-     "zarr",
-     "torch",
-     "pytorch_lightning",
-     "scipy",
-     "torchist",
+    "numpy",
+    "pylab",
+    "tqdm",
+    "numcodecs",
+    "zarr",
+    "torch",
+    "pytorch_lightning",
+    "scipy",
+    "torchist",
 ]
 
 
@@ -154,7 +154,9 @@ extensions = [
     "sphinx_rtd_theme",
 ]
 
-mathjax_path="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
+mathjax_path = (
+    "https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
+)
 
 # bibliography
 bibtex_bibfiles = ["refs.bib"]
@@ -213,11 +215,11 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-#html_theme = 'alabaster'
-#html_theme = 'classic'
-#html_theme = 'scrolls'
+# html_theme = 'alabaster'
+# html_theme = 'classic'
+# html_theme = 'scrolls'
 html_theme = "sphinx_rtd_theme"
-#html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+# html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -226,7 +228,7 @@ html_theme = "sphinx_rtd_theme"
 html_theme_options = {
     "titles_only": False,
     "logo_only": False,
-    "style_nav_header_background": '#595959',
+    "style_nav_header_background": "#595959",
 }
 
 html_logo = "_static/img/swyft_logo_wide.png"
@@ -241,7 +243,7 @@ html_static_path = ["nstatic"]
 #
 # This is required for the alabaster theme
 # refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
-#html_sidebars = {
+# html_sidebars = {
 #    "**": [
 #        "about.html",
 #        "navigation.html",
@@ -249,7 +251,7 @@ html_static_path = ["nstatic"]
 #        "searchbox.html",
 #        "donate.html",
 #    ]
-#}
+# }
 #
 
 # -- Options for HTMLHelp output ------------------------------------------

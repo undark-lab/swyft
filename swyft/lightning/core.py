@@ -33,7 +33,6 @@ from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import torchist
 
 
-
 #############
 # SwyftModule
 #############
@@ -229,7 +228,6 @@ class LogRatioSamples:
 #        return samples
 
 
-
 #########
 # Trainer
 #########
@@ -367,12 +365,12 @@ class SwyftTrainer(pl.Trainer):
 
         return out
 
+
 def _calc_mass(r0, r):
     p = torch.exp(r - r.max(axis=0).values)
     p /= p.sum(axis=0)
     m = r > r0
     return (p * m).sum(axis=0)
-
 
 
 #################
@@ -421,4 +419,3 @@ class CoverageSamples:
         z1 = z1.reshape(*z1.shape, 1)
         z = np.concatenate([z0, z1, z2], axis=-1)
         return z
-

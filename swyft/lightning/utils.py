@@ -224,8 +224,6 @@ def get_weighted_samples(lrs_coll, params: Union[str, Sequence[str]]):
     raise SwyftParameterError("Requested parameters not available:", *params)
 
 
-
-
 # def weights_sample(N, values, weights, replacement = True):
 #    """Weight-based sampling with or without replacement."""
 #    sw = weights.shape
@@ -279,7 +277,6 @@ def best_from_yaml(filepath):
             path = k
             val_loss = v
     return path
-
 
 
 ##################
@@ -344,8 +341,6 @@ def _collection_select(coll, err, fn, *args, **kwargs):
     raise SwyftParameterError(err)
 
 
-
-
 ##############
 # Transformers
 ##############
@@ -404,6 +399,7 @@ def to_torch(x):
     else:
         return torch.as_tensor(x)
 
+
 def collate_output(out):
     """Turn list of tensors/arrays-value dicts into dict of collated tensors or arrays"""
     keys = out[0].keys()
@@ -414,6 +410,3 @@ def collate_output(out):
         else:
             result[key] = np.stack([x[key] for x in out])
     return result
-
-
-

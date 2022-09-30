@@ -17,6 +17,7 @@ import swyft
 import swyft.lightning.utils
 import scipy.stats
 
+
 @dataclass
 class RectangleBounds:
     """Dataclass for storing rectangular bounds.
@@ -95,9 +96,6 @@ class RectBoundSampler:
                 loc=self._u_low, scale=self._u_high - self._u_low
             ).rvs()
             return self._distr.ppf(u)
-
-
-
 
 
 # @dataclass

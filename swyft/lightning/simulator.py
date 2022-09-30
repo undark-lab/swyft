@@ -64,7 +64,9 @@ class Samples(dict):
         Returns:
             SamplesDataset
         """
-        return swyft.lightning.data.SamplesDataset(self, on_after_load_sample=on_after_load_sample)
+        return swyft.lightning.data.SamplesDataset(
+            self, on_after_load_sample=on_after_load_sample
+        )
 
     def get_dataloader(
         self,
@@ -397,11 +399,7 @@ class SimulatorResampler:
         return sims
 
 
-
-
-
-
-#class Trace(dict):
+# class Trace(dict):
 #    """Defines the computational graph (DAG) and keeps track of simulation results."""
 #
 #    def __init__(self, targets=None, conditions={}):
@@ -462,7 +460,7 @@ class SimulatorResampler:
 #        return TracePrefixContextManager(self, prefix)
 #
 #
-#class TracePrefixContextManager:
+# class TracePrefixContextManager:
 #    def __init__(self, trace, prefix):
 #        self._trace = trace
 #        self._prefix = prefix
@@ -477,7 +475,7 @@ class SimulatorResampler:
 #        self._trace._prefix = self._prefix
 #
 #
-#class LazyValue:
+# class LazyValue:
 #    """Provides lazy evaluation functionality."""
 #
 #    def __init__(self, trace, this_name, fn_out_names, fn, *args, **kwargs):
@@ -534,7 +532,7 @@ class SimulatorResampler:
 #        return self._trace[self._this_name]
 
 
-#class SimulatorOld:
+# class SimulatorOld:
 #    """Handles simulations."""
 #
 #    def on_before_forward(self, sample):
@@ -646,4 +644,3 @@ class SimulatorResampler:
 #                yield self._run(targets=targets, conditions=conditions)
 #
 #        return iterator
-

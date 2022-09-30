@@ -20,7 +20,6 @@ import swyft
 from swyft.lightning.simulator import Samples, Sample
 
 
-
 ######################
 # Datasets and loaders
 ######################
@@ -149,17 +148,14 @@ class RepeatDatasetWrapper(torch.utils.data.Dataset):
         return self._dataset[i // self._repeat]
 
 
-
-
-
 ###########
 # ZarrStore
 ###########
 
 
 class ZarrStore:
-    r"""Storing training data in zarr archive.
-    """
+    r"""Storing training data in zarr archive."""
+
     def __init__(self, file_path, sync_path=None):
         if sync_path is None:
             sync_path = file_path + ".sync"
@@ -327,6 +323,7 @@ class ZarrStore:
         )
         return dl
 
+
 def _get_index_slices(idx):
     """Returns list of enumerated consecutive indices"""
     idx = np.array(idx)
@@ -394,9 +391,9 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
                 yield out
 
 
-#def get_ntrain_nvalid(
+# def get_ntrain_nvalid(
 #    validation_amount: Union[float, int], len_dataset: int
-#) -> Tuple[int, int]:
+# ) -> Tuple[int, int]:
 #    """Divide a dataset into a training and validation set.
 #
 #    Args:
@@ -433,7 +430,7 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
 
 
 ## TODO: Deprecate
-#class SwyftDataModule_deprecated(pl.LightningDataModule):
+# class SwyftDataModule_deprecated(pl.LightningDataModule):
 #    def __init__(
 #        self,
 #        on_after_load_sample=None,
