@@ -25,5 +25,5 @@ __all__ = [
     "LogRatioEstimator_Ndim",
     "LogRatioEstimator_1dim",
     "LogRatioEstimator_1dim_Gaussian",
-    "RectBoundSampler"
+    "RectBoundSampler",
 ]

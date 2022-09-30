@@ -19,11 +19,10 @@ import fasteners
 import swyft
 
 
-
-
 ###################
 # Zarr-based Stores
 ###################
+
 
 def get_ntrain_nvalid(
     validation_amount: Union[float, int], len_dataset: int
@@ -63,7 +62,6 @@ def get_ntrain_nvalid(
     return n_train, n_valid
 
 
-
 def get_index_slices(idx):
     """Returns list of enumerated consecutive indices"""
     idx = np.array(idx)
@@ -71,17 +69,27 @@ def get_index_slices(idx):
     residual_idx = idx
     slices = []
     while len(residual_idx) > 0:
-        mask = (residual_idx - residual_idx[0] - np.arange(len(residual_idx)) == 0)
-        slc1 = [residual_idx[mask][0], residual_idx[mask][-1]+1]
-        slc2 = [pointer, pointer+sum(mask)]
+        mask = residual_idx - residual_idx[0] - np.arange(len(residual_idx)) == 0
+        slc1 = [residual_idx[mask][0], residual_idx[mask][-1] + 1]
+        slc2 = [pointer, pointer + sum(mask)]
         pointer += sum(mask)
         slices.append([slc2, slc1])
         residual_idx = residual_idx[~mask]
     return slices
 
+
 # TODO: Deprecate
 class SwyftDataModule_deprecated(pl.LightningDataModule):
-    def __init__(self, on_after_load_sample = None, store = None, batch_size: int = 32, validation_percentage = 0.2, manual_seed = None, train_multiply = 10 , num_workers = 0):
+    def __init__(
+        self,
+        on_after_load_sample=None,
+        store=None,
+        batch_size: int = 32,
+        validation_percentage=0.2,
+        manual_seed=None,
+        train_multiply=10,
+        num_workers=0,
+    ):
         super().__init__()
         self.store = store
         self.on_after_load_sample = on_after_load_sample
@@ -89,68 +97,90 @@ class SwyftDataModule_deprecated(pl.LightningDataModule):
         self.num_workers = num_workers
         self.validation_percentage = validation_percentage
         self.train_multiply = train_multiply
-        print("Deprecation warning: Use dataloaders directly rathe than this data module for transparency.")
+        print(
+            "Deprecation warning: Use dataloaders directly rathe than this data module for transparency."
+        )
 
     def setup(self, stage):
-        self.dataset = SamplesDataset(self.store, on_after_load_sample= self.on_after_load_sample)#, x_keys = ['data'], z_keys=['z'])
-        n_train, n_valid = get_ntrain_nvalid(self.validation_percentage, len(self.dataset))
-        self.dataset_train, self.dataset_valid = random_split(self.dataset, [n_train, n_valid], generator=torch.Generator().manual_seed(42))
-        self.dataset_test = SamplesDataset(self.store)#, x_keys = ['data'], z_keys=['z'])
+        self.dataset = SamplesDataset(
+            self.store, on_after_load_sample=self.on_after_load_sample
+        )  # , x_keys = ['data'], z_keys=['z'])
+        n_train, n_valid = get_ntrain_nvalid(
+            self.validation_percentage, len(self.dataset)
+        )
+        self.dataset_train, self.dataset_valid = random_split(
+            self.dataset,
+            [n_train, n_valid],
+            generator=torch.Generator().manual_seed(42),
+        )
+        self.dataset_test = SamplesDataset(
+            self.store
+        )  # , x_keys = ['data'], z_keys=['z'])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers = self.num_workers)
+        return torch.utils.data.DataLoader(
+            self.dataset_train, batch_size=self.batch_size, num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_valid, batch_size=self.batch_size, num_workers = self.num_workers)
-    
+        return torch.utils.data.DataLoader(
+            self.dataset_valid, batch_size=self.batch_size, num_workers=self.num_workers
+        )
+
     # # TODO: Deprecate
     # def predict_dataloader(self):
     #     return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
-    
-    def test_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers = self.num_workers)
 
-    def samples(self, N, random = False):
-        dataloader = torch.utils.data.DataLoader(self.dataset_train, batch_size=N, num_workers = 0, shuffle = random)
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(
+            self.dataset_test, batch_size=self.batch_size, num_workers=self.num_workers
+        )
+
+    def samples(self, N, random=False):
+        dataloader = torch.utils.data.DataLoader(
+            self.dataset_train, batch_size=N, num_workers=0, shuffle=random
+        )
         examples = next(iter(dataloader))
         return Samples(examples)
 
 
 class ZarrStore:
-    def __init__(self, file_path, sync_path = None):
+    def __init__(self, file_path, sync_path=None):
         if sync_path is None:
             sync_path = file_path + ".sync"
         synchronizer = zarr.ProcessSynchronizer(sync_path) if sync_path else None
         self.store = zarr.DirectoryStore(file_path)
-        self.root = zarr.group(store = self.store, synchronizer = synchronizer)
-        self.lock = fasteners.InterProcessLock(file_path+".lock.file")
-            
-    def reset_length(self, N, clubber = False):
+        self.root = zarr.group(store=self.store, synchronizer=synchronizer)
+        self.lock = fasteners.InterProcessLock(file_path + ".lock.file")
+
+    def reset_length(self, N, clubber=False):
         """Resize store.  N >= current store length."""
         if N < len(self) and not clubber:
             raise ValueError(
                 """New length shorter than current store length.
                 You can use clubber = True if you know what your are doing."""
-                )
+            )
         for k in self.data.keys():
             shape = self.data[k].shape
             self.data[k].resize(N, *shape[1:])
-        self.root['meta/sim_status'].resize(N,)
-        
-    def init(self, N, chunk_size, shapes = None, dtypes = None):
+        self.root["meta/sim_status"].resize(
+            N,
+        )
+
+    def init(self, N, chunk_size, shapes=None, dtypes=None):
         if len(self) > 0:
             print("WARNING: Already initialized.")
             return self
         self._init_shapes(shapes, dtypes, N, chunk_size)
         return self
-        
+
     def __len__(self):
-        if 'data' not in self.root.keys():
+        if "data" not in self.root.keys():
             return 0
-        keys = self.root['data'].keys()
-        ns = [len(self.root['data'][k]) for k in keys]
+        keys = self.root["data"].keys()
+        ns = [len(self.root["data"][k]) for k in keys]
         N = ns[0]
-        assert all([n==N for n in ns])
+        assert all([n == N for n in ns])
         return N
 
     def keys(self):
@@ -165,51 +195,63 @@ class ZarrStore:
             return self.data[i]
         else:
             raise ValueError
-    
+
     # TODO: Remove consistency checks
-    def _init_shapes(self, shapes, dtypes, N, chunk_size):          
+    def _init_shapes(self, shapes, dtypes, N, chunk_size):
         """Initializes shapes, or checks consistency."""
         for k in shapes.keys():
             s = shapes[k]
             dtype = dtypes[k]
             try:
-                self.root.zeros('data/'+k, shape = (N, *s), chunks = (chunk_size, *s), dtype = dtype)
+                self.root.zeros(
+                    "data/" + k, shape=(N, *s), chunks=(chunk_size, *s), dtype=dtype
+                )
             except zarr.errors.ContainsArrayError:
-                assert self.root['data/'+k].shape == (N, *s), "Inconsistent array sizes"
-                assert self.root['data/'+k].chunks == (chunk_size, *s), "Inconsistent chunk sizes"
-                assert self.root['data/'+k].dtype == dtype, "Inconsistent dtype"
+                assert self.root["data/" + k].shape == (
+                    N,
+                    *s,
+                ), "Inconsistent array sizes"
+                assert self.root["data/" + k].chunks == (
+                    chunk_size,
+                    *s,
+                ), "Inconsistent chunk sizes"
+                assert self.root["data/" + k].dtype == dtype, "Inconsistent dtype"
         try:
-            self.root.zeros('meta/sim_status', shape = (N, ), chunks = (chunk_size, ), dtype = 'i4')
+            self.root.zeros(
+                "meta/sim_status", shape=(N,), chunks=(chunk_size,), dtype="i4"
+            )
         except zarr.errors.ContainsArrayError:
-            assert self.root['meta/sim_status'].shape == (N, ), "Inconsistent array sizes"
+            assert self.root["meta/sim_status"].shape == (
+                N,
+            ), "Inconsistent array sizes"
         try:
             assert self.chunk_size == chunk_size, "Inconsistent chunk size"
         except KeyError:
-            self.data.attrs['chunk_size'] = chunk_size
+            self.data.attrs["chunk_size"] = chunk_size
 
     @property
     def chunk_size(self):
-        return self.data.attrs['chunk_size']
+        return self.data.attrs["chunk_size"]
 
     @property
     def data(self):
-        return self.root['data']
-    
+        return self.root["data"]
+
     def numpy(self):
-        return {k: v[:] for k, v in self.root['data'].items()}
-    
+        return {k: v[:] for k, v in self.root["data"].items()}
+
     def get_sample_store(self):
         return Samples(self.numpy())
-    
+
     @property
     def meta(self):
-        return {k: v for k, v in self.root['meta'].items()}
-    
+        return {k: v for k, v in self.root["meta"].items()}
+
     @property
     def sims_required(self):
-        return sum(self.root['meta']['sim_status'][:] == 0)
+        return sum(self.root["meta"]["sim_status"][:] == 0)
 
-    def simulate(self, sampler, max_sims = None, batch_size = 10):
+    def simulate(self, sampler, max_sims=None, batch_size=10):
         total_sims = 0
         if isinstance(sampler, swyft.Simulator):
             sampler = sampler.sample
@@ -226,33 +268,55 @@ class ZarrStore:
             return num_sims
 
         samples = sample_fn(num_sims)
-        
+
         # Reserve slots
         with self.lock:
-            sim_status = self.root['meta']['sim_status']
-            data = self.root['data']
-            
-            idx = np.arange(len(sim_status))[sim_status[:]==0][:num_sims]
+            sim_status = self.root["meta"]["sim_status"]
+            data = self.root["data"]
+
+            idx = np.arange(len(sim_status))[sim_status[:] == 0][:num_sims]
             index_slices = get_index_slices(idx)
-            
+
             for i_slice, j_slice in index_slices:
-                sim_status[j_slice[0]:j_slice[1]] = 1
+                sim_status[j_slice[0] : j_slice[1]] = 1
                 for k, v in data.items():
-                    data[k][j_slice[0]:j_slice[1]] = samples[k][i_slice[0]:i_slice[1]]
-                
+                    data[k][j_slice[0] : j_slice[1]] = samples[k][
+                        i_slice[0] : i_slice[1]
+                    ]
+
         return num_sims
 
-    def get_dataset(self, idx_range = None, on_after_load_sample = None):
-        return ZarrStoreIterableDataset(self, idx_range = idx_range, on_after_load_sample = on_after_load_sample)
-    
-    def get_dataloader(self, num_workers = 0, batch_size = 1, pin_memory = False, drop_last = True, idx_range = None, on_after_load_sample = None):
-        ds = self.get_dataset(idx_range = idx_range, on_after_load_sample = on_after_load_sample)
-        dl = torch.utils.data.DataLoader(ds, num_workers = num_workers, batch_size = batch_size, drop_last = drop_last, pin_memory = pin_memory)
+    def get_dataset(self, idx_range=None, on_after_load_sample=None):
+        return ZarrStoreIterableDataset(
+            self, idx_range=idx_range, on_after_load_sample=on_after_load_sample
+        )
+
+    def get_dataloader(
+        self,
+        num_workers=0,
+        batch_size=1,
+        pin_memory=False,
+        drop_last=True,
+        idx_range=None,
+        on_after_load_sample=None,
+    ):
+        ds = self.get_dataset(
+            idx_range=idx_range, on_after_load_sample=on_after_load_sample
+        )
+        dl = torch.utils.data.DataLoader(
+            ds,
+            num_workers=num_workers,
+            batch_size=batch_size,
+            drop_last=drop_last,
+            pin_memory=pin_memory,
+        )
         return dl
 
 
 class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
-    def __init__(self, zarr_store : ZarrStore, idx_range = None, on_after_load_sample = None):
+    def __init__(
+        self, zarr_store: ZarrStore, idx_range=None, on_after_load_sample=None
+    ):
         self.zs = zarr_store
         if idx_range is None:
             self.n_samples = len(self.zs)
@@ -261,21 +325,24 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             self.offset = idx_range[0]
             self.n_samples = idx_range[1] - idx_range[0]
         self.chunk_size = self.zs.chunk_size
-        self.n_chunks = int(math.ceil(self.n_samples/float(self.chunk_size)))
+        self.n_chunks = int(math.ceil(self.n_samples / float(self.chunk_size)))
         self.on_after_load_sample = on_after_load_sample
-      
+
     @staticmethod
     def get_idx(n_chunks, worker_info):
         if worker_info is not None:
             num_workers = worker_info.num_workers
             worker_id = worker_info.id
-            n_chunks_per_worker = int(math.ceil(n_chunks/float(num_workers)))
-            idx = [worker_id*n_chunks_per_worker, min((worker_id+1)*n_chunks_per_worker, n_chunks)]
+            n_chunks_per_worker = int(math.ceil(n_chunks / float(num_workers)))
+            idx = [
+                worker_id * n_chunks_per_worker,
+                min((worker_id + 1) * n_chunks_per_worker, n_chunks),
+            ]
             idx = np.random.permutation(range(*idx))
         else:
             idx = np.random.permutation(n_chunks)
         return idx
-    
+
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
         idx = self.get_idx(self.n_chunks, worker_info)
@@ -284,13 +351,14 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             # Read in chunks
             data_chunk = {}
             for k in self.zs.data.keys():
-                data_chunk[k] = self.zs.data[k][offset+i0*self.chunk_size:offset+(i0+1)*self.chunk_size]
+                data_chunk[k] = self.zs.data[k][
+                    offset + i0 * self.chunk_size : offset + (i0 + 1) * self.chunk_size
+                ]
             n = len(data_chunk[k])
-                
+
             # Return separate samples
             for i in np.random.permutation(n):
                 out = {k: v[i] for k, v in data_chunk.items()}
                 if self.on_after_load_sample:
                     out = self.on_after_load_sample(out)
                 yield out
-

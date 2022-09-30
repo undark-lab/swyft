@@ -35,32 +35,33 @@ def plot_2d(
     ax=plt,
     bins=100,
     color="k",
-    cmap = 'gray_r',
-    smooth = 0.,
+    cmap="gray_r",
+    smooth=0.0,
 ):
-    """Plot 2-dimensional posteriors.
-    """
-    counts, xy = swyft.get_pdf(logratios, [parname1, parname2], bins = bins, smooth = smooth)
-    xbins = xy[:,0]
-    ybins = xy[:,1]
-#    if not isinstance(logratios, list):
-#        logratios = [logratios,]
-#
-#    samples = None
-#    for s in logratios:
-#        weighted_samples = s.get_matching_weighted_samples(parname1, parname2)
-#        if weighted_samples is not None:
-#            samples, weights = weighted_samples
-#    if samples is None:
-#        return
+    """Plot 2-dimensional posteriors."""
+    counts, xy = swyft.get_pdf(
+        logratios, [parname1, parname2], bins=bins, smooth=smooth
+    )
+    xbins = xy[:, 0]
+    ybins = xy[:, 1]
+    #    if not isinstance(logratios, list):
+    #        logratios = [logratios,]
+    #
+    #    samples = None
+    #    for s in logratios:
+    #        weighted_samples = s.get_matching_weighted_samples(parname1, parname2)
+    #        if weighted_samples is not None:
+    #            samples, weights = weighted_samples
+    #    if samples is None:
+    #        return
 
-#    # FIXME: use interpolation when grid_interpolate == True
-#    x = samples[:,0].numpy()
-#    y = samples[:,1].numpy()
-#    w = weights.numpy()
-#    counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap=cmap)
-#    if smooth is not None:
-#        counts = gaussian_filter(counts, smooth)
+    #    # FIXME: use interpolation when grid_interpolate == True
+    #    x = samples[:,0].numpy()
+    #    y = samples[:,1].numpy()
+    #    w = weights.numpy()
+    #    counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap=cmap)
+    #    if smooth is not None:
+    #        counts = gaussian_filter(counts, smooth)
 
     levels = sorted(get_HDI_thresholds(counts))
     ax.contour(
@@ -71,12 +72,11 @@ def plot_2d(
         colors=color,
     )
     ax.imshow(
-        counts.T,
-        extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
-        cmap = cmap
+        counts.T, extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()], cmap=cmap
     )
     ax.set_xlim([xbins.min(), xbins.max()])
     ax.set_ylim([ybins.min(), ybins.max()])
+
 
 #    xm = (xbins[:-1] + xbins[1:]) / 2
 #    ym = (ybins[:-1] + ybins[1:]) / 2
@@ -98,33 +98,32 @@ def plot_1d(
     bins=100,
     color="k",
     contours=True,
-    smooth=0.,
+    smooth=0.0,
 ):
-    """Plot 1-dimensional posteriors.
-    """
-#    samples, weights, = swyft.get_weighted_samples(logratios, parname)
+    """Plot 1-dimensional posteriors."""
+    #    samples, weights, = swyft.get_weighted_samples(logratios, parname)
 
-#    if not isinstance(logratios, list):
-#        logratios = [logratios,]
-#
-#    samples = None
-#    for s in logratios:
-#        weighted_samples = s.get_matching_weighted_samples(parname)
-#        if weighted_samples is not None:
-#            samples, weights = weighted_samples
-#    if samples is None:
-#        return
+    #    if not isinstance(logratios, list):
+    #        logratios = [logratios,]
+    #
+    #    samples = None
+    #    for s in logratios:
+    #        weighted_samples = s.get_matching_weighted_samples(parname)
+    #        if weighted_samples is not None:
+    #            samples, weights = weighted_samples
+    #    if samples is None:
+    #        return
 
-    v, zm = swyft.get_pdf(logratios, parname, bins = bins, smooth = smooth)
-    zm = zm[:,0]
+    v, zm = swyft.get_pdf(logratios, parname, bins=bins, smooth=smooth)
+    zm = zm[:, 0]
 
-#    x = samples[:,0].numpy()
-#    w = weights.numpy()
-#
-#    v, e = np.histogram(x, weights=w, bins=bins, density=True)
-#    zm = (e[1:] + e[:-1]) / 2
-#    if smooth is not None:
-#        v = gaussian_filter1d(v, smooth)
+    #    x = samples[:,0].numpy()
+    #    w = weights.numpy()
+    #
+    #    v, e = np.histogram(x, weights=w, bins=bins, density=True)
+    #    zm = (e[1:] + e[:-1]) / 2
+    #    if smooth is not None:
+    #        v = gaussian_filter1d(v, smooth)
 
     levels = sorted(get_HDI_thresholds(v))
     if contours:
@@ -132,6 +131,7 @@ def plot_1d(
     ax.plot(zm, v, color=color)
     ax.set_xlim([zm.min(), zm.max()])
     ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
+
 
 #    # Diagnostics
 #    mean = sum(w * x) / sum(w)
@@ -327,7 +327,7 @@ def corner(
     contours_1d: bool = True,
     fig=None,
     labeler=None,
-    smooth=0.,
+    smooth=0.0,
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -395,14 +395,20 @@ def corner(
             if j < i:
                 try:
                     ret = plot_2d(
-                        logratios, parnames[j], parnames[i], ax=ax, color=color, bins=bins, smooth = smooth
+                        logratios,
+                        parnames[j],
+                        parnames[i],
+                        ax=ax,
+                        color=color,
+                        bins=bins,
+                        smooth=smooth,
                     )
                 except swyft.SwyftParameterError:
                     pass
-#                if truth is not None:
-#                    ax.axvline(truth[parnames[j]], color="r")
-#                    ax.axhline(truth[parnames[i]], color="r")
-#                diagnostics[(pois[j], pois[i])] = ret
+            #                if truth is not None:
+            #                    ax.axvline(truth[parnames[j]], color="r")
+            #                    ax.axhline(truth[parnames[i]], color="r")
+            #                diagnostics[(pois[j], pois[i])] = ret
             if j == i:
                 try:
                     ret = plot_1d(
@@ -412,14 +418,14 @@ def corner(
                         color=color,
                         bins=bins,
                         contours=contours_1d,
-                        smooth = smooth
+                        smooth=smooth,
                     )
                 except swyft.SwyftParameterError:
                     pass
 
-#                if truth is not None:
-#                    ax.axvline(truth[pois[i]], ls=":", color="r")
-#                diagnostics[(pois[i],)] = ret
+    #                if truth is not None:
+    #                    ax.axvline(truth[pois[i]], ls=":", color="r")
+    #                diagnostics[(pois[i],)] = ret
     return fig
 
 
@@ -441,26 +447,27 @@ if __name__ == "__main__":
     pass
 
 
-def plot_zz(coverage_samples, *args, ax = None):
+def plot_zz(coverage_samples, *args, ax=None):
     """Make a zz plot."""
     cov = swyft.estimate_coverage(coverage_samples, *args)
     ax = ax if ax else plt.gca()
-    swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
+    swyft.plot.mass.plot_empirical_z_score(ax, cov[:, 0], cov[:, 1], cov[:, 2:])
 
-def plot_pp(coverage_samples, *args, ax = None):
+
+def plot_pp(coverage_samples, *args, ax=None):
     """Make a pp plot."""
     cov = swyft.estimate_coverage(coverage_samples, *args)
-    alphas = 1-swyft.plot.mass.get_alpha(cov)
+    alphas = 1 - swyft.plot.mass.get_alpha(cov)
     ax = ax if ax else plt.gca()
-    ax.fill_between(alphas[:,0], alphas[:,2], alphas[:,3], color = '0.8')
-    ax.plot(alphas[:,0], alphas[:,1], 'k')
-    plt.plot([0, 1], [0, 1], 'g--')
+    ax.fill_between(alphas[:, 0], alphas[:, 2], alphas[:, 3], color="0.8")
+    ax.plot(alphas[:, 0], alphas[:, 1], "k")
+    plt.plot([0, 1], [0, 1], "g--")
     plt.xlabel("Nominal credibility [$1-p$]")
     plt.ylabel("Empirical coverage [$1-p$]")
-    #swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
-    
-    
-#def plot_scores(mass):
+    # swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
+
+
+# def plot_scores(mass):
 #    s = mass.get_z_scores()
 #    for j, k in enumerate(s.keys()):
 #        for i in [0, 1, 2]:

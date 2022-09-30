@@ -3,10 +3,12 @@ import os
 import torch
 from . import SwyftModelForward, SampleStore
 
+
 class TorchStore:
     """
     A very simple store using torch tensors.
     """
+
     def __init__(self, store_path: str, simulator: SwyftModelForward):
         self.store_path = store_path
         self.simulator = simulator
@@ -68,7 +70,10 @@ class TorchStore:
 
                 torch.save(
                     SampleStore(
-                        {k: torch.cat((v, new_samples[k])) for k, v in all_samples.items()}
+                        {
+                            k: torch.cat((v, new_samples[k]))
+                            for k, v in all_samples.items()
+                        }
                     ),
                     self.store_path,
                 )

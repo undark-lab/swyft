@@ -37,7 +37,7 @@ class OnlineStandardizingLayer(nn.Module):
     def _parallel_algorithm(
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert x.shape[1:] == self.shape, "%s vs %s"%(x.shape[1:], self.shape)
+        assert x.shape[1:] == self.shape, "%s vs %s" % (x.shape[1:], self.shape)
         na = self.n.clone()
         nb = x.shape[0]
         nab = na + nb

@@ -20,11 +20,12 @@ from swyft.lightning.samples import *
 # Simulator
 ###########
 
-def to_numpy(*args, single_precision = False):
+
+def to_numpy(*args, single_precision=False):
     if len(args) > 1:
         result = []
         for arg in args:
-            r = to_numpy(arg, single_precision = single_precision)
+            r = to_numpy(arg, single_precision=single_precision)
             result.append(r)
         return tuple(result)
 
@@ -41,13 +42,15 @@ def to_numpy(*args, single_precision = False):
                 x = x.numpy()
             return x
     elif isinstance(x, Samples):
-        return Samples({k: to_numpy(v, single_precision = single_precision) for k, v in x.items()})
+        return Samples(
+            {k: to_numpy(v, single_precision=single_precision) for k, v in x.items()}
+        )
     elif isinstance(x, tuple):
-        return tuple(to_numpy(v, single_precision = single_precision) for v in x)
+        return tuple(to_numpy(v, single_precision=single_precision) for v in x)
     elif isinstance(x, list):
-        return [to_numpy(v, single_precision = single_precision) for v in x]
+        return [to_numpy(v, single_precision=single_precision) for v in x]
     elif isinstance(x, dict):
-        return {k: to_numpy(v, single_precision = single_precision) for k, v in x.items()}
+        return {k: to_numpy(v, single_precision=single_precision) for k, v in x.items()}
     elif isinstance(x, np.ndarray):
         if not single_precision:
             return x
@@ -58,9 +61,11 @@ def to_numpy(*args, single_precision = False):
     else:
         return x
 
+
 def to_numpy32(*args):
-    return to_numpy(*args, single_precision = True)
-    
+    return to_numpy(*args, single_precision=True)
+
+
 def to_torch(x):
     if isinstance(x, Samples):
         return Samples({k: to_torch(v) for k, v in x.items()})
@@ -68,12 +73,12 @@ def to_torch(x):
         return {k: to_torch(v) for k, v in x.items()}
     else:
         return torch.as_tensor(x)
-    
+
 
 class Trace(dict):
-    """Defines the computational graph (DAG) and keeps track of simulation results.
-    """
-    def __init__(self, targets = None, conditions = {}):
+    """Defines the computational graph (DAG) and keeps track of simulation results."""
+
+    def __init__(self, targets=None, conditions={}):
         """Instantiate Trace instante.
 
         Args:
@@ -86,7 +91,7 @@ class Trace(dict):
         self._prefix = ""
 
     def __repr__(self):
-        return "Trace("+super().__repr__()+")"
+        return "Trace(" + super().__repr__() + ")"
 
     def __setitem__(self, k, v):
         if k not in self.keys():
@@ -94,8 +99,9 @@ class Trace(dict):
 
     @property
     def covers_targets(self):
-        return (self._targets is not None 
-                and all([k in self.keys() for k in self._targets]))
+        return self._targets is not None and all(
+            [k in self.keys() for k in self._targets]
+        )
 
     def sample(self, names, fn, *args, **kwargs):
         """Register sampling function.
@@ -111,7 +117,9 @@ class Trace(dict):
         assert callable(fn), "Second argument must be a function."
         if isinstance(names, list):
             names = [self._prefix + n for n in names]
-            lazy_values = [LazyValue(self, k, names, fn, *args, **kwargs) for k in names]
+            lazy_values = [
+                LazyValue(self, k, names, fn, *args, **kwargs) for k in names
+            ]
             if self._targets is None or any([k in self._targets for k in names]):
                 lazy_values[0].evaluate()
             return tuple(lazy_values)
@@ -134,15 +142,18 @@ class TracePrefixContextManager:
         self._prefix = prefix
 
     def __enter__(self):
-        self._prefix, self._trace._prefix = self._trace._prefix, self._prefix + self._trace._prefix
+        self._prefix, self._trace._prefix = (
+            self._trace._prefix,
+            self._prefix + self._trace._prefix,
+        )
 
     def __exit__(self, exception_type, exception_value, traceback):
         self._trace._prefix = self._prefix
 
 
 class LazyValue:
-    """Provides lazy evaluation functionality.
-    """
+    """Provides lazy evaluation functionality."""
+
     def __init__(self, trace, this_name, fn_out_names, fn, *args, **kwargs):
         """Instantiates LazyValue object.
 
@@ -161,7 +172,11 @@ class LazyValue:
         self._kwargs = kwargs
 
     def __repr__(self):
-        value = self._trace[self._this_name] if self._this_name in self._trace.keys() else "None"
+        value = (
+            self._trace[self._this_name]
+            if self._this_name in self._trace.keys()
+            else "None"
+        )
         return f"LazyValue{self._this_name, value, self._fn, self._args, self._kwargs}"
 
     @property
@@ -176,8 +191,14 @@ class LazyValue:
             Value of `this_name`.
         """
         if self._this_name not in self._trace.keys():
-            args = (arg.evaluate() if isinstance(arg, LazyValue) else arg for arg in self._args)
-            kwargs = {k: v.evaluate() if isinstance(v, LazyValue) else v for k, v in self._kwargs.items()}
+            args = (
+                arg.evaluate() if isinstance(arg, LazyValue) else arg
+                for arg in self._args
+            )
+            kwargs = {
+                k: v.evaluate() if isinstance(v, LazyValue) else v
+                for k, v in self._kwargs.items()
+            }
             result = self._fn(*args, **kwargs)
             if not isinstance(self._fn_out_names, list):
                 self._trace[self._fn_out_names] = result
@@ -201,6 +222,7 @@ def collate_output(out):
 
 class SimulatorOld:
     """Handles simulations."""
+
     def on_before_forward(self, sample):
         """Apply transformations to conditions.
 
@@ -213,8 +235,7 @@ class SimulatorOld:
 
     @abstractmethod
     def forward(self, trace):
-        """Main function to overwrite.
-        """
+        """Main function to overwrite."""
         raise NotImplementedError
 
     def on_after_forward(self, sample):
@@ -225,11 +246,10 @@ class SimulatorOld:
         return sample
 
     def transform_samples(self, sample):
-        """Apply transformation to generated samples.
-        """
+        """Apply transformation to generated samples."""
         return sample
 
-    def _run(self, targets = None, conditions = {}):
+    def _run(self, targets=None, conditions={}):
         conditions = conditions() if callable(conditions) else conditions
 
         conditions = self.on_before_forward(conditions)
@@ -237,9 +257,9 @@ class SimulatorOld:
         trace = Trace(targets, conditions)
         if not trace.covers_targets:
             self.forward(trace)
-            #try:
+            # try:
             #    self.forward(trace)
-            #except CoversTargetException:
+            # except CoversTargetException:
             #    pass
         if targets is not None and not trace.covers_targets:
             raise ValueError("Missing simulation targets.")
@@ -247,8 +267,8 @@ class SimulatorOld:
         result = self.transform_samples(result)
 
         return result
-    
-    def get_shapes_and_dtypes(self, targets = None):
+
+    def get_shapes_and_dtypes(self, targets=None):
         """Return shapes and data-types of sample variables.
 
         Args:
@@ -257,7 +277,7 @@ class SimulatorOld:
         Return:
             dictionary of shapes, dictionary of dtypes
         """
-        sample = self.sample(targets = targets)
+        sample = self.sample(targets=targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
@@ -266,7 +286,7 @@ class SimulatorOld:
         result = self.forward(trace)
         return result
 
-    def sample(self, N = None, targets = None, conditions = {}, exclude = []):
+    def sample(self, N=None, targets=None, conditions={}, exclude=[]):
         """Sample from the simulator.
 
         Args:
@@ -299,22 +319,24 @@ class SimulatorOld:
         """
         return SimulatorResampler(self, targets)
 
-    def get_iterator(self, targets = None, conditions = {}):
+    def get_iterator(self, targets=None, conditions={}):
         """Generates an iterator. Useful for iterative sampling.
 
         Args:
             targets: Optional list of target sample variables.
             conditions: Dict or Callable.
         """
+
         def iterator():
             while True:
-                yield self._run(targets = targets, conditions = conditions)
+                yield self._run(targets=targets, conditions=conditions)
 
         return iterator
-    
-    
+
+
 class SimulatorResampler:
     """Handles rerunning part of the simulator. Typically used for on-the-fly calculations during training."""
+
     def __init__(self, simulator, targets):
         """Instantiates SimulatorResampler
 
@@ -324,7 +346,7 @@ class SimulatorResampler:
         """
         self._simulator = simulator
         self._targets = targets
-        
+
     def __call__(self, sample):
         """Resamples.
 
@@ -337,13 +359,13 @@ class SimulatorResampler:
         conditions = sample.copy()
         for k in self._targets:
             conditions.pop(k)
-        sims = self._simulator.sample(conditions = conditions, targets = self._targets)
+        sims = self._simulator.sample(conditions=conditions, targets=self._targets)
         return sims
 
 
 class Node:
-    """Provides lazy evaluation functionality.
-    """
+    """Provides lazy evaluation functionality."""
+
     def __init__(self, parname, mult_parnames, fn, *inputs):
         """Instantiates LazyValue object.
 
@@ -366,7 +388,10 @@ class Node:
         if self._parname in trace.keys():  # Nothing to do
             return trace[self._parname]
         else:
-            args = (arg.evaluate(trace) if isinstance(arg, Node) else arg for arg in self._inputs)
+            args = (
+                arg.evaluate(trace) if isinstance(arg, Node) else arg
+                for arg in self._inputs
+            )
             result = self._fn(*args)
             if self._mult_parnames is None:
                 trace[self._parname] = result
@@ -374,10 +399,11 @@ class Node:
                 for parname, value in zip(self._mult_parnames, result):
                     trace[parname] = value
             return trace[self._parname]
-        
+
+
 class Switch:
-    """Provides lazy evaluation functionality.
-    """
+    """Provides lazy evaluation functionality."""
+
     def __init__(self, parname, options, choice):
         self._parname = parname
         self._options = options
@@ -393,23 +419,24 @@ class Switch:
             trace[self._parname] = result
             return result
 
+
 class Graph:
-    """Defines the computational graph (DAG) and keeps track of simulation results.
-    """
+    """Defines the computational graph (DAG) and keeps track of simulation results."""
+
     def __init__(self):
         self.nodes = {}
         self._prefix = ""
 
     def __repr__(self):
-        return "Graph("+self.nodes.__repr__()+")"
+        return "Graph(" + self.nodes.__repr__() + ")"
 
     def __setitem__(self, key, value):
         if key not in self.nodes.keys():
             self.nodes.__setitem__(key, value)
-            
+
     def keys(self):
         return self.nodes.keys()
-            
+
     def __getitem__(self, key):
         return self.nodes[key]
 
@@ -436,13 +463,13 @@ class Graph:
             for i, parname in enumerate(parnames):
                 self.nodes[parname] = nodes[i]
             return nodes
-    
+
     def switch(self, parname, options, choice):
         self.nodes[parname] = Switch(parname, options, choice)
-        
+
     def prefix(self, prefix):
         return GraphPrefixContextManager(self, prefix)
-    
+
 
 class GraphPrefixContextManager:
     def __init__(self, graph, prefix):
@@ -450,12 +477,14 @@ class GraphPrefixContextManager:
         self._prefix = prefix
 
     def __enter__(self):
-        self._prefix, self._graph._prefix = self._graph._prefix, self._prefix + self._graph._prefix
+        self._prefix, self._graph._prefix = (
+            self._graph._prefix,
+            self._prefix + self._graph._prefix,
+        )
 
     def __exit__(self, exception_type, exception_value, traceback):
         self._graph._prefix = self._prefix
-        
-        
+
 
 class Simulator:
     r"""Base class for defining a simulator in Swyft.
@@ -464,31 +493,33 @@ class Simulator:
 
 
     Example usage:
-    
+
     .. code-block:: python
-       
+
        class MySim(swyft.Simulator):
            def __init__(self):
                super().__init__()
                self.transform_samples = swyft.to_numpy32
-       
+
            def build(self, graph):
                z = graph.node('z', lambda: np.random.rand(1))
                x = graph.node('x', lambda z: z + np.random.randn(1)*0.1, z)
     """
+
     def __init__(self):
         self.graph = None
-#        self.build_graph(self.graph)
-        
+
+    #        self.build_graph(self.graph)
+
     def transform_conditions(self, conditions):
         return conditions
-    
+
     def build(self, graph: Graph):
         """To be overwritten in derived classes (see example usage above).
 
         .. note::
 
-	   This method only runs *once* after Simulator instantiation, during the generation of the very first
+           This method only runs *once* after Simulator instantiation, during the generation of the very first
            sample. Afterwards, the graph object itself (and the
            functions its nodes point to) is used for performing computations.
 
@@ -504,16 +535,16 @@ class Simulator:
         """Hook for applying transformation to generated samples.  Should be overwritten by user.
 
         A typical use-case is to change the data-type of the samples to single precision (if applicable).  Swyft provides some convenience functions that can be used in this case. See above `to_numpy32' for an example.
-        
+
         Args:
             sample: Input sample
-        
+
         Returns:
             Sample: Transformed sample.
         """
         return sample
 
-    def _run(self, targets = None, conditions = {}):
+    def _run(self, targets=None, conditions={}):
         if self.graph is None:
             self.graph = Graph()
             self.build(self.graph)
@@ -526,7 +557,7 @@ class Simulator:
             self.graph[target].evaluate(trace)
         result = self.transform_samples(trace)
         return result
-    
+
     def get_shapes_and_dtypes(self, targets: Optional[Sequence[str]] = None):
         """This function run the simulator once and collects information about
         shapes and data-types of the nodes of the computational graph.
@@ -537,22 +568,27 @@ class Simulator:
         Return:
             (Dict, Dict): Dictionary of shapes and dictionary of dtypes
         """
-        sample = self.sample(targets = targets)
+        sample = self.sample(targets=targets)
         shapes = {k: tuple(v.shape) for k, v in sample.items()}
         dtypes = {k: v.dtype for k, v in sample.items()}
         return shapes, dtypes
 
-    def sample(self, N: Optional[int] = None, targets: Optional[Sequence[str]] = None,
-        conditions: Union[Dict, Callable] = {}, exclude: Optional[Sequence[str]] = []):
+    def sample(
+        self,
+        N: Optional[int] = None,
+        targets: Optional[Sequence[str]] = None,
+        conditions: Union[Dict, Callable] = {},
+        exclude: Optional[Sequence[str]] = [],
+    ):
         """Sample from the simulator.
 
         Args:
             N: Number of samples to generate.  If None, a single sample without sample dimension is returned.
             targets: Optional list of target sample variables to generate. If `None`, all targets are simulated.
-	    conditions: Dict or Callable, conditions on sample variables.  A
+            conditions: Dict or Callable, conditions on sample variables.  A
                 callable will be executed separately for each sample and is expected to return
                 a dictionary with conditions.
-	    exclude: Optional list of parameters that are excluded from the
+            exclude: Optional list of parameters that are excluded from the
                 returned samples.  Can be used to reduce memory consumption.
         """
         if N is None:
@@ -579,15 +615,16 @@ class Simulator:
         """
         return SimulatorResampler(self, targets)
 
-    def get_iterator(self, targets = None, conditions = {}):
+    def get_iterator(self, targets=None, conditions={}):
         """Generates an iterator. Useful for iterative sampling.
 
         Args:
             targets: Optional list of target sample variables.
             conditions: Dict or Callable.
         """
+
         def iterator():
             while True:
-                yield self._run(targets = targets, conditions = conditions)
+                yield self._run(targets=targets, conditions=conditions)
 
         return iterator

@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 from swyft.types import Array, LimitType, MarginalToArray, MarginalToDataFrame
 from swyft.utils.marginals import get_d_dim_marginal_indices, get_df_dict_from_marginals
-#from swyft.weightedmarginals import WeightedMarginalSamples
+
+# from swyft.weightedmarginals import WeightedMarginalSamples
 
 
 def split_corner_axes(axes: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -29,9 +30,9 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
         return None
 
 
-#def _marginaldict_weightedmarginaldict_to_dfdict(
+# def _marginaldict_weightedmarginaldict_to_dfdict(
 #    marginal: Union[WeightedMarginalSamples, MarginalToArray]
-#) -> MarginalToDataFrame:
+# ) -> MarginalToDataFrame:
 #    """convert marginal samples, marginal weighted samples, and marginal dataframes to marginal dataframes.
 #
 #    Args:
@@ -55,7 +56,7 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
 #        )
 
 
-#def hist1d(
+# def hist1d(
 #    marginal_1d: Union[WeightedMarginalSamples, MarginalToArray, MarginalToDataFrame],
 #    figsize: Optional[Tuple[float, float]] = None,
 #    bins: int = 100,
@@ -70,7 +71,7 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
 #    tickswhich: str = "both",
 #    labelrotation: float = 45.0,
 #    space_between_axes: float = 0.1,
-#) -> Tuple[Figure, np.ndarray]:
+# ) -> Tuple[Figure, np.ndarray]:
 #    """create a row of 1d histograms from marginals
 #
 #    Args:
@@ -168,7 +169,7 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
 #    return fig, axes
 #
 #
-#def corner(
+# def corner(
 #    marginal_1d: Union[WeightedMarginalSamples, MarginalToArray, MarginalToDataFrame],
 #    marginal_2d: Union[WeightedMarginalSamples, MarginalToArray, MarginalToDataFrame],
 #    figsize: Optional[Tuple[float, float]] = None,
@@ -185,7 +186,7 @@ def _set_weight_keyword(df: DataFrame) -> Optional[str]:
 #    tickswhich: str = "both",
 #    labelrotation: float = 45.0,
 #    space_between_axes: float = 0.1,
-#) -> Tuple[Figure, np.ndarray]:
+# ) -> Tuple[Figure, np.ndarray]:
 #    """create a corner plot from a dictionary of marginals
 #
 #    Args:
