@@ -19,132 +19,146 @@ import fasteners
 import swyft
 
 
-###################
-# Zarr-based Stores
-###################
+
+######################
+# Datasets and loaders
+######################
 
 
-def get_ntrain_nvalid(
-    validation_amount: Union[float, int], len_dataset: int
-) -> Tuple[int, int]:
-    """Divide a dataset into a training and validation set.
+class SwyftDataModule(pl.LightningDataModule):
+    """DataModule to handle simulated data.
 
     Args:
-        validation_amount: percentage or number of elements in the validation set
-        len_dataset: total length of the dataset
-
-    Raises:
-        TypeError: When the validation_amount is neither a float or int.
+        data: Simulation data
+        lenghts: List of number of samples used for [training, validation, testing].
+        fractions: Fraction of samples used for [training, validation, testing].
+        batch_size: Minibatch size.
+        num_workers: Number of workers for dataloader.
+        shuffle: Shuffle training data.
 
     Returns:
-        (n_train, n_valid)
+        pytorch_lightning.LightningDataModule
     """
-    assert validation_amount > 0
-    if isinstance(validation_amount, float):
-        percent_validation = validation_amount
-        percent_train = 1.0 - percent_validation
-        n_valid, n_train = split_length_by_percentage(
-            len_dataset, (percent_validation, percent_train)
-        )
-        if n_valid % 2 != 0:
-            n_valid += 1
-            n_train -= 1
-    elif isinstance(validation_amount, int):
-        n_valid = validation_amount
-        n_train = len_dataset - n_valid
-        assert n_train > 0
 
-        if n_valid % 2 != 0:
-            n_valid += 1
-            n_train -= 1
-    else:
-        raise TypeError("validation_amount must be int or float")
-    return n_train, n_valid
-
-
-def get_index_slices(idx):
-    """Returns list of enumerated consecutive indices"""
-    idx = np.array(idx)
-    pointer = 0
-    residual_idx = idx
-    slices = []
-    while len(residual_idx) > 0:
-        mask = residual_idx - residual_idx[0] - np.arange(len(residual_idx)) == 0
-        slc1 = [residual_idx[mask][0], residual_idx[mask][-1] + 1]
-        slc2 = [pointer, pointer + sum(mask)]
-        pointer += sum(mask)
-        slices.append([slc2, slc1])
-        residual_idx = residual_idx[~mask]
-    return slices
-
-
-# TODO: Deprecate
-class SwyftDataModule_deprecated(pl.LightningDataModule):
     def __init__(
         self,
-        on_after_load_sample=None,
-        store=None,
+        data,
+        lengths: Union[Sequence[int], None] = None,
+        fractions: Union[Sequence[float], None] = None,
         batch_size: int = 32,
-        validation_percentage=0.2,
-        manual_seed=None,
-        train_multiply=10,
-        num_workers=0,
+        num_workers: int = 0,
+        shuffle: bool = False,
     ):
         super().__init__()
-        self.store = store
-        self.on_after_load_sample = on_after_load_sample
+        self.data = data
+        if lengths is not None and fractions is None:
+            self.lengths = lengths
+        elif lengths is None and fractions is not None:
+            self.lengths = self._get_lengths(fractions, len(data))
+        else:
+            raise ValueError("Either lenghts or fraction must be set, but not both.")
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.validation_percentage = validation_percentage
-        self.train_multiply = train_multiply
-        print(
-            "Deprecation warning: Use dataloaders directly rathe than this data module for transparency."
-        )
+        self.shuffle = shuffle
 
-    def setup(self, stage):
-        self.dataset = SamplesDataset(
-            self.store, on_after_load_sample=self.on_after_load_sample
-        )  # , x_keys = ['data'], z_keys=['z'])
-        n_train, n_valid = get_ntrain_nvalid(
-            self.validation_percentage, len(self.dataset)
-        )
-        self.dataset_train, self.dataset_valid = random_split(
-            self.dataset,
-            [n_train, n_valid],
-            generator=torch.Generator().manual_seed(42),
-        )
-        self.dataset_test = SamplesDataset(
-            self.store
-        )  # , x_keys = ['data'], z_keys=['z'])
+    @staticmethod
+    def _get_lengths(fractions, N):
+        fractions = np.array(fractions)
+        fractions /= sum(fractions)
+        mu = N * fractions
+        n = np.floor(mu)
+        n[0] += N - sum(n)
+        return [int(v) for v in n]
+
+    def setup(self, stage: str):
+        if isinstance(self.data, Samples):
+            dataset = self.data.get_dataset()
+            splits = torch.utils.data.random_split(dataset, self.lengths)
+            self.dataset_train, self.dataset_val, self.dataset_test = splits
+        elif isinstance(self.data, swyft.ZarrStore):
+            idxr1 = (0, self.lengths[1])
+            idxr2 = (self.lengths[1], self.lengths[1] + self.lengths[2])
+            idxr3 = (self.lengths[1] + self.lengths[2], len(self.data))
+            self.dataset_train = self.data.get_dataset(
+                idx_range=idxr1, on_after_load_sample=None
+            )
+            self.dataset_val = self.data.get_dataset(
+                idx_range=idxr2, on_after_load_sample=None
+            )
+            self.dataset_test = self.data.get_dataset(
+                idx_range=idxr3, on_after_load_sample=None
+            )
+        else:
+            raise ValueError
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(
-            self.dataset_train, batch_size=self.batch_size, num_workers=self.num_workers
+        dataloader = torch.utils.data.DataLoader(
+            self.dataset_train,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
         )
+        return dataloader
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(
-            self.dataset_valid, batch_size=self.batch_size, num_workers=self.num_workers
+        dataloader = torch.utils.data.DataLoader(
+            self.dataset_val,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
         )
-
-    # # TODO: Deprecate
-    # def predict_dataloader(self):
-    #     return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
+        return dataloader
 
     def test_dataloader(self):
-        return torch.utils.data.DataLoader(
-            self.dataset_test, batch_size=self.batch_size, num_workers=self.num_workers
-        )
-
-    def samples(self, N, random=False):
         dataloader = torch.utils.data.DataLoader(
-            self.dataset_train, batch_size=N, num_workers=0, shuffle=random
+            self.dataset_test,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
         )
-        examples = next(iter(dataloader))
-        return Samples(examples)
+        return dataloader
+
+
+class SamplesDataset(torch.utils.data.Dataset):
+    """Simple torch dataset based on Samples."""
+
+    def __init__(self, sample_store, on_after_load_sample=None):
+        self._dataset = sample_store
+        self._on_after_load_sample = on_after_load_sample
+
+    def __len__(self):
+        return len(self._dataset[list(self._dataset.keys())[0]])
+
+    def __getitem__(self, i):
+        d = {k: v[i] for k, v in self._dataset.items()}
+        if self._on_after_load_sample is not None:
+            d = self._on_after_load_sample(d)
+        return d
+
+
+class RepeatDatasetWrapper(torch.utils.data.Dataset):
+    def __init__(self, dataset, repeat):
+        self._dataset = dataset
+        self._repeat = repeat
+
+    def __len__(self):
+        return len(self._dataset) * self._repeat
+
+    def __getitem__(self, i):
+        return self._dataset[i // self._repeat]
+
+
+
+
+
+###########
+# ZarrStore
+###########
 
 
 class ZarrStore:
+    r"""Storing training data in zarr archive.
+    """
     def __init__(self, file_path, sync_path=None):
         if sync_path is None:
             sync_path = file_path + ".sync"
@@ -275,7 +289,7 @@ class ZarrStore:
             data = self.root["data"]
 
             idx = np.arange(len(sim_status))[sim_status[:] == 0][:num_sims]
-            index_slices = get_index_slices(idx)
+            index_slices = _get_index_slices(idx)
 
             for i_slice, j_slice in index_slices:
                 sim_status[j_slice[0] : j_slice[1]] = 1
@@ -311,6 +325,21 @@ class ZarrStore:
             pin_memory=pin_memory,
         )
         return dl
+
+def _get_index_slices(idx):
+    """Returns list of enumerated consecutive indices"""
+    idx = np.array(idx)
+    pointer = 0
+    residual_idx = idx
+    slices = []
+    while len(residual_idx) > 0:
+        mask = residual_idx - residual_idx[0] - np.arange(len(residual_idx)) == 0
+        slc1 = [residual_idx[mask][0], residual_idx[mask][-1] + 1]
+        slc2 = [pointer, pointer + sum(mask)]
+        pointer += sum(mask)
+        slices.append([slc2, slc1])
+        residual_idx = residual_idx[~mask]
+    return slices
 
 
 class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
@@ -362,3 +391,107 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
                 if self.on_after_load_sample:
                     out = self.on_after_load_sample(out)
                 yield out
+
+
+#def get_ntrain_nvalid(
+#    validation_amount: Union[float, int], len_dataset: int
+#) -> Tuple[int, int]:
+#    """Divide a dataset into a training and validation set.
+#
+#    Args:
+#        validation_amount: percentage or number of elements in the validation set
+#        len_dataset: total length of the dataset
+#
+#    Raises:
+#        TypeError: When the validation_amount is neither a float or int.
+#
+#    Returns:
+#        (n_train, n_valid)
+#    """
+#    assert validation_amount > 0
+#    if isinstance(validation_amount, float):
+#        percent_validation = validation_amount
+#        percent_train = 1.0 - percent_validation
+#        n_valid, n_train = split_length_by_percentage(
+#            len_dataset, (percent_validation, percent_train)
+#        )
+#        if n_valid % 2 != 0:
+#            n_valid += 1
+#            n_train -= 1
+#    elif isinstance(validation_amount, int):
+#        n_valid = validation_amount
+#        n_train = len_dataset - n_valid
+#        assert n_train > 0
+#
+#        if n_valid % 2 != 0:
+#            n_valid += 1
+#            n_train -= 1
+#    else:
+#        raise TypeError("validation_amount must be int or float")
+#    return n_train, n_valid
+
+
+## TODO: Deprecate
+#class SwyftDataModule_deprecated(pl.LightningDataModule):
+#    def __init__(
+#        self,
+#        on_after_load_sample=None,
+#        store=None,
+#        batch_size: int = 32,
+#        validation_percentage=0.2,
+#        manual_seed=None,
+#        train_multiply=10,
+#        num_workers=0,
+#    ):
+#        super().__init__()
+#        self.store = store
+#        self.on_after_load_sample = on_after_load_sample
+#        self.batch_size = batch_size
+#        self.num_workers = num_workers
+#        self.validation_percentage = validation_percentage
+#        self.train_multiply = train_multiply
+#        print(
+#            "Deprecation warning: Use dataloaders directly rathe than this data module for transparency."
+#        )
+#
+#    def setup(self, stage):
+#        self.dataset = SamplesDataset(
+#            self.store, on_after_load_sample=self.on_after_load_sample
+#        )  # , x_keys = ['data'], z_keys=['z'])
+#        n_train, n_valid = get_ntrain_nvalid(
+#            self.validation_percentage, len(self.dataset)
+#        )
+#        self.dataset_train, self.dataset_valid = random_split(
+#            self.dataset,
+#            [n_train, n_valid],
+#            generator=torch.Generator().manual_seed(42),
+#        )
+#        self.dataset_test = SamplesDataset(
+#            self.store
+#        )  # , x_keys = ['data'], z_keys=['z'])
+#
+#    def train_dataloader(self):
+#        return torch.utils.data.DataLoader(
+#            self.dataset_train, batch_size=self.batch_size, num_workers=self.num_workers
+#        )
+#
+#    def val_dataloader(self):
+#        return torch.utils.data.DataLoader(
+#            self.dataset_valid, batch_size=self.batch_size, num_workers=self.num_workers
+#        )
+#
+#    # # TODO: Deprecate
+#    # def predict_dataloader(self):
+#    #     return torch.utils.data.DataLoader(self.dataset, batch_size=self.batch_size, num_workers = self.num_workers)
+#
+#    def test_dataloader(self):
+#        return torch.utils.data.DataLoader(
+#            self.dataset_test, batch_size=self.batch_size, num_workers=self.num_workers
+#        )
+#
+#    def samples(self, N, random=False):
+#        dataloader = torch.utils.data.DataLoader(
+#            self.dataset_train, batch_size=N, num_workers=0, shuffle=random
+#        )
+#        examples = next(iter(dataloader))
+#        return Samples(examples)

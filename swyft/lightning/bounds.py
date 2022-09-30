@@ -16,38 +16,6 @@ import torch
 import swyft
 import scipy.stats
 
-# @dataclass
-# class MeanStd:
-#    """Store mean and standard deviation"""
-#    mean: torch.Tensor
-#    std: torch.Tensor
-#
-#    def from_samples(samples, weights = None):
-#        """
-#        Estimate mean and std deviation of samples by averaging over first dimension.
-#        Supports weights>=0 with weights.shape = samples.shape
-#        """
-#        if weights is None:
-#            weights = torch.ones_like(samples)
-#        mean = (samples*weights).sum(axis=0)/weights.sum(axis=0)
-#        res = samples - mean
-#        var = (res*res*weights).sum(axis=0)/weights.sum(axis=0)
-#        return MeanStd(mean = mean, std = var**0.5)
-
-# def get_1d_rect_bounds(samples, th = 1e-6):
-#    bounds = {}
-#    r = samples.logratios
-#    r = r - r.max(axis=0).values  # subtract peak
-#    p = samples.params
-#    all_max = p.max(dim=0).values
-#    all_min = p.min(dim=0).values
-#    constr_min = torch.where(r > np.log(th), p, all_max).min(dim=0).values
-#    constr_max = torch.where(r > np.log(th), p, all_min).max(dim=0).values
-#    #bound = torch.stack([constr_min, constr_max], dim = -1)
-#    bound = RectangleBound(constr_min, constr_max)
-#    return bound
-
-
 @dataclass
 class RectangleBounds:
     """Dataclass for storing rectangular bounds.
@@ -126,3 +94,38 @@ class RectBoundSampler:
                 loc=self._u_low, scale=self._u_high - self._u_low
             ).rvs()
             return self._distr.ppf(u)
+
+
+
+
+
+# @dataclass
+# class MeanStd:
+#    """Store mean and standard deviation"""
+#    mean: torch.Tensor
+#    std: torch.Tensor
+#
+#    def from_samples(samples, weights = None):
+#        """
+#        Estimate mean and std deviation of samples by averaging over first dimension.
+#        Supports weights>=0 with weights.shape = samples.shape
+#        """
+#        if weights is None:
+#            weights = torch.ones_like(samples)
+#        mean = (samples*weights).sum(axis=0)/weights.sum(axis=0)
+#        res = samples - mean
+#        var = (res*res*weights).sum(axis=0)/weights.sum(axis=0)
+#        return MeanStd(mean = mean, std = var**0.5)
+
+# def get_1d_rect_bounds(samples, th = 1e-6):
+#    bounds = {}
+#    r = samples.logratios
+#    r = r - r.max(axis=0).values  # subtract peak
+#    p = samples.params
+#    all_max = p.max(dim=0).values
+#    all_min = p.min(dim=0).values
+#    constr_min = torch.where(r > np.log(th), p, all_max).min(dim=0).values
+#    constr_max = torch.where(r > np.log(th), p, all_min).max(dim=0).values
+#    #bound = torch.stack([constr_min, constr_max], dim = -1)
+#    bound = RectangleBound(constr_min, constr_max)
+#    return bound
