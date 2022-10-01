@@ -23,13 +23,12 @@ class RectangleBounds:
     """Dataclass for storing rectangular bounds.
 
     Args:
-        params: Bounds
+        bounds: Bounds
         parnames: Parameter names
     """
 
-    params: torch.Tensor
+    bounds: torch.Tensor
     parnames: np.array
-
 
 def _rect_bounds_from_tensors(
     params: torch.Tensor, logratios: torch.Tensor, threshold=1e-6
@@ -67,7 +66,7 @@ def get_rect_bounds(logratios, threshold: float = 1e-6):
         bounds = _rect_bounds_from_tensors(
             logratios.params, logratios.logratios, threshold=threshold
         )
-        return RectangleBounds(params=bounds, parnames=logratios.parnames)
+        return RectangleBounds(bounds=bounds, parnames=logratios.parnames)
 
     return swyft.lightning.utils._collection_map(logratios, lambda x: map_fn(x))
 
@@ -76,27 +75,64 @@ class RectBoundSampler:
     """Sampler for rectangular bound regions.
 
     Args:
-        distr: Description of probability distribution
+        distr: Description of probability distribution, or list of distributions
         bounds:
     """
 
     def __init__(self, distr, bounds=None):
+        if not isinstance(distr, list):
+            distr = [distr]
         self._distr = distr
-        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
-            s = distr.rvs()
-            self._u_low = s * 0.0 if bounds is None else distr.cdf(bounds[..., 0])
-            self._u_high = (
-                s * 0.0 + 1.0 if bounds is None else distr.cdf(bounds[..., 1])
-            )
-            self._distr = distr
+        self._u = []
+        i = 0
+        for d in distr:
+            if isinstance(d, scipy.stats._distn_infrastructure.rv_frozen):
+                s = np.atleast_1d(d.rvs())
+                j = len(s)
+                u_low = s * 0.0 if bounds is None else d.cdf(bounds[i:i+j, ..., 0])
+                u_high = (
+                    s * 0.0 + 1.0 if bounds is None else d.cdf(bounds[i:i+j, ..., 1])
+                )
+                self._u.append([u_low, u_high])
+                i += j
+            else:
+                raise TypeError
 
     def __call__(self):
-        if isinstance(self._distr, scipy.stats._distn_infrastructure.rv_frozen):
-            u = scipy.stats.uniform(
-                loc=self._u_low, scale=self._u_high - self._u_low
-            ).rvs()
-            return self._distr.ppf(u)
+        result = []
+        for i, d in enumerate(self._distr):
+            if isinstance(d, scipy.stats._distn_infrastructure.rv_frozen):
+#                u = scipy.stats.uniform(
+#                    loc=self._u[i][0], scale=self._u[i][1] - self._u[i][0]
+#                ).rvs()
+                u = np.random.rand(*self._u[i][0].shape)
+                u *= (self._u[i][1]-self._u[i][0])
+                u += self._u[i][0]
+                result.append(np.atleast_1d(d.ppf(u)))
+            else:
+                raise TypeError
+        return np.hstack(result)
 
+
+def collect_rect_bounds(lrs_coll, parname: str, parshape: tuple, threshold: float = 1e-6):
+    """Collect rectangular bounds for a parameter of interest.
+    
+    Args:
+        lrs_coll: Collection of LogRatioSamples
+        parname: Name of parameter vector/array of interest
+        parshape: Shape of parameter vector/array
+        threshold: Likelihood-ratio selection threshold
+    """
+    bounds = swyft.lightning.bounds.get_rect_bounds(lrs_coll, threshold = threshold)
+    box = []
+    for i in range(*parshape):
+        try:
+            i0, i1 = swyft.lightning.utils.param_select(bounds.parnames, [parname+"[%i]"%i])
+            b = bounds.bounds[i0][i1]
+        except swyft.lightning.utils.SwyftParameterError:
+            b = torch.tensor([[-np.inf, +np.inf]])
+        box.append(b)
+    return torch.cat(box)
 
 # @dataclass
 # class MeanStd:

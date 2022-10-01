@@ -285,6 +285,30 @@ def best_from_yaml(filepath):
 ##################
 
 
+def param_select(parnames, target_parnames, match_exactly: bool = False):
+    """Find indices of parameters of interest.
+    
+    The output can be used to for instance select parameter from the LogRatioSamples object like
+    
+    obj.params[idx1][idx2]
+    
+    Args:
+        parnames: :math:`(*logratios_shape, num_params)`
+        target_parnames: List of parameter names of interest
+        match_exactly: Only return exact matches (i.e. no partial matches)
+        
+    Returns:
+        tuple, list: idx1 (logratio index), idx2 (parameter indices)
+    """
+    assert len(parnames.shape) == 2, "`param_select` is only implemented for 1-dim logratios_shape"
+    for i, pars in enumerate(parnames):
+        if all(target_parname in pars for target_parname in target_parnames):
+            idx = [list(pars).index(tp) for tp in target_parnames]
+            if not match_exactly or len(idx) == len(target_parnames):
+                return (i,), idx
+    raise swyft.lightning.utils.SwyftParameterError("Requested parameters not found: %s"%target_parnames)
+
+
 def _collection_mask(coll, mask_fn):
     def mask(item):
         if isinstance(item, list) or isinstance(item, tuple) or isinstance(item, dict):
