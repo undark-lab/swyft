@@ -124,7 +124,7 @@ class Node:
             return trace[self._parname]
         else:
             args = (
-                arg.evaluate(trace) if isinstance(arg, Node) else arg
+                arg.evaluate(trace) if (isinstance(arg, Node) or isinstance(arg, Switch)) else arg
                 for arg in self._inputs
             )
             result = self._fn(*args)
@@ -200,7 +200,9 @@ class Graph:
             return nodes
 
     def switch(self, parname, options, choice):
-        self.nodes[parname] = Switch(parname, options, choice)
+        switch = Switch(parname, options, choice)
+        self.nodes[parname] = switch
+        return switch
 
     def prefix(self, prefix):
         return GraphPrefixContextManager(self, prefix)
