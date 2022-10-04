@@ -166,7 +166,7 @@ class LogRatioSamples:
     logratios: torch.Tensor
     params: torch.Tensor
     parnames: np.array
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata = field(default_factory=dict)  # dict[str, Any]
 
     #    @property
     #    def ratios(self):
