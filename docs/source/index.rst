@@ -6,12 +6,23 @@
 .. include:: ../../README.rst
 
 .. toctree::
-   :caption: Contents:
+   :caption: Basics:
    :maxdepth: 2
 
    swyft
    install
    tutorial-notebooks
+
+.. toctree::
+   :caption: Reference:
+   :maxdepth: 2
+
    autodoc
+   changelog
+
+.. toctree::
+   :caption: Extra information:
+   :maxdepth: 2
+
    contributing-link
    citation
