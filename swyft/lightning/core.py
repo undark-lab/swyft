@@ -286,7 +286,7 @@ class SwyftTrainer(pl.Trainer):
                     for k in keys
                     if k[:4] != "aux_"
                 }
-                return SampleRatios(**d)
+                return d
             elif isinstance(ratio_batches[0], list) or isinstance(
                 ratio_batches[0], tuple
             ):
