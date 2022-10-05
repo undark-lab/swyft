@@ -8,7 +8,7 @@ from scipy import stats
 
 from swyft.plot.histogram import split_corner_axes
 from swyft.types import Array, MarginalToArray
-from swyft.utils.marginals import get_d_dim_marginal_indices
+#from swyft.utils.marginals import get_d_dim_marginal_indices
 
 
 def get_z_score(alpha: Union[float, np.ndarray]) -> np.ndarray:

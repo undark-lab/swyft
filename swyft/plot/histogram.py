@@ -2,14 +2,14 @@ from typing import Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
+#import seaborn as sns
 from matplotlib.figure import Figure
-from pandas import DataFrame
+#from pandas import DataFrame
 from torch import Tensor
 from tqdm import tqdm
 
-from swyft.types import Array, LimitType, MarginalToArray, MarginalToDataFrame
-from swyft.utils.marginals import get_d_dim_marginal_indices, get_df_dict_from_marginals
+from swyft.types import Array, LimitType, MarginalToArray   #, MarginalToDataFrame
+#from swyft.utils.marginals import get_d_dim_marginal_indices, get_df_dict_from_marginals
 
 # from swyft.weightedmarginals import WeightedMarginalSamples
 
@@ -21,13 +21,13 @@ def split_corner_axes(axes: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndar
     return lower, diag, upper
 
 
-def _set_weight_keyword(df: DataFrame) -> Optional[str]:
-    if "weight" in df.columns:
-        return "weight"
-    elif "weights" in df.columns:
-        return "weights"
-    else:
-        return None
+#def _set_weight_keyword(df: DataFrame) -> Optional[str]:
+#    if "weight" in df.columns:
+#        return "weight"
+#    elif "weights" in df.columns:
+#        return "weights"
+#    else:
+#        return None
 
 
 # def _marginaldict_weightedmarginaldict_to_dfdict(
