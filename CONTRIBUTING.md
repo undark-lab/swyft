@@ -1,3 +1,5 @@
+(this document has not been updated to swyft-lightning yet)
+
 # Community Guidelines and Contributing
 [![codecov](https://codecov.io/gh/undark-lab/swyft/branch/master/graph/badge.svg?token=E253LRJWWE)](https://codecov.io/gh/undark-lab/swyft)
 [![Tests](https://github.com/undark-lab/swyft/actions/workflows/tests.yml/badge.svg)](https://github.com/undark-lab/swyft/actions)
