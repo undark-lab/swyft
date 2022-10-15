@@ -20,3 +20,4 @@ questions `here <https://github.com/undark-lab/swyft/discussions>`_.
    notebooks/0F*
    notebooks/0G*
    notebooks/0H*
+   notebooks/01*
