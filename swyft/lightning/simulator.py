@@ -76,7 +76,7 @@ class Samples(dict):
         repeat=None,
         num_workers=0,
     ):
-        """(Deprecated) Generator function to directly generate a dataloader object.
+        """Generator function to directly generate a dataloader object.
 
         Args:
             batch_size: batch_size for dataloader
@@ -84,7 +84,6 @@ class Samples(dict):
             on_after_load_sample: see `get_dataset`
             repeat: If not None, Wrap dataset in RepeatDatasetWrapper
         """
-        print("WARNING: Deprecated")
         dataset = self.get_dataset(on_after_load_sample=on_after_load_sample)
         if repeat is not None:
             dataset = swyft.lightning.data.RepeatDatasetWrapper(dataset, repeat=repeat)

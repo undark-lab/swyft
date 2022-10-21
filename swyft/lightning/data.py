@@ -48,6 +48,7 @@ class SwyftDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 0,
         shuffle: bool = False,
+        on_after_load_sample: Optional[callable] = None,
     ):
         super().__init__()
         self.data = data
@@ -60,6 +61,7 @@ class SwyftDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle = shuffle
+        self.on_after_load_sample = on_after_load_sample
 
     @staticmethod
     def _get_lengths(fractions, N):
@@ -72,7 +74,7 @@ class SwyftDataModule(pl.LightningDataModule):
 
     def setup(self, stage: str):
         if isinstance(self.data, Samples):
-            dataset = self.data.get_dataset()
+            dataset = self.data.get_dataset(on_after_load_sample = self.on_after_load_sample)
             splits = torch.utils.data.random_split(dataset, self.lengths)
             self.dataset_train, self.dataset_val, self.dataset_test = splits
         elif isinstance(self.data, swyft.ZarrStore):
@@ -80,7 +82,7 @@ class SwyftDataModule(pl.LightningDataModule):
             idxr2 = (self.lengths[1], self.lengths[1] + self.lengths[2])
             idxr3 = (self.lengths[1] + self.lengths[2], len(self.data))
             self.dataset_train = self.data.get_dataset(
-                idx_range=idxr1, on_after_load_sample=None
+                idx_range=idxr1, on_after_load_sample=self.on_after_load_sample
             )
             self.dataset_val = self.data.get_dataset(
                 idx_range=idxr2, on_after_load_sample=None
