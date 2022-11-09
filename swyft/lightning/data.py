@@ -74,7 +74,9 @@ class SwyftDataModule(pl.LightningDataModule):
 
     def setup(self, stage: str):
         if isinstance(self.data, Samples):
-            dataset = self.data.get_dataset(on_after_load_sample = self.on_after_load_sample)
+            dataset = self.data.get_dataset(
+                on_after_load_sample=self.on_after_load_sample
+            )
             splits = torch.utils.data.random_split(dataset, self.lengths)
             self.dataset_train, self.dataset_val, self.dataset_test = splits
         elif isinstance(self.data, swyft.ZarrStore):
@@ -176,9 +178,7 @@ class ZarrStore:
         for k in self.data.keys():
             shape = self.data[k].shape
             self.data[k].resize(N, *shape[1:])
-        self.root["meta/sim_status"].resize(
-            N,
-        )
+        self.root["meta/sim_status"].resize(N,)
 
     def init(self, N, chunk_size, shapes=None, dtypes=None):
         if len(self) > 0:

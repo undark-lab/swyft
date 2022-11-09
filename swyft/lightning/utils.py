@@ -20,7 +20,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.trainer.supporters import CombinedLoader
-#from pytorch_lightning.cli import instantiate_class
+
+# from pytorch_lightning.cli import instantiate_class
 
 import yaml
 
@@ -149,7 +150,7 @@ def _weighted_smoothed_histogramdd(v, w, bins=50, smooth=0):
         low = v.min(axis=0).values
         upp = v.max(axis=0).values
         h = torchist.histogramdd(v, bins=bins, weights=w, low=low, upp=upp)
-        h /= len(v) * (upp[0] - low[0]) * (upp[1] - low[1]) / bins**2
+        h /= len(v) * (upp[0] - low[0]) * (upp[1] - low[1]) / bins ** 2
         x = torch.linspace(low[0], upp[0], bins + 1)
         y = torch.linspace(low[1], upp[1], bins + 1)
         x = (x[1:] + x[:-1]) / 2
@@ -300,13 +301,17 @@ def param_select(parnames, target_parnames, match_exactly: bool = False):
     Returns:
         tuple, list: idx1 (logratio index), idx2 (parameter indices)
     """
-    assert len(parnames.shape) == 2, "`param_select` is only implemented for 1-dim logratios_shape"
+    assert (
+        len(parnames.shape) == 2
+    ), "`param_select` is only implemented for 1-dim logratios_shape"
     for i, pars in enumerate(parnames):
         if all(target_parname in pars for target_parname in target_parnames):
             idx = [list(pars).index(tp) for tp in target_parnames]
             if not match_exactly or len(idx) == len(target_parnames):
                 return (i,), idx
-    raise swyft.lightning.utils.SwyftParameterError("Requested parameters not found: %s"%target_parnames)
+    raise swyft.lightning.utils.SwyftParameterError(
+        "Requested parameters not found: %s" % target_parnames
+    )
 
 
 def _collection_mask(coll, mask_fn):

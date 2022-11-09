@@ -123,7 +123,9 @@ class Node:
             return trace[self._parname]
         else:
             args = (
-                arg.evaluate(trace) if (isinstance(arg, Node) or isinstance(arg, Switch)) else arg
+                arg.evaluate(trace)
+                if (isinstance(arg, Node) or isinstance(arg, Switch))
+                else arg
                 for arg in self._inputs
             )
             result = self._fn(*args)

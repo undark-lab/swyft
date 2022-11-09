@@ -8,7 +8,8 @@ from scipy import stats
 
 from swyft.plot.histogram import split_corner_axes
 from swyft.types import Array, MarginalToArray
-#from swyft.utils.marginals import get_d_dim_marginal_indices
+
+# from swyft.utils.marginals import get_d_dim_marginal_indices
 
 
 def get_z_score(alpha: Union[float, np.ndarray]) -> np.ndarray:
@@ -270,12 +271,7 @@ def empirical_z_score_corner(
             empirical_mass_1d[k], max_z_score
         )
         plot_empirical_z_score(
-            ax,
-            nominal_z_scores,
-            z_mean,
-            z_interval,
-            xlabel=None,
-            ylabel=None,
+            ax, nominal_z_scores, z_mean, z_interval, xlabel=None, ylabel=None,
         )
 
     # plot the 2d mass
@@ -288,12 +284,7 @@ def empirical_z_score_corner(
             empirical_mass_2d[k], max_z_score
         )
         plot_empirical_z_score(
-            ax,
-            nominal_z_scores,
-            z_mean,
-            z_interval,
-            xlabel=None,
-            ylabel=None,
+            ax, nominal_z_scores, z_mean, z_interval, xlabel=None, ylabel=None,
         )
 
     # bottom row

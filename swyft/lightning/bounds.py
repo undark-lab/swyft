@@ -30,6 +30,7 @@ class RectangleBounds:
     bounds: torch.Tensor
     parnames: np.array
 
+
 def _rect_bounds_from_tensors(
     params: torch.Tensor, logratios: torch.Tensor, threshold=1e-6
 ):
@@ -89,9 +90,11 @@ class RectBoundSampler:
             if isinstance(d, scipy.stats._distn_infrastructure.rv_frozen):
                 s = np.atleast_1d(d.rvs())
                 j = len(s)
-                u_low = s * 0.0 if bounds is None else d.cdf(bounds[i:i+j, ..., 0])
+                u_low = s * 0.0 if bounds is None else d.cdf(bounds[i : i + j, ..., 0])
                 u_high = (
-                    s * 0.0 + 1.0 if bounds is None else d.cdf(bounds[i:i+j, ..., 1])
+                    s * 0.0 + 1.0
+                    if bounds is None
+                    else d.cdf(bounds[i : i + j, ..., 1])
                 )
                 self._u.append([u_low, u_high])
                 i += j
@@ -102,11 +105,11 @@ class RectBoundSampler:
         result = []
         for i, d in enumerate(self._distr):
             if isinstance(d, scipy.stats._distn_infrastructure.rv_frozen):
-#                u = scipy.stats.uniform(
-#                    loc=self._u[i][0], scale=self._u[i][1] - self._u[i][0]
-#                ).rvs()
+                #                u = scipy.stats.uniform(
+                #                    loc=self._u[i][0], scale=self._u[i][1] - self._u[i][0]
+                #                ).rvs()
                 u = np.random.rand(*self._u[i][0].shape)
-                u *= (self._u[i][1]-self._u[i][0])
+                u *= self._u[i][1] - self._u[i][0]
                 u += self._u[i][0]
                 result.append(np.atleast_1d(d.ppf(u)))
             else:
@@ -114,7 +117,9 @@ class RectBoundSampler:
         return np.hstack(result)
 
 
-def collect_rect_bounds(lrs_coll, parname: str, parshape: tuple, threshold: float = 1e-6):
+def collect_rect_bounds(
+    lrs_coll, parname: str, parshape: tuple, threshold: float = 1e-6
+):
     """Collect rectangular bounds for a parameter of interest.
     
     Args:
@@ -123,16 +128,19 @@ def collect_rect_bounds(lrs_coll, parname: str, parshape: tuple, threshold: floa
         parshape: Shape of parameter vector/array
         threshold: Likelihood-ratio selection threshold
     """
-    bounds = swyft.lightning.bounds.get_rect_bounds(lrs_coll, threshold = threshold)
+    bounds = swyft.lightning.bounds.get_rect_bounds(lrs_coll, threshold=threshold)
     box = []
     for i in range(*parshape):
         try:
-            i0, i1 = swyft.lightning.utils.param_select(bounds.parnames, [parname+"[%i]"%i])
+            i0, i1 = swyft.lightning.utils.param_select(
+                bounds.parnames, [parname + "[%i]" % i]
+            )
             b = bounds.bounds[i0][i1]
         except swyft.lightning.utils.SwyftParameterError:
             b = torch.tensor([[-np.inf, +np.inf]])
         box.append(b)
     return torch.cat(box)
+
 
 # @dataclass
 # class MeanStd:

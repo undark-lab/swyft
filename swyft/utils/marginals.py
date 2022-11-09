@@ -1,27 +1,28 @@
-#from itertools import combinations
-#from typing import List, Tuple
+# from itertools import combinations
+# from typing import List, Tuple
 #
 ##from pandas.core.frame import DataFrame
-#from toolz import keyfilter
+# from toolz import keyfilter
 #
 from swyft.types import (
     Array,
     MarginalIndex,
     MarginalToArray,
-    #MarginalToDataFrame,
+    # MarginalToDataFrame,
     StrictMarginalIndex,
 )
-#from swyft.utils.array import tensor_to_array
+
+# from swyft.utils.array import tensor_to_array
 from swyft.utils.misc import depth
 
 
-#def get_d_dim_marginal_indices(n_parameters: int, d: int) -> StrictMarginalIndex:
+# def get_d_dim_marginal_indices(n_parameters: int, d: int) -> StrictMarginalIndex:
 #    return tuple(combinations(range(n_parameters), d))
 
 
-#def get_corner_marginal_indices(
+# def get_corner_marginal_indices(
 #    n_parameters: int,
-#) -> Tuple[StrictMarginalIndex, StrictMarginalIndex]:
+# ) -> Tuple[StrictMarginalIndex, StrictMarginalIndex]:
 #    """produce the marginals for a corner plot
 #
 #    Args:
@@ -65,22 +66,22 @@ def tupleize_marginal_indices(marginal_indices: MarginalIndex) -> StrictMarginal
     return out
 
 
-#def get_marginal_dim_by_key(key: Tuple[int]) -> int:
+# def get_marginal_dim_by_key(key: Tuple[int]) -> int:
 #    return len(key)
 #
 #
-#def get_marginal_dim_by_value(value: Array) -> int:
+# def get_marginal_dim_by_value(value: Array) -> int:
 #    return value.shape[-1]
 #
 #
-#def filter_marginals_by_dim(marginals: MarginalToArray, dim: int) -> MarginalToArray:
+# def filter_marginals_by_dim(marginals: MarginalToArray, dim: int) -> MarginalToArray:
 #    assert all(
 #        isinstance(k, tuple) for k in marginals.keys()
 #    ), "This function works on tuples of parameters."
 #    return keyfilter(lambda x: get_marginal_dim_by_key(x) == dim, marginals)
 
 
-#def get_df_from_marginal(v: Array, marginal_index: Tuple[int] = None) -> DataFrame:
+# def get_df_from_marginal(v: Array, marginal_index: Tuple[int] = None) -> DataFrame:
 #    v = tensor_to_array(v)
 #    if isinstance(marginal_index, int):
 #        marginal_index = [marginal_index]
@@ -91,5 +92,5 @@ def tupleize_marginal_indices(marginal_indices: MarginalIndex) -> StrictMarginal
 #    return DataFrame(v, columns=marginal_index)
 
 
-#def get_df_dict_from_marginals(marginals: MarginalToArray) -> MarginalToDataFrame:
+# def get_df_dict_from_marginals(marginals: MarginalToArray) -> MarginalToDataFrame:
 #    return {key: get_df_from_marginal(marginals[key], key) for key in marginals.keys()}

@@ -7,9 +7,9 @@ from swyft.utils.marginals import filter_marginals_by_dim
 
 ##import pandas as pd
 #
-#def create_violin_df_from_marginal_dict(
+# def create_violin_df_from_marginal_dict(
 #    marginals: MarginalToArray, method: Optional[str] = None
-#) -> pd.DataFrame:
+# ) -> pd.DataFrame:
 #    """map from a marginal sample dict to the df format for violin plots
 #
 #    Args:
@@ -49,6 +49,7 @@ def violin(
         Axes
     """
     import seaborn as sns
+
     ax = sns.violinplot(
         x="Marginal",
         y="Parameter",

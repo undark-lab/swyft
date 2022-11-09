@@ -73,8 +73,11 @@ def plot_2d(
         colors=color,
     )
     ax.imshow(
-        counts.T, extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()], cmap=cmap,
-        origin = 'lower', aspect = 'auto'
+        counts.T,
+        extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
+        cmap=cmap,
+        origin="lower",
+        aspect="auto",
     )
     ax.set_xlim([xbins.min(), xbins.max()])
     ax.set_ylim([ybins.min(), ybins.max()])

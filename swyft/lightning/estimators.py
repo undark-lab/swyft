@@ -289,13 +289,13 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
             )
 
         # log r(x, z) = log p(x, z)/p(x)/p(z), with covariance given by [[x_var, xz_cov], [xz_cov, z_var]]
-        xb = (x - self.x_mean) / self.x_var**0.5
-        zb = (z - self.z_mean) / self.z_var**0.5
-        rho = self.xz_cov / self.x_var**0.5 / self.z_var**0.5
+        xb = (x - self.x_mean) / self.x_var ** 0.5
+        zb = (z - self.z_mean) / self.z_var ** 0.5
+        rho = self.xz_cov / self.x_var ** 0.5 / self.z_var ** 0.5
         r = (
-            -0.5 * torch.log(1 - rho**2)
-            + rho / (1 - rho**2) * xb * zb
-            - 0.5 * rho**2 / (1 - rho**2) * (xb**2 + zb**2)
+            -0.5 * torch.log(1 - rho ** 2)
+            + rho / (1 - rho ** 2) * xb * zb
+            - 0.5 * rho ** 2 / (1 - rho ** 2) * (xb ** 2 + zb ** 2)
         )
         # out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
         out = LogRatioSamples(r, z, metadata={"type": "Gaussian1d"})

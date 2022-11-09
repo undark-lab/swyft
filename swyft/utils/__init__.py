@@ -5,8 +5,8 @@ from swyft.utils.array import (
     tensor_to_array,
 )
 from swyft.utils.marginals import (
-#    get_corner_marginal_indices,
-#    get_d_dim_marginal_indices,
+    #    get_corner_marginal_indices,
+    #    get_d_dim_marginal_indices,
     tupleize_marginal_indices,
 )
 from swyft.utils.misc import depth, is_cuda_available, is_empty

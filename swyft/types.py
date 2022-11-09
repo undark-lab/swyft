@@ -4,7 +4,8 @@ from typing import Callable, Dict, Hashable, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 import torch
-#from pandas import DataFrame
+
+# from pandas import DataFrame
 
 # If you add a type, don't forget to update autodoc_type_aliases in /docs/source/config.py
 
@@ -23,7 +24,7 @@ StrictMarginalIndex = Tuple[Tuple[int, ...], ...]
 # Map from (3, 4) --> array
 MarginalToArray = Dict[Tuple[int, ...], Array]
 # Map from (3, 4) --> DataFrame
-#MarginalToDataFrame = Dict[Tuple[int, ...], DataFrame]
+# MarginalToDataFrame = Dict[Tuple[int, ...], DataFrame]
 
 ParameterNamesType = Sequence[str]
 ObsType = Dict[Hashable, Array]
