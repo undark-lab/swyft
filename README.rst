@@ -1,5 +1,5 @@
-*swyft lightning*
-=======
+*swyft v0.4.x*
+==============
 
 
 .. image:: https://badge.fury.io/py/swyft.svg
