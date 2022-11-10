@@ -99,7 +99,9 @@ class TestSaveLoadMarginalRatioEstimator:
         )
 
         marginal_ratio_estimator = mre.MarginalRatioEstimator(
-            marginal_indices=marginal_indices, network=network, device=device,
+            marginal_indices=marginal_indices,
+            network=network,
+            device=device,
         )
 
         # Saving
@@ -108,7 +110,9 @@ class TestSaveLoadMarginalRatioEstimator:
 
         # Loading
         marginal_ratio_estimator_loaded = mre.MarginalRatioEstimator.load(
-            network=network, device=device, filename=path,
+            network=network,
+            device=device,
+            filename=path,
         )
 
         # Testing each loaded piece
@@ -148,7 +152,9 @@ class TestMarginalRatioEstimator:
             num_blocks=1,
         )
         marginal_ratio_estimator = mre.MarginalRatioEstimator(
-            marginal_indices=marginal_indices, network=network, device=cls.device,
+            marginal_indices=marginal_indices,
+            network=network,
+            device=cls.device,
         )
         return marginal_ratio_estimator
 
@@ -158,7 +164,10 @@ class TestMarginalRatioEstimator:
 
     @pytest.mark.parametrize(
         "marginal_indices, batch_size",
-        product([[0, 1], [(0, 1)]], [None, 10],),  # With these, n_parameters >= 2
+        product(
+            [[0, 1], [(0, 1)]],
+            [None, 10],
+        ),  # With these, n_parameters >= 2
     )
     def test_log_ratio_shape(
         self, marginal_indices: MarginalIndex, batch_size: Optional[int]
@@ -172,7 +181,9 @@ class TestMarginalRatioEstimator:
         }
         fabricated_v = torch.randn(n_batch, self.n_parameters)
         log_ratio = marginal_ratio_estimator.log_ratio(
-            observation=fabricated_observation, v=fabricated_v, batch_size=batch_size,
+            observation=fabricated_observation,
+            v=fabricated_v,
+            batch_size=batch_size,
         )
         assert set(log_ratio.keys()) == set(marginal_indices)
         for _, value in log_ratio.items():

@@ -62,7 +62,9 @@ class TestMarginalPosterior:
             num_blocks=1,
         )
         marginal_ratio_estimator = mre.MarginalRatioEstimator(
-            marginal_indices=marginal_indices, network=network, device=cls.device,
+            marginal_indices=marginal_indices,
+            network=network,
+            device=cls.device,
         )
         return marginal_ratio_estimator
 
@@ -96,7 +98,9 @@ class TestMarginalPosterior:
         marginal_indices = list(range(self.n_parameters))
         network = AllOneNetwork(marginal_indices)
         marginal_ratio_estimator = mre.MarginalRatioEstimator(
-            marginal_indices=marginal_indices, network=network, device=self.device,
+            marginal_indices=marginal_indices,
+            network=network,
+            device=self.device,
         )
         mp = MarginalPosterior(marginal_ratio_estimator, prior)
 
@@ -105,7 +109,9 @@ class TestMarginalPosterior:
             key: torch.rand(*shape) for key, shape in self.observation_shapes.items()
         }
         bound = mp.truncate(
-            n_samples, fabricated_observation, threshold=-50.0,
+            n_samples,
+            fabricated_observation,
+            threshold=-50.0,
         )  # TODO make this test the actual behavior of the function.
         assert isinstance(bound, Bound)
 
@@ -115,7 +121,9 @@ class TestMarginalPosterior:
         marginal_indices = list(range(self.n_parameters))
         network = AllOneNetwork(marginal_indices)
         marginal_ratio_estimator = mre.MarginalRatioEstimator(
-            marginal_indices=marginal_indices, network=network, device=self.device,
+            marginal_indices=marginal_indices,
+            network=network,
+            device=self.device,
         )
         mp = MarginalPosterior(marginal_ratio_estimator, prior)
 
@@ -129,7 +137,9 @@ class TestMarginalPosterior:
         dataset = SimpleDataset(observations, us, vs)
 
         empirical_mass, _ = mp.empirical_mass(
-            n_observations=n_observations, n_posterior_samples=1000, dataset=dataset,
+            n_observations=n_observations,
+            n_posterior_samples=1000,
+            dataset=dataset,
         )  # TODO make this test the actual behavior of the function.
         assert isinstance(empirical_mass, dict)
 
@@ -140,7 +150,11 @@ class TestMarginalPosterior:
         )
 
     @pytest.mark.parametrize(
-        "marginal_indices, batch_size", product([[0], [0, 1], [(0, 1)]], [None, 10],),
+        "marginal_indices, batch_size",
+        product(
+            [[0], [0, 1], [(0, 1)]],
+            [None, 10],
+        ),
     )
     def test_log_prob_shape(
         self, marginal_indices: MarginalIndex, batch_size: Optional[int]
@@ -160,7 +174,9 @@ class TestMarginalPosterior:
         }
         fabricated_v = torch.randn(n_batch, self.n_parameters)
         log_prob = marginal_posterior.log_prob(
-            observation=fabricated_observation, v=fabricated_v, batch_size=batch_size,
+            observation=fabricated_observation,
+            v=fabricated_v,
+            batch_size=batch_size,
         )
         assert set(log_prob.keys()) == set(marginal_indices)
         for _, value in log_prob.items():
@@ -168,7 +184,11 @@ class TestMarginalPosterior:
 
     @pytest.mark.parametrize(
         "n_samples, marginal_indices, batch_size",
-        product([101, 1000], [[0], [0, 1], [(0, 1)]], [None, 10],),
+        product(
+            [101, 1000],
+            [[0], [0, 1], [(0, 1)]],
+            [None, 10],
+        ),
     )
     def test_weighted_sample_shape(
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]
@@ -209,7 +229,11 @@ class TestMarginalPosterior:
 
     @pytest.mark.parametrize(
         "n_samples, marginal_indices, batch_size",
-        product([5, 10], [[0], [0, 1], [(0, 1)]], [None, 10],),
+        product(
+            [5, 10],
+            [[0], [0, 1], [(0, 1)]],
+            [None, 10],
+        ),
     )
     def test_sample_shape(
         self, n_samples: int, marginal_indices: MarginalIndex, batch_size: Optional[int]

@@ -271,7 +271,12 @@ def empirical_z_score_corner(
             empirical_mass_1d[k], max_z_score
         )
         plot_empirical_z_score(
-            ax, nominal_z_scores, z_mean, z_interval, xlabel=None, ylabel=None,
+            ax,
+            nominal_z_scores,
+            z_mean,
+            z_interval,
+            xlabel=None,
+            ylabel=None,
         )
 
     # plot the 2d mass
@@ -284,7 +289,12 @@ def empirical_z_score_corner(
             empirical_mass_2d[k], max_z_score
         )
         plot_empirical_z_score(
-            ax, nominal_z_scores, z_mean, z_interval, xlabel=None, ylabel=None,
+            ax,
+            nominal_z_scores,
+            z_mean,
+            z_interval,
+            xlabel=None,
+            ylabel=None,
         )
 
     # bottom row

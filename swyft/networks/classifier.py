@@ -217,7 +217,11 @@ def get_marginal_classifier(
         num_blocks=num_blocks,
     )
 
-    return Network(observation_transform, parameter_transform, marginal_classifier,)
+    return Network(
+        observation_transform,
+        parameter_transform,
+        marginal_classifier,
+    )
 
 
 if __name__ == "__main__":

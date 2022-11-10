@@ -178,7 +178,9 @@ class ZarrStore:
         for k in self.data.keys():
             shape = self.data[k].shape
             self.data[k].resize(N, *shape[1:])
-        self.root["meta/sim_status"].resize(N,)
+        self.root["meta/sim_status"].resize(
+            N,
+        )
 
     def init(self, N, chunk_size, shapes=None, dtypes=None):
         if len(self) > 0:

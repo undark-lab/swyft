@@ -253,7 +253,10 @@ class TestSaveLoadPrior:
     def test_save_load_init(self):
         normal = stats.norm(0, 1)
         prior = Prior(
-            cdf=normal.cdf, icdf=normal.ppf, log_prob=normal.logpdf, n_parameters=1,
+            cdf=normal.cdf,
+            icdf=normal.ppf,
+            log_prob=normal.logpdf,
+            n_parameters=1,
         )
 
         # Saving
@@ -272,7 +275,10 @@ class TestSaveLoadPrior:
 
     @pytest.mark.parametrize(
         "distribution, args",
-        [(Uniform, uniform_hyperparameters[0]), (Normal, normal_hyperparameters[0]),],
+        [
+            (Uniform, uniform_hyperparameters[0]),
+            (Normal, normal_hyperparameters[0]),
+        ],
     )
     def test_save_load_from_torch_distribution(self, distribution, args):
         distribution = distribution(*args)

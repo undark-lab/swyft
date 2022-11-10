@@ -121,7 +121,7 @@ def collect_rect_bounds(
     lrs_coll, parname: str, parshape: tuple, threshold: float = 1e-6
 ):
     """Collect rectangular bounds for a parameter of interest.
-    
+
     Args:
         lrs_coll: Collection of LogRatioSamples
         parname: Name of parameter vector/array of interest
