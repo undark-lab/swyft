@@ -53,20 +53,20 @@ a hyper-efficient, simulation-based inference technique for complex data and exp
    will be overhauled.  Right now v0.4.0 is still in pre-release, and
    documentation is not yet fully updated.
 
-* **Documentation & installation**: https://swyft.readthedocs.io/en/lightning/
-* **Example usage**: https://swyft.readthedocs.io/en/lightning/tutorial-notebooks.html
+* **Documentation & installation**: https://swyft.readthedocs.io/
+* **Example usage**: https://swyft.readthedocs.io/tutorial-notebooks.html
 * **Source code**: https://github.com/undark-lab/swyft
 * **Support & discussion**: https://github.com/undark-lab/swyft/discussions
 * **Bug reports**: https://github.com/undark-lab/swyft/issues
-* **Contributing**: https://swyft.readthedocs.io/en/lightning/contributing-link.html
-* **Citation**: https://swyft.readthedocs.io/en/lightning/citation.html
+* **Contributing**: https://swyft.readthedocs.io/contributing-link.html
+* **Citation**: https://swyft.readthedocs.io/citation.html
 
 *swyft*:
 
 * estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically require fewer simulations than the corresponding joint.
 * performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
-* seamless reuses simulations drawn from previous analyses, even with different priors. (not yet supported in swyft lightning, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
-* integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy. (not yet supported in swyft lightning, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
+* seamless reuses simulations drawn from previous analyses, even with different priors. (not yet supported in swyft v0.4.x, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
+* integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy. (not yet supported in swyft v0.4.x, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
 
 *swyft* is designed to solve the Bayesian inverse problem when the user has access to a simulator that stochastically maps parameters to observational data.
 In scientific settings, a cost-benefit analysis often favors approximating the posterior marginality; *swyft* provides this functionality.
