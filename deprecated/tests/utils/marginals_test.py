@@ -31,30 +31,26 @@ class TupleizeMarginals:
     str_to_truth = {str(mi): t for mi, t in zip(marginal_indices, truth)}
 
     @pytest.mark.parametrize(
-        "marginal_index",
-        marginal_indices,
+        "marginal_index", marginal_indices,
     )
     def test_compare_to_truth(self, mi: MarginalIndex) -> None:
         assert tupleize_marginal_indices(mi) == self.str_to_truth[str(mi)]
 
     @pytest.mark.parametrize(
-        "marginal_index",
-        marginal_indices,
+        "marginal_index", marginal_indices,
     )
     def test_depth(mi: MarginalIndex) -> None:
         assert depth(tupleize_marginal_indices(mi)) == 2
 
     @pytest.mark.parametrize(
-        "marginal_index",
-        marginal_indices,
+        "marginal_index", marginal_indices,
     )
     def test_tuple(mi: MarginalIndex) -> StrictMarginalIndex:
         mi = tupleize_marginal_indices(mi)
         assert isinstance(mi, Tuple)
 
     @pytest.mark.parametrize(
-        "marginal_index",
-        marginal_indices,
+        "marginal_index", marginal_indices,
     )
     def test_nested_tuple(mi: MarginalIndex) -> StrictMarginalIndex:
         mi = tupleize_marginal_indices(mi)

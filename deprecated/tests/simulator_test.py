@@ -52,10 +52,7 @@ class TestSimulator(unittest.TestCase):
         sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
         simulator._run(
-            v=pars,
-            sims=sims,
-            sim_status=sim_status,
-            indices=np.arange(100, dtype=int),
+            v=pars, sims=sims, sim_status=sim_status, indices=np.arange(100, dtype=int),
         )
 
         assert np.all(sim_status == SimulationStatus.FINISHED)
@@ -83,10 +80,7 @@ class TestSimulator(unittest.TestCase):
         sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
         simulator._run(
-            v=pars,
-            sims=sims,
-            sim_status=sim_status,
-            indices=np.arange(100, dtype=int),
+            v=pars, sims=sims, sim_status=sim_status, indices=np.arange(100, dtype=int),
         )
 
         assert np.all(sim_status == SimulationStatus.FAILED)
@@ -101,10 +95,7 @@ class TestSimulator(unittest.TestCase):
         sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
         simulator._run(
-            v=pars,
-            sims=sims,
-            sim_status=sim_status,
-            indices=np.arange(100, dtype=int),
+            v=pars, sims=sims, sim_status=sim_status, indices=np.arange(100, dtype=int),
         )
 
         assert np.all(sim_status[:49] == SimulationStatus.FAILED)
@@ -123,10 +114,7 @@ class TestSimulator(unittest.TestCase):
         sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
         simulator._run(
-            v=pars,
-            sims=sims,
-            sim_status=sim_status,
-            indices=np.arange(100, dtype=int),
+            v=pars, sims=sims, sim_status=sim_status, indices=np.arange(100, dtype=int),
         )
 
         assert np.all(sim_status[:49] == SimulationStatus.FAILED)
@@ -145,10 +133,7 @@ class TestSimulator(unittest.TestCase):
         sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
         simulator._run(
-            v=pars,
-            sims=sims,
-            sim_status=sim_status,
-            indices=np.arange(100, dtype=int),
+            v=pars, sims=sims, sim_status=sim_status, indices=np.arange(100, dtype=int),
         )
 
         assert np.all(sim_status[50:] == SimulationStatus.FINISHED)
@@ -227,10 +212,7 @@ class TestSimulator(unittest.TestCase):
         sim_status = np.full(100, SimulationStatus.RUNNING, dtype=int)
 
         simulator._run(
-            v=pars,
-            sims=sims,
-            sim_status=sim_status,
-            indices=np.arange(100, dtype=int),
+            v=pars, sims=sims, sim_status=sim_status, indices=np.arange(100, dtype=int),
         )
 
         assert np.all(sim_status == SimulationStatus.FINISHED)

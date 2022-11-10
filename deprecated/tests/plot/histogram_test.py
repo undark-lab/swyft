@@ -61,9 +61,7 @@ class TestHist1d:
         }
 
         weighted_samples = WeightedMarginalSamples(weights, v)
-        fig, axes = hist1d(
-            marginal_1d=weighted_samples,
-        )
+        fig, axes = hist1d(marginal_1d=weighted_samples,)
         assert isinstance(fig, Figure)
         assert axes.shape == (n_parameters,)
 
@@ -76,8 +74,6 @@ class TestHist1d:
             for marginal_index in marginal_indices
         }
 
-        fig, axes = hist1d(
-            marginal_1d=marginal_samples,
-        )
+        fig, axes = hist1d(marginal_1d=marginal_samples,)
         assert isinstance(fig, Figure)
         assert axes.shape == (n_parameters,)

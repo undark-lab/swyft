@@ -108,9 +108,7 @@ def main():
     nm, nbp = get_marginal_block_shape(marginal_indices)
 
     mre = MarginalLogRatioEstimator(
-        Head(key, o, f),
-        Combinator(f, marginal_indices),
-        Tail(nm, f + nbp),
+        Head(key, o, f), Combinator(f, marginal_indices), Tail(nm, f + nbp),
     )
     out = mre(x, theta)
     breakpoint()
