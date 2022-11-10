@@ -54,12 +54,12 @@ a hyper-efficient, simulation-based inference technique for complex data and exp
    documentation is not yet fully updated.
 
 * **Documentation & installation**: https://swyft.readthedocs.io/
-* **Example usage**: https://swyft.readthedocs.io/tutorial-notebooks.html
+* **Example usage**: https://swyft.readthedocs.io/en/latest/tutorial-notebooks.html
 * **Source code**: https://github.com/undark-lab/swyft
 * **Support & discussion**: https://github.com/undark-lab/swyft/discussions
 * **Bug reports**: https://github.com/undark-lab/swyft/issues
-* **Contributing**: https://swyft.readthedocs.io/contributing-link.html
-* **Citation**: https://swyft.readthedocs.io/citation.html
+* **Contributing**: https://swyft.readthedocs.io/en/latest/contributing-link.html
+* **Citation**: https://swyft.readthedocs.io/en/latest/citation.html
 
 *swyft*:
 
