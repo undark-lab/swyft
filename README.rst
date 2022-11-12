@@ -1,6 +1,5 @@
-*swyft v0.4.x*
-==============
-
+Swyft v0.4
+==========
 
 .. image:: https://badge.fury.io/py/swyft.svg
    :target: https://badge.fury.io/py/swyft
@@ -47,11 +46,29 @@
 
 *swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
 a hyper-efficient, simulation-based inference technique for complex data and expensive simulators.
+As of v0.4.0, swyft is based on pytorch-lightning.
 
-.. note::
-   As of v0.4.0, swyft will be based on pytorch-lightning, and the entire API
-   will be overhauled.  Right now v0.4.0 is still in pre-release, and
-   documentation is not yet fully updated.
+
+Swyft in action
+---------------
+
+
+.. image:: docs/source/_static/img/SBI-curve.gif
+   :width: 800
+   :align: center
+
+
+* Swyft makes it convenient to perform Bayesian or Frequentist inference of hundreds, thousands or millions of parameter posteriors by constructing optimal data summaries. 
+* To this end, Swyft estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically require fewer simulations than the corresponding joint.
+* Swyft performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
+* Swyft is based on stochastic simulators, which map parameters stochastically to observational data. Swyft makes it convenient to define such simulators as graphical models.
+* In scientific settings, a cost-benefit analysis often favors approximating the posterior marginality; *swyft* provides this functionality.
+The package additionally implements our prior truncation technique, routines to empirically test results by estimating the expected coverage,
+and a simulator manager with `zarr <https://zarr.readthedocs.io/en/stable/>`_ storage to simplify use with complex simulators.
+
+
+Further information
+-------------------
 
 * **Documentation & installation**: https://swyft.readthedocs.io/
 * **Example usage**: https://swyft.readthedocs.io/en/latest/tutorial-notebooks.html
@@ -61,22 +78,9 @@ a hyper-efficient, simulation-based inference technique for complex data and exp
 * **Contributing**: https://swyft.readthedocs.io/en/latest/contributing-link.html
 * **Citation**: https://swyft.readthedocs.io/en/latest/citation.html
 
-*swyft*:
 
-* estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically require fewer simulations than the corresponding joint.
-* performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
-* seamless reuses simulations drawn from previous analyses, even with different priors. (not yet supported in swyft v0.4.x, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
-* integrates `dask <https://dask.org/>`_ and `zarr <https://zarr.readthedocs.io/en/stable/>`_ to make complex simulation easy. (not yet supported in swyft v0.4.x, see `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_)
-
-*swyft* is designed to solve the Bayesian inverse problem when the user has access to a simulator that stochastically maps parameters to observational data.
-In scientific settings, a cost-benefit analysis often favors approximating the posterior marginality; *swyft* provides this functionality.
-The package additionally implements our prior truncation technique, routines to empirically test results by estimating the expected coverage,
-and a `dask <https://dask.org/>`_ simulator manager with `zarr <https://zarr.readthedocs.io/en/stable/>`_ storage to simplify use with complex simulators.
-
-
-
-Related
--------
+Swyft history
+-------------
 
 * `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_ is the version that was submitted to `JOSS <https://joss.theoj.org/papers/10.21105/joss.04205>`_.
 * `tmnre <https://github.com/bkmi/tmnre>`_ is the implementation of the paper `Truncated Marginal Neural Ratio Estimation <https://arxiv.org/abs/2107.01214>`_.
