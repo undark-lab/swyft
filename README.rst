@@ -53,7 +53,7 @@ Swyft in action
 ---------------
 
 
-.. image:: docs/source/_static/img/SBI-curve.gif
+.. image:: https://raw.githubusercontent.com/undark-lab/swyft/v0.4.1/docs/source/_static/img/SBI-curve.gif
    :width: 800
    :align: center
 
