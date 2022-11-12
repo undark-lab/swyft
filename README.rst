@@ -58,13 +58,14 @@ Swyft in action
    :align: center
 
 
+
 * Swyft makes it convenient to perform Bayesian or Frequentist inference of hundreds, thousands or millions of parameter posteriors by constructing optimal data summaries. 
 * To this end, Swyft estimates likelihood-to-evidence ratios for arbitrary marginal posteriors; they typically require fewer simulations than the corresponding joint.
 * Swyft performs targeted inference by prior truncation, combining simulation efficiency with empirical testability.
 * Swyft is based on stochastic simulators, which map parameters stochastically to observational data. Swyft makes it convenient to define such simulators as graphical models.
 * In scientific settings, a cost-benefit analysis often favors approximating the posterior marginality; *swyft* provides this functionality.
-The package additionally implements our prior truncation technique, routines to empirically test results by estimating the expected coverage,
-and a simulator manager with `zarr <https://zarr.readthedocs.io/en/stable/>`_ storage to simplify use with complex simulators.
+* The package additionally implements our prior truncation technique, routines to empirically test results by estimating the expected coverage, and a simulator manager with `zarr <https://zarr.readthedocs.io/en/stable/>`_ storage to simplify use with complex simulators.
+
 
 
 Further information
@@ -86,3 +87,4 @@ Swyft history
 * `tmnre <https://github.com/bkmi/tmnre>`_ is the implementation of the paper `Truncated Marginal Neural Ratio Estimation <https://arxiv.org/abs/2107.01214>`_.
 * `v0.1.2 <https://github.com/undark-lab/swyft/releases/tag/v0.1.2>`_ is the implementation of the paper `Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time <https://arxiv.org/abs/2011.13951>`_.
 * `sbi <https://github.com/mackelab/sbi>`_ is a collection of simulation-based inference methods. Unlike *swyft*, the repository does not include truncation nor marginal estimation of posteriors.
+
