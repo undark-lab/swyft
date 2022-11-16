@@ -5,6 +5,19 @@ from scipy.ndimage import gaussian_filter, gaussian_filter1d
 import swyft
 import swyft.lightning.utils
 
+from typing import (
+    Callable,
+    Dict,
+    Hashable,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    Any,
+)
+
 
 def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
     idx = np.argsort(x)
@@ -452,16 +465,35 @@ if __name__ == "__main__":
     pass
 
 
-def plot_zz(coverage_samples, *args, ax=None):
-    """Make a zz plot."""
-    cov = swyft.estimate_coverage(coverage_samples, *args)
+def plot_zz(
+    coverage_samples,
+    params: Union[str, Sequence[str]],
+    z_max: float = 3.5,
+    bins: int = 50,
+    ax=None,
+):
+    """Make a zz plot.
+
+    Args:
+        coverage_samples: Collection of CoverageSamples object
+        params: Parameters of interest
+        z_max: Maximum value of z.
+        bins: Number of discretization bins.
+    """
+    cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
     ax = ax if ax else plt.gca()
     swyft.plot.mass.plot_empirical_z_score(ax, cov[:, 0], cov[:, 1], cov[:, 2:])
 
 
-def plot_pp(coverage_samples, *args, ax=None):
+def plot_pp(
+    coverage_samples,
+    params: Union[str, Sequence[str]],
+    z_max: float = 3.5,
+    bins: int = 50,
+    ax=None
+):
     """Make a pp plot."""
-    cov = swyft.estimate_coverage(coverage_samples, *args)
+    cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
     alphas = 1 - swyft.plot.mass.get_alpha(cov)
     ax = ax if ax else plt.gca()
     ax.fill_between(alphas[:, 0], alphas[:, 2], alphas[:, 3], color="0.8")

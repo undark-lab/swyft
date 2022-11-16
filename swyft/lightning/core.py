@@ -393,9 +393,10 @@ class CoverageSamples:
     params: torch.Tensor
     parnames: np.array
 
-    def _get_matching_masses(self, *args):
+    def _get_matching_masses(self, parnames):
+        parnames = [parnames] if isinstance(parnames, str) else parnames
         for i, pars in enumerate(self.parnames):
-            if set(pars) == set(args):
+            if set(pars) == set(parnames):
                 return self.prob_masses[:, i]
         return None
 
@@ -414,7 +415,7 @@ class CoverageSamples:
         """
         m = self._get_matching_masses(parnames)
         if m is None:
-            raise SwyftParameterError("Requested parameters not available:", params)
+            raise SwyftParameterError("Requested parameters not available:", parnames)
         z0, z1, z2 = get_empirical_z_score(m, z_max, bins, interval_z_score=1.0)
         z0 = np.tile(z0, (*z1.shape[:-1], 1))
         z0 = np.reshape(z0, (*z0.shape, 1))
