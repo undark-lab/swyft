@@ -314,7 +314,7 @@ class SwyftTrainer(pl.Trainer):
         else:
             return ratio_batches
 
-    def test_coverage(self, model, A, B, batch_size=1024):
+    def test_coverage(self, model, A, B, batch_size=1024, logratio_noise=True):
         """Estimate empirical mass.
 
         Args:
@@ -322,6 +322,7 @@ class SwyftTrainer(pl.Trainer):
             A: truth samples
             B: prior samples
             batch_size: batch sized used during network evaluation
+            logratio_noise: Add a small amount of noise to log-ratio estimates, which stabilizes mass estimates for classification tasks.
 
         Returns:
             Dict of CoverageSamples objects.
@@ -348,7 +349,7 @@ class SwyftTrainer(pl.Trainer):
             for i in range(n0):
                 ratio0 = p0.logratios[i]
                 value0 = p0.params[i]
-                m = _calc_mass(ratio0, ratios[i])
+                m = _calc_mass(ratio0, ratios[i], add_noise=logratio_noise)
                 vs.append(value0)
                 ms.append(m)
             masses = torch.stack(ms, dim=0)
@@ -368,7 +369,10 @@ class SwyftTrainer(pl.Trainer):
         return out
 
 
-def _calc_mass(r0, r):
+def _calc_mass(r0, r, add_noise=False):
+    if add_noise:
+        r = r + torch.rand_like(r) * 1e-3
+        r0 = r0 + torch.rand_like(r0) * 1e-3
     p = torch.exp(r - r.max(axis=0).values)
     p /= p.sum(axis=0)
     m = r > r0
