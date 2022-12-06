@@ -490,7 +490,7 @@ def plot_pp(
     params: Union[str, Sequence[str]],
     z_max: float = 3.5,
     bins: int = 50,
-    ax=None
+    ax=None,
 ):
     """Make a pp plot."""
     cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
