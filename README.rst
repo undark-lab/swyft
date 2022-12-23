@@ -86,5 +86,10 @@ Swyft history
 * `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_ is the version that was submitted to `JOSS <https://joss.theoj.org/papers/10.21105/joss.04205>`_.
 * `tmnre <https://github.com/bkmi/tmnre>`_ is the implementation of the paper `Truncated Marginal Neural Ratio Estimation <https://arxiv.org/abs/2107.01214>`_.
 * `v0.1.2 <https://github.com/undark-lab/swyft/releases/tag/v0.1.2>`_ is the implementation of the paper `Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time <https://arxiv.org/abs/2011.13951>`_.
-* `sbi <https://github.com/mackelab/sbi>`_ is a collection of simulation-based inference methods. Unlike *swyft*, the repository does not include truncation nor marginal estimation of posteriors.
 
+Relevant packages
+-----------------
+
+* `sbi <https://github.com/mackelab/sbi>`_ is a collection of simulation-based inference methods. Unlike *swyft*, the repository does not include our truncation scheme nor marginal estimation of posteriors.
+
+* `lampe <https://github.com/francois-rozet/lampe>`_ is an implementation of amoritzed simulation-based inference methods aimed at simulation-based inference researchers due to its flexibility.
