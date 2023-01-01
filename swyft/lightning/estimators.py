@@ -228,7 +228,21 @@ class LogRatioEstimator_1dim(torch.nn.Module):
 class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
     """Estimating posteriors assuming that they are Gaussian."""
 
-    def __init__(self, momentum=0.1):
+    def __init__(self, num_params, varnames = None, momentum : float = 0.1):
+        """
+        Default module for estimating 1-dim marginal posteriors, using Gaussian approximations.
+
+        Args:
+            num_params: Length of parameter vector.
+            varnames: List of name of parameter vector. If a single string is provided, indices are attached automatically.
+            momentum: Momentum for running estimate for variance and covariances.
+
+        .. note::
+           
+	   This module performs running estimates of parameter variances and
+           covariances.  There are no learnable parameters.  This can cause errors when using the module
+           in isolation without other modules with learnable parameters.
+        """
         super().__init__()
         self.momentum = momentum
         self.x_mean = None
@@ -237,19 +251,28 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
         self.z_var = None
         self.xz_cov = None
 
+        if isinstance(varnames, list):
+            self.varnames = np.array([[v] for v in varnames])
+        else:
+            self.varnames = np.array(
+                [[varnames + "[%i]" % i] for i in range(num_params)]
+            )
+
     def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         """2-dim Gaussian approximation to marginals and joint, assuming (B, N)."""
-        print("Warning: deprecated, might be broken")
-        x, z = equalize_tensors(x, z)
+        #print("Warning: deprecated, might be broken")
+#        x, z = equalize_tensors(x, z)
+        #print(x.shape, z.shape)
         if self.training or self.x_mean is None:
             # Covariance estimates must be based on joined samples only
             # NOTE: This makes assumptions about the structure of mini batches during training (J, M, M, J, J, M, M, J, ...)
             # TODO: Change to (J, M, J, M, J, M, ...) in the future
             batch_size = len(x)
             # idx = np.array([[i, i+3] for i in np.arange(0, batch_size, 4)]).flatten()
-            idx = np.arange(
-                batch_size // 2
-            )  # TODO: Assuming (J, J, J, J, M, M, M, M) etc
+#            idx = np.arange(
+#                batch_size // 2
+#            )  # TODO: Assuming (J, J, J, J, M, M, M, M) etc
+            idx = np.arange(batch_size)
 
             # Estimation w/o Bessel's correction, using simple MLE estimate (https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices)
             x_mean_batch = x[idx].mean(dim=0).detach()
@@ -289,14 +312,16 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
             )
 
         # log r(x, z) = log p(x, z)/p(x)/p(z), with covariance given by [[x_var, xz_cov], [xz_cov, z_var]]
+        x, z = swyft.equalize_tensors(x, z)
         xb = (x - self.x_mean) / self.x_var**0.5
         zb = (z - self.z_mean) / self.z_var**0.5
         rho = self.xz_cov / self.x_var**0.5 / self.z_var**0.5
-        r = (
+        #print(xb.shape, zb.shape, rho.shape)
+        logratios = (
             -0.5 * torch.log(1 - rho**2)
             + rho / (1 - rho**2) * xb * zb
             - 0.5 * rho**2 / (1 - rho**2) * (xb**2 + zb**2)
         )
         # out = torch.cat([r.unsqueeze(-1), z.unsqueeze(-1).detach()], dim=-1)
-        out = LogRatioSamples(r, z, metadata={"type": "Gaussian1d"})
+        out = LogRatioSamples(logratios, z.unsqueeze(-1), self.varnames, metadata={"type": "Gaussian1d"})
         return out
