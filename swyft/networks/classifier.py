@@ -158,7 +158,10 @@ class MarginalClassifier(nn.Module):
     def forward(
         self, features: torch.Tensor, marginal_block: torch.Tensor
     ) -> torch.Tensor:
-        fb = features.unsqueeze(1).expand(-1, self.n_marginals, -1)  # B, M, O
+        if len(features.shape) == 2:  # Input shape is B, O
+            fb = features.unsqueeze(1).expand(-1, self.n_marginals, -1)  # B, M, O
+        else:
+            fb = features  # Input shape is alreadby B, M, O
         combined = torch.cat([fb, marginal_block], dim=2)  # B, M, O + P
         return self.net(combined).squeeze(-1)  # B, M
 

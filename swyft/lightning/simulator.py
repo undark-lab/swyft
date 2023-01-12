@@ -12,7 +12,7 @@ from typing import (
 )
 import numpy as np
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import swyft
 import swyft.lightning.data
 from swyft.lightning.data import *
