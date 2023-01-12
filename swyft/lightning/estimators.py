@@ -229,7 +229,7 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
     """Estimating posteriors assuming that they are Gaussian."""
 
     def __init__(self, num_params, varnames=None, momentum: float = 0.1, minstd: float = 1e-3):
-        """
+        r"""
         Default module for estimating 1-dim marginal posteriors, using Gaussian approximations.
 
         Args:
