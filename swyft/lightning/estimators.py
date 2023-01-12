@@ -228,7 +228,9 @@ class LogRatioEstimator_1dim(torch.nn.Module):
 class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
     """Estimating posteriors assuming that they are Gaussian."""
 
-    def __init__(self, num_params, varnames=None, momentum: float = 0.1, minstd: float = 1e-3):
+    def __init__(
+        self, num_params, varnames=None, momentum: float = 0.1, minstd: float = 1e-3
+    ):
         r"""
         Default module for estimating 1-dim marginal posteriors, using Gaussian approximations.
 
@@ -245,7 +247,7 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
            covariances.  There are no learnable parameters.  This can cause errors when using the module
            in isolation without other modules with learnable parameters.
 
-	   The covariance estimates are based on joined samples only.  The
+           The covariance estimates are based on joined samples only.  The
            first n_batch samples of z are assumed to be joined jointly drawn, where n_batch is the batch
            size of x.
         """
@@ -313,7 +315,9 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
         xb = (x - self.x_mean) / self.x_var**0.5
         zb = (z - self.z_mean) / self.z_var**0.5
         rho = self.xz_cov / self.x_var**0.5 / self.z_var**0.5
-        rho = torch.clip(rho, min = -(1-self.minstd**2)**0.5, max = (1-self.minstd**2)**0.5)
+        rho = torch.clip(
+            rho, min=-((1 - self.minstd**2) ** 0.5), max=(1 - self.minstd**2) ** 0.5
+        )
         logratios = (
             -0.5 * torch.log(1 - rho**2)
             + rho / (1 - rho**2) * xb * zb
