@@ -46,7 +46,7 @@ def plot_2d(
     logratios,
     parname1,
     parname2,
-    ax=plt,
+    ax=None,
     bins=100,
     color="k",
     cmap="gray_r",
@@ -68,6 +68,9 @@ def plot_2d(
     #            samples, weights = weighted_samples
     #    if samples is None:
     #        return
+
+    if ax is None:
+        ax = plt.gca()
 
     #    # FIXME: use interpolation when grid_interpolate == True
     #    x = samples[:,0].numpy()
@@ -111,7 +114,7 @@ def plot_1d(
     logratios,
     parname,
     weights_key=None,
-    ax=plt,
+    ax=None,
     grid_interpolate=False,
     bins=100,
     color="k",
@@ -143,6 +146,9 @@ def plot_1d(
     #    if smooth is not None:
     #        v = gaussian_filter1d(v, smooth)
 
+    if ax is None:
+        ax = plt.gca()
+
     levels = sorted(get_HDI_thresholds(v))
     if contours:
         contour1d(zm, v, levels, ax=ax, color=color)
@@ -167,13 +173,16 @@ def plot_posterior(
     samples,
     pois,
     weights_key=None,
-    ax=plt,
+    ax=None,
     grid_interpolate=False,
     bins=100,
     color="k",
     contours=True,
     **kwargs
 ):
+    if ax is None:
+        ax = plt.gca()
+
     if isinstance(pois, int):
         pois = (pois,)
 
