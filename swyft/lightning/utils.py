@@ -225,6 +225,22 @@ def get_weighted_samples(lrs_coll, params: Union[str, Sequence[str]]):
     raise SwyftParameterError("Requested parameters not available:", *params)
 
 
+def get_class_probs(lrs_coll, params: str):
+    """Return class probabilities for discrete parameters.
+
+    Args:
+        lrs_coll: Collection of LogRatioSamples objects
+        params: Parameter of interest (must be (0, 1, ..., K-1) for K classes)
+
+    Returns:
+        np.Array: Vector of length K with class probabilities
+    """
+    params, weights = get_weighted_samples(lrs_coll, params)
+    probs = np.array([weights[params[:,0] == k].sum() for k in range(int(params[:,0].max())+1)])
+    probs /= probs.sum()
+    return probs
+
+
 # def weights_sample(N, values, weights, replacement = True):
 #    """Weight-based sampling with or without replacement."""
 #    sw = weights.shape

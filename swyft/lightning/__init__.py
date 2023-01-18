@@ -12,6 +12,7 @@ __all__ = [
     "Simulator",
     "get_pdf",
     "get_weighted_samples",
+    "get_class_probs",
     "best_from_yaml",
     "SwyftModule",
     "SwyftTrainer",
