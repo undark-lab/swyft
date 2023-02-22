@@ -132,6 +132,14 @@ class ParameterTransform(nn.Module):
             )
 
 
+def spectral_embedding(z, Lmax=8):
+    DB = z.shape[-1]
+    f = 2 ** torch.arange(Lmax)
+    ZF = z.repeat_interleave(Lmax, dim=-1) * f.repeat(DB)
+    # Embedding multiplies last dimension size by 2*Lmax+1
+    return torch.cat([z, torch.sin(ZF), torch.cos(ZF)], dim=-1)
+
+
 class MarginalClassifier(nn.Module):
     def __init__(
         self,
@@ -141,19 +149,21 @@ class MarginalClassifier(nn.Module):
         num_blocks: int,
         dropout_probability: float = 0.0,
         use_batch_norm: bool = True,
+        Lmax: int = 0,
     ) -> None:
         super().__init__()
         self.n_marginals = n_marginals
         self.n_combined_features = n_combined_features
         self.net = ResidualNetWithChannel(
             channels=self.n_marginals,
-            in_features=self.n_combined_features,
+            in_features=self.n_combined_features * (1 + 2 * Lmax),
             out_features=1,
             hidden_features=hidden_features,
             num_blocks=num_blocks,
             dropout_probability=dropout_probability,
             use_batch_norm=use_batch_norm,
         )
+        self.Lmax = Lmax
 
     def forward(
         self, features: torch.Tensor, marginal_block: torch.Tensor
@@ -163,6 +173,8 @@ class MarginalClassifier(nn.Module):
         else:
             fb = features  # Input shape is alreadby B, M, O
         combined = torch.cat([fb, marginal_block], dim=2)  # B, M, O + P
+        if self.Lmax > 0:
+            combined = spectral_embedding(combined, Lmax=self.Lmax)
         return self.net(combined).squeeze(-1)  # B, M
 
 

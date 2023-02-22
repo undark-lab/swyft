@@ -236,7 +236,9 @@ def get_class_probs(lrs_coll, params: str):
         np.Array: Vector of length K with class probabilities
     """
     params, weights = get_weighted_samples(lrs_coll, params)
-    probs = np.array([weights[params[:,0] == k].sum() for k in range(int(params[:,0].max())+1)])
+    probs = np.array(
+        [weights[params[:, 0] == k].sum() for k in range(int(params[:, 0].max()) + 1)]
+    )
     probs /= probs.sum()
     return probs
 

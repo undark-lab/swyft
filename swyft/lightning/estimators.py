@@ -53,6 +53,7 @@ class LogRatioEstimator_Ndim(torch.nn.Module):
         dropout=0.1,
         hidden_features=64,
         num_blocks=2,
+        Lmax=0,
     ):
         super().__init__()
         self.marginals = marginals
@@ -67,6 +68,7 @@ class LogRatioEstimator_Ndim(torch.nn.Module):
             hidden_features=hidden_features,
             dropout_probability=dropout,
             num_blocks=num_blocks,
+            Lmax=Lmax,
         )
         if isinstance(varnames, str):
             basename = varnames
