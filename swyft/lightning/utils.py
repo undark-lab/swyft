@@ -360,6 +360,19 @@ def _collection_map(coll, map_fn):
     else:
         return map_fn(coll)
 
+def _collection_flatten(coll, acc = None):
+    """Flatten a nested list of collections by returning a list of all nested items."""
+    if acc is None:
+        acc = []
+    if isinstance(coll, list) or isinstance(coll, tuple):
+        for v in coll:
+            _collection_flatten(v, acc)
+    elif isinstance(coll, dict):
+        for v in coll.values():
+            _collection_flatten(v, acc)
+    else:
+        acc.append(coll)
+    return acc
 
 def _collection_select(coll, err, fn, *args, **kwargs):
     if isinstance(coll, list):
