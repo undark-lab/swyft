@@ -329,3 +329,7 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
             logratios, z.unsqueeze(-1), self.varnames, metadata={"type": "Gaussian1d"}
         )
         return out
+
+    def get_z_estimate(self, x):
+        z_estimator = (x - self.x_mean)*self.xz_cov/self.x_var**0.5 + self.z_mean
+        return z_estimator
