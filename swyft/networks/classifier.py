@@ -133,8 +133,9 @@ class ParameterTransform(nn.Module):
 
 
 def spectral_embedding(z, Lmax=8):
+    device = z.device
     DB = z.shape[-1]
-    f = 2 ** torch.arange(Lmax)
+    f = 2 ** torch.arange(Lmax, device = device)
     ZF = z.repeat_interleave(Lmax, dim=-1) * f.repeat(DB)
     # Embedding multiplies last dimension size by 2*Lmax+1
     return torch.cat([z, torch.sin(ZF), torch.cos(ZF)], dim=-1)

@@ -186,6 +186,7 @@ class LogRatioEstimator_1dim(torch.nn.Module):
         num_blocks=2,
         use_batch_norm=True,
         ptrans_online_z_score=True,
+        Lmax=0,
     ):
         """
         Default module for estimating 1-dim marginal posteriors.
@@ -209,6 +210,7 @@ class LogRatioEstimator_1dim(torch.nn.Module):
             dropout_probability=dropout,
             num_blocks=num_blocks,
             use_batch_norm=use_batch_norm,
+            Lmax=Lmax
         )
         if isinstance(varnames, list):
             self.varnames = np.array([[v] for v in varnames])
