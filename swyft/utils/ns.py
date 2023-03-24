@@ -7,41 +7,44 @@ class SwyftSimpleSliceSampler:
         self.X_init = X_init
         self.X_live = X_init*1.
         self.L_live = None
+        self.device = X_init.device
+        self._update_L(X_init)
 
-    @staticmethod
-    def _get_directions(B, D):
+    def _get_directions(self, B, D):
         """This function generates a minibatch of D-dimensional random directions."""
-        t = torch.randn(B, D)
+        t = torch.randn(B, D, device = self.device)
         l = (t**2).sum(axis=-1)**0.5
         n = t/l.unsqueeze(-1)
         return n
 
-    @staticmethod
-    def _get_slice_sample_points(B, S):
+    def _get_slice_sample_points(self, B, S):
         """This function generates a minibatch of S slice sample positions."""
-        hard_bounds = torch.tensor([-1., 1.]).unsqueeze(0).repeat((B,1))
+        hard_bounds = torch.tensor([-1., 1.], device = self.device).unsqueeze(0).repeat((B,1))
         current_bounds = hard_bounds.clone()
-        L = torch.empty((B, S))
+        L = torch.empty((B, S), device = self.device)
         for i in range(S):
-            x = torch.rand(B)*(current_bounds[:,1]-current_bounds[:,0])+current_bounds[:,0]
+            x = torch.rand(B, device = self.device)*(current_bounds[:,1]-current_bounds[:,0])+current_bounds[:,0]
             L[:,i] = x
             current_bounds[x<0,0] = x[x<0]
             current_bounds[x>0,1] = x[x>0]
         return L
     
-    def _gen_new_samples(self, X_seeds, logl_fn, logl_th, num_steps = 10, max_step_size = 1., samples_per_slice = 20):
+    def _gen_new_samples(self, X_seeds, logl_fn, logl_th, num_steps = 5, max_step_size = 1., samples_per_slice = 20):
         """This function generates new samples within the likelihodo constraint logl_fn > log_th."""
         B, D = X_seeds.shape
-        C = torch.zeros(B)  # counter for accepted points
+        C = torch.zeros(B, device = self.device)  # counter for accepted points
         X = X_seeds.clone()
-        logl = torch.ones(B)*(-np.inf)
+        logl = torch.ones(B, device = self.device)*(-np.inf)
         for i in range(num_steps):
             N = self._get_directions(B, D)
             L = self._get_slice_sample_points(B, S = samples_per_slice)*max_step_size
-            dX = N.unsqueeze(-2)*L.unsqueeze(-1)
+            dX_uniform = N.unsqueeze(-2)*L.unsqueeze(-1)
+            dX = torch.matmul(dX_uniform, self._L.T)
             pX = X.unsqueeze(-2) + dX # proposals
+            #logl_prop = logl_fn(pX.flatten(0, -2)).view(*pX_shape[:-2], -1)
             logl_prop = logl_fn(pX)
             accept_matrix = logl_prop > logl_th
+            #print(accept_matrix.sum(), logl_th)
             idx = torch.argmax(accept_matrix.int(), dim=1)
             nX = torch.stack([pX[i][idx[i]] for i in range(B)], dim=0)
             logl_selected = torch.stack([logl_prop[i][idx[i]] for i in range(B)], dim=0)
@@ -67,25 +70,28 @@ class SwyftSimpleSliceSampler:
         samples_logv = []  # estimate of constrained volume
         samples_Z = []
         samples_logwt = []
-        logl_th = -np.inf
+        logl_th = torch.tensor(-np.inf)
         Z = 0
-        Z_rest = np.inf
+        Z_rest = torch.tensor(np.inf)
 
         pbar = tqdm(range(max_steps))
         for i in pbar:
-    #        pbar.set_description("logl_min=%.2f, Z=%.2e"%(logl_th, Z))
-            pbar.set_description("Z_sum=%.2e, Z_rest=%.2e, logl_min=%.2f"%(Z, Z_rest, logl_th))
+            pbar.set_description("Z_sum=%.2e, Z_rest=%.2e, logl_min=%.2f"%(Z, Z_rest.item(), logl_th.item()))
+   #        pbar.set_description("logl_min=%.2f, Z=%.2e"%(logl_th, Z))
+   #         pbar.set_description("Z_sum=%.2e, Z_rest=%.2e, logl_min=%.2f"%(Z, Z_rest, logl_th))
+            self._update_L(X_live)
             idx_batch = np.random.choice(range(NLP), B, replace = True)
             X_batch = X_live[idx_batch]
             logl_th = L_live.min()
             if logl_th > logl_th_max:  # Stop sampling once maxmimum threshold is reached
                 break
             X_new, L_new = self._gen_new_samples(X_batch, logl_fn, logl_th, num_steps = 10)
+            #print(len(X_new), X_live.min(), X_live.max(), L_live.min(), L_live.max())
             for i in range(len(X_new)):
                 if L_new[i] > L_live.min():
-                    idx_min = np.argmin(L_live)
+                    idx_min = np.argmin(L_live.cpu().numpy())
                     Lmin = L_live[idx_min].item()*1.
-                    samples_X.append(1.*X_live[idx_min].numpy())
+                    samples_X.append(1.*X_live[idx_min].cpu().numpy())
                     samples_logl.append(Lmin)
                     samples_logv.append(np.log(V))
                     L_live[idx_min] = L_new[i]*1.0
@@ -112,7 +118,6 @@ class SwyftSimpleSliceSampler:
         self.samples_logv = samples_logv
         self.samples_logl = samples_logl
         self.samples_logwt = samples_logwt
-        return samples_X, samples_logv, samples_logl, samples_logwt, X_live, L_live
 
     def grow_live_points(self, logl_fn, logl_th_max = -1.0, num_batch_samples = 100, num_samples = 10000):
         X_init = self.X_live
@@ -171,3 +176,10 @@ class SwyftSimpleSliceSampler:
         wt = torch.exp(logv[mask]-logv[mask].max())
         n_eff = sum(wt)**2/sum(wt**2)
         return n_eff.item()
+    
+    def _update_L(self, X):
+        #X = self.X_live*1.
+        cov = torch.cov(X.T)
+        L = torch.linalg.cholesky(cov)
+        self._L = L
+
