@@ -89,7 +89,7 @@ class SwyftModule(pl.LightningModule):
             logratios = torch.cat(
                 [val.logratios.flatten(start_dim=1) for val in out], dim=1
             )
-        elif isinstance(out, LogRatioSamples):
+        elif isinstance(out, swyft.LogRatioSamples):
             logratios = out.logratios.flatten(start_dim=1)
         else:
             logratios = None
@@ -148,12 +148,13 @@ class SwyftModule(pl.LightningModule):
         return loss_tot
 
     def _get_aux_losses(self, out):
-        masked_out = _collection_mask(out, lambda v: isinstance(v, swyft.AuxLoss))
-        flattened_out = _collection_flatten(masked_out)
-        if flattened_out == []:
+        flattened_out = _collection_flatten(out)
+        filtered_out = [v for v in flattened_out if isinstance(v, swyft.AuxLoss)]
+        if len(filtered_out) == 0:
             return None
-        losses = torch.cat([v.loss.unsqueeze(-1) for v in flattened_out], dim=1)
-        return losses
+        else:
+            losses = torch.cat([v.loss.unsqueeze(-1) for v in flattened_out], dim=1)
+            return losses
 
     def training_step(self, batch, batch_idx):
         loss = self._calc_loss(batch)
