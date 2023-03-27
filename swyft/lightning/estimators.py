@@ -335,3 +335,59 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
     def get_z_estimate(self, x):
         z_estimator = (x - self.x_mean)*self.xz_cov/self.x_var**0.5 + self.z_mean
         return z_estimator
+
+
+
+class LogRatioEstimator_Autoregressive(nn.Module):
+    def __init__(self, num_features, num_params, varnames, dropout, num_blocks, hidden_features):
+        super().__init__()
+        self.cl1 = swyft.LogRatioEstimator_1dim(
+            num_features = num_features + num_params,
+            num_params = num_params,
+            varnames = varnames,
+            dropout = dropout,
+            num_blocks = num_blocks,
+            hidden_features = hidden_features,
+            Lmax=0,
+        )
+        self.cl2 = swyft.LogRatioEstimator_1dim(
+            num_features = num_features + num_params,
+            num_params = num_params,
+            varnames = varnames,
+            dropout = 0.1,
+            num_blocks = 2,
+            hidden_features = 256,
+            Lmax=0,
+        )
+        self.num_params = num_params
+        
+    def forward(self, xA, zA, zB):
+        xA, zB = swyft.equalize_tensors(xA, zB)
+        xA, zA = swyft.equalize_tensors(xA, zA)
+        
+        fA = torch.cat([xA, zA], dim=-1)
+        fA = fA.unsqueeze(1)
+        fA = fA.repeat((1, self.num_params, 1))
+        mask = torch.ones(self.num_params, fA.shape[-1], device=fA.device)
+        for i in range(self.num_params):
+            mask[i, -self.num_params+i:] = 0
+        fA = fA*mask
+        logratios1 = self.cl1(fA, zB)
+        
+        fA = torch.cat([xA*0, zA], dim=-1)
+        fA = fA.unsqueeze(1)
+        fA = fA.repeat((1, self.num_params, 1))
+        mask = torch.ones(self.num_params, fA.shape[-1], device=fA.device)
+        for i in range(self.num_params):
+            mask[i, -self.num_params+i:] = 0
+        fA = fA*mask
+        logratios2 = self.cl2(fA, zB)
+        
+        l1 = logratios1.logratios.sum(-1)
+        l2 = logratios2.logratios.sum(-1)
+        l2 = torch.where(l2 > 0, l2, 0)
+        l = (l1-l2).detach().unsqueeze(-1)
+        
+        logratios_tot = swyft.LogRatioSamples(l, logratios1.params, logratios1.parnames)
+                
+        return dict(lrs_total=logratios_tot, lrs_partials1=logratios1, lrs_partials2=logratios2)
