@@ -354,9 +354,9 @@ class LogRatioEstimator_Autoregressive(nn.Module):
             num_features = num_features + num_params,
             num_params = num_params,
             varnames = varnames,
-            dropout = 0.1,
-            num_blocks = 2,
-            hidden_features = 256,
+            dropout = dropout,
+            num_blocks = num_blocks,
+            hidden_features = hidden_features,
             Lmax=0,
         )
         self.num_params = num_params
