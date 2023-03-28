@@ -39,7 +39,7 @@ class SwyftSimpleSliceSampler:
             current_bounds[x>0,1] = x[x>0]
         return L
     
-    def _gen_new_samples(self, X_seeds, logl_fn, logl_th, num_steps = 5, max_step_size = 1., samples_per_slice = 20, Lchol = None):
+    def _gen_new_samples(self, X_seeds, logl_fn, logl_th, num_steps = 3, max_step_size = 1., samples_per_slice = 5, Lchol = None):
         """This function generates new samples within the likelihodo constraint logl_fn > log_th."""
         if Lchol is None:
             Lchol = self._calc_Lchol(X_seeds)
@@ -71,7 +71,8 @@ class SwyftSimpleSliceSampler:
         return X[C==num_steps], logl[C==num_steps]
 
     
-    def nested_sampling(self, logl_fn, logl_th_max = np.inf, max_steps = 100000, num_batch_samples = 100, epsilon = 1e-6):
+    def nested_sampling(self, logl_fn, logl_th_max = np.inf, max_steps = 100000, num_batch_samples = 200, epsilon = 1e-6,
+            max_step_size = 1., samples_per_slice = 10, num_steps = 5):
         """Run nested sampling, staring with X_init live points."""
         X_init = self.X_live
         NLP, D = X_init.shape
@@ -100,7 +101,8 @@ class SwyftSimpleSliceSampler:
             if logl_th > logl_th_max:  # Stop sampling once maxmimum threshold is reached
                 break
             Lchol = self._calc_Lchol(X_live)
-            X_new, L_new = self._gen_new_samples(X_batch, logl_fn, logl_th, num_steps = 10, Lchol = Lchol)
+            X_new, L_new = self._gen_new_samples(X_batch, logl_fn, logl_th, num_steps = num_steps,
+                    Lchol = Lchol, max_step_size = max_step_size, samples_per_slice = samples_per_slice)
 
             for i in range(len(X_new)):
                 if L_new[i] > L_live.min():
