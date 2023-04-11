@@ -391,3 +391,183 @@ class LogRatioEstimator_Autoregressive(nn.Module):
         logratios_tot = swyft.LogRatioSamples(l, logratios1.params, logratios1.parnames)
                 
         return dict(lrs_total=logratios_tot, lrs_partials1=logratios1, lrs_partials2=logratios2)
+
+    
+class LogRatioEstimator_Gaussian(torch.nn.Module):
+    """Estimating posteriors assuming that they are Gaussian."""
+
+    def __init__(
+        self, num_params, varnames=None, momentum: float = 0.02, minstd: float = 1e-3
+    ):
+        super().__init__()
+        self._momentum = momentum
+        self._mean = None
+        self._cov = None
+        self._minstd = minstd
+
+        if isinstance(varnames, list):
+            self.varnames = np.array([[v] for v in varnames])
+        else:
+            self.varnames = np.array(
+                [[varnames + "[%i]" % i] for i in range(num_params)]
+            )
+         
+    @staticmethod
+    def _get_mean_cov(x, correction = 1):
+        # (B, *, D)
+        mean = x.mean(dim=0) # (*, D)
+        diffs = x - mean # (B, *, D)
+        N = len(x)
+        covs = torch.einsum(diffs.unsqueeze(-1), [0, ...], diffs.unsqueeze(-2), [0, ...], [...])/(N-correction)
+        return mean, covs  # (*, D), (*, D, D)
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor):
+        """Gaussian approximation to marginals and joint, assuming (B, N).
+        
+        a shape: (B, N, D1)
+        b shape: (B, N, D2)
+        
+        """
+        
+        a_dim = a.shape[-1]
+        b_dim = b.shape[-1]
+        
+        if self.training or self._mean is None:
+            batch_size = len(a)
+            idx = np.arange(batch_size)
+
+            X = torch.cat([a[idx], b[idx]], dim=-1).detach()
+
+            # Estimation w/o Bessel's correction
+            # Using simple MLE estimate (https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices)
+            mean_batch, cov_batch = self._get_mean_cov(X, correction=0)
+
+            # Momentum-based update rule
+            momentum = self._momentum
+            self._mean = (
+                mean_batch
+                if self._mean is None
+                else (1 - momentum) * self._mean + momentum * mean_batch
+            )
+            self._cov = (
+                cov_batch
+                if self._cov is None
+                else (1 - momentum) * self._cov + momentum * cov_batch
+            )
+
+        # Match tensor batch dimensions
+        a, b = swyft.equalize_tensors(a, b)
+        
+        # Get standard normal distributed parameters
+        X = torch.cat([a, b], dim=-1).double()
+
+        dist_ab = torch.distributions.multivariate_normal.MultivariateNormal(
+            self._mean, covariance_matrix = self._cov.double()) 
+        logprobs_ab = dist_ab.log_prob(X)
+        
+        dist_b = torch.distributions.multivariate_normal.MultivariateNormal(
+            self._mean[..., a_dim:], covariance_matrix = self._cov[..., a_dim:, a_dim:].double()) 
+        logprobs_b = dist_b.log_prob(X[..., a_dim:])
+        
+        dist_a = torch.distributions.multivariate_normal.MultivariateNormal(
+            self._mean[..., :a_dim], covariance_matrix = self._cov[..., :a_dim, :a_dim].double()) 
+        logprobs_a = dist_a.log_prob(X[..., :a_dim])
+        
+        logratios = logprobs_ab - logprobs_b - logprobs_a
+        
+        lrs = swyft.LogRatioSamples(logratios, a, self.varnames)
+           
+        return lrs
+    
+    
+class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
+    def __init__(self, num_params, varnames):
+        super().__init__()
+        self.cl = LogRatioEstimator_Gaussian(num_params, varnames = varnames)
+        self.num_params = num_params
+        self.mask = nn.Parameter(self.get_mask(num_params), requires_grad = False)
+        self.A = nn.Parameter(0.5*torch.ones(num_params, num_params), requires_grad = True)
+        self.B = nn.Linear(num_params, num_params, bias = False)
+
+    @property
+    def Phi(self):
+        return self.mask*self.A
+
+    @staticmethod
+    def get_mask(D):
+        mask = torch.ones(D, D)
+        for i in range(D):
+            mask[i, i:] = 0
+        return mask
+
+    def forward(self, xA, zA, zB):
+        fA = torch.matmul(zA, self.Phi.T) + torch.randn_like(xA)*1e-10
+        fM = torch.stack([self.B(xA),fA], dim=-1)
+        logratios = self.cl(fM, zB.unsqueeze(-1))
+
+        return logratios
+
+    def get_likelihood_components(self, z, double_precision = True):
+        """Returns linear and quadratic component of likelihood ln p(x|z).
+
+        ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
+
+        Returns:
+            invN, b: torch.Tensor, torch.Tensor
+        """
+        mean = self.cl._mean.detach()
+        cov = self.cl._cov.detach()
+        L = self.Phi.detach()
+        B = self.B.weight.detach()
+
+        if double_precision:
+            cov = cov.double()
+            mean = mean.double()
+            L = L.double()
+            B = B.double()
+            z = z.double()
+
+        bm, lm, zm = mean.T
+        invSigma_eff = torch.linalg.inv(cov)
+        invSigma_eff[:,1:2,1:2] += torch.linalg.inv(cov[:,1:2,1:2])
+        invSigma_eff[:,:2,:2] -= torch.linalg.inv(cov[:,:2,:2])
+        invSigma_eff[:,1:,1:] -= torch.linalg.inv(cov[:,1:,1:])
+        D11 = invSigma_eff[:,0,0]
+        D22 = invSigma_eff[:,1,1]
+        D33 = invSigma_eff[:,2,2]
+        D23 = invSigma_eff[:,1,2]
+        D12 = invSigma_eff[:,0,1]
+        D13 = invSigma_eff[:,0,2]
+
+        quadratic = (
+            torch.diag(D33)
+            + torch.matmul(torch.matmul(L.T, torch.diag(D22)), L)
+            + torch.matmul(L.T, torch.diag(D23))
+            + torch.matmul(torch.diag(D23), L)
+        )
+
+        b = torch.matmul(B, z)
+        linear = (
+        torch.matmul(torch.diag(D13)+torch.matmul(L.T, torch.diag(D12)), b-bm)-
+        torch.matmul(torch.diag(D23)+torch.matmul(L.T, torch.diag(D22)), lm)-
+        torch.matmul(torch.diag(D33)+torch.matmul(L.T, torch.diag(D23)), zm)
+        )
+
+        return quadratic, linear
+
+    def get_MAP(self, z, cov = None, double_precision = True):
+        invN, b = self.get_likelihood_components(z, double_precision = double_precision)
+        if cov is not None:
+            z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(cov)), -b)
+        else:
+            z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
+        return z_MAP
+
+    def get_samples(self, n, z, cov = None, gamma = 1):
+        best = self.get_MAP(z, cov = cov)
+        invN, b = self.get_likelihood_components(z)
+        invN = invN*gamma
+        newcov = torch.linalg.inv(invN+torch.linalg.inv(cov))
+        dist = torch.distributions.MultivariateNormal(best, newcov)
+        draws = dist.sample(torch.Size([n]))
+        return draws
