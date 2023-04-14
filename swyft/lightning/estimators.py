@@ -431,7 +431,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         
         a_dim = a.shape[-1]
         b_dim = b.shape[-1]
-        
+
         if self.training or self._mean is None:
             batch_size = len(a)
             idx = np.arange(batch_size)
@@ -507,7 +507,7 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
 
         return logratios
 
-    def get_likelihood_components(self, z, double_precision = True):
+    def get_likelihood_components(self, z, double_precision = True, enforce_positivity = True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
@@ -546,6 +546,11 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
             + torch.matmul(torch.diag(D23), L)
         )
 
+        if enforce_positivity:
+            mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
+            quadratic = quadratic - torch.eye(len(quadratic)).to(quadratic.device)*mineig*1.0
+            print(mineig)
+
         b = torch.matmul(B, z)
         linear = (
         torch.matmul(torch.diag(D13)+torch.matmul(L.T, torch.diag(D12)), b-bm)-
@@ -556,16 +561,16 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         return quadratic, linear
 
     def get_MAP(self, z, cov = None, double_precision = True):
-        invN, b = self.get_likelihood_components(z, double_precision = double_precision)
+        invN, b = self.get_likelihood_components(z, double_precision = double_precision, enforce_positivity = False)
         if cov is not None:
             z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(cov)), -b)
         else:
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
         return z_MAP
 
-    def get_samples(self, n, z, cov = None, gamma = 1):
+    def get_samples(self, n, z, cov = None, gamma = 1.):
         best = self.get_MAP(z, cov = cov)
-        invN, b = self.get_likelihood_components(z)
+        invN, _ = self.get_likelihood_components(z, enforce_positivity = True)
         invN = invN*gamma
         newcov = torch.linalg.inv(invN+torch.linalg.inv(cov))
         dist = torch.distributions.MultivariateNormal(best, newcov)
