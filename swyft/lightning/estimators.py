@@ -230,7 +230,10 @@ class LogRatioEstimator_1dim(torch.nn.Module):
 
 
 class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
-    """Estimating posteriors assuming that they are Gaussian."""
+    """Estimating posteriors assuming that they are Gaussian.
+
+    DEPRECATED: Use LogRatioEstimator_Gaussian instead.
+    """
 
     def __init__(
         self, num_params, varnames=None, momentum: float = 0.1, minstd: float = 1e-3
@@ -337,8 +340,8 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
         return z_estimator
 
 
-
 class LogRatioEstimator_Autoregressive(nn.Module):
+    r"""Conventional autoregressive model, based on swyft.LogRatioEstimator_1dim."""
     def __init__(self, num_features, num_params, varnames, dropout, num_blocks, hidden_features):
         super().__init__()
         self.cl1 = swyft.LogRatioEstimator_1dim(
@@ -394,10 +397,17 @@ class LogRatioEstimator_Autoregressive(nn.Module):
 
     
 class LogRatioEstimator_Gaussian(torch.nn.Module):
-    """Estimating posteriors with Gaussian approximation."""
+    """Estimating posteriors with Gaussian approximation.
+
+    Args:
+        num_params: Length of parameter vector.
+        varnames: List of name of parameter vector. If a single string is provided, indices are attached automatically.
+        momentum: Momentum of covariance and mean estimates
+        minstd: Minimum standard deviation to enforce numerical stability
+    """
 
     def __init__(
-        self, num_params, varnames=None, momentum: float = 0.02, minstd: float = 1e-3
+        self, num_params, varnames=None, momentum: float = 0.02, minstd: float = 1e-10
     ):
         super().__init__()
         self._momentum = momentum
@@ -420,6 +430,15 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         N = len(x)
         covs = torch.einsum(diffs.unsqueeze(-1), [0, ...], diffs.unsqueeze(-2), [0, ...], [...])/(N-correction)
         return mean, covs  # (*, D), (*, D, D)
+
+
+    @property
+    def cov(self):
+        return self._cov + torch.eye(self._mean.shape[-1]).to(self._cov.device)*self._minstd**2
+
+    @property
+    def mean(self):
+        return self._mean
 
     def forward(self, a: torch.Tensor, b: torch.Tensor):
         """Gaussian approximation to marginals and joint, assuming (B, N).
@@ -455,6 +474,8 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
                 else (1 - momentum) * self._cov + momentum * cov_batch
             )
 
+        cov = self.cov
+
         # Match tensor batch dimensions
         a, b = swyft.equalize_tensors(a, b)
         
@@ -462,15 +483,15 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         X = torch.cat([a, b], dim=-1).double()
 
         dist_ab = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean, covariance_matrix = self._cov.double()) 
+            self._mean, covariance_matrix = cov.double()) 
         logprobs_ab = dist_ab.log_prob(X)
         
         dist_b = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean[..., a_dim:], covariance_matrix = self._cov[..., a_dim:, a_dim:].double()) 
+            self._mean[..., a_dim:], covariance_matrix = cov[..., a_dim:, a_dim:].double()) 
         logprobs_b = dist_b.log_prob(X[..., a_dim:])
         
         dist_a = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean[..., :a_dim], covariance_matrix = self._cov[..., :a_dim, :a_dim].double()) 
+            self._mean[..., :a_dim], covariance_matrix = cov[..., :a_dim, :a_dim].double()) 
         logprobs_a = dist_a.log_prob(X[..., :a_dim])
         
         logratios = logprobs_ab - logprobs_b - logprobs_a
@@ -481,29 +502,50 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
     
     
 class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
-    def __init__(self, num_params, varnames, L_init = None):
+    r"""Estimate Gaussian log-ratios with an autoregressive model.
+
+    Args:
+        num_params: Length of parameter vector.
+        varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
+        L_init: Optional initial values for L-matrix.
+        minstd: Minimum standard deviation to enforce numerical stability
+
+    The forward method returns an swyft.LogRatioSamples object.
+    """
+
+    def __init__(self, num_params, varnames, L_init = None, minstd: float = 1e-10):
         super().__init__()
-        self.cl = LogRatioEstimator_Gaussian(num_params, varnames = varnames)
+        self.cl = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd)
         self.num_params = num_params
-        self.mask = nn.Parameter(self.get_mask(num_params), requires_grad = False)
+        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
         if L_init is None:
-            L_init = 1e-1*torch.ones(num_params, num_params)
+            L_init = 0.1*torch.ones(num_params, num_params)
         self.L_full = nn.Parameter(L_init, requires_grad = True)
 
     @property
     def L(self):
-        return self.mask*self.L_full
+        """Lower triangular matrix of parameter correlations."""
+        return self._mask*self.L_full
 
     @staticmethod
-    def get_mask(D):
+    def _get_mask(D):
         mask = torch.ones(D, D)
         for i in range(D):
             mask[i, i:] = 0
         return mask
 
     def forward(self, xA, zA, zB):
-        # NEXT: Remove noise contribution
-        lA = torch.matmul(zA, self.L.T) # + torch.randn_like(xA)*1e-10
+        """Forward method.
+
+        Args:
+            xA: Data vector (num_params,)
+            zA: True parameters (num_params,)
+            zB: Contrastive parameters (num_params,)
+
+        Returns:
+            swyft.LogRatioSamples
+        """
+        lA = torch.matmul(zA, self.L.T) # + torch.randn_like(xA)*1e-1
         fA = torch.stack([xA, lA], dim=-1)
         logratios = self.cl(fA, zB.unsqueeze(-1))
 
@@ -514,11 +556,16 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
 
         ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
 
+        Args:
+            x: Data vector
+            double_precision: Use double precision for matrix inversions
+            enfore_positivity: Add diagonal matrix to enfore positivity of quadratic terms
+
         Returns:
             invN, b: torch.Tensor, torch.Tensor
         """
-        mean = self.cl._mean.detach()
-        cov = self.cl._cov.detach()
+        mean = self.cl.mean.detach()
+        cov = self.cl.cov.detach()
         L = self.L.detach()
 
         if double_precision:
@@ -560,6 +607,17 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         return quadratic, linear
 
     def get_MAP(self, x, prior_cov = None, double_precision = True):
+        """Generate MAP estimator for z.
+
+        Args:
+            x: Data vector
+            prior_cov: Prior covariance matrix
+            double_precision: Use double precision for matrix inversion
+
+        Returns:
+            torch.tensor: MAP estimator
+        """
+
         invN, b = self.get_likelihood_components(x, double_precision = double_precision, enforce_positivity = False)
         if prior_cov is not None:
             z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b)
@@ -568,6 +626,20 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         return z_MAP
 
     def get_post_samples(self, N, x, prior_cov = None, gamma = 1.):
+        """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
+
+        Args:
+            x: Data vector
+            prior_cov: Prior covariance matrix
+            gamma: Rescaling factor for likelihood covariance matrix
+
+        Returns:
+            Samples
+
+        Note: This is expected to work for significantly less than 1e4
+        dimensions. For more parameters, other techniques directly based on the
+        likelihood quadratic and linear components should be used.
+        """
         best = self.get_MAP(x, prior_cov = prior_cov)
         invN, _ = self.get_likelihood_components(x, enforce_positivity = True)
         invN = invN*gamma
