@@ -431,7 +431,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         
         a_dim = a.shape[-1]
         b_dim = b.shape[-1]
-        
+
         if self.training or self._mean is None:
             batch_size = len(a)
             idx = np.arange(batch_size)
@@ -487,7 +487,6 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         self.num_params = num_params
         self.mask = nn.Parameter(self.get_mask(num_params), requires_grad = False)
         self.A = nn.Parameter(0.5*torch.ones(num_params, num_params), requires_grad = True)
-        self.B = nn.Linear(num_params, num_params, bias = False)
 
     @property
     def Phi(self):
@@ -502,12 +501,12 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
 
     def forward(self, xA, zA, zB):
         fA = torch.matmul(zA, self.Phi.T) + torch.randn_like(xA)*1e-10
-        fM = torch.stack([self.B(xA),fA], dim=-1)
+        fM = torch.stack([xA, fA], dim=-1)
         logratios = self.cl(fM, zB.unsqueeze(-1))
 
         return logratios
 
-    def get_likelihood_components(self, z, double_precision = True):
+    def get_likelihood_components(self, x, double_precision = True, enforce_positivity = True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
@@ -518,14 +517,12 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         mean = self.cl._mean.detach()
         cov = self.cl._cov.detach()
         L = self.Phi.detach()
-        B = self.B.weight.detach()
 
         if double_precision:
             cov = cov.double()
             mean = mean.double()
             L = L.double()
-            B = B.double()
-            z = z.double()
+            x = x.double()
 
         bm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
@@ -546,9 +543,13 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
             + torch.matmul(torch.diag(D23), L)
         )
 
-        b = torch.matmul(B, z)
+        if enforce_positivity:
+            mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
+            quadratic = quadratic - torch.eye(len(quadratic)).to(quadratic.device)*mineig*1.0
+            print(mineig)
+
         linear = (
-        torch.matmul(torch.diag(D13)+torch.matmul(L.T, torch.diag(D12)), b-bm)-
+        torch.matmul(torch.diag(D13)+torch.matmul(L.T, torch.diag(D12)), x-bm)-
         torch.matmul(torch.diag(D23)+torch.matmul(L.T, torch.diag(D22)), lm)-
         torch.matmul(torch.diag(D33)+torch.matmul(L.T, torch.diag(D23)), zm)
         )
@@ -556,16 +557,16 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         return quadratic, linear
 
     def get_MAP(self, z, cov = None, double_precision = True):
-        invN, b = self.get_likelihood_components(z, double_precision = double_precision)
+        invN, b = self.get_likelihood_components(z, double_precision = double_precision, enforce_positivity = False)
         if cov is not None:
             z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(cov)), -b)
         else:
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
         return z_MAP
 
-    def get_samples(self, n, z, cov = None, gamma = 1):
+    def get_samples(self, n, z, cov = None, gamma = 1.):
         best = self.get_MAP(z, cov = cov)
-        invN, b = self.get_likelihood_components(z)
+        invN, _ = self.get_likelihood_components(z, enforce_positivity = True)
         invN = invN*gamma
         newcov = torch.linalg.inv(invN+torch.linalg.inv(cov))
         dist = torch.distributions.MultivariateNormal(best, newcov)
