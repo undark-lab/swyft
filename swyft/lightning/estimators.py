@@ -596,6 +596,7 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         # NEXT: Check if really necessary
         if enforce_positivity:
             mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
+        #    print(mineig)
             quadratic = quadratic - torch.eye(len(quadratic)).to(quadratic.device)*mineig*1.0
 
         linear = (
@@ -668,10 +669,10 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         self.num_params = num_params
         self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
         if L1_init is None:
-            L1_init = 0.01*torch.ones(num_params, num_params)
+            L1_init = 0.1*torch.ones(num_params, num_params)
         self.L1_full = nn.Parameter(L1_init, requires_grad = True)
         if L2_init is None:
-            L2_init = 0.01*torch.ones(num_params, num_params)
+            L2_init = 0.1*torch.ones(num_params, num_params)
         self.L2_full = nn.Parameter(L2_init, requires_grad = True)
 
     @property
@@ -744,6 +745,7 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         cov = self.cl2.cov.detach()
         L2 = self.L2.detach()
         G, D = self.get_prior_decomposition()
+        #print(D[:10])
 
         if double_precision:
             cov = cov.double()
