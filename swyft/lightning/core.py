@@ -153,7 +153,7 @@ class SwyftModule(pl.LightningModule):
         if len(filtered_out) == 0:
             return None
         else:
-            losses = torch.cat([v.loss.unsqueeze(-1) for v in flattened_out], dim=1)
+            losses = torch.cat([v.loss.unsqueeze(-1) for v in filtered_out], dim=1)
             return losses
 
     def training_step(self, batch, batch_idx):
