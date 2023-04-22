@@ -669,10 +669,12 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         self.num_params = num_params
         self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
         if L1_init is None:
-            L1_init = 0.1*torch.ones(num_params, num_params)
+            L1_init = torch.ones(num_params, num_params)*0.1
+#            L1_init += torch.diag(torch.ones(num_params-1), diagonal=-1)*0.1
         self.L1_full = nn.Parameter(L1_init, requires_grad = True)
         if L2_init is None:
-            L2_init = 0.1*torch.ones(num_params, num_params)
+            L2_init = torch.ones(num_params, num_params)*0.1
+#            L2_init += torch.diag(torch.ones(num_params-1), diagonal=-1)*0.1
         self.L2_full = nn.Parameter(L2_init, requires_grad = True)
 
     @property
