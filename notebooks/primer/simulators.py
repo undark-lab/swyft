@@ -50,7 +50,7 @@ class SimulatorBlob(swyft.Simulator):
         Cov *= 2
         dist = torch.distributions.MultivariateNormal(torch.zeros(N), Cov)
         R = (L1**2+L2**2)**0.5
-        weights = torch.exp(-0.5*R**2/0.3**2)
+        weights = torch.exp(-0.5*(R-0.5)**2/0.1**2)*0 + 1
         return weights, dist, Cov
         
     def sample_GP(self):
