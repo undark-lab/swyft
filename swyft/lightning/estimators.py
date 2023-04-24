@@ -726,7 +726,7 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         """
         cov = self.cl1.cov
         invCov = torch.linalg.inv(cov)
-        G = torch.eye(len(self.L1)) + torch.matmul(torch.diag(invCov[:,0,1]/invCov[:,0,0]), self.L1)
+        G = torch.eye(len(self.L1)).to(cov.device) + torch.matmul(torch.diag(invCov[:,0,1]/invCov[:,0,0]), self.L1)
         D = invCov[:,0,0]
         return G, D
 
