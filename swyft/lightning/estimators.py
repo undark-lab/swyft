@@ -342,7 +342,7 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
 
 class LogRatioEstimator_Autoregressive(nn.Module):
     r"""Conventional autoregressive model, based on swyft.LogRatioEstimator_1dim."""
-    def __init__(self, num_features, num_params, varnames, dropout, num_blocks, hidden_features):
+    def __init__(self, num_features, num_params, varnames, dropout = 0.1, num_blocks = 2, hidden_features = 64):
         super().__init__()
         self.cl1 = swyft.LogRatioEstimator_1dim(
             num_features = num_features + num_params,
