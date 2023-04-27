@@ -5,13 +5,19 @@ Welcome!  You can find here a collection of tutorials that introduce the basic
 functionalites of Swyft.  If anything is unclear, don't hesistate to ask
 questions `here <https://github.com/undark-lab/swyft/discussions>`_.
 
-
 .. toctree::
-   :caption: Notebooks:
+   :caption: 15 min crash course:
    :maxdepth: 1
    :glob:
 
-   notebooks/Swyft*
+   notebooks/00*
+
+
+.. toctree::
+   :caption: Basic tutorials:
+   :maxdepth: 1
+   :glob:
+
    notebooks/0A*
    notebooks/0B*
    notebooks/0C*
@@ -20,4 +26,16 @@ questions `here <https://github.com/undark-lab/swyft/discussions>`_.
    notebooks/0F*
    notebooks/0G*
    notebooks/0H*
-   notebooks/01*
+   notebooks/0I*
+   notebooks/0J*
+
+
+
+.. toctree::
+   :caption: Applications:
+   :maxdepth: 1
+   :glob:
+
+   notebooks/1A*
+   notebooks/1B*
+   notebooks/1C*

@@ -80,9 +80,9 @@ class SwyftDataModule(pl.LightningDataModule):
             splits = torch.utils.data.random_split(dataset, self.lengths)
             self.dataset_train, self.dataset_val, self.dataset_test = splits
         elif isinstance(self.data, swyft.ZarrStore):
-            idxr1 = (0, self.lengths[1])
-            idxr2 = (self.lengths[1], self.lengths[1] + self.lengths[2])
-            idxr3 = (self.lengths[1] + self.lengths[2], len(self.data))
+            idxr1 = (0, self.lengths[0])
+            idxr2 = (self.lengths[0], self.lengths[0] + self.lengths[1])
+            idxr3 = (self.lengths[0] + self.lengths[1], len(self.data))
             self.dataset_train = self.data.get_dataset(
                 idx_range=idxr1, on_after_load_sample=self.on_after_load_sample
             )
