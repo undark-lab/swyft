@@ -18,7 +18,6 @@ questions `here <https://github.com/undark-lab/swyft/discussions>`_.
    :maxdepth: 1
    :glob:
 
-   notebooks/00*
    notebooks/0A*
    notebooks/0B*
    notebooks/0C*
@@ -29,9 +28,6 @@ questions `here <https://github.com/undark-lab/swyft/discussions>`_.
    notebooks/0H*
    notebooks/0I*
    notebooks/0J*
-   notebooks/1A*
-   notebooks/1B*
-   notebooks/1C*
 
 
 
