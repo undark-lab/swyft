@@ -849,6 +849,28 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
         return z_MAP
 
+    def get_prior_samples(self, N, prior_cov = None):
+        """Generate samples from approximate prior, based on output of prior decomposition.
+
+        Args:
+            N: Number of requested samples.
+            prior_cov: Prior covariance matrix (if provided, overwrites approximate prior)
+
+        Returns:
+            torch.tensor: Samples
+        """
+        if prior_cov is None:
+            G, D = self.get_prior_decomposition()
+            G = G.double()
+            D = D.double()
+            inv_cov = torch.matmul(torch.matmul(G.T, torch.diag(D)), G).double()
+            cov = torch.linalg.inv(inv_cov)
+        else:
+            cov = prior_cov.double()*1.
+        dist = torch.distributions.MultivariateNormal(torch.zeros(len(cov)).to(cov.device).double(), covariance_matrix = cov)
+        draws = dist.sample(torch.Size((N, )))
+        return draws
+
     def get_post_samples(self, N, x, prior_cov = None, gamma = 1.):
         """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
 
