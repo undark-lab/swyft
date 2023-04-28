@@ -670,11 +670,9 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
         if L1_init is None:
             L1_init = torch.ones(num_params, num_params)*0.1
-#            L1_init += torch.diag(torch.ones(num_params-1), diagonal=-1)*0.1
         self.L1_full = nn.Parameter(L1_init, requires_grad = True)
         if L2_init is None:
             L2_init = torch.ones(num_params, num_params)*0.1
-#            L2_init += torch.diag(torch.ones(num_params-1), diagonal=-1)*0.1
         self.L2_full = nn.Parameter(L2_init, requires_grad = True)
 
     @property
@@ -730,7 +728,7 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         D = invCov[:,0,0]
         return G, D
 
-    def get_likelihood_components(self, x, double_precision = True, enforce_positivity = True):
+    def get_likelihood_components(self, x, double_precision = True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
@@ -738,7 +736,6 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         Args:
             x: Data vector
             double_precision: Use double precision for matrix inversions
-            enfore_positivity: Add diagonal matrix to enfore positivity of quadratic terms
 
         Returns:
             invN, b: torch.Tensor, torch.Tensor
@@ -746,8 +743,7 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         mean = self.cl2.mean.detach()
         cov = self.cl2.cov.detach()
         L2 = self.L2.detach()
-        G, D = self.get_prior_decomposition()
-        #print(D[:10])
+        G, _ = self.get_prior_decomposition()
 
         if double_precision:
             cov = cov.double()
@@ -759,10 +755,6 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
         invSigma_eff[:,2:,2:] -= torch.linalg.inv(cov[:,2:,2:])
-        #invSigma_eff = torch.linalg.inv(cov)
-        #invSigma_eff[:,1:2,1:2] += torch.linalg.inv(cov[:,1:2,1:2])
-        #invSigma_eff[:,:2,:2] -= torch.linalg.inv(cov[:,:2,:2])
-        #invSigma_eff[:,1:,1:] -= torch.linalg.inv(cov[:,1:,1:])
         D00 = invSigma_eff[:,0,0]
         D11 = invSigma_eff[:,1,1]
         D22 = invSigma_eff[:,2,2]
@@ -778,11 +770,55 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         )
         quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
 
-        # NEXT: Check if really necessary
-#        if enforce_positivity:
-#        mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
-#        print(mineig)
-#        quadratic = quadratic - torch.eye(len(quadratic)).to(quadratic.device)*mineig*1.0
+        linear = (
+        torch.matmul(torch.diag(D02)+torch.matmul(L2.T, torch.diag(D01)), x-xm)-
+        torch.matmul(torch.diag(D12)+torch.matmul(L2.T, torch.diag(D11)), lm)-
+        torch.matmul(torch.diag(D22)+torch.matmul(L2.T, torch.diag(D12)), zm)
+        )
+        linear = torch.matmul(G.T, linear)
+
+        return quadratic, linear
+
+    def get_posterior_components(self, x, double_precision = True):
+        """Returns linear and quadratic component of likelihood ln p(x|z).
+
+        ln p(z|x) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
+
+        Args:
+            x: Data vector
+            double_precision: Use double precision for matrix inversions
+
+        Returns:
+            invN, b: torch.Tensor, torch.Tensor
+        """
+        mean = self.cl2.mean.detach()
+        cov = self.cl2.cov.detach()
+        L2 = self.L2.detach()
+        G, _ = self.get_prior_decomposition()
+
+        if double_precision:
+            cov = cov.double()
+            mean = mean.double()
+            L2 = L2.double()
+            x = x.double()
+            G = G.double()
+
+        xm, lm, zm = mean.T
+        invSigma_eff = torch.linalg.inv(cov)
+        D00 = invSigma_eff[:,0,0]
+        D11 = invSigma_eff[:,1,1]
+        D22 = invSigma_eff[:,2,2]
+        D12 = invSigma_eff[:,1,2]
+        D01 = invSigma_eff[:,0,1]
+        D02 = invSigma_eff[:,0,2]
+
+        quadratic = (
+            torch.diag(D22)
+            + torch.matmul(torch.matmul(L2.T, torch.diag(D11)), L2)
+            + torch.matmul(L2.T, torch.diag(D12))
+            + torch.matmul(torch.diag(D12), L2)
+        )
+        quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
 
         linear = (
         torch.matmul(torch.diag(D02)+torch.matmul(L2.T, torch.diag(D01)), x-xm)-
@@ -805,10 +841,11 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
             torch.tensor: MAP estimator
         """
 
-        invN, b = self.get_likelihood_components(x, double_precision = double_precision, enforce_positivity = False)
         if prior_cov is not None:
+            invN, b = self.get_likelihood_components(x, double_precision = double_precision)
             z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b)
         else:
+            invN, b = self.get_posterior_components(x, double_precision = double_precision)
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
         return z_MAP
 
@@ -828,9 +865,14 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         likelihood quadratic and linear components should be used.
         """
         best = self.get_MAP(x, prior_cov = prior_cov)
-        invN, _ = self.get_likelihood_components(x, enforce_positivity = True)
-        invN = invN*gamma
-        full_cov = torch.linalg.inv(invN+torch.linalg.inv(prior_cov))
+        if prior_cov is not None:
+            invN, _ = self.get_likelihood_components(x)
+            invN = invN*gamma
+            full_cov = torch.linalg.inv(invN+torch.linalg.inv(prior_cov))
+        else:
+            invN, _ = self.get_posterior_components(x)
+            invN = invN*gamma
+            full_cov = torch.linalg.inv(invN)
         dist = torch.distributions.MultivariateNormal(best, full_cov)
         draws = dist.sample(torch.Size([N]))
         return draws
