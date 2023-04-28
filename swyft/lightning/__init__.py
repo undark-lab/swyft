@@ -25,8 +25,11 @@ __all__ = [
     "CoverageSamples",
     "estimate_coverage",
     "equalize_tensors",
-    "LogRatioEstimator_Ndim",
     "LogRatioEstimator_1dim",
-    "LogRatioEstimator_1dim_Gaussian",
+    "LogRatioEstimator_Ndim",
+    "LogRatioEstimator_Autoregressive",
+    "LogRatioEstimator_Gaussian",
+    "LogRatioEstimator_Gaussian_Autoregressive",
     "RectBoundSampler",
+    "LogRatioEstimator_1dim_Gaussian",
 ]

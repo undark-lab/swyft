@@ -501,8 +501,8 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         return lrs
     
     
-class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
-    r"""Estimate Gaussian log-ratios with an autoregressive model.
+class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
+    r"""Estimate Gaussian log-ratios with an autoregressive model, using four factor decomposition.
 
     Args:
         num_params: Length of parameter vector.
@@ -650,8 +650,8 @@ class LogRatioEstimator_Autoregressive_Gaussian(nn.Module):
         return draws
 
 
-class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
-    r"""Estimate Gaussian log-ratios with an autoregressive model.
+class LogRatioEstimator_Gaussian_Autoregressive(nn.Module):
+    r"""Estimate high-dimensional Gaussian log-ratios with an autoregressive model.
 
     Args:
         num_params: Length of parameter vector.
