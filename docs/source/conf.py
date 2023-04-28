@@ -151,7 +151,8 @@ extensions = [
     "nbsphinx",
     "nbsphinx_link",
 #    "m2r2",
-    "sphinx_rtd_theme",
+    "furo",
+#    "sphinx_rtd_theme",
 ]
 
 mathjax_path = (
