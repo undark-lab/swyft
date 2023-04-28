@@ -829,13 +829,14 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
 
         return quadratic, linear
 
-    def get_MAP(self, x, prior_cov = None, double_precision = True):
+    def get_MAP(self, x, prior_cov = None, double_precision = True, gamma = 1.):
         """Generate MAP estimator for z.
 
         Args:
             x: Data vector
-            prior_cov: Prior covariance matrix
+            prior_cov: Prior covariance matrix to combine with estimated likelihood (if not provided, posterior estimate will be used).
             double_precision: Use double precision for matrix inversion
+            gamma: Rescaling of likelihood function (only used when prior_cov is not None)
 
         Returns:
             torch.tensor: MAP estimator
@@ -843,7 +844,7 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
 
         if prior_cov is not None:
             invN, b = self.get_likelihood_components(x, double_precision = double_precision)
-            z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b)
+            z_MAP = torch.matmul(torch.linalg.inv(invN*gamma + torch.linalg.inv(prior_cov)), -b*gamma)
         else:
             invN, b = self.get_posterior_components(x, double_precision = double_precision)
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
@@ -886,7 +887,7 @@ class LogRatioEstimator_Autoregressive_Gaussian2(nn.Module):
         dimensions. For more parameters, other techniques directly based on the
         likelihood quadratic and linear components should be used.
         """
-        best = self.get_MAP(x, prior_cov = prior_cov)
+        best = self.get_MAP(x, prior_cov = prior_cov, gamma = gamma)
         if prior_cov is not None:
             invN, _ = self.get_likelihood_components(x)
             invN = invN*gamma
