@@ -13,7 +13,6 @@ Site content
    :caption: Basics
    :maxdepth: 2
 
-   swyft
    install
    quickstart
    tutorial-notebooks
