@@ -5,26 +5,3 @@
 
 .. include:: ../../README.rst
 
-.. toctree::
-   :caption: Basics:
-   :maxdepth: 2
-
-   swyft
-   install
-   quickstart
-   tutorial-notebooks
-   examples
-
-.. toctree::
-   :caption: Reference:
-   :maxdepth: 2
-
-   autodoc
-   changelog
-
-.. toctree::
-   :caption: Extra information:
-   :maxdepth: 2
-
-   contributing-link
-   citation

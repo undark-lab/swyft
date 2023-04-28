@@ -151,7 +151,6 @@ extensions = [
     "nbsphinx",
     "nbsphinx_link",
 #    "m2r2",
-    "furo",
 #    "sphinx_rtd_theme",
 ]
 
