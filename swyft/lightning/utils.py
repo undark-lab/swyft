@@ -427,8 +427,8 @@ def to_numpy(*args, single_precision=False):
             else:
                 x = x.numpy()
             return x
-    elif isinstance(x, swyft.lightning.simulator.Samples):
-        return swyft.lightning.simulator.Samples(
+    elif isinstance(x, swyft.Samples):
+        return swyft.Samples(
             {k: to_numpy(v, single_precision=single_precision) for k, v in x.items()}
         )
     elif isinstance(x, tuple):
@@ -453,8 +453,8 @@ def to_numpy32(*args):
 
 
 def to_torch(x):
-    if isinstance(x, swyft.lightning.simulator.Samples):
-        return swyft.lightning.simulator.Samples({k: to_torch(v) for k, v in x.items()})
+    if isinstance(x, swyft.Samples):
+        return swyft.Samples({k: to_torch(v) for k, v in x.items()})
     elif isinstance(x, dict):
         return {k: to_torch(v) for k, v in x.items()}
     else:
