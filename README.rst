@@ -1,5 +1,11 @@
-Swyft v0.4
-==========
+Swyft
+=====
+
+.. image:: https://raw.githubusercontent.com/undark-lab/swyft/v0.4.1/docs/source/_static/img/swyft_logo_wide.png
+   :width: 800
+   :align: center
+
+*Swyft* is a system for scientific simulation-based inference at scale.
 
 .. image:: https://badge.fury.io/py/swyft.svg
    :target: https://badge.fury.io/py/swyft
@@ -44,9 +50,8 @@ Swyft v0.4
    :target: https://doi.org/10.5281/zenodo.5752734
 
 
-*swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
+*Swyft* is the official implementation of Truncated Marginal Neural Ratio Estimation (TMNRE),
 a hyper-efficient, simulation-based inference technique for complex data and expensive simulators.
-As of v0.4.0, swyft is based on pytorch-lightning.
 
 
 Swyft in action
@@ -101,9 +106,10 @@ Further information
 * **Citation**: https://swyft.readthedocs.io/en/latest/citation.html
 
 
-Swyft history
--------------
+*Swyft* history
+---------------
 
+* As of v0.4.0, *Swyft* is based on pytorch-lightning, with a completely updated
 * `v0.3.2 <https://github.com/undark-lab/swyft/releases/tag/v0.3.2>`_ is the version that was submitted to `JOSS <https://joss.theoj.org/papers/10.21105/joss.04205>`_.
 * `tmnre <https://github.com/bkmi/tmnre>`_ is the implementation of the paper `Truncated Marginal Neural Ratio Estimation <https://arxiv.org/abs/2107.01214>`_.
 * `v0.1.2 <https://github.com/undark-lab/swyft/releases/tag/v0.1.2>`_ is the implementation of the paper `Simulation-efficient marginal posterior estimation with swyft: stop wasting your precious time <https://arxiv.org/abs/2011.13951>`_.
@@ -111,6 +117,6 @@ Swyft history
 Relevant packages
 -----------------
 
-* `sbi <https://github.com/mackelab/sbi>`_ is a collection of simulation-based inference methods. Unlike *swyft*, the repository does not include our truncation scheme nor marginal estimation of posteriors.
+* `sbi <https://github.com/mackelab/sbi>`_ is a collection of simulation-based inference methods. Unlike *Swyft*, the repository does not include our truncation scheme nor marginal estimation of posteriors.
 
 * `lampe <https://github.com/francois-rozet/lampe>`_ is an implementation of amoritzed simulation-based inference methods aimed at simulation-based inference researchers due to its flexibility.

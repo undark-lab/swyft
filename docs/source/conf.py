@@ -150,7 +150,7 @@ extensions = [
     "sphinxcontrib.bibtex",
     "nbsphinx",
     "nbsphinx_link",
-    "m2r2",
+#    "m2r2",
     "sphinx_rtd_theme",
 ]
 

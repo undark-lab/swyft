@@ -1,4 +1,1 @@
-docutils==0.17.1
-furo==2022.6.21
-myst-nb==0.17.1
-sphinx==5.0.2
+furo==2023.03.27

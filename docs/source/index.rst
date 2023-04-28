@@ -11,7 +11,9 @@
 
    swyft
    install
+   quickstart
    tutorial-notebooks
+   examples
 
 .. toctree::
    :caption: Reference:
