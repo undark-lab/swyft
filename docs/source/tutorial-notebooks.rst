@@ -6,14 +6,6 @@ functionalites of Swyft.  If anything is unclear, don't hesistate to ask
 questions `here <https://github.com/undark-lab/swyft/discussions>`_.
 
 .. toctree::
-   :caption: 15 min crash course:
-   :maxdepth: 1
-   :glob:
-
-   notebooks/00*
-
-
-.. toctree::
    :caption: Basic tutorials:
    :maxdepth: 1
    :glob:
@@ -29,13 +21,3 @@ questions `here <https://github.com/undark-lab/swyft/discussions>`_.
    notebooks/0I*
    notebooks/0J*
 
-
-
-.. toctree::
-   :caption: Applications:
-   :maxdepth: 1
-   :glob:
-
-   notebooks/1A*
-   notebooks/1B*
-   notebooks/1C*

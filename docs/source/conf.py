@@ -150,8 +150,8 @@ extensions = [
     "sphinxcontrib.bibtex",
     "nbsphinx",
     "nbsphinx_link",
-    "m2r2",
-    "sphinx_rtd_theme",
+#    "m2r2",
+#    "sphinx_rtd_theme",
 ]
 
 mathjax_path = (
