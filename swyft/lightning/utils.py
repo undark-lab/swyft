@@ -19,7 +19,10 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.trainer.supporters import CombinedLoader
+try:
+    from pytorch_lightning.trainer.supporters import CombinedLoader
+except ImportError:
+    from pytorch_lightning.utilities import CombinedLoader
 
 # from pytorch_lightning.cli import instantiate_class
 
