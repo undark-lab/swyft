@@ -30,5 +30,4 @@ Site content
    :caption: Extra information
    :maxdepth: 2
 
-   contributing-link
    citation
