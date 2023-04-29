@@ -17,6 +17,7 @@ Site content
    quickstart
    tutorial-notebooks
    examples
+   papers
 
 .. toctree::
    :caption: Reference
