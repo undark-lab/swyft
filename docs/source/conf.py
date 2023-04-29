@@ -226,12 +226,12 @@ html_theme = "furo"
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-html_title= "Swyft <release> documentation"
+html_title= "Swyft v0.4.2 documentation"
 
 html_theme_options = {
     "titles_only": False,
 #    "logo_only": True,
-#    "sidebar_hide_name": True,
+    "sidebar_hide_name": True,
 #    "announcement": "<em>Important</em> announcement!",
     "style_nav_header_background": "#595959",
 }
