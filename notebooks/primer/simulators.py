@@ -2,6 +2,11 @@ import numpy as np
 from scipy import stats
 import swyft
 import torch
+import scipy.ndimage
+from PIL import Image, ImageFont, ImageDraw
+import scipy.ndimage as ndimage
+
+
 
 class SimulatorLinePattern(swyft.Simulator):
     def __init__(self, Npix = 256, bounds = None):
@@ -63,3 +68,125 @@ class SimulatorBlob(swyft.Simulator):
     def build(self, graph):
         z = graph.node("z", lambda: self.sample_GP())
         mu = graph.node("mu", lambda z: self.weights*np.exp(z), z)
+        
+
+class SimulatorLetter(swyft.Simulator):
+    def __init__(self, bounds = None):
+        super().__init__()
+        self.letter_imgs = [self.get_letter(l) for l in "AbCdEf"]
+        self.transform_samples = swyft.to_numpy32
+        self.bounds = bounds
+
+    # set font and font size, from ChatGPT
+    @staticmethod
+    def get_letter(l):
+        font = ImageFont.truetype('/usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf', 50)
+        img = Image.new('RGB', (48, 48), color='white')
+        draw = ImageDraw.Draw(img)
+        draw.text((9, -5), l, fill='black', font=font)
+        arr = np.array(img)[:,:,0]
+        arr = 1-arr/arr.max()
+        return arr
+    
+    @staticmethod
+    def add_letter(img, rot, pos, output_shape):
+        img = scipy.ndimage.rotate(img, rot, mode = 'constant', reshape = False)
+        mapping = lambda x: (x[0]-pos[0]*output_shape[0], x[1]-pos[1]*output_shape[1])
+        img = scipy.ndimage.affine_transform(img, np.eye(2), offset = -pos*256, output_shape = (256, 256))
+        return img
+
+    def gen_letter_sequence(self, rot, pos):
+        img = np.zeros((256, 256))
+        for i in range(6):
+            img += self.add_letter(self.letter_imgs[i], rot[i], pos[i]*0.85, (256, 256))
+        return img
+    
+    def get_pos(self):
+        if self.bounds is None:
+            return np.random.rand(6, 2)
+        else:
+            i = np.random.randint(len(self.bounds[0]))
+            return self.bounds[:,i,:]
+    
+    def build(self, graph):
+        rot = graph.node("rot", lambda: np.random.rand(6)*0)
+        pos = graph.node('pos', self.get_pos)
+        mu = graph.node('mu', lambda rot, pos: self.gen_letter_sequence(rot, pos), rot, pos)
+        
+        
+class SimulatorSnake(swyft.Simulator):
+    def __init__(self, bounds = None, bounds_n_steps = None, n_max = 50):
+        super().__init__()
+        self.bounds = bounds
+        self.n_max = n_max
+        self.bounds_n_steps = bounds_n_steps
+        self.transform_samples = swyft.to_numpy32
+        
+    def get_image(self, turns, n_steps):
+        turns = turns[:n_steps[0]]
+        directions_angle = np.cumsum(turns)*np.pi/2
+        directions_cart = np.array([np.cos(directions_angle), np.sin(directions_angle)]).T
+        path = np.array([np.cumsum(directions_cart[:,0]), np.cumsum(directions_cart[:,1])]).T
+        img = np.zeros((256, 256))
+        idxs = np.floor(path*4).astype(int)+128
+        for i, j in idxs:
+            if i < 0 or j < 0 or i > 255 or j > 255:
+                pass
+            else:
+                img[i, j] += 1
+        img = ndimage.gaussian_filter(img, sigma=1, order=0)
+        return img
+                
+    def get_n_steps(self):
+        b = self.bounds_n_steps
+        if b is not None:
+            return np.random.randint(b[0], b[1]+1, size = (1,))
+        else:
+            return np.random.randint(10, self.n_max, size = (1,))
+    
+#    def get_turns(self):
+#        turns = np.random.choice([-1, 0, 1], self.n_max, p = [0.1, 0.8, 0.1])
+#        return turns
+    
+    def get_turns(self):
+        probs = np.array([[0.1, 0.8, 0.1]]).repeat(self.n_max, axis=0)
+        bounds = self.bounds
+        if bounds is not None:
+            probs = probs*bounds
+        indxs = (probs.cumsum(1)/probs.sum(1)[:,None] > np.random.rand(probs.shape[0])[:,None]).argmax(1)
+        choices = np.array([-1., 0., 1.])
+        return choices[indxs]
+
+    def build(self, graph):
+        n_steps = graph.node("n_steps", self.get_n_steps)
+        turns = graph.node('turns', self.get_turns)
+        img = graph.node('mu', self.get_image, turns, n_steps)
+        
+        
+class SimulatorUnraveling(swyft.Simulator):
+    def __init__(self, sigma = 2.0):
+        super().__init__()
+        self.sigma = sigma
+        self.transform_samples = swyft.to_numpy32
+        
+    def gen_image(self, pos):        
+        font = ImageFont.truetype('/usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf', 22)
+        img = Image.new('RGB', (256, 256), color='white')
+        draw = ImageDraw.Draw(img)
+        x, y = pos
+        draw.text((x+10, y+10), "Unvraveling", fill='black', font=font)
+        draw.text((x+35, y+35), "the", fill='black', font=font)
+        draw.text((x+60, y+60), "Un-Unravelable", fill='black', font=font)
+        arr = np.array(img)[:,:,0]
+        arr = 1-arr/arr.max()
+        return arr
+    
+    def gen_pos(self):
+        x, y = np.random.rand(2)*256-128
+        y += 75
+        return np.array([x, y])
+    
+    def build(self, graph):
+        pos = graph.node("pos", self.gen_pos)
+        mu = graph.node('mu', self.gen_image, pos)
+        x = graph.node('x', lambda mu: mu + np.random.randn(*mu.shape)*self.sigma, mu)
