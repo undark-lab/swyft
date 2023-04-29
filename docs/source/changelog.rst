@@ -5,6 +5,13 @@ The full release logs can be found on `github
 <https://github.com/undark-lab/swyft/releases>_.  Here we provide a brief
 summary.
 
+v0.4.3 (2023-04-28)
+-------------------
+
+- Tutorials completely redone (they are the ones from the Jan 2023 training event)
+- New documentation theme, and general documentation clean-up
+- pytorch-lightning 2.0.0 compatibility
+
 
 v0.4.2 (2023-04-26)
 -------------------

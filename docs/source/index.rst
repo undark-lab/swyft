@@ -17,6 +17,8 @@ Site content
    quickstart
    tutorial-notebooks
    examples
+   papers
+   events
 
 .. toctree::
    :caption: Reference
@@ -29,5 +31,4 @@ Site content
    :caption: Extra information
    :maxdepth: 2
 
-   contributing-link
    citation
