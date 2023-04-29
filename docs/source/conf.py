@@ -44,14 +44,14 @@ autodoc_mock_imports = [
 
 here = os.path.dirname(__file__)
 repo = os.path.join(here, "..", "..")
-# _version_py = os.path.join(repo, 'swyft', '__version__.py')
-# version_ns = {}
-# with open(_version_py) as f:
-#     exec(f.read(), version_ns)
-# # The short X.Y version.
-# version = '%i.%i' % version_ns['version_info'][:2]
-# # The full version, including alpha/beta/rc tags.
-# release = version_ns['__version__']
+#_version_py = os.path.join(repo, 'swyft', '__version__.py')
+#version_ns = {}
+#with open(_version_py) as f:
+#    exec(f.read(), version_ns)
+## The short X.Y version.
+#version = '%i.%i' % version_ns['version_info'][:2]
+## The full version, including alpha/beta/rc tags.
+#release = version_ns['__version__']
 
 import subprocess
 
@@ -226,9 +226,13 @@ html_theme = "furo"
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
+html_title= "Swyft v0.4.2 documentation"
+
 html_theme_options = {
     "titles_only": False,
-    "logo_only": False,
+#    "logo_only": True,
+    "sidebar_hide_name": True,
+#    "announcement": "<em>Important</em> announcement!",
     "style_nav_header_background": "#595959",
 }
 
