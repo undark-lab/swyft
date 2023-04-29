@@ -18,6 +18,7 @@ Site content
    tutorial-notebooks
    examples
    papers
+   events
 
 .. toctree::
    :caption: Reference
