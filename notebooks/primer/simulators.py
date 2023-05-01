@@ -36,12 +36,13 @@ class SimulatorLinePattern(swyft.Simulator):
         
         
 class SimulatorBlob(swyft.Simulator):
-    def __init__(self, bounds = None, Npix = 64):
+    def __init__(self, bounds = None, Npix = 64, sigma = 0.1):
         super().__init__()
         self.transform_samples = swyft.to_numpy32
         self.bounds = bounds
         self.weights, self.dist, self.Cov = self.setup_cov(Npix = Npix)
         self.Npix = Npix
+        self.sigma = sigma
 
     def setup_cov(self, Npix = 64):
         N = Npix**2
@@ -67,6 +68,7 @@ class SimulatorBlob(swyft.Simulator):
             
     def build(self, graph):
         z = graph.node("z", lambda: self.sample_GP())
+        zn = graph.node("zn", lambda z: z + np.random.randn(self.Npix, self.Npix)*self.sigma, z)
         mu = graph.node("mu", lambda z: self.weights*np.exp(z), z)
         
 
