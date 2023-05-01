@@ -69,7 +69,7 @@ class SimulatorBlob(swyft.Simulator):
     def build(self, graph):
         z = graph.node("z", lambda: self.sample_GP())
         zn = graph.node("zn", lambda z: z + np.random.randn(self.Npix, self.Npix)*self.sigma, z)
-        mu = graph.node("mu", lambda z: self.weights*np.exp(z), z)
+        mu = graph.node("mu", lambda z: self.weights*np.exp(z*0.5)*0.5 , z)
         
 
 class SimulatorLetter(swyft.Simulator):
