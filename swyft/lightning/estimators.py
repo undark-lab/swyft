@@ -909,6 +909,8 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
         L_init: Optional initial values for L-matrix.
         minstd: Minimum standard deviation to enforce numerical stability
+        momentum: Momentum of Gaussian variance estimation.
+        optimize_Phi: Optimize Phi matrix during fit.
 
     The forward method returns an swyft.LogRatioSamples object.
 
@@ -921,7 +923,7 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
 
     """
 
-    def __init__(self, num_params, varnames, L_init = None, Phi_init = None, minstd: float = 1e-10, momentum = 0.02):
+    def __init__(self, num_params, varnames, L_init = None, Phi_init = None, minstd: float = 1e-10, momentum = 0.02, optimize_Phi = False):
         super().__init__()
         self.cl1 = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd, momentum=momentum)  # Estimate prior
         self.cl2 = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd, momentum=momentum)  # Estimate likelihood
@@ -931,18 +933,13 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
             L_init = torch.ones(num_params, num_params)*0.1
         self.L_full = nn.Parameter(L_init, requires_grad = True)
         if Phi_init is None:
-            Phi_init = torch.eye(num_params) + torch.randn(num_params, num_params)*1e-5
-        self.Phi_full = nn.Parameter(Phi_init, requires_grad = True)
-
-    @property
-    def Phi(self):
-        #return torch.nn.functional.softmax(self.Phi_full, dim = 1)
-        return self.Phi_full
+            Phi_init = torch.eye(num_params)
+        self.Phi = nn.Parameter(Phi_init, requires_grad = optimize_Phi)
 
     @property
     def L(self):
         """Lower triangular matrix of parameter correlations."""
-        return self._mask*self.L_full*0
+        return self._mask*self.L_full
 
     @staticmethod
     def _get_mask(D):
@@ -966,7 +963,7 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         # Getting good data summaries for marginals p(z_i|x_i)/p(z_i)
         logratios1 = self.cl1(xA.unsqueeze(-1), zB.unsqueeze(-1))  # (x; z)
 
-        # Estimating likelihood p(\vec x|z)/\prod_i p(x_i)
+        # Estimating likelihood p(\vec x|\vec z)/\prod_i p(x_i)
         LxB = torch.matmul(xB.detach(), self.L.T)
         PzB = torch.matmul(zB, self.Phi.T)
         fB = torch.stack([LxB, PzB], dim=-1)
