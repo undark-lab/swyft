@@ -9,7 +9,7 @@ import scipy.ndimage as ndimage
 
 
 class SimulatorLinePattern(swyft.Simulator):
-    def __init__(self, Npix = 256, bounds = None):
+    def __init__(self, Npix = 256, bounds = None, sigma = 0., randn_realizations = None):
         super().__init__()
         self.transform_samples = swyft.to_numpy32
         g = np.linspace(-1, 1, Npix)
@@ -21,18 +21,32 @@ class SimulatorLinePattern(swyft.Simulator):
             stats.uniform(-1, 2),
             stats.uniform(0.1, 0.3)
         ], bounds = bounds)
+        self.sigma = sigma
+        self.Npix = Npix
+        self.randn_realizations = randn_realizations
         
     def templates(self, z):
         w = z[4]
+        sigmoid = lambda x: 1/(1+np.exp(-x*100))
         t1 = np.exp(-np.sin((self.grid[0]-z[0]+self.grid[1]-z[1])/0.02)**2/0.2)
-        m1 = (self.grid[0]>z[0]-w)*(self.grid[0]<z[0]+w)*(self.grid[1]>z[1]-w)*(self.grid[1]<z[1]+w)
+        m1 = sigmoid(self.grid[0]-(z[0]-w))*sigmoid(-self.grid[0]+z[0]+w)*sigmoid(self.grid[1]-z[1]+w)*sigmoid(-self.grid[1]+z[1]+w)
         t2 = np.exp(-np.sin((self.grid[1]-z[3])/0.016)**2/0.4)
-        m2 = (self.grid[0]>z[2]-w)*(self.grid[0]<z[2]+w)*(self.grid[1]>z[3]-w)*(self.grid[1]<z[3]+w)
+        m2 = sigmoid(self.grid[0]-z[2]+w)*sigmoid(-self.grid[0]+z[2]+w)*sigmoid(self.grid[1]-z[3]+w)*sigmoid(-self.grid[1]+z[3]+w)
         return t1*m1 + t2*m2
+    
+    def sample_noise(self):
+        if self.randn_realizations is None:
+            return np.random.randn(self.Npix, self.Npix)*self.sigma
+        else:
+            i, j, k = np.random.randint((len(self.randn_realizations), 256, 256))
+            r = self.randn_realizations[i]*self.sigma
+            r = np.roll(np.roll(r, j, axis = 0), k, axis = 1)
+            return r
     
     def build(self, graph):
         z = graph.node('z', self.z_sampler)
         mu = graph.node('mu', self.templates, z)
+        x = graph.node('x', lambda mu: mu + self.sample_noise(), mu)
         
         
 class SimulatorBlob(swyft.Simulator):
