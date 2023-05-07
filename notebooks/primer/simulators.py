@@ -7,6 +7,28 @@ from PIL import Image, ImageFont, ImageDraw
 import scipy.ndimage as ndimage
 
 
+class HistoryDict(dict):
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            super().__setitem__(k, [v])
+    
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            key, i = key
+        else:
+            i = -1
+        if key in self.keys():
+            value = super().__getitem__(key)[i]
+        else:
+            value = None
+        return value
+    
+    def __setitem__(self, key, value):
+        if key in self.keys():
+            super().__getitem__(key).append(value)
+        else:
+            super().__setitem__(key, [value])
+
 
 class SimulatorLinePattern(swyft.Simulator):
     def __init__(self, Npix = 256, bounds = None, sigma = 0., randn_realizations = None):
