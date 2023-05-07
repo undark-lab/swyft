@@ -91,7 +91,7 @@ class AdamOptimizerInit(OptimizerInit):
             optim_constructor=torch.optim.Adam,
             optim_args={"lr": lr},
             scheduler_constructor=torch.optim.lr_scheduler.ReduceLROnPlateau,
-            scheduler_args={"factor": lrs_factor, "patience": lrs_patience},
+            scheduler_args={"factor": lrs_factor, "patience": lrs_patience, "verbose": True},
         )
 
 
