@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from icecream import ic
+#from icecream import ic
 import swyft
 
 # TODO: This could be significantly nicer
