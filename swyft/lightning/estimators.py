@@ -650,7 +650,7 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
         return draws
 
 
-class LogRatioEstimator_Gaussian_Autoregressive(nn.Module):
+class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
     r"""Estimate high-dimensional Gaussian log-ratios with an autoregressive model.
 
     Args:
@@ -704,9 +704,11 @@ class LogRatioEstimator_Gaussian_Autoregressive(nn.Module):
         Returns:
             swyft.LogRatioSamples
         """
+        # Estimating correlated prior p(z)
         L1zB = torch.matmul(zB, self.L1.T)
         logratios1 = self.cl1(zA.unsqueeze(-1), L1zB.unsqueeze(-1))  # (z; L1 z)
 
+        # Estimating correlated posterior p(Gz|x)
         G, D = self.get_prior_decomposition()
         GzA = torch.matmul(zA, G.T.detach())
         GzB = torch.matmul(zB, G.T.detach())
