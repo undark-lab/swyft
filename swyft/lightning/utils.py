@@ -19,6 +19,7 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 try:
     from pytorch_lightning.trainer.supporters import CombinedLoader
 except ImportError:
@@ -91,7 +92,11 @@ class AdamOptimizerInit(OptimizerInit):
             optim_constructor=torch.optim.Adam,
             optim_args={"lr": lr},
             scheduler_constructor=torch.optim.lr_scheduler.ReduceLROnPlateau,
-            scheduler_args={"factor": lrs_factor, "patience": lrs_patience, "verbose": True},
+            scheduler_args={
+                "factor": lrs_factor,
+                "patience": lrs_patience,
+                "verbose": True,
+            },
         )
 
 
@@ -363,7 +368,8 @@ def _collection_map(coll, map_fn):
     else:
         return map_fn(coll)
 
-def _collection_flatten(coll, acc = None):
+
+def _collection_flatten(coll, acc=None):
     """Flatten a nested list of collections by returning a list of all nested items."""
     if acc is None:
         acc = []
@@ -376,6 +382,7 @@ def _collection_flatten(coll, acc = None):
     else:
         acc.append(coll)
     return acc
+
 
 def _collection_select(coll, err, fn, *args, **kwargs):
     if isinstance(coll, list):

@@ -23,5 +23,5 @@ __all__ = [
     "get_corner_marginal_indices",
     "tensor_to_array",
     "tupleize_marginal_indices",
-    "SwyftSimpleSliceSampler"
+    "SwyftSimpleSliceSampler",
 ]

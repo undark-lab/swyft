@@ -19,6 +19,7 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 try:
     from pytorch_lightning.trainer.supporters import CombinedLoader
 except ImportError:
@@ -31,7 +32,13 @@ import yaml
 
 from swyft.lightning.data import *
 from swyft.plot.mass import get_empirical_z_score
-from swyft.lightning.utils import OptimizerInit, AdamOptimizerInit, SwyftParameterError, _collection_mask, _collection_flatten
+from swyft.lightning.utils import (
+    OptimizerInit,
+    AdamOptimizerInit,
+    SwyftParameterError,
+    _collection_mask,
+    _collection_flatten,
+)
 
 import scipy
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
@@ -131,8 +138,9 @@ class SwyftModule(pl.LightningModule):
         out = self(x, z)  # Evaluate network
         loss_tot = 0
 
-        logratios = self._get_logratios(out
-        ) # Generates concatenated flattened list of all estimated log ratios
+        logratios = self._get_logratios(
+            out
+        )  # Generates concatenated flattened list of all estimated log ratios
         if logratios is not None:
             y = torch.zeros_like(logratios)
             y[:num_pos, ...] = 1
@@ -142,7 +150,7 @@ class SwyftModule(pl.LightningModule):
             )
             num_ratios = loss.shape[1]
             loss = loss.sum() / num_neg  # Calculates batched-averaged loss
-            loss = loss - 2 * np.log(2.0) * num_ratios 
+            loss = loss - 2 * np.log(2.0) * num_ratios
             loss_tot += loss
 
         aux_losses = self._get_aux_losses(out)
@@ -179,6 +187,7 @@ class SwyftModule(pl.LightningModule):
 #################
 # LogRatioSamples
 #################
+
 
 @dataclass
 class AuxLoss:

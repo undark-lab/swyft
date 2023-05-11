@@ -210,7 +210,7 @@ class LogRatioEstimator_1dim(torch.nn.Module):
             dropout_probability=dropout,
             num_blocks=num_blocks,
             use_batch_norm=use_batch_norm,
-            Lmax=Lmax
+            Lmax=Lmax,
         )
         if isinstance(varnames, list):
             self.varnames = np.array([[v] for v in varnames])
@@ -336,66 +336,77 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
         return out
 
     def get_z_estimate(self, x):
-        z_estimator = (x - self.x_mean)*self.xz_cov/self.x_var**0.5 + self.z_mean
+        z_estimator = (x - self.x_mean) * self.xz_cov / self.x_var**0.5 + self.z_mean
         return z_estimator
 
 
 class LogRatioEstimator_Autoregressive(nn.Module):
     r"""Conventional autoregressive model, based on swyft.LogRatioEstimator_1dim."""
-    def __init__(self, num_features, num_params, varnames, dropout = 0.1, num_blocks = 2, hidden_features = 64):
+
+    def __init__(
+        self,
+        num_features,
+        num_params,
+        varnames,
+        dropout=0.1,
+        num_blocks=2,
+        hidden_features=64,
+    ):
         super().__init__()
         self.cl1 = swyft.LogRatioEstimator_1dim(
-            num_features = num_features + num_params,
-            num_params = num_params,
-            varnames = varnames,
-            dropout = dropout,
-            num_blocks = num_blocks,
-            hidden_features = hidden_features,
+            num_features=num_features + num_params,
+            num_params=num_params,
+            varnames=varnames,
+            dropout=dropout,
+            num_blocks=num_blocks,
+            hidden_features=hidden_features,
             Lmax=0,
         )
         self.cl2 = swyft.LogRatioEstimator_1dim(
-            num_features = num_features + num_params,
-            num_params = num_params,
-            varnames = varnames,
-            dropout = dropout,
-            num_blocks = num_blocks,
-            hidden_features = hidden_features,
+            num_features=num_features + num_params,
+            num_params=num_params,
+            varnames=varnames,
+            dropout=dropout,
+            num_blocks=num_blocks,
+            hidden_features=hidden_features,
             Lmax=0,
         )
         self.num_params = num_params
-        
+
     def forward(self, xA, zA, zB):
         xA, zB = swyft.equalize_tensors(xA, zB)
         xA, zA = swyft.equalize_tensors(xA, zA)
-        
+
         fA = torch.cat([xA, zA], dim=-1)
         fA = fA.unsqueeze(1)
         fA = fA.repeat((1, self.num_params, 1))
         mask = torch.ones(self.num_params, fA.shape[-1], device=fA.device)
         for i in range(self.num_params):
-            mask[i, -self.num_params+i:] = 0
-        fA = fA*mask
+            mask[i, -self.num_params + i :] = 0
+        fA = fA * mask
         logratios1 = self.cl1(fA, zB)
-        
-        fA = torch.cat([xA*0, zA], dim=-1)
+
+        fA = torch.cat([xA * 0, zA], dim=-1)
         fA = fA.unsqueeze(1)
         fA = fA.repeat((1, self.num_params, 1))
         mask = torch.ones(self.num_params, fA.shape[-1], device=fA.device)
         for i in range(self.num_params):
-            mask[i, -self.num_params+i:] = 0
-        fA = fA*mask
+            mask[i, -self.num_params + i :] = 0
+        fA = fA * mask
         logratios2 = self.cl2(fA, zB)
-        
+
         l1 = logratios1.logratios.sum(-1)
         l2 = logratios2.logratios.sum(-1)
         l2 = torch.where(l2 > 0, l2, 0)
-        l = (l1-l2).detach().unsqueeze(-1)
-        
-        logratios_tot = swyft.LogRatioSamples(l, logratios1.params, logratios1.parnames)
-                
-        return dict(lrs_total=logratios_tot, lrs_partials1=logratios1, lrs_partials2=logratios2)
+        l = (l1 - l2).detach().unsqueeze(-1)
 
-    
+        logratios_tot = swyft.LogRatioSamples(l, logratios1.params, logratios1.parnames)
+
+        return dict(
+            lrs_total=logratios_tot, lrs_partials1=logratios1, lrs_partials2=logratios2
+        )
+
+
 class LogRatioEstimator_Gaussian(torch.nn.Module):
     """Estimating posteriors with Gaussian approximation.
 
@@ -421,20 +432,24 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
             self.varnames = np.array(
                 [[varnames + "[%i]" % i] for i in range(num_params)]
             )
-         
-    @staticmethod
-    def _get_mean_cov(x, correction = 1):
-        # (B, *, D)
-        mean = x.mean(dim=0) # (*, D)
-        diffs = x - mean # (B, *, D)
-        N = len(x)
-        covs = torch.einsum(diffs.unsqueeze(-1), [0, ...], diffs.unsqueeze(-2), [0, ...], [...])/(N-correction)
-        return mean, covs  # (*, D), (*, D, D)
 
+    @staticmethod
+    def _get_mean_cov(x, correction=1):
+        # (B, *, D)
+        mean = x.mean(dim=0)  # (*, D)
+        diffs = x - mean  # (B, *, D)
+        N = len(x)
+        covs = torch.einsum(
+            diffs.unsqueeze(-1), [0, ...], diffs.unsqueeze(-2), [0, ...], [...]
+        ) / (N - correction)
+        return mean, covs  # (*, D), (*, D, D)
 
     @property
     def cov(self):
-        return self._cov + torch.eye(self._mean.shape[-1]).to(self._cov.device)*self._minstd**2
+        return (
+            self._cov
+            + torch.eye(self._mean.shape[-1]).to(self._cov.device) * self._minstd**2
+        )
 
     @property
     def mean(self):
@@ -442,12 +457,12 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
 
     def forward(self, a: torch.Tensor, b: torch.Tensor):
         """Gaussian approximation to marginals and joint, assuming (B, N).
-        
+
         a shape: (B, N, D1)
         b shape: (B, N, D2)
-        
+
         """
-        
+
         a_dim = a.shape[-1]
         b_dim = b.shape[-1]
 
@@ -478,29 +493,32 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
 
         # Match tensor batch dimensions
         a, b = swyft.equalize_tensors(a, b)
-        
+
         # Get standard normal distributed parameters
         X = torch.cat([a, b], dim=-1).double()
 
         dist_ab = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean, covariance_matrix = cov.double()) 
+            self._mean, covariance_matrix=cov.double()
+        )
         logprobs_ab = dist_ab.log_prob(X)
-        
+
         dist_b = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean[..., a_dim:], covariance_matrix = cov[..., a_dim:, a_dim:].double()) 
+            self._mean[..., a_dim:], covariance_matrix=cov[..., a_dim:, a_dim:].double()
+        )
         logprobs_b = dist_b.log_prob(X[..., a_dim:])
-        
+
         dist_a = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean[..., :a_dim], covariance_matrix = cov[..., :a_dim, :a_dim].double()) 
+            self._mean[..., :a_dim], covariance_matrix=cov[..., :a_dim, :a_dim].double()
+        )
         logprobs_a = dist_a.log_prob(X[..., :a_dim])
-        
+
         logratios = logprobs_ab - logprobs_b - logprobs_a
-        
+
         lrs = swyft.LogRatioSamples(logratios, a, self.varnames)
-           
+
         return lrs
-    
-    
+
+
 class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
     r"""Estimate Gaussian log-ratios with an autoregressive model, using four factor decomposition.
 
@@ -513,19 +531,21 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
     The forward method returns an swyft.LogRatioSamples object.
     """
 
-    def __init__(self, num_params, varnames, L_init = None, minstd: float = 1e-10):
+    def __init__(self, num_params, varnames, L_init=None, minstd: float = 1e-10):
         super().__init__()
-        self.cl = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd)
+        self.cl = LogRatioEstimator_Gaussian(
+            num_params, varnames=varnames, minstd=minstd
+        )
         self.num_params = num_params
-        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
+        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
         if L_init is None:
-            L_init = 0.1*torch.ones(num_params, num_params)
-        self.L_full = nn.Parameter(L_init, requires_grad = True)
+            L_init = 0.1 * torch.ones(num_params, num_params)
+        self.L_full = nn.Parameter(L_init, requires_grad=True)
 
     @property
     def L(self):
         """Lower triangular matrix of parameter correlations."""
-        return self._mask*self.L_full
+        return self._mask * self.L_full
 
     @staticmethod
     def _get_mask(D):
@@ -545,13 +565,15 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
         Returns:
             swyft.LogRatioSamples
         """
-        lA = torch.matmul(zA, self.L.T) # + torch.randn_like(xA)*1e-1
+        lA = torch.matmul(zA, self.L.T)  # + torch.randn_like(xA)*1e-1
         fA = torch.stack([xA, lA], dim=-1)
         logratios = self.cl(fA, zB.unsqueeze(-1))
 
         return logratios
 
-    def get_likelihood_components(self, x, double_precision = True, enforce_positivity = True):
+    def get_likelihood_components(
+        self, x, double_precision=True, enforce_positivity=True
+    ):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
@@ -576,15 +598,15 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
 
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
-        invSigma_eff[:,1:2,1:2] += torch.linalg.inv(cov[:,1:2,1:2])
-        invSigma_eff[:,:2,:2] -= torch.linalg.inv(cov[:,:2,:2])
-        invSigma_eff[:,1:,1:] -= torch.linalg.inv(cov[:,1:,1:])
-        D11 = invSigma_eff[:,0,0]
-        D22 = invSigma_eff[:,1,1]
-        D33 = invSigma_eff[:,2,2]
-        D23 = invSigma_eff[:,1,2]
-        D12 = invSigma_eff[:,0,1]
-        D13 = invSigma_eff[:,0,2]
+        invSigma_eff[:, 1:2, 1:2] += torch.linalg.inv(cov[:, 1:2, 1:2])
+        invSigma_eff[:, :2, :2] -= torch.linalg.inv(cov[:, :2, :2])
+        invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
+        D11 = invSigma_eff[:, 0, 0]
+        D22 = invSigma_eff[:, 1, 1]
+        D33 = invSigma_eff[:, 2, 2]
+        D23 = invSigma_eff[:, 1, 2]
+        D12 = invSigma_eff[:, 0, 1]
+        D13 = invSigma_eff[:, 0, 2]
 
         quadratic = (
             torch.diag(D33)
@@ -596,18 +618,21 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
         # NEXT: Check if really necessary
         if enforce_positivity:
             mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
-        #    print(mineig)
-            quadratic = quadratic - torch.eye(len(quadratic)).to(quadratic.device)*mineig*1.0
+            #    print(mineig)
+            quadratic = (
+                quadratic
+                - torch.eye(len(quadratic)).to(quadratic.device) * mineig * 1.0
+            )
 
         linear = (
-        torch.matmul(torch.diag(D13)+torch.matmul(L.T, torch.diag(D12)), x-xm)-
-        torch.matmul(torch.diag(D23)+torch.matmul(L.T, torch.diag(D22)), lm)-
-        torch.matmul(torch.diag(D33)+torch.matmul(L.T, torch.diag(D23)), zm)
+            torch.matmul(torch.diag(D13) + torch.matmul(L.T, torch.diag(D12)), x - xm)
+            - torch.matmul(torch.diag(D23) + torch.matmul(L.T, torch.diag(D22)), lm)
+            - torch.matmul(torch.diag(D33) + torch.matmul(L.T, torch.diag(D23)), zm)
         )
 
         return quadratic, linear
 
-    def get_MAP(self, x, prior_cov = None, double_precision = True):
+    def get_MAP(self, x, prior_cov=None, double_precision=True):
         """Generate MAP estimator for z.
 
         Args:
@@ -619,14 +644,18 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
             torch.tensor: MAP estimator
         """
 
-        invN, b = self.get_likelihood_components(x, double_precision = double_precision, enforce_positivity = False)
+        invN, b = self.get_likelihood_components(
+            x, double_precision=double_precision, enforce_positivity=False
+        )
         if prior_cov is not None:
-            z_MAP = torch.matmul(torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b)
+            z_MAP = torch.matmul(
+                torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b
+            )
         else:
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
         return z_MAP
 
-    def get_post_samples(self, N, x, prior_cov = None, gamma = 1.):
+    def get_post_samples(self, N, x, prior_cov=None, gamma=1.0):
         """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
 
         Args:
@@ -641,10 +670,10 @@ class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
         dimensions. For more parameters, other techniques directly based on the
         likelihood quadratic and linear components should be used.
         """
-        best = self.get_MAP(x, prior_cov = prior_cov)
-        invN, _ = self.get_likelihood_components(x, enforce_positivity = True)
-        invN = invN*gamma
-        full_cov = torch.linalg.inv(invN+torch.linalg.inv(prior_cov))
+        best = self.get_MAP(x, prior_cov=prior_cov)
+        invN, _ = self.get_likelihood_components(x, enforce_positivity=True)
+        invN = invN * gamma
+        full_cov = torch.linalg.inv(invN + torch.linalg.inv(prior_cov))
         dist = torch.distributions.MultivariateNormal(best, full_cov)
         draws = dist.sample(torch.Size([N]))
         return draws
@@ -662,28 +691,34 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
     The forward method returns an swyft.LogRatioSamples object.
     """
 
-    def __init__(self, num_params, varnames, L1_init = None, L2_init = None, minstd: float = 1e-10):
+    def __init__(
+        self, num_params, varnames, L1_init=None, L2_init=None, minstd: float = 1e-10
+    ):
         super().__init__()
-        self.cl1 = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd)  # Estimate prior
-        self.cl2 = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd)  # Estimate likelihood
+        self.cl1 = LogRatioEstimator_Gaussian(
+            num_params, varnames=varnames, minstd=minstd
+        )  # Estimate prior
+        self.cl2 = LogRatioEstimator_Gaussian(
+            num_params, varnames=varnames, minstd=minstd
+        )  # Estimate likelihood
         self.num_params = num_params
-        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
+        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
         if L1_init is None:
-            L1_init = torch.ones(num_params, num_params)*0.1
-        self.L1_full = nn.Parameter(L1_init, requires_grad = True)
+            L1_init = torch.ones(num_params, num_params) * 0.1
+        self.L1_full = nn.Parameter(L1_init, requires_grad=True)
         if L2_init is None:
-            L2_init = torch.ones(num_params, num_params)*0.1
-        self.L2_full = nn.Parameter(L2_init, requires_grad = True)
+            L2_init = torch.ones(num_params, num_params) * 0.1
+        self.L2_full = nn.Parameter(L2_init, requires_grad=True)
 
     @property
     def L1(self):
         """Lower triangular matrix of parameter correlations."""
-        return self._mask*self.L1_full
+        return self._mask * self.L1_full
 
     @property
     def L2(self):
         """Lower triangular matrix of parameter correlations."""
-        return self._mask*self.L2_full
+        return self._mask * self.L2_full
 
     @staticmethod
     def _get_mask(D):
@@ -720,17 +755,19 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
         return logratios1, logratios2
 
     def get_prior_decomposition(self):
-        """Returns estimate of the prior, such that 
+        """Returns estimate of the prior, such that
             inv_Sigma = G.T * D * G
         is the inverse of the prior covariance matrix.  Here D, is diagonal and G is a lower triangular matrix.
         """
         cov = self.cl1.cov
         invCov = torch.linalg.inv(cov)
-        G = torch.eye(len(self.L1)).to(cov.device) + torch.matmul(torch.diag(invCov[:,0,1]/invCov[:,0,0]), self.L1)
-        D = invCov[:,0,0]
+        G = torch.eye(len(self.L1)).to(cov.device) + torch.matmul(
+            torch.diag(invCov[:, 0, 1] / invCov[:, 0, 0]), self.L1
+        )
+        D = invCov[:, 0, 0]
         return G, D
 
-    def get_likelihood_components(self, x, double_precision = True):
+    def get_likelihood_components(self, x, double_precision=True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
@@ -756,13 +793,13 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
 
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
-        invSigma_eff[:,2:,2:] -= torch.linalg.inv(cov[:,2:,2:])
-        D00 = invSigma_eff[:,0,0]
-        D11 = invSigma_eff[:,1,1]
-        D22 = invSigma_eff[:,2,2]
-        D12 = invSigma_eff[:,1,2]
-        D01 = invSigma_eff[:,0,1]
-        D02 = invSigma_eff[:,0,2]
+        invSigma_eff[:, 2:, 2:] -= torch.linalg.inv(cov[:, 2:, 2:])
+        D00 = invSigma_eff[:, 0, 0]
+        D11 = invSigma_eff[:, 1, 1]
+        D22 = invSigma_eff[:, 2, 2]
+        D12 = invSigma_eff[:, 1, 2]
+        D01 = invSigma_eff[:, 0, 1]
+        D02 = invSigma_eff[:, 0, 2]
 
         quadratic = (
             torch.diag(D22)
@@ -773,15 +810,15 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
         quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
 
         linear = (
-        torch.matmul(torch.diag(D02)+torch.matmul(L2.T, torch.diag(D01)), x-xm)-
-        torch.matmul(torch.diag(D12)+torch.matmul(L2.T, torch.diag(D11)), lm)-
-        torch.matmul(torch.diag(D22)+torch.matmul(L2.T, torch.diag(D12)), zm)
+            torch.matmul(torch.diag(D02) + torch.matmul(L2.T, torch.diag(D01)), x - xm)
+            - torch.matmul(torch.diag(D12) + torch.matmul(L2.T, torch.diag(D11)), lm)
+            - torch.matmul(torch.diag(D22) + torch.matmul(L2.T, torch.diag(D12)), zm)
         )
         linear = torch.matmul(G.T, linear)
 
         return quadratic, linear
 
-    def get_posterior_components(self, x, double_precision = True):
+    def get_posterior_components(self, x, double_precision=True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(z|x) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
@@ -807,12 +844,12 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
 
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
-        D00 = invSigma_eff[:,0,0]
-        D11 = invSigma_eff[:,1,1]
-        D22 = invSigma_eff[:,2,2]
-        D12 = invSigma_eff[:,1,2]
-        D01 = invSigma_eff[:,0,1]
-        D02 = invSigma_eff[:,0,2]
+        D00 = invSigma_eff[:, 0, 0]
+        D11 = invSigma_eff[:, 1, 1]
+        D22 = invSigma_eff[:, 2, 2]
+        D12 = invSigma_eff[:, 1, 2]
+        D01 = invSigma_eff[:, 0, 1]
+        D02 = invSigma_eff[:, 0, 2]
 
         quadratic = (
             torch.diag(D22)
@@ -823,15 +860,15 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
         quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
 
         linear = (
-        torch.matmul(torch.diag(D02)+torch.matmul(L2.T, torch.diag(D01)), x-xm)-
-        torch.matmul(torch.diag(D12)+torch.matmul(L2.T, torch.diag(D11)), lm)-
-        torch.matmul(torch.diag(D22)+torch.matmul(L2.T, torch.diag(D12)), zm)
+            torch.matmul(torch.diag(D02) + torch.matmul(L2.T, torch.diag(D01)), x - xm)
+            - torch.matmul(torch.diag(D12) + torch.matmul(L2.T, torch.diag(D11)), lm)
+            - torch.matmul(torch.diag(D22) + torch.matmul(L2.T, torch.diag(D12)), zm)
         )
         linear = torch.matmul(G.T, linear)
 
         return quadratic, linear
 
-    def get_MAP(self, x, prior_cov = None, double_precision = True, gamma = 1.):
+    def get_MAP(self, x, prior_cov=None, double_precision=True, gamma=1.0):
         """Generate MAP estimator for z.
 
         Args:
@@ -845,14 +882,20 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
         """
 
         if prior_cov is not None:
-            invN, b = self.get_likelihood_components(x, double_precision = double_precision)
-            z_MAP = torch.matmul(torch.linalg.inv(invN*gamma + torch.linalg.inv(prior_cov)), -b*gamma)
+            invN, b = self.get_likelihood_components(
+                x, double_precision=double_precision
+            )
+            z_MAP = torch.matmul(
+                torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), -b * gamma
+            )
         else:
-            invN, b = self.get_posterior_components(x, double_precision = double_precision)
+            invN, b = self.get_posterior_components(
+                x, double_precision=double_precision
+            )
             z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
         return z_MAP
 
-    def get_prior_samples(self, N, prior_cov = None):
+    def get_prior_samples(self, N, prior_cov=None):
         """Generate samples from approximate prior, based on output of prior decomposition.
 
         Args:
@@ -869,12 +912,14 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
             inv_cov = torch.matmul(torch.matmul(G.T, torch.diag(D)), G).double()
             cov = torch.linalg.inv(inv_cov)
         else:
-            cov = prior_cov.double()*1.
-        dist = torch.distributions.MultivariateNormal(torch.zeros(len(cov)).to(cov.device).double(), covariance_matrix = cov)
-        draws = dist.sample(torch.Size((N, )))
+            cov = prior_cov.double() * 1.0
+        dist = torch.distributions.MultivariateNormal(
+            torch.zeros(len(cov)).to(cov.device).double(), covariance_matrix=cov
+        )
+        draws = dist.sample(torch.Size((N,)))
         return draws
 
-    def get_post_samples(self, N, x, prior_cov = None, gamma = 1.):
+    def get_post_samples(self, N, x, prior_cov=None, gamma=1.0):
         """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
 
         Args:
@@ -889,14 +934,14 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
         dimensions. For more parameters, other techniques directly based on the
         likelihood quadratic and linear components should be used.
         """
-        best = self.get_MAP(x, prior_cov = prior_cov, gamma = gamma)
+        best = self.get_MAP(x, prior_cov=prior_cov, gamma=gamma)
         if prior_cov is not None:
             invN, _ = self.get_likelihood_components(x)
-            invN = invN*gamma
-            full_cov = torch.linalg.inv(invN+torch.linalg.inv(prior_cov))
+            invN = invN * gamma
+            full_cov = torch.linalg.inv(invN + torch.linalg.inv(prior_cov))
         else:
             invN, _ = self.get_posterior_components(x)
-            invN = invN*gamma
+            invN = invN * gamma
             full_cov = torch.linalg.inv(invN)
         dist = torch.distributions.MultivariateNormal(best, full_cov)
         draws = dist.sample(torch.Size([N]))
@@ -905,7 +950,7 @@ class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
 
 class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
     r"""Estimate high-dimensional Gaussian log-ratios with an autoregressive model.
-    
+
     Args:
         num_params: Length of parameter vector.
         varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
@@ -925,23 +970,36 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
 
     """
 
-    def __init__(self, num_params, varnames, L_init = None, Phi_init = None, minstd: float = 1e-10, momentum = 0.02, optimize_Phi = False):
+    def __init__(
+        self,
+        num_params,
+        varnames,
+        L_init=None,
+        Phi_init=None,
+        minstd: float = 1e-10,
+        momentum=0.02,
+        optimize_Phi=False,
+    ):
         super().__init__()
-        self.cl1 = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd, momentum=momentum)  # Estimate prior
-        self.cl2 = LogRatioEstimator_Gaussian(num_params, varnames = varnames, minstd = minstd, momentum=momentum)  # Estimate likelihood
+        self.cl1 = LogRatioEstimator_Gaussian(
+            num_params, varnames=varnames, minstd=minstd, momentum=momentum
+        )  # Estimate prior
+        self.cl2 = LogRatioEstimator_Gaussian(
+            num_params, varnames=varnames, minstd=minstd, momentum=momentum
+        )  # Estimate likelihood
         self.num_params = num_params
-        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad = False)
+        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
         if L_init is None:
-            L_init = torch.ones(num_params, num_params)*0.1
-        self.L_full = nn.Parameter(L_init, requires_grad = True)
+            L_init = torch.ones(num_params, num_params) * 0.1
+        self.L_full = nn.Parameter(L_init, requires_grad=True)
         if Phi_init is None:
             Phi_init = torch.eye(num_params)
-        self.Phi = nn.Parameter(Phi_init, requires_grad = optimize_Phi)
+        self.Phi = nn.Parameter(Phi_init, requires_grad=optimize_Phi)
 
     @property
     def L(self):
         """Lower triangular matrix of parameter correlations."""
-        return self._mask*self.L_full
+        return self._mask * self.L_full
 
     @staticmethod
     def _get_mask(D):
@@ -973,7 +1031,7 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
 
         return logratios1, logratios2
 
-    def get_likelihood_components(self, x, double_precision = True):
+    def get_likelihood_components(self, x, double_precision=True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T invN z - 2 z.T b ] + const(x)
@@ -999,18 +1057,22 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
 
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
-        invSigma_eff[:,1:,1:] -= torch.linalg.inv(cov[:,1:,1:])
+        invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
 
-        quadratic = torch.matmul(torch.matmul(Phi.T, torch.diag(invSigma_eff[:,2,2])), Phi)
+        quadratic = torch.matmul(
+            torch.matmul(Phi.T, torch.diag(invSigma_eff[:, 2, 2])), Phi
+        )
 
-        linear = torch.matmul(Phi.T,
-                - torch.matmul(torch.diag(invSigma_eff[:,2,0]), x-xm) 
-                - torch.matmul(torch.diag(invSigma_eff[:,2,1]), torch.matmul(L, x)-lm)
-                + torch.matmul(torch.diag(invSigma_eff[:,2,2]), zm))
+        linear = torch.matmul(
+            Phi.T,
+            -torch.matmul(torch.diag(invSigma_eff[:, 2, 0]), x - xm)
+            - torch.matmul(torch.diag(invSigma_eff[:, 2, 1]), torch.matmul(L, x) - lm)
+            + torch.matmul(torch.diag(invSigma_eff[:, 2, 2]), zm),
+        )
 
         return quadratic, linear
 
-    def get_MAP(self, x, prior_cov, double_precision = True, gamma = 1.):
+    def get_MAP(self, x, prior_cov, double_precision=True, gamma=1.0):
         """Generate MAP estimator for z.
 
         Args:
@@ -1023,12 +1085,14 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
             torch.tensor: MAP estimator
         """
 
-        invN, b = self.get_likelihood_components(x, double_precision = double_precision)
-        z_MAP = torch.matmul(torch.linalg.inv(invN*gamma + torch.linalg.inv(prior_cov)), b*gamma)
+        invN, b = self.get_likelihood_components(x, double_precision=double_precision)
+        z_MAP = torch.matmul(
+            torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), b * gamma
+        )
 
         return z_MAP
 
-    def get_post_samples(self, N, x, prior_cov, gamma = 1.):
+    def get_post_samples(self, N, x, prior_cov, gamma=1.0):
         """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
 
         Args:
@@ -1043,10 +1107,10 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         dimensions. For more parameters, other techniques directly based on the
         likelihood quadratic and linear components should be used.
         """
-        best = self.get_MAP(x, prior_cov, gamma = gamma)
+        best = self.get_MAP(x, prior_cov, gamma=gamma)
         invN, _ = self.get_likelihood_components(x)
-        full_cov = torch.linalg.inv(invN*gamma+torch.linalg.inv(prior_cov))
+        full_cov = torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov))
         L_chol = torch.linalg.cholesky(full_cov)
-        dist = torch.distributions.MultivariateNormal(best, scale_tril = L_chol)
+        dist = torch.distributions.MultivariateNormal(best, scale_tril=L_chol)
         draws = dist.sample(torch.Size([N]))
         return draws
