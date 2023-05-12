@@ -19,6 +19,7 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 try:
     from pytorch_lightning.trainer.supporters import CombinedLoader
 except ImportError:
@@ -31,7 +32,13 @@ import yaml
 
 from swyft.lightning.data import *
 from swyft.plot.mass import get_empirical_z_score
-from swyft.lightning.utils import OptimizerInit, AdamOptimizerInit, SwyftParameterError
+from swyft.lightning.utils import (
+    OptimizerInit,
+    AdamOptimizerInit,
+    SwyftParameterError,
+    _collection_mask,
+    _collection_flatten,
+)
 
 import scipy
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
@@ -80,8 +87,7 @@ class SwyftModule(pl.LightningModule):
     def configure_optimizers(self):
         return self.optimizer_init(self.parameters())
 
-    def _logratios(self, x, z):
-        out = self(x, z)
+    def _get_logratios(self, out):
         if isinstance(out, dict):
             out = {k: v for k, v in out.items() if k[:4] != "aux_"}
             logratios = torch.cat(
@@ -89,11 +95,15 @@ class SwyftModule(pl.LightningModule):
             )
         elif isinstance(out, list) or isinstance(out, tuple):
             out = [v for v in out if hasattr(v, "logratios")]
+            if out == []:
+                return None
             logratios = torch.cat(
                 [val.logratios.flatten(start_dim=1) for val in out], dim=1
             )
-        else:
+        elif isinstance(out, swyft.LogRatioSamples):
             logratios = out.logratios.flatten(start_dim=1)
+        else:
+            logratios = None
         return logratios
 
     def validation_step(self, batch, batch_idx):
@@ -125,18 +135,38 @@ class SwyftModule(pl.LightningModule):
         num_pos = len(list(x.values())[0])  # Number of positive examples
         num_neg = len(list(z.values())[0]) - num_pos  # Number of negative examples
 
-        logratios = self._logratios(
-            x, z
+        out = self(x, z)  # Evaluate network
+        loss_tot = 0
+
+        logratios = self._get_logratios(
+            out
         )  # Generates concatenated flattened list of all estimated log ratios
-        y = torch.zeros_like(logratios)
-        y[:num_pos, ...] = 1
-        pos_weight = torch.ones_like(logratios[0]) * num_neg / num_pos
-        loss = F.binary_cross_entropy_with_logits(
-            logratios, y, reduction="none", pos_weight=pos_weight
-        )
-        num_ratios = loss.shape[1]
-        loss = loss.sum() / num_neg  # Calculates batched-averaged loss
-        return loss - 2 * np.log(2.0) * num_ratios
+        if logratios is not None:
+            y = torch.zeros_like(logratios)
+            y[:num_pos, ...] = 1
+            pos_weight = torch.ones_like(logratios[0]) * num_neg / num_pos
+            loss = F.binary_cross_entropy_with_logits(
+                logratios, y, reduction="none", pos_weight=pos_weight
+            )
+            num_ratios = loss.shape[1]
+            loss = loss.sum() / num_neg  # Calculates batched-averaged loss
+            loss = loss - 2 * np.log(2.0) * num_ratios
+            loss_tot += loss
+
+        aux_losses = self._get_aux_losses(out)
+        if aux_losses is not None:
+            loss_tot += aux_losses.sum()
+
+        return loss_tot
+
+    def _get_aux_losses(self, out):
+        flattened_out = _collection_flatten(out)
+        filtered_out = [v for v in flattened_out if isinstance(v, swyft.AuxLoss)]
+        if len(filtered_out) == 0:
+            return None
+        else:
+            losses = torch.cat([v.loss.unsqueeze(-1) for v in filtered_out], dim=1)
+            return losses
 
     def training_step(self, batch, batch_idx):
         loss = self._calc_loss(batch)
@@ -157,6 +187,13 @@ class SwyftModule(pl.LightningModule):
 #################
 # LogRatioSamples
 #################
+
+
+@dataclass
+class AuxLoss:
+    r"""Datacloss for storing aditional loss functions that are minimized during optimization"""
+    loss: torch.Tensor
+    name: str
 
 
 @dataclass

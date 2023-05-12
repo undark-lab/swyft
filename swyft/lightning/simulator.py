@@ -49,7 +49,7 @@ class Samples(dict):
     def __getitem__(self, i):
         """For integers, return 'rows', for string returns 'columns'."""
         if isinstance(i, int):
-            return {k: v[i] for k, v in self.items()}
+            return Sample({k: v[i] for k, v in self.items()})
         elif isinstance(i, slice):
             return Samples({k: v[i] for k, v in self.items()})
         else:

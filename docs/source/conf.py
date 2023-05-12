@@ -162,7 +162,6 @@ mathjax_path = (
 bibtex_bibfiles = ["refs.bib"]
 bibtex_reference_style = "author_year"
 
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["ntemplates"]
 
@@ -177,8 +176,8 @@ master_doc = "index"
 
 # General information about the project.
 project = "swyft"
-copyright = "2022, Alex Cole, Benjamin Kurt Miller, Christoph Weniger"
-author = "Alex Cole, Benjamin Kurt Miller, Christoph Weniger"
+copyright = "2023, Noemi Anau Montel, Alex Cole, Benjamin Kurt Miller, Christoph Weniger"
+author = "Noemi Anau Montel, Alex Cole, Benjamin Kurt Miller, Christoph Weniger"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -290,7 +289,7 @@ latex_documents = [
         master_doc,
         "swyft.tex",
         "swyft Documentation",
-        "Benjamin Kurt Miller, Christoph Weniger, Alex Cole",
+        "James Alvey, Noemi Anau Montel, Alex Cole, Benjamin Kurt Miller, Christoph Weniger",
         "manual",
     )
 ]

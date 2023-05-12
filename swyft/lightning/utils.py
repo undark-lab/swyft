@@ -19,6 +19,7 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 try:
     from pytorch_lightning.trainer.supporters import CombinedLoader
 except ImportError:
@@ -91,7 +92,11 @@ class AdamOptimizerInit(OptimizerInit):
             optim_constructor=torch.optim.Adam,
             optim_args={"lr": lr},
             scheduler_constructor=torch.optim.lr_scheduler.ReduceLROnPlateau,
-            scheduler_args={"factor": lrs_factor, "patience": lrs_patience},
+            scheduler_args={
+                "factor": lrs_factor,
+                "patience": lrs_patience,
+                "verbose": True,
+            },
         )
 
 
@@ -228,6 +233,24 @@ def get_weighted_samples(lrs_coll, params: Union[str, Sequence[str]]):
     raise SwyftParameterError("Requested parameters not available:", *params)
 
 
+def get_class_probs(lrs_coll, params: str):
+    """Return class probabilities for discrete parameters.
+
+    Args:
+        lrs_coll: Collection of LogRatioSamples objects
+        params: Parameter of interest (must be (0, 1, ..., K-1) for K classes)
+
+    Returns:
+        np.Array: Vector of length K with class probabilities
+    """
+    params, weights = get_weighted_samples(lrs_coll, params)
+    probs = np.array(
+        [weights[params[:, 0] == k].sum() for k in range(int(params[:, 0].max()) + 1)]
+    )
+    probs /= probs.sum()
+    return probs
+
+
 # def weights_sample(N, values, weights, replacement = True):
 #    """Weight-based sampling with or without replacement."""
 #    sw = weights.shape
@@ -346,6 +369,21 @@ def _collection_map(coll, map_fn):
         return map_fn(coll)
 
 
+def _collection_flatten(coll, acc=None):
+    """Flatten a nested list of collections by returning a list of all nested items."""
+    if acc is None:
+        acc = []
+    if isinstance(coll, list) or isinstance(coll, tuple):
+        for v in coll:
+            _collection_flatten(v, acc)
+    elif isinstance(coll, dict):
+        for v in coll.values():
+            _collection_flatten(v, acc)
+    else:
+        acc.append(coll)
+    return acc
+
+
 def _collection_select(coll, err, fn, *args, **kwargs):
     if isinstance(coll, list):
         for item in coll:
@@ -399,8 +437,8 @@ def to_numpy(*args, single_precision=False):
             else:
                 x = x.numpy()
             return x
-    elif isinstance(x, swyft.lightning.simulator.Samples):
-        return swyft.lightning.simulator.Samples(
+    elif isinstance(x, swyft.Samples):
+        return swyft.Samples(
             {k: to_numpy(v, single_precision=single_precision) for k, v in x.items()}
         )
     elif isinstance(x, tuple):
@@ -425,8 +463,8 @@ def to_numpy32(*args):
 
 
 def to_torch(x):
-    if isinstance(x, swyft.lightning.simulator.Samples):
-        return swyft.lightning.simulator.Samples({k: to_torch(v) for k, v in x.items()})
+    if isinstance(x, swyft.Samples):
+        return swyft.Samples({k: to_torch(v) for k, v in x.items()})
     elif isinstance(x, dict):
         return {k: to_torch(v) for k, v in x.items()}
     else:

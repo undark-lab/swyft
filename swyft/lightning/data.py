@@ -203,7 +203,7 @@ class ZarrStore:
 
     def __getitem__(self, i):
         if isinstance(i, int):
-            return {k: self.data[k][i] for k in self.keys()}
+            return Sample({k: self.data[k][i] for k in self.keys()})
         elif isinstance(i, slice):
             return Samples({k: self.data[k][i] for k in self.keys()})
         elif isinstance(i, str):
