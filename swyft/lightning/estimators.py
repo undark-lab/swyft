@@ -975,7 +975,9 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         num_params,
         varnames,
         L_init=None,
+        L_module=None,
         Phi_init=None,
+        Phi_module=None,
         minstd: float = 1e-10,
         momentum=0.02,
         optimize_Phi=False,
@@ -989,9 +991,17 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         )  # Estimate likelihood
         self.num_params = num_params
         self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
+
+        #assert Phi_init is None or Phi_module is None
+        #assert L_init is None or L_module is None
+
+        self.Phi_module = Phi_module
+        self.L_module = L_module
+
         if L_init is None:
             L_init = torch.ones(num_params, num_params) * 0.1
         self.L_full = nn.Parameter(L_init, requires_grad=True)
+
         if Phi_init is None:
             Phi_init = torch.eye(num_params)
         self.Phi = nn.Parameter(Phi_init, requires_grad=optimize_Phi)
@@ -1024,8 +1034,14 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         logratios1 = self.cl1(xA.unsqueeze(-1), zB.unsqueeze(-1))  # (x; z)
 
         # Estimating likelihood p(\vec x|\vec z)/\prod_i p(x_i)
-        LxB = torch.matmul(xB.detach(), self.L.T)
-        PzB = torch.matmul(zB, self.Phi.T)
+        if self.Phi_module:
+            PzB = self.Phi_module(zB)
+        else:
+            PzB = torch.matmul(zB, self.Phi.T)
+        if self.L_module:
+            LxB = self.L_module(xB.detach())
+        else:
+            LxB = torch.matmul(xB.detach(), self.L.T)
         fB = torch.stack([LxB, PzB], dim=-1)
         logratios2 = self.cl2(xA.unsqueeze(-1).detach(), fB)  # (x; L x, Phi z)
 
@@ -1062,6 +1078,13 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         quadratic = torch.matmul(
             torch.matmul(Phi.T, torch.diag(invSigma_eff[:, 2, 2])), Phi
         )
+
+        quadratic = torch.matmul(
+            torch.matmul(Phi.T, torch.diag(invSigma_eff[:, 2, 2])), Phi
+        )
+
+#        quadratic = lambda x:
+#            (self.Phi_T_module(torch.matmul(torch.diag(invSigma_eff[:,2,2], self.Phi_module(x)))
 
         linear = torch.matmul(
             Phi.T,
