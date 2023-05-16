@@ -11,6 +11,7 @@ from swyft.utils.marginals import (
 )
 from swyft.utils.misc import depth, is_cuda_available, is_empty
 from swyft.utils.ns import SwyftSimpleSliceSampler
+from swyft.utils.geda import GEDASampler
 
 __all__ = [
     "array_to_tensor",
@@ -24,4 +25,5 @@ __all__ = [
     "tensor_to_array",
     "tupleize_marginal_indices",
     "SwyftSimpleSliceSampler",
+    "GEDASampler",
 ]
