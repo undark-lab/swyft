@@ -990,7 +990,6 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
             num_params, varnames=varnames, minstd=minstd, momentum=momentum
         )  # Estimate likelihood
         self.num_params = num_params
-        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
 
         #assert Phi_init is None or Phi_module is None
         #assert L_init is None or L_module is None
@@ -998,13 +997,16 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
         self.Phi_module = Phi_module
         self.L_module = L_module
 
-        if L_init is None:
-            L_init = torch.ones(num_params, num_params) * 0.1
-        self.L_full = nn.Parameter(L_init, requires_grad=True)
+        if self.L_module is None:
+            self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
+            if L_init is None:
+                L_init = torch.ones(num_params, num_params) * 0.1
+            self.L_full = nn.Parameter(L_init, requires_grad=True)
 
-        if Phi_init is None:
-            Phi_init = torch.eye(num_params)
-        self.Phi = nn.Parameter(Phi_init, requires_grad=optimize_Phi)
+        if self.Phi_module is None:
+            if Phi_init is None:
+                Phi_init = torch.eye(num_params)
+            self.Phi = nn.Parameter(Phi_init, requires_grad=optimize_Phi)
 
     @property
     def L(self):
