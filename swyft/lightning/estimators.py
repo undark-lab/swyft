@@ -1034,7 +1034,7 @@ class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
     def get_likelihood_components(self, x, double_precision=True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
-        ln p(x|z) = -1/2 * [ z.T invN z - 2 z.T b ] + const(x)
+        ln p(x|z) = -1/2 * [ z.T Q z - 2 z.T b ] + const(x)
 
         Args:
             x: Data vector
@@ -1142,13 +1142,11 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
         self,
         num_params,
         varnames,
-        L_init=None,
-        L_module=None,
-        Phi_init=None,
-        Phi_module=None,
+        L=None,
+        Phi=None,
+        PhiT=None,
         minstd: float = 1e-10,
         momentum=0.02,
-        optimize_Phi=False,
     ):
         super().__init__()
         self.cl1 = LogRatioEstimator_Gaussian(
@@ -1159,35 +1157,9 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
         )  # Estimate likelihood
         self.num_params = num_params
 
-        #assert Phi_init is None or Phi_module is None
-        #assert L_init is None or L_module is None
-
-        self.Phi_module = Phi_module
-        self.L_module = L_module
-
-        if self.L_module is None:
-            self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
-            if L_init is None:
-                L_init = torch.ones(num_params, num_params) * 0.1
-            self.L_full = nn.Parameter(L_init, requires_grad=True)
-
-        if self.Phi_module is None:
-            if Phi_init is None:
-                Phi_init = torch.eye(num_params)
-            self.Phi = nn.Parameter(Phi_init, requires_grad=optimize_Phi)
-
-    @property
-    def L(self):
-        """Lower triangular matrix of parameter correlations."""
-        return self._mask * self.L_full
-
-    @staticmethod
-    def _get_mask(D):
-        "Autoregressive masking"
-        mask = torch.ones(D, D)
-        for i in range(D):
-            mask[i, i:] = 0
-        return mask
+        self.Phi = Phi
+        self.PhiT = PhiT
+        self.L = L
 
     def forward(self, xA, xB, zB):
         """Forward method.
@@ -1204,14 +1176,8 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
         logratios1 = self.cl1(xA.unsqueeze(-1), zB.unsqueeze(-1))  # (x; z)
 
         # Estimating likelihood p(\vec x|\vec z)/\prod_i p(x_i)
-        if self.Phi_module:
-            PzB = self.Phi_module(zB)
-        else:
-            PzB = torch.matmul(zB, self.Phi.T)
-        if self.L_module:
-            LxB = self.L_module(xB.detach())
-        else:
-            LxB = torch.matmul(xB.detach(), self.L.T)
+        PzB = self.Phi(zB)
+        LxB = self.L(xB.detach())
         fB = torch.stack([LxB, PzB], dim=-1)
         logratios2 = self.cl2(xA.unsqueeze(-1).detach(), fB)  # (x; L x, Phi z)
 
@@ -1222,57 +1188,42 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
 
         ln p(x|z) = -1/2 * [ z.T Q z - 2 z.T b ] + const(x)
 
+        We assume the matrix factorization Q = Phi.T D Phi.
+
+        Phi is a linear operator, Phi.T its transpose.
+
         Args:
             x: Data vector
             double_precision: Use double precision for matrix inversions
 
         Returns:
-            Q, b: torch.Tensor, torch.Tensor
+            Phi.T, D, Phi, b: torch.Tensor, torch.Tensor
         """
         mean = self.cl2.mean.detach()
         cov = self.cl2.cov.detach()
-        L = self.L.detach()
-        Phi = self.Phi.detach()
 
         if double_precision:
             cov = cov.double()
             mean = mean.double()
-            L = L.double()
-            Phi = Phi.double()
             x = x.double()
 
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
         invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
 
-        if self.Phi_module:
-            quadratic = torch.matmul(
-                torch.matmul(Phi.T, torch.diag(invSigma_eff[:, 2, 2])), Phi
-            )
+#        temp = (
+#            -torch.matmul(torch.diag(invSigma_eff[:, 2, 0]), x - xm)
+#            - torch.matmul(torch.diag(invSigma_eff[:, 2, 1]), self.L(x) - lm)
+#            + torch.matmul(torch.diag(invSigma_eff[:, 2, 2]), zm)
+#        )
+        temp = (
+            -invSigma_eff[:, 2, 0]*(x - xm)
+            - invSigma_eff[:, 2, 1]*(self.L(x) - lm)
+            + invSigma_eff[:, 2, 2]*zm
+        )
+        linear = self.PhiT(temp)
 
-            temp = (
-                -torch.matmul(torch.diag(invSigma_eff[:, 2, 0]), x - xm)
-                - torch.matmul(torch.diag(invSigma_eff[:, 2, 1]), torch.matmul(L, x) - lm)
-                + torch.matmul(torch.diag(invSigma_eff[:, 2, 2]), zm),
-            )
-            linear = self.Phi_module.T(temp)
-
-            return self.Phi_module.T, torch.diag(invSigma_eff[:, 2, 2]), self.Phi_module, linear
-
-
-        else:
-            quadratic = torch.matmul(
-                torch.matmul(Phi.T, torch.diag(invSigma_eff[:, 2, 2])), Phi
-            )
-
-            temp = (
-                -torch.matmul(torch.diag(invSigma_eff[:, 2, 0]), x - xm)
-                - torch.matmul(torch.diag(invSigma_eff[:, 2, 1]), torch.matmul(L, x) - lm)
-                + torch.matmul(torch.diag(invSigma_eff[:, 2, 2]), zm),
-            )
-            linear = torch.matmul(Phi.T, temp)
-
-            return quadratic, linear
+        return lambda x: self.PhiT(x).detach(), invSigma_eff[:, 2, 2], lambda x: self.Phi(x).detach(), linear
 
     def get_MAP(self, x, prior_cov, double_precision=True, gamma=1.0):
         """Generate MAP estimator for z.
@@ -1287,10 +1238,11 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
             torch.tensor: MAP estimator
         """
 
-        invN, b = self.get_likelihood_components(x, double_precision=double_precision)
-        z_MAP = torch.matmul(
-            torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), b * gamma
-        )
+        PhiT, D, Phi, b = self.get_likelihood_components(x, double_precision=double_precision)
+#        z_MAP = torch.matmul(
+#            torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), b * gamma
+#        )
+        z_MAP = None
 
         return z_MAP
 
