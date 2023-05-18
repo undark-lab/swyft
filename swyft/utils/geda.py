@@ -67,13 +67,14 @@ class GEDASampler:
         theta = self.U2T(mu_U2_theta + r_theta/(1/self.omega + self.D2)**0.5).real        
         return theta, u1
     
-    def sample(self, N, steps = 1000):
+    def sample(self, N, steps = 1000, reset = False):
         "Generate N samples"
         samples = []
         # Initialize with a random sample from Q2
-        theta = self.U2T(torch.randn(self.N, dtype = self.U2_dtype, device = self.device)/(0/self.omega + self.D2)**0.5).real # Sample from Q2
-        u1 = torch.randn(self.N, device = self.device, dtype = self.dtype)*self.omega**0.5  # Sample u1 assuming theta = u2 = 0
         for i in range(N):
+            if reset or i == 0:
+                theta = self.U2T(torch.randn(self.N, dtype = self.U2_dtype, device = self.device)/(0/self.omega + self.D2)**0.5).real # Sample from Q2
+                u1 = torch.randn(self.N, device = self.device, dtype = self.dtype)*self.omega**0.5  # Sample u1 assuming theta = u2 = 0
             for _ in range(steps):
                 theta, u1 = self._gibbs_sample_step(theta, u1)
             samples.append(theta)
