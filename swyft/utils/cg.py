@@ -1,4 +1,5 @@
 import torch
+import time
 
 def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, verbose=False):
     # Adopted from https://github.com/sbarratt/torch_cg/blob/master/LICENSE.md
