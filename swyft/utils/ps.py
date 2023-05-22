@@ -34,3 +34,18 @@ class PowerSpectrumSampler:
         phi_k = A*pk(self.k)**0.5
         phi_x = torch.fft.ifft2(phi_k, norm = 'ortho')
         return phi_x.real
+    
+    def get_prior_Q_factors(self, pk):
+        """Return components of prior precision matrix.
+
+        Q = UT * D * U
+
+        Returns:
+            UT, D, U: Linear operator, tensor, linear operator
+        """
+        # Define prior precision matrix function
+        D = pk(self.k).view(-1)
+        N = self.N
+        U = lambda x: torch.fft.fft2(x.view(N, N), norm = 'ortho').view(N*N)
+        UT = lambda x: torch.fft.ifft2(x.view(N, N), norm = 'ortho').view(N*N)
+        return UT, 1/D, U
