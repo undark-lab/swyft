@@ -438,6 +438,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         # (B, *, D)
         mean = x.mean(dim=0)  # (*, D)
         diffs = x - mean  # (B, *, D)
+        diffs = diffs.double()
         N = len(x)
         covs = torch.einsum(
             diffs.unsqueeze(-1), [0, ...], diffs.unsqueeze(-2), [0, ...], [...]
@@ -497,19 +498,25 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         # Get standard normal distributed parameters
         X = torch.cat([a, b], dim=-1).double()
 
+        try:
+            L = torch.linalg.cholesky(cov.double())
+        except torch.linalg.LinAlgError:
+            eig, _ = torch.linalg.eig(cov.double())
+            print(eig.shape)
+            print(eig.min(), eig.max())
+            raise torch.linalg.LinAlgError
         dist_ab = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean, covariance_matrix=cov.double()
-        )
+            self._mean, scale_tril = L)
         logprobs_ab = dist_ab.log_prob(X)
 
+        L = torch.linalg.cholesky(cov[..., a_dim:, a_dim:].double())
         dist_b = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean[..., a_dim:], covariance_matrix=cov[..., a_dim:, a_dim:].double()
-        )
+            self._mean[..., a_dim:], scale_tril = L)
         logprobs_b = dist_b.log_prob(X[..., a_dim:])
 
+        L = torch.linalg.cholesky(cov[..., :a_dim, :a_dim].double())
         dist_a = torch.distributions.multivariate_normal.MultivariateNormal(
-            self._mean[..., :a_dim], covariance_matrix=cov[..., :a_dim, :a_dim].double()
-        )
+            self._mean[..., :a_dim], scale_tril = L)
         logprobs_a = dist_a.log_prob(X[..., :a_dim])
 
         logratios = logprobs_ab - logprobs_b - logprobs_a
@@ -1183,7 +1190,7 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
 
         return logratios1, logratios2
 
-    def get_likelihood_components(self, x, double_precision=True):
+    def get_likelihood_components(self, x = None, double_precision=True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
 
         ln p(x|z) = -1/2 * [ z.T Q z - 2 z.T b ] + const(x)
@@ -1205,66 +1212,66 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
         if double_precision:
             cov = cov.double()
             mean = mean.double()
-            x = x.double()
+            if x is not None:
+                x = x.double()
+            else:
+                x = None
 
         xm, lm, zm = mean.T
         invSigma_eff = torch.linalg.inv(cov)
         invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
 
-#        temp = (
-#            -torch.matmul(torch.diag(invSigma_eff[:, 2, 0]), x - xm)
-#            - torch.matmul(torch.diag(invSigma_eff[:, 2, 1]), self.L(x) - lm)
-#            + torch.matmul(torch.diag(invSigma_eff[:, 2, 2]), zm)
-#        )
-        temp = (
-            -invSigma_eff[:, 2, 0]*(x - xm)
-            - invSigma_eff[:, 2, 1]*(self.L(x) - lm)
-            + invSigma_eff[:, 2, 2]*zm
-        )
-        linear = self.PhiT(temp)
+        if x is not None:
+            temp = (
+                -invSigma_eff[:, 2, 0]*(x - xm)
+                - invSigma_eff[:, 2, 1]*(self.L(x) - lm)
+                + invSigma_eff[:, 2, 2]*zm
+            )
+            linear = self.PhiT(temp)
+        else:
+            linear = None
 
         return lambda x: self.PhiT(x).detach(), invSigma_eff[:, 2, 2], lambda x: self.Phi(x).detach(), linear
 
-    def get_MAP(self, x, prior_cov, double_precision=True, gamma=1.0):
-        """Generate MAP estimator for z.
+    def get_likelihood_Q_factors(self):
+        """Return components of likelihood precision matrix Q.
 
-        Args:
-            x: Data vector
-            prior_cov: Prior covariance matrix to combine with estimated likelihood (if not provided, posterior estimate will be used).
-            double_precision: Use double precision for matrix inversion
-            gamma: Rescaling of likelihood function (only used when prior_cov is not None)
+        Q = GT * D * G
 
         Returns:
-            torch.tensor: MAP estimator
+            UT, D, U: Linear operator, tensor, linear operator
         """
+        G1Tt, D1, G1t, _ = self.get_likelihood_components(x = None)
+        G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
+        G1 = lambda x: G1t(x.unsqueeze(0))[0]
+        return G1T, D1, G1
 
-        PhiT, D, Phi, b = self.get_likelihood_components(x, double_precision=double_precision)
-#        z_MAP = torch.matmul(
-#            torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), b * gamma
-#        )
-        z_MAP = None
+    def get_MAP(self, x, prior, gamma = 1.):
+        G1Tt, D1, G1t, b = self.get_likelihood_components(x)
 
-        return z_MAP
+        G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
+        G1 = lambda x: G1t(x.unsqueeze(0))[0]
+        like_Q = lambda x: G1T(D1*G1(x)).detach()*gamma
 
-    def get_post_samples(self, N, x, prior_cov, gamma=1.0):
-        """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
+        U2T, D2, U2 = prior
+        prior_Q = lambda x: U2T(U2(x)*D2).real.detach()
 
-        Args:
-            x: Data vector
-            prior_cov: Prior covariance matrix
-            gamma: Rescaling factor for likelihood covariance matrix
+        B0 = b.cuda().view(1, -1, 1).detach()*1.*gamma
 
-        Returns:
-            Samples
+        def A(x):
+            x = x[0,:,0]
+            x = prior_Q(x) + like_Q(x)
+            return x.view(1, -1, 1).detach()
 
-        Note: This is expected to work for significantly less than 1e4
-        dimensions. For more parameters, other techniques directly based on the
-        likelihood quadratic and linear components should be used.
-        """
-        best = self.get_MAP(x, prior_cov, gamma=gamma)
-        invN, _ = self.get_likelihood_components(x)
-        full_cov = torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov))
-        L_chol = torch.linalg.cholesky(full_cov)
-        dist = torch.distributions.MultivariateNormal(best, scale_tril=L_chol)
-        draws = dist.sample(torch.Size([N]))
+        cg = swyft.utils.CG(A, rtol = 0.001, verbose = False, maxiter = 10000)
+        x0 = cg.forward(B0)
+        return x0
+
+    def get_noise_samples_GEDA(self, N, prior, steps = 100, epsilon = None, reset = False, initialize_with_Q2 = True, gamma = 1.):
+        G1T, D1, G1 = self.get_likelihood_Q_factors()
+        U2T, D2, U2 = prior
+        if epsilon is None:
+            epsilon = 0.5/D1.max().item()
+        geda = swyft.utils.GEDASampler(epsilon, G1, D1*gamma, G1T, U2, D2, U2T)
+        draws = geda.sample(N, steps = steps, reset = reset, initialize_with_Q2= initialize_with_Q2)
         return draws
