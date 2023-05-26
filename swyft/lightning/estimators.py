@@ -1164,6 +1164,12 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
         )  # Estimate likelihood
         self.num_params = num_params
 
+        if Phi is None:
+            Phi = lambda x: x
+            PhiT = lambda x: x
+        if L is None:
+            L = lambda x: x*0
+
         self.Phi = Phi
         self.PhiT = PhiT
         self.L = L
