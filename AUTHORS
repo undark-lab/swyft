@@ -1,0 +1,20 @@
+Swyft
+Copyright 2020 The Swyft contributors
+
+Maintainer
+Christoph Weniger, University of Amsterdam <c.weniger@uva.nl>
+
+Initial developers
+Benjamin Miller
+Francesco Nattino
+Christoph Weniger
+
+Contributors
+Noemi Anau Montel
+Alex Cole
+Adam Coogan
+Meiert Grootes
+Ou Ku
+
+Dependencies
+Shane Barratt (for details see deps/torch_cg)
