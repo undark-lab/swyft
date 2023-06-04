@@ -1,0 +1,3 @@
+[submodule "swyft/deps/pytorch_unet"]
+	path = swyft/deps/pytorch_unet
+	url = https://github.com/cweniger/Pytorch-UNet

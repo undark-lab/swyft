@@ -87,24 +87,34 @@ class SwyftModule(pl.LightningModule):
     def configure_optimizers(self):
         return self.optimizer_init(self.parameters())
 
+#    def _get_logratios(self, out):
+#        if isinstance(out, dict):
+#            out = {k: v for k, v in out.items() if k[:4] != "aux_"}
+#            logratios = torch.cat(
+#                [val.logratios.flatten(start_dim=1) for val in out.values()], dim=1
+#            )
+#        elif isinstance(out, list) or isinstance(out, tuple):
+#            out = [v for v in out if hasattr(v, "logratios")]
+#            if out == []:
+#                return None
+#            logratios = torch.cat(
+#                [val.logratios.flatten(start_dim=1) for val in out], dim=1
+#            )
+#        elif isinstance(out, swyft.LogRatioSamples):
+#            logratios = out.logratios.flatten(start_dim=1)
+#        else:
+#            logratios = None
+#        return logratios
+
     def _get_logratios(self, out):
-        if isinstance(out, dict):
-            out = {k: v for k, v in out.items() if k[:4] != "aux_"}
-            logratios = torch.cat(
-                [val.logratios.flatten(start_dim=1) for val in out.values()], dim=1
-            )
-        elif isinstance(out, list) or isinstance(out, tuple):
-            out = [v for v in out if hasattr(v, "logratios")]
-            if out == []:
-                return None
-            logratios = torch.cat(
-                [val.logratios.flatten(start_dim=1) for val in out], dim=1
-            )
-        elif isinstance(out, swyft.LogRatioSamples):
-            logratios = out.logratios.flatten(start_dim=1)
+        flattened_out = _collection_flatten(out)
+        filtered_out = [v for v in flattened_out if hasattr(v, "logratios")]
+        if len(filtered_out) == 0:
+            return None
         else:
-            logratios = None
-        return logratios
+            return torch.cat([v.logratios.flatten(start_dim=1) for v in filtered_out], dim=1)
+#            losses = torch.cat([v.loss.unsqueeze(-1) for v in filtered_out], dim=1)
+#            return losses
 
     def validation_step(self, batch, batch_idx):
         loss = self._calc_loss(batch, randomized=False)

@@ -11,6 +11,9 @@ from swyft.utils.marginals import (
 )
 from swyft.utils.misc import depth, is_cuda_available, is_empty
 from swyft.utils.ns import SwyftSimpleSliceSampler
+from swyft.utils.geda import GEDASampler
+from swyft.utils.cg import CG
+from swyft.utils.ps import get_pk, PowerSpectrumSampler
 
 __all__ = [
     "array_to_tensor",
@@ -24,4 +27,8 @@ __all__ = [
     "tensor_to_array",
     "tupleize_marginal_indices",
     "SwyftSimpleSliceSampler",
+    "GEDASampler",
+    "CG",
+    "get_pk",
+    "PowerSpectrumSampler"
 ]

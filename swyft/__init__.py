@@ -5,6 +5,7 @@ from swyft.lightning.data import *
 from swyft.lightning.simulator import *
 from swyft.lightning.utils import *
 from swyft.plot import *
+import swyft.deps
 
 try:
     from .__version__ import version as __version__
