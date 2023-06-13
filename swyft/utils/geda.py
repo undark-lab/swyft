@@ -63,7 +63,8 @@ class GEDASampler:
         mu_u1 = theta - self.omega*(self.Q1(theta)-self.G1T(u2*self.D1))
         u1 = mu_u1 + self._r2[1]*self.omega**0.5
         mu_U2_theta = (1/self.omega + self.D2)**-1*self.U2((self.R(u1)+0))
-        r_theta = torch.randn(self.N, dtype = self.U2_dtype, device = self.device)
+        # TODO: This only works for Fourier transform U2 and U2T right now
+        r_theta = torch.randn(self.N, dtype = self.U2_dtype, device = self.device)*1.41
         theta = self.U2T(mu_U2_theta + r_theta/(1/self.omega + self.D2)**0.5).real        
         return theta, u1
     

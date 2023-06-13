@@ -48,4 +48,4 @@ class PowerSpectrumSampler:
         N = self.N
         U = lambda x: torch.fft.fft2(x.view(N, N), norm = 'ortho').view(N*N)
         UT = lambda x: torch.fft.ifft2(x.view(N, N), norm = 'ortho').view(N*N)
-        return UT, 1/D, U
+        return UT, 2/D, U  # The factor 2 comes from the fact that std results are obtained for pk = lambda k: 2.
