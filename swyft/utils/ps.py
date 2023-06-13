@@ -15,7 +15,7 @@ def get_pk(x, nbins = 50):
         y = fx[..., (k>=kedges[i])*(k<kedges[i+1])]
         y = torch.abs(y)**2
         PS.append(y.mean(dim=-1).view(-1))
-    PS = torch.stack(PS, dim=-1).T
+    PS = torch.stack(PS, dim=-1)
     return PS
 
 
