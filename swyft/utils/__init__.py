@@ -10,7 +10,6 @@ from swyft.utils.marginals import (
     tupleize_marginal_indices,
 )
 from swyft.utils.misc import depth, is_cuda_available, is_empty
-from swyft.utils.ns import SwyftSimpleSliceSampler
 
 __all__ = [
     "array_to_tensor",
@@ -23,5 +22,4 @@ __all__ = [
     "get_corner_marginal_indices",
     "tensor_to_array",
     "tupleize_marginal_indices",
-    "SwyftSimpleSliceSampler",
 ]
