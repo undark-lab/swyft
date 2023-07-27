@@ -29,8 +29,6 @@ __all__ = [
     "LogRatioEstimator_Ndim",
     "LogRatioEstimator_Autoregressive",
     "LogRatioEstimator_Gaussian",
-    "LogRatioEstimator_Gaussian_Autoregressive_Z",
-    "LogRatioEstimator_Gaussian_Autoregressive_X",
     "RectBoundSampler",
     "LogRatioEstimator_1dim_Gaussian",
 ]
