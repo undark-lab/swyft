@@ -211,10 +211,12 @@ def corner(
 
     diagnostics = {}
 
-    if labeler is not None:
-        labels = [labeler.get(k, k) for k in parnames]
-    else:
-        labels = parnames
+#    if labeler is not None:
+#        labels = [labeler.get(k, k) for k in parnames]
+#    else:
+#        labels = parnames
+
+    labels = labels if labels is not None else parnames
 
     for i in range(K):
         for j in range(K):
