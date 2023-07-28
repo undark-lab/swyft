@@ -19,6 +19,11 @@ from typing import (
 )
 
 
+#####################
+# Auxiliary functions
+#####################
+
+
 def _grid_interpolate_samples(x, y, bins=1000, return_norm=False):
     idx = np.argsort(x)
     x, y = x[idx], y[idx]
@@ -40,6 +45,11 @@ def _get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
     idx = [np.argmax(enclosed_mass >= total_mass * f) for f in cred_level]
     levels = np.array(x[idx])
     return levels
+
+
+#####################
+# Inferface functions
+#####################
 
 
 def plot_2d(
@@ -180,7 +190,6 @@ def corner(
     label_args={},
     contours_1d: bool = True,
     fig=None,
-    labeler=None,
     smooth=0.0,
 ) -> None:
     """Make a beautiful corner plot.
@@ -192,7 +201,7 @@ def corner(
         bins: Number of bins used for histograms.
         figsize: Size of figure
         color: Color
-        labels: Custom labels (default is parameter names)
+        labels: Optional custom labels, either list or dict.
         label_args: Custom label arguments
         contours_1d: Plot 1-dim contours
         fig: Figure instance
@@ -211,12 +220,14 @@ def corner(
 
     diagnostics = {}
 
-#    if labeler is not None:
-#        labels = [labeler.get(k, k) for k in parnames]
-#    else:
-#        labels = parnames
-
-    labels = labels if labels is not None else parnames
+    if labels is None:
+        labels = parnames
+    elif isinstance(labels, list);
+        assert len(list)==len(parnames), "Length of labels list must correspond to number of parameters."
+    elif isinstance(labels, dict):
+        labels = [labels.get(k, k) for k in parnames]
+    else:
+        raise ValueError("labels must be None, list or dict")
 
     for i in range(K):
         for j in range(K):
