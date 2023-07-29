@@ -337,8 +337,8 @@ def plot_pp(
 
 
 def grid(
-    samples,
-    pois,
+    lrs_coll,
+    parnames,
     truth=None,
     bins=100,
     figsize=(15, 10),
@@ -349,12 +349,13 @@ def grid(
     subplots_kwargs={},
     fig=None,
     contours=True,
+    smooth=0.0
 ) -> None:
     """Make beautiful 1-dim posteriors.
 
     Args:
-        samples: Samples from `swyft.Posteriors.sample`
-        pois: List of parameters of interest
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parnames: List of parameters of interest
         truth: Ground truth vector
         bins: Number of bins used for histograms.
         figsize: Size of figure
@@ -362,15 +363,14 @@ def grid(
         labels: Custom labels (default is parameter names)
         label_args: Custom label arguments
         ncol: Number of panel columns
-        subplot_kwargs: Subplot kwargs
+        fig: Figure instance
+        contours: Plot 1-dim contours
+        smooth: Smothing
     """
 
-    grid_interpolate = False
-    diags = {}
-
     if ncol is None:
-        ncol = len(pois)
-    K = len(pois)
+        ncol = len(parnames)
+    K = len(parnames)
     nrow = (K - 1) // ncol + 1
 
     if fig is None:
@@ -384,9 +384,6 @@ def grid(
         left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
     )
 
-    if labels is None:
-        labels = [samples["parameter_names"][pois[i]] for i in range(K)]
-
     for k in range(K):
         if nrow == 1 and ncol > 1:
             ax = axes[k]
@@ -395,20 +392,19 @@ def grid(
         else:
             i, j = k % ncol, k // ncol
             ax = axes[j, i]
-        ret = plot_posterior(
-            samples,
-            pois[k],
+        plot_1d(
+            lrs_coll,
+            parnames[k],
             ax=ax,
-            grid_interpolate=grid_interpolate,
-            color=color,
             bins=bins,
+            color=color,
             contours=contours,
+            smooth=smooth
         )
         ax.set_xlabel(labels[k], **label_args)
         if truth is not None:
-            ax.axvline(truth[pois[k]], ls=":", color="r")
-        diags[(pois[k],)] = ret
-    return fig, diags
+            ax.axvline(truth[parnames[k]], ls=":", color="r")
+    return fig
 
 if __name__ == "__main__":
     pass
