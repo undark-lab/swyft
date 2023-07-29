@@ -214,7 +214,7 @@ def corner(
 
     if labels is None:
         labels = parnames
-    elif isinstance(labels, list);
+    elif isinstance(labels, list):
         assert len(list)==len(parnames), "Length of labels list must correspond to number of parameters."
     elif isinstance(labels, dict):
         labels = [labels.get(k, k) for k in parnames]
