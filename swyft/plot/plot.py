@@ -67,7 +67,7 @@ def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 
 
 def plot_2d(
-    logratios,
+    lrs_coll,
     parname1,
     parname2,
     ax=None,
@@ -76,22 +76,23 @@ def plot_2d(
     cmap="gray_r",
     smooth=0.0,
 ):
-    """Plot 2-dimensional posteriors."""
+    """Plot 2-dimensional posterior.
+
+    Args:
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parname1: Name of parameter 1
+        parname2: Name of parameter 2
+        ax: Optional figure axis argument
+        bins: Number of bins used for histograms.
+        color: Contour colors
+        cmap: Density colors
+        smooth: Applied smoothing factor
+    """
     counts, xy = swyft.lightning.utils.get_pdf(
-        logratios, [parname1, parname2], bins=bins, smooth=smooth
+        lrs_coll, [parname1, parname2], bins=bins, smooth=smooth
     )
     xbins = xy[:, 0]
     ybins = xy[:, 1]
-    #    if not isinstance(logratios, list):
-    #        logratios = [logratios,]
-    #
-    #    samples = None
-    #    for s in logratios:
-    #        weighted_samples = s.get_matching_weighted_samples(parname1, parname2)
-    #        if weighted_samples is not None:
-    #            samples, weights = weighted_samples
-    #    if samples is None:
-    #        return
 
     if ax is None:
         ax = plt.gca()
@@ -135,40 +136,28 @@ def plot_2d(
 
 
 def plot_1d(
-    logratios,
+    lrs_coll,
     parname,
-    weights_key=None,
     ax=None,
-    grid_interpolate=False,
     bins=100,
     color="k",
     contours=True,
     smooth=0.0,
 ):
-    """Plot 1-dimensional posteriors."""
-    #    samples, weights, = swyft.get_weighted_samples(logratios, parname)
+    """Plot 1-dimensional posteriors.
 
-    #    if not isinstance(logratios, list):
-    #        logratios = [logratios,]
-    #
-    #    samples = None
-    #    for s in logratios:
-    #        weighted_samples = s.get_matching_weighted_samples(parname)
-    #        if weighted_samples is not None:
-    #            samples, weights = weighted_samples
-    #    if samples is None:
-    #        return
+    Args:
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parname: Name of parameter
+        ax: Optional figure axis argument
+        bins: Number of bins used for histograms.
+        color: Contour colors
+        contours: Indicate contours
+        smooth: Applied smoothing factor
+    """
 
-    v, zm = swyft.lightning.utils.get_pdf(logratios, parname, bins=bins, smooth=smooth)
+    v, zm = swyft.lightning.utils.get_pdf(lrs_coll, parname, bins=bins, smooth=smooth)
     zm = zm[:, 0]
-
-    #    x = samples[:,0].numpy()
-    #    w = weights.numpy()
-    #
-    #    v, e = np.histogram(x, weights=w, bins=bins, density=True)
-    #    zm = (e[1:] + e[:-1]) / 2
-    #    if smooth is not None:
-    #        v = gaussian_filter1d(v, smooth)
 
     if ax is None:
         ax = plt.gca()
@@ -181,20 +170,8 @@ def plot_1d(
     ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
 
 
-#    # Diagnostics
-#    mean = sum(w * x) / sum(w)
-#    mode = zm[v == v.max()][0]
-#    int2 = zm[v > levels[2]].min(), zm[v > levels[2]].max()
-#    int1 = zm[v > levels[1]].min(), zm[v > levels[1]].max()
-#    int0 = zm[v > levels[0]].min(), zm[v > levels[0]].max()
-#    entropy = -simps(v * np.log(v), zm)
-#    return dict(
-#        mean=mean, mode=mode, HDI1=int2, HDI2=int1, HDI3=int0, entropy=entropy
-#    )
-
-
 def corner(
-    logratios,
+    lrs_coll,
     parnames,
     bins=100,
     truth=None,
@@ -209,16 +186,17 @@ def corner(
     """Make a beautiful corner plot.
 
     Args:
-        samples: Samples from `swyft.Posteriors.sample`
-        pois: List of parameters of interest
-        truth: Ground truth vector
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parnames: List of parameters of interest
         bins: Number of bins used for histograms.
+        truth: Ground truth vector
         figsize: Size of figure
         color: Color
         labels: Optional custom labels, either list or dict.
         label_args: Custom label arguments
         contours_1d: Plot 1-dim contours
         fig: Figure instance
+        smooth: histogram smoothing
     """
     K = len(parnames)
     if fig is None:
@@ -276,7 +254,7 @@ def corner(
             if j < i:
                 try:
                     ret = plot_2d(
-                        logratios,
+                        lrs_coll,
                         parnames[j],
                         parnames[i],
                         ax=ax,
@@ -293,7 +271,7 @@ def corner(
             if j == i:
                 try:
                     ret = plot_1d(
-                        logratios,
+                        lrs_coll,
                         parnames[i],
                         ax=ax,
                         color=color,
@@ -324,6 +302,7 @@ def plot_zz(
         params: Parameters of interest
         z_max: Maximum value of z.
         bins: Number of discretization bins.
+        ax: Optional axes instance.
     """
     cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
     ax = ax if ax else plt.gca()
@@ -337,7 +316,15 @@ def plot_pp(
     bins: int = 50,
     ax=None,
 ):
-    """Make a pp plot."""
+    """Make a pp plot.
+
+    Args:
+        coverage_samples: Collection of CoverageSamples object
+        params: Parameters of interest
+        z_max: Maximum value of z.
+        bins: Number of discretization bins.
+        ax: Optional axes instance.
+    """
     cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
     alphas = 1 - swyft.plot.mass.get_alpha(cov)
     ax = ax if ax else plt.gca()
@@ -348,6 +335,80 @@ def plot_pp(
     plt.ylabel("Empirical coverage [$1-p$]")
     # swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
 
+
+def grid(
+    samples,
+    pois,
+    truth=None,
+    bins=100,
+    figsize=(15, 10),
+    color="k",
+    labels=None,
+    label_args={},
+    ncol=None,
+    subplots_kwargs={},
+    fig=None,
+    contours=True,
+) -> None:
+    """Make beautiful 1-dim posteriors.
+
+    Args:
+        samples: Samples from `swyft.Posteriors.sample`
+        pois: List of parameters of interest
+        truth: Ground truth vector
+        bins: Number of bins used for histograms.
+        figsize: Size of figure
+        color: Color
+        labels: Custom labels (default is parameter names)
+        label_args: Custom label arguments
+        ncol: Number of panel columns
+        subplot_kwargs: Subplot kwargs
+    """
+
+    grid_interpolate = False
+    diags = {}
+
+    if ncol is None:
+        ncol = len(pois)
+    K = len(pois)
+    nrow = (K - 1) // ncol + 1
+
+    if fig is None:
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
+    else:
+        axes = fig.get_axes()
+    lb = 0.125
+    tr = 0.9
+    whspace = 0.15
+    fig.subplots_adjust(
+        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+    )
+
+    if labels is None:
+        labels = [samples["parameter_names"][pois[i]] for i in range(K)]
+
+    for k in range(K):
+        if nrow == 1 and ncol > 1:
+            ax = axes[k]
+        elif nrow == 1 and ncol == 1:
+            ax = axes
+        else:
+            i, j = k % ncol, k // ncol
+            ax = axes[j, i]
+        ret = plot_posterior(
+            samples,
+            pois[k],
+            ax=ax,
+            grid_interpolate=grid_interpolate,
+            color=color,
+            bins=bins,
+            contours=contours,
+        )
+        ax.set_xlabel(labels[k], **label_args)
+        if truth is not None:
+            ax.axvline(truth[pois[k]], ls=":", color="r")
+        diags[(pois[k],)] = ret
+    return fig, diags
 
 if __name__ == "__main__":
     pass
