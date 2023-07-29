@@ -47,6 +47,20 @@ def _get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
     return levels
 
 
+def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
+    y0 = -1.0 * v.max()
+    y1 = 5.0 * v.max()
+    ax.fill_between(z, y0, y1, where=v > levels[0], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v > levels[1], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v > levels[2], color=color, alpha=0.1)
+    # if not isinstance(colors, list):
+    #    colors = [colors]*len(levels)
+    # for i, l in enumerate(levels):
+    #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
+    #    for c in z[zero_crossings]:
+    #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
+
+
 #####################
 # Inferface functions
 #####################
@@ -294,20 +308,6 @@ def corner(
     #                    ax.axvline(truth[pois[i]], ls=":", color="r")
     #                diagnostics[(pois[i],)] = ret
     return fig
-
-
-def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
-    y0 = -1.0 * v.max()
-    y1 = 5.0 * v.max()
-    ax.fill_between(z, y0, y1, where=v > levels[0], color=color, alpha=0.1)
-    ax.fill_between(z, y0, y1, where=v > levels[1], color=color, alpha=0.1)
-    ax.fill_between(z, y0, y1, where=v > levels[2], color=color, alpha=0.1)
-    # if not isinstance(colors, list):
-    #    colors = [colors]*len(levels)
-    # for i, l in enumerate(levels):
-    #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
-    #    for c in z[zero_crossings]:
-    #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
 
 
 def plot_zz(
