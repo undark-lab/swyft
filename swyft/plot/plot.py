@@ -50,9 +50,9 @@ def _get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
 def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
     y0 = -1.0 * v.max()
     y1 = 5.0 * v.max()
-    ax.fill_between(z, y0, y1, where=v > levels[0], color=color, alpha=0.1)
-    ax.fill_between(z, y0, y1, where=v > levels[1], color=color, alpha=0.1)
-    ax.fill_between(z, y0, y1, where=v > levels[2], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v >= levels[0], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v >= levels[1], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v >= levels[2], color=color, alpha=0.1)
     # if not isinstance(colors, list):
     #    colors = [colors]*len(levels)
     # for i, l in enumerate(levels):
@@ -66,7 +66,7 @@ def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 #####################
 
 
-def plot_2d(
+def plot_pair(
     lrs_coll,
     parname1,
     parname2,
@@ -170,7 +170,7 @@ def plot_1d(
     ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
 
 
-def corner(
+def plot_corner(
     lrs_coll,
     parnames,
     bins=100,
@@ -215,7 +215,7 @@ def corner(
     if labels is None:
         labels = parnames
     elif isinstance(labels, list):
-        assert len(list)==len(parnames), "Length of labels list must correspond to number of parameters."
+        assert len(labels)==len(parnames), "Length of labels list must correspond to number of parameters."
     elif isinstance(labels, dict):
         labels = [labels.get(k, k) for k in parnames]
     else:
@@ -253,7 +253,7 @@ def corner(
             # 2-dim plots
             if j < i:
                 try:
-                    ret = plot_2d(
+                    ret = plot_pair(
                         lrs_coll,
                         parnames[j],
                         parnames[i],
@@ -336,12 +336,12 @@ def plot_pp(
     # swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
 
 
-def grid(
+def plot_posterior(
     lrs_coll,
     parnames,
     truth=None,
     bins=100,
-    figsize=(15, 10),
+    figsize=(10, 8),
     color="k",
     labels=None,
     label_args={},
@@ -349,7 +349,7 @@ def grid(
     subplots_kwargs={},
     fig=None,
     contours=True,
-    smooth=0.0
+    smooth=1.0
 ) -> None:
     """Make beautiful 1-dim posteriors.
 
@@ -371,14 +371,18 @@ def grid(
     if labels is None:
         labels = parnames
     elif isinstance(labels, list):
-        assert len(list)==len(parnames), "Length of labels list must correspond to number of parameters."
+        assert len(labels)==len(parnames), "Length of labels list must correspond to number of parameters."
     elif isinstance(labels, dict):
         labels = [labels.get(k, k) for k in parnames]
     else:
         raise ValueError("labels must be None, list or dict")
 
+    if isinstance(truth, dict):
+        truth = [truth.get(k, None) for k in parnames]
+
     if ncol is None:
-        ncol = len(parnames)
+        ncol = min(len(parnames), 4)
+    
     K = len(parnames)
     nrow = (K - 1) // ncol + 1
 
@@ -386,21 +390,26 @@ def grid(
         fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
     else:
         axes = fig.get_axes()
-    lb = 0.125
-    tr = 0.9
-    whspace = 0.15
-    fig.subplots_adjust(
-        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
-    )
 
-    for k in range(K):
-        if nrow == 1 and ncol > 1:
-            ax = axes[k]
-        elif nrow == 1 and ncol == 1:
-            ax = axes
-        else:
-            i, j = k % ncol, k // ncol
-            ax = axes[j, i]
+  #  lb = 0.125
+  #  tr = 0.9
+  #  whspace = 0.15
+  #  fig.subplots_adjust(
+  #      left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+  #  )
+
+    # Ensure axes has always the same shape
+    if isinstance(axes, np.ndarray):
+        axes = axes.reshape(-1)
+    else:
+        axes = np.array([axes])
+        ncol = nrow = 1
+
+    for k in range(ncol*nrow):
+        ax = axes[k]
+        if k >= K:
+            ax.set_visible(False)
+            continue
         plot_1d(
             lrs_coll,
             parnames[k],
@@ -411,9 +420,12 @@ def grid(
             smooth=smooth
         )
         ax.set_xlabel(labels[k], **label_args)
-        if truth is not None:
-            ax.axvline(truth[parnames[k]], ls=":", color="r")
-    return fig
+        ax.set_yticks([])
+        if truth is not None and truth[k] is not None:
+            ax.axvline(truth[k], ls="-", color="r")
+        #ax.tick_params(axis='x', which='minor', bottom = True)
+        ax.minorticks_on()
+    fig.tight_layout()
 
 if __name__ == "__main__":
     pass
