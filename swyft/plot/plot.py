@@ -75,7 +75,8 @@ def plot_pair(
     color="k",
     cmap="gray_r",
     smooth=0.0,
-    cred_level=[0.68268, 0.95450, 0.99730]
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None,
 ):
     """Plot 2-dimensional posterior.
 
@@ -89,6 +90,7 @@ def plot_pair(
         cmap: Density colors
         smooth: Applied smoothing factor
         cred_level: Credible levels for contours
+        truth: Dictionary with parameters names as keys and true values
     """
     counts, xy = swyft.lightning.utils.get_pdf(
         lrs_coll, [parname1, parname2], bins=bins, smooth=smooth
@@ -124,6 +126,17 @@ def plot_pair(
     )
     ax.set_xlim([xbins.min(), xbins.max()])
     ax.set_ylim([ybins.min(), ybins.max()])
+    
+    if truth is not None:
+        ax.axvline(truth[parname1], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+        ax.axhline(truth[parname2], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+        ax.scatter(
+            [truth[parname1]],
+            [truth[parname2]],
+            c="k",
+            marker=".",
+            s=100,
+        )
 
 
 #    xm = (xbins[:-1] + xbins[1:]) / 2
@@ -145,6 +158,7 @@ def plot_1d(
     color="k",
     contours=True,
     smooth=0.0,
+    truth=None
 ):
     """Plot 1-dimensional posteriors.
 
@@ -157,6 +171,7 @@ def plot_1d(
         contours: Indicate contours
         smooth: Applied smoothing factor
         cred_level: Credible levels for contours
+        truth: Dictionary with parameters names as keys and true values
     """
 
     v, zm = swyft.lightning.utils.get_pdf(lrs_coll, parname, bins=bins, smooth=smooth)
@@ -171,13 +186,15 @@ def plot_1d(
     ax.plot(zm, v, color=color)
     ax.set_xlim([zm.min(), zm.max()])
     ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
+    
+    if truth is not None:
+        ax.axvline(truth[parname], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
 
 
 def plot_corner(
     lrs_coll,
     parnames,
     bins=100,
-    truth=None,
     figsize=(10, 10),
     color="k",
     labels=None,
@@ -185,7 +202,8 @@ def plot_corner(
     contours_1d: bool = True,
     fig=None,
     smooth=0.0,
-    cred_level=[0.68268, 0.95450, 0.99730]
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -201,6 +219,7 @@ def plot_corner(
         contours_1d: Plot 1-dim contours
         fig: Figure instance
         smooth: histogram smoothing
+        truth: Dictionary with parameters names as keys and true values
     """
     K = len(parnames)
     if fig is None:
@@ -265,14 +284,12 @@ def plot_corner(
                         color=color,
                         bins=bins,
                         smooth=smooth,
-                        cred_level=cred_level
+                        cred_level=cred_level,
+                        truth=truth
                     )
                 except swyft.SwyftParameterError:
                     pass
-            #                if truth is not None:
-            #                    ax.axvline(truth[parnames[j]], color="r")
-            #                    ax.axhline(truth[parnames[i]], color="r")
-            #                diagnostics[(pois[j], pois[i])] = ret
+           
             if j == i:
                 try:
                     ret = plot_1d(
@@ -283,13 +300,11 @@ def plot_corner(
                         bins=bins,
                         contours=contours_1d,
                         smooth=smooth,
+                        truth=truth
                     )
                 except swyft.SwyftParameterError:
                     pass
 
-    #                if truth is not None:
-    #                    ax.axvline(truth[pois[i]], ls=":", color="r")
-    #                diagnostics[(pois[i],)] = ret
     return fig
 
 
