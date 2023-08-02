@@ -158,6 +158,7 @@ def plot_1d(
     color="k",
     contours=True,
     smooth=0.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
     truth=None
 ):
     """Plot 1-dimensional posteriors.
@@ -180,7 +181,7 @@ def plot_1d(
     if ax is None:
         ax = plt.gca()
 
-    levels = sorted(_get_HDI_thresholds(v))
+    levels = sorted(_get_HDI_thresholds(v, cred_level=cred_level))
     if contours:
         _contour1d(zm, v, levels, ax=ax, color=color)
     ax.plot(zm, v, color=color)
