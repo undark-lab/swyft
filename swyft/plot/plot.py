@@ -423,10 +423,9 @@ def plot_posterior(
     # Ensure axes has always the same shape
     if isinstance(axes, np.ndarray):
         axes = axes.reshape(-1)
-    else:
-        axes = np.array([axes])
-        ncol = nrow = 1
-
+    # else:
+    #     axes = np.array([axes])
+    #     ncol = nrow = 1
     for k in range(ncol*nrow):
         ax = axes[k]
         if k >= K:
