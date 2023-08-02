@@ -187,7 +187,7 @@ def plot_1d(
     ax.plot(zm, v, color=color)
     ax.set_xlim([zm.min(), zm.max()])
     ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
-    
+
     if truth is not None:
         ax.axvline(truth[parname], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
 
@@ -220,6 +220,7 @@ def plot_corner(
         contours_1d: Plot 1-dim contours
         fig: Figure instance
         smooth: histogram smoothing
+        cred_level: Credible levels for contours
         truth: Dictionary with parameters names as keys and true values
     """
     K = len(parnames)
@@ -360,7 +361,6 @@ def plot_pp(
 def plot_posterior(
     lrs_coll,
     parnames,
-    truth=None,
     bins=100,
     figsize=(10, 8),
     color="k",
@@ -370,7 +370,9 @@ def plot_posterior(
     subplots_kwargs={},
     fig=None,
     contours=True,
-    smooth=1.0
+    smooth=1.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None
 ) -> None:
     """Make beautiful 1-dim posteriors.
 
@@ -387,6 +389,8 @@ def plot_posterior(
         fig: Figure instance
         contours: Plot 1-dim contours
         smooth: Smothing
+        cred_level: Credible levels for contours
+        truth: Dictionary with parameters names as keys and true values
     """
 
     if labels is None:
@@ -397,10 +401,7 @@ def plot_posterior(
         labels = [labels.get(k, k) for k in parnames]
     else:
         raise ValueError("labels must be None, list or dict")
-
-    if isinstance(truth, dict):
-        truth = [truth.get(k, None) for k in parnames]
-
+    
     if ncol is None:
         ncol = min(len(parnames), 4)
     
@@ -438,12 +439,12 @@ def plot_posterior(
             bins=bins,
             color=color,
             contours=contours,
-            smooth=smooth
+            smooth=smooth,
+            cred_level=cred_level,
+            truth=truth
         )
         ax.set_xlabel(labels[k], **label_args)
         ax.set_yticks([])
-        if truth is not None and truth[k] is not None:
-            ax.axvline(truth[k], ls="-", color="r")
         #ax.tick_params(axis='x', which='minor', bottom = True)
         ax.minorticks_on()
     fig.tight_layout()
