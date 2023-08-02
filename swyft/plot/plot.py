@@ -75,6 +75,7 @@ def plot_pair(
     color="k",
     cmap="gray_r",
     smooth=0.0,
+    cred_level=[0.68268, 0.95450, 0.99730]
 ):
     """Plot 2-dimensional posterior.
 
@@ -87,6 +88,7 @@ def plot_pair(
         color: Contour colors
         cmap: Density colors
         smooth: Applied smoothing factor
+        cred_level: Credible levels for contours
     """
     counts, xy = swyft.lightning.utils.get_pdf(
         lrs_coll, [parname1, parname2], bins=bins, smooth=smooth
@@ -105,7 +107,7 @@ def plot_pair(
     #    if smooth is not None:
     #        counts = gaussian_filter(counts, smooth)
 
-    levels = sorted(_get_HDI_thresholds(counts))
+    levels = sorted(_get_HDI_thresholds(counts, cred_level=cred_level))
     ax.contour(
         counts.T,
         extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
@@ -154,6 +156,7 @@ def plot_1d(
         color: Contour colors
         contours: Indicate contours
         smooth: Applied smoothing factor
+        cred_level: Credible levels for contours
     """
 
     v, zm = swyft.lightning.utils.get_pdf(lrs_coll, parname, bins=bins, smooth=smooth)
@@ -182,6 +185,7 @@ def plot_corner(
     contours_1d: bool = True,
     fig=None,
     smooth=0.0,
+    cred_level=[0.68268, 0.95450, 0.99730]
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -261,6 +265,7 @@ def plot_corner(
                         color=color,
                         bins=bins,
                         smooth=smooth,
+                        cred_level=cred_level
                     )
                 except swyft.SwyftParameterError:
                     pass
