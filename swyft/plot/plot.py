@@ -66,7 +66,7 @@ def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 #####################
 
 
-def plot_pair(
+def plot_2d(
     lrs_coll,
     parname1,
     parname2,
@@ -278,7 +278,7 @@ def plot_corner(
             # 2-dim plots
             if j < i:
                 try:
-                    ret = plot_pair(
+                    ret = plot_2d(
                         lrs_coll,
                         parnames[j],
                         parnames[i],
@@ -393,6 +393,8 @@ def plot_posterior(
         truth: Dictionary with parameters names as keys and true values
     """
 
+    if isinstance(parnames, str):
+        parnames = [parnames]
     if labels is None:
         labels = parnames
     elif isinstance(labels, list):
@@ -423,9 +425,10 @@ def plot_posterior(
     # Ensure axes has always the same shape
     if isinstance(axes, np.ndarray):
         axes = axes.reshape(-1)
-    # else:
-    #     axes = np.array([axes])
-    #     ncol = nrow = 1
+    else:
+        axes = np.array([axes])
+        ncol = nrow = 1
+
     for k in range(ncol*nrow):
         ax = axes[k]
         if k >= K:
