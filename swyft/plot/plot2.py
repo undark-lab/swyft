@@ -353,7 +353,6 @@ def corner(
     label_args={},
     contours_1d: bool = True,
     fig=None,
-    labeler=None,
     smooth=0.0,
 ) -> None:
     """Make a beautiful corner plot.
@@ -384,10 +383,7 @@ def corner(
 
     diagnostics = {}
 
-    if labeler is not None:
-        labels = [labeler.get(k, k) for k in parnames]
-    else:
-        labels = parnames
+    labels = labels if labels is not None else parnames
 
     for i in range(K):
         for j in range(K):

@@ -525,434 +525,433 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
 
         return lrs
 
-
-class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
-    r"""Estimate Gaussian log-ratios with an autoregressive model, using four factor decomposition.
-
-    Args:
-        num_params: Length of parameter vector.
-        varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
-        L_init: Optional initial values for L-matrix.
-        minstd: Minimum standard deviation to enforce numerical stability
-
-    The forward method returns an swyft.LogRatioSamples object.
-    """
-
-    def __init__(self, num_params, varnames, L_init=None, minstd: float = 1e-10):
-        super().__init__()
-        self.cl = LogRatioEstimator_Gaussian(
-            num_params, varnames=varnames, minstd=minstd
-        )
-        self.num_params = num_params
-        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
-        if L_init is None:
-            L_init = 0.1 * torch.ones(num_params, num_params)
-        self.L_full = nn.Parameter(L_init, requires_grad=True)
-
-    @property
-    def L(self):
-        """Lower triangular matrix of parameter correlations."""
-        return self._mask * self.L_full
-
-    @staticmethod
-    def _get_mask(D):
-        mask = torch.ones(D, D)
-        for i in range(D):
-            mask[i, i:] = 0
-        return mask
-
-    def forward(self, xA, zA, zB):
-        """Forward method.
-
-        Args:
-            xA: Data vector (num_params,)
-            zA: True parameters (num_params,)
-            zB: Contrastive parameters (num_params,)
-
-        Returns:
-            swyft.LogRatioSamples
-        """
-        lA = torch.matmul(zA, self.L.T)  # + torch.randn_like(xA)*1e-1
-        fA = torch.stack([xA, lA], dim=-1)
-        logratios = self.cl(fA, zB.unsqueeze(-1))
-
-        return logratios
-
-    def get_likelihood_components(
-        self, x, double_precision=True, enforce_positivity=True
-    ):
-        """Returns linear and quadratic component of likelihood ln p(x|z).
-
-        ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
-
-        Args:
-            x: Data vector
-            double_precision: Use double precision for matrix inversions
-            enfore_positivity: Add diagonal matrix to enfore positivity of quadratic terms
-
-        Returns:
-            invN, b: torch.Tensor, torch.Tensor
-        """
-        mean = self.cl.mean.detach()
-        cov = self.cl.cov.detach()
-        L = self.L.detach()
-
-        if double_precision:
-            cov = cov.double()
-            mean = mean.double()
-            L = L.double()
-            x = x.double()
-
-        xm, lm, zm = mean.T
-        invSigma_eff = torch.linalg.inv(cov)
-        invSigma_eff[:, 1:2, 1:2] += torch.linalg.inv(cov[:, 1:2, 1:2])
-        invSigma_eff[:, :2, :2] -= torch.linalg.inv(cov[:, :2, :2])
-        invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
-        D11 = invSigma_eff[:, 0, 0]
-        D22 = invSigma_eff[:, 1, 1]
-        D33 = invSigma_eff[:, 2, 2]
-        D23 = invSigma_eff[:, 1, 2]
-        D12 = invSigma_eff[:, 0, 1]
-        D13 = invSigma_eff[:, 0, 2]
-
-        quadratic = (
-            torch.diag(D33)
-            + torch.matmul(torch.matmul(L.T, torch.diag(D22)), L)
-            + torch.matmul(L.T, torch.diag(D23))
-            + torch.matmul(torch.diag(D23), L)
-        )
-
-        # NEXT: Check if really necessary
-        if enforce_positivity:
-            mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
-            #    print(mineig)
-            quadratic = (
-                quadratic
-                - torch.eye(len(quadratic)).to(quadratic.device) * mineig * 1.0
-            )
-
-        linear = (
-            torch.matmul(torch.diag(D13) + torch.matmul(L.T, torch.diag(D12)), x - xm)
-            - torch.matmul(torch.diag(D23) + torch.matmul(L.T, torch.diag(D22)), lm)
-            - torch.matmul(torch.diag(D33) + torch.matmul(L.T, torch.diag(D23)), zm)
-        )
-
-        return quadratic, linear
-
-    def get_MAP(self, x, prior_cov=None, double_precision=True):
-        """Generate MAP estimator for z.
-
-        Args:
-            x: Data vector
-            prior_cov: Prior covariance matrix
-            double_precision: Use double precision for matrix inversion
-
-        Returns:
-            torch.tensor: MAP estimator
-        """
-
-        invN, b = self.get_likelihood_components(
-            x, double_precision=double_precision, enforce_positivity=False
-        )
-        if prior_cov is not None:
-            z_MAP = torch.matmul(
-                torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b
-            )
-        else:
-            z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
-        return z_MAP
-
-    def get_post_samples(self, N, x, prior_cov=None, gamma=1.0):
-        """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
-
-        Args:
-            x: Data vector
-            prior_cov: Prior covariance matrix
-            gamma: Rescaling factor for likelihood covariance matrix
-
-        Returns:
-            Samples
-
-        Note: This is expected to work for significantly less than 1e4
-        dimensions. For more parameters, other techniques directly based on the
-        likelihood quadratic and linear components should be used.
-        """
-        best = self.get_MAP(x, prior_cov=prior_cov)
-        invN, _ = self.get_likelihood_components(x, enforce_positivity=True)
-        invN = invN * gamma
-        full_cov = torch.linalg.inv(invN + torch.linalg.inv(prior_cov))
-        dist = torch.distributions.MultivariateNormal(best, full_cov)
-        draws = dist.sample(torch.Size([N]))
-        return draws
-
-
-class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
-    r"""Estimate high-dimensional Gaussian log-ratios with an autoregressive model.
-
-    Args:
-        num_params: Length of parameter vector.
-        varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
-        L_init: Optional initial values for L-matrix.
-        minstd: Minimum standard deviation to enforce numerical stability
-
-    The forward method returns an swyft.LogRatioSamples object.
-    """
-
-    def __init__(
-        self, num_params, varnames, L1_init=None, L2_init=None, minstd: float = 1e-10
-    ):
-        super().__init__()
-        self.cl1 = LogRatioEstimator_Gaussian(
-            num_params, varnames=varnames, minstd=minstd
-        )  # Estimate prior
-        self.cl2 = LogRatioEstimator_Gaussian(
-            num_params, varnames=varnames, minstd=minstd
-        )  # Estimate likelihood
-        self.num_params = num_params
-        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
-        if L1_init is None:
-            L1_init = torch.ones(num_params, num_params) * 0.1
-        self.L1_full = nn.Parameter(L1_init, requires_grad=True)
-        if L2_init is None:
-            L2_init = torch.ones(num_params, num_params) * 0.1
-        self.L2_full = nn.Parameter(L2_init, requires_grad=True)
-
-    @property
-    def L1(self):
-        """Lower triangular matrix of parameter correlations."""
-        return self._mask * self.L1_full
-
-    @property
-    def L2(self):
-        """Lower triangular matrix of parameter correlations."""
-        return self._mask * self.L2_full
-
-    @staticmethod
-    def _get_mask(D):
-        "Autoregressive masking"
-        mask = torch.ones(D, D)
-        for i in range(D):
-            mask[i, i:] = 0
-        return mask
-
-    def forward(self, xA, zA, zB):
-        """Forward method.
-
-        Args:
-            xA: Data vector from A (num_params,)
-            zA: Model parameters from A (num_params,)
-            zB: Model parameters from B (num_params,)
-
-        Returns:
-            swyft.LogRatioSamples
-        """
-        # Estimating correlated prior p(z)
-        L1zB = torch.matmul(zB, self.L1.T)
-        logratios1 = self.cl1(zA.unsqueeze(-1), L1zB.unsqueeze(-1))  # (z; L1 z)
-
-        # Estimating correlated posterior p(Gz|x)
-        G, D = self.get_prior_decomposition()
-        GzA = torch.matmul(zA, G.T.detach())
-        GzB = torch.matmul(zB, G.T.detach())
-
-        L2GzA = torch.matmul(GzA, self.L2.T)
-        fA = torch.stack([xA, L2GzA], dim=-1)
-        logratios2 = self.cl2(fA, GzB.unsqueeze(-1))  # (x, L2 G z; G z)
-
-        return logratios1, logratios2
-
-    def get_prior_decomposition(self):
-        """Returns estimate of the prior, such that
-            inv_Sigma = G.T * D * G
-        is the inverse of the prior covariance matrix.  Here D, is diagonal and G is a lower triangular matrix.
-        """
-        cov = self.cl1.cov
-        invCov = torch.linalg.inv(cov)
-        G = torch.eye(len(self.L1)).to(cov.device) + torch.matmul(
-            torch.diag(invCov[:, 0, 1] / invCov[:, 0, 0]), self.L1
-        )
-        D = invCov[:, 0, 0]
-        return G, D
-
-    def get_likelihood_components(self, x, double_precision=True):
-        """Returns linear and quadratic component of likelihood ln p(x|z).
-
-        ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
-
-        Args:
-            x: Data vector
-            double_precision: Use double precision for matrix inversions
-
-        Returns:
-            invN, b: torch.Tensor, torch.Tensor
-        """
-        mean = self.cl2.mean.detach()
-        cov = self.cl2.cov.detach()
-        L2 = self.L2.detach()
-        G, _ = self.get_prior_decomposition()
-
-        if double_precision:
-            cov = cov.double()
-            mean = mean.double()
-            L2 = L2.double()
-            x = x.double()
-            G = G.double()
-
-        xm, lm, zm = mean.T
-        invSigma_eff = torch.linalg.inv(cov)
-        invSigma_eff[:, 2:, 2:] -= torch.linalg.inv(cov[:, 2:, 2:])
-        D00 = invSigma_eff[:, 0, 0]
-        D11 = invSigma_eff[:, 1, 1]
-        D22 = invSigma_eff[:, 2, 2]
-        D12 = invSigma_eff[:, 1, 2]
-        D01 = invSigma_eff[:, 0, 1]
-        D02 = invSigma_eff[:, 0, 2]
-
-        quadratic = (
-            torch.diag(D22)
-            + torch.matmul(torch.matmul(L2.T, torch.diag(D11)), L2)
-            + torch.matmul(L2.T, torch.diag(D12))
-            + torch.matmul(torch.diag(D12), L2)
-        )
-        quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
-
-        linear = (
-            torch.matmul(torch.diag(D02) + torch.matmul(L2.T, torch.diag(D01)), x - xm)
-            - torch.matmul(torch.diag(D12) + torch.matmul(L2.T, torch.diag(D11)), lm)
-            - torch.matmul(torch.diag(D22) + torch.matmul(L2.T, torch.diag(D12)), zm)
-        )
-        linear = torch.matmul(G.T, linear)
-
-        return quadratic, linear
-
-    def get_posterior_components(self, x, double_precision=True):
-        """Returns linear and quadratic component of likelihood ln p(x|z).
-
-        ln p(z|x) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
-
-        Args:
-            x: Data vector
-            double_precision: Use double precision for matrix inversions
-
-        Returns:
-            invN, b: torch.Tensor, torch.Tensor
-        """
-        mean = self.cl2.mean.detach()
-        cov = self.cl2.cov.detach()
-        L2 = self.L2.detach()
-        G, _ = self.get_prior_decomposition()
-
-        if double_precision:
-            cov = cov.double()
-            mean = mean.double()
-            L2 = L2.double()
-            x = x.double()
-            G = G.double()
-
-        xm, lm, zm = mean.T
-        invSigma_eff = torch.linalg.inv(cov)
-        D00 = invSigma_eff[:, 0, 0]
-        D11 = invSigma_eff[:, 1, 1]
-        D22 = invSigma_eff[:, 2, 2]
-        D12 = invSigma_eff[:, 1, 2]
-        D01 = invSigma_eff[:, 0, 1]
-        D02 = invSigma_eff[:, 0, 2]
-
-        quadratic = (
-            torch.diag(D22)
-            + torch.matmul(torch.matmul(L2.T, torch.diag(D11)), L2)
-            + torch.matmul(L2.T, torch.diag(D12))
-            + torch.matmul(torch.diag(D12), L2)
-        )
-        quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
-
-        linear = (
-            torch.matmul(torch.diag(D02) + torch.matmul(L2.T, torch.diag(D01)), x - xm)
-            - torch.matmul(torch.diag(D12) + torch.matmul(L2.T, torch.diag(D11)), lm)
-            - torch.matmul(torch.diag(D22) + torch.matmul(L2.T, torch.diag(D12)), zm)
-        )
-        linear = torch.matmul(G.T, linear)
-
-        return quadratic, linear
-
-    def get_MAP(self, x, prior_cov=None, double_precision=True, gamma=1.0):
-        """Generate MAP estimator for z.
-
-        Args:
-            x: Data vector
-            prior_cov: Prior covariance matrix to combine with estimated likelihood (if not provided, posterior estimate will be used).
-            double_precision: Use double precision for matrix inversion
-            gamma: Rescaling of likelihood function (only used when prior_cov is not None)
-
-        Returns:
-            torch.tensor: MAP estimator
-        """
-
-        if prior_cov is not None:
-            invN, b = self.get_likelihood_components(
-                x, double_precision=double_precision
-            )
-            z_MAP = torch.matmul(
-                torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), -b * gamma
-            )
-        else:
-            invN, b = self.get_posterior_components(
-                x, double_precision=double_precision
-            )
-            z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
-        return z_MAP
-
-    def get_prior_samples(self, N, prior_cov=None):
-        """Generate samples from approximate prior, based on output of prior decomposition.
-
-        Args:
-            N: Number of requested samples.
-            prior_cov: Prior covariance matrix (if provided, overwrites approximate prior)
-
-        Returns:
-            torch.tensor: Samples
-        """
-        if prior_cov is None:
-            G, D = self.get_prior_decomposition()
-            G = G.double()
-            D = D.double()
-            inv_cov = torch.matmul(torch.matmul(G.T, torch.diag(D)), G).double()
-            cov = torch.linalg.inv(inv_cov)
-        else:
-            cov = prior_cov.double() * 1.0
-        dist = torch.distributions.MultivariateNormal(
-            torch.zeros(len(cov)).to(cov.device).double(), covariance_matrix=cov
-        )
-        draws = dist.sample(torch.Size((N,)))
-        return draws
-
-    def get_post_samples(self, N, x, prior_cov=None, gamma=1.0):
-        """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
-
-        Args:
-            x: Data vector
-            prior_cov: Prior covariance matrix
-            gamma: Rescaling factor for likelihood covariance matrix
-
-        Returns:
-            Samples
-
-        Note: This is expected to work for significantly less than 1e4
-        dimensions. For more parameters, other techniques directly based on the
-        likelihood quadratic and linear components should be used.
-        """
-        best = self.get_MAP(x, prior_cov=prior_cov, gamma=gamma)
-        if prior_cov is not None:
-            invN, _ = self.get_likelihood_components(x)
-            invN = invN * gamma
-            full_cov = torch.linalg.inv(invN + torch.linalg.inv(prior_cov))
-        else:
-            invN, _ = self.get_posterior_components(x)
-            invN = invN * gamma
-            full_cov = torch.linalg.inv(invN)
-        dist = torch.distributions.MultivariateNormal(best, full_cov)
-        draws = dist.sample(torch.Size([N]))
-        return draws
+#class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
+#    r"""Estimate Gaussian log-ratios with an autoregressive model, using four factor decomposition.
+#
+#    Args:
+#        num_params: Length of parameter vector.
+#        varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
+#        L_init: Optional initial values for L-matrix.
+#        minstd: Minimum standard deviation to enforce numerical stability
+#
+#    The forward method returns an swyft.LogRatioSamples object.
+#    """
+#
+#    def __init__(self, num_params, varnames, L_init=None, minstd: float = 1e-10):
+#        super().__init__()
+#        self.cl = LogRatioEstimator_Gaussian(
+#            num_params, varnames=varnames, minstd=minstd
+#        )
+#        self.num_params = num_params
+#        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
+#        if L_init is None:
+#            L_init = 0.1 * torch.ones(num_params, num_params)
+#        self.L_full = nn.Parameter(L_init, requires_grad=True)
+#
+#    @property
+#    def L(self):
+#        """Lower triangular matrix of parameter correlations."""
+#        return self._mask * self.L_full
+#
+#    @staticmethod
+#    def _get_mask(D):
+#        mask = torch.ones(D, D)
+#        for i in range(D):
+#            mask[i, i:] = 0
+#        return mask
+#
+#    def forward(self, xA, zA, zB):
+#        """Forward method.
+#
+#        Args:
+#            xA: Data vector (num_params,)
+#            zA: True parameters (num_params,)
+#            zB: Contrastive parameters (num_params,)
+#
+#        Returns:
+#            swyft.LogRatioSamples
+#        """
+#        lA = torch.matmul(zA, self.L.T)  # + torch.randn_like(xA)*1e-1
+#        fA = torch.stack([xA, lA], dim=-1)
+#        logratios = self.cl(fA, zB.unsqueeze(-1))
+#
+#        return logratios
+#
+#    def get_likelihood_components(
+#        self, x, double_precision=True, enforce_positivity=True
+#    ):
+#        """Returns linear and quadratic component of likelihood ln p(x|z).
+#
+#        ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
+#
+#        Args:
+#            x: Data vector
+#            double_precision: Use double precision for matrix inversions
+#            enfore_positivity: Add diagonal matrix to enfore positivity of quadratic terms
+#
+#        Returns:
+#            invN, b: torch.Tensor, torch.Tensor
+#        """
+#        mean = self.cl.mean.detach()
+#        cov = self.cl.cov.detach()
+#        L = self.L.detach()
+#
+#        if double_precision:
+#            cov = cov.double()
+#            mean = mean.double()
+#            L = L.double()
+#            x = x.double()
+#
+#        xm, lm, zm = mean.T
+#        invSigma_eff = torch.linalg.inv(cov)
+#        invSigma_eff[:, 1:2, 1:2] += torch.linalg.inv(cov[:, 1:2, 1:2])
+#        invSigma_eff[:, :2, :2] -= torch.linalg.inv(cov[:, :2, :2])
+#        invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
+#        D11 = invSigma_eff[:, 0, 0]
+#        D22 = invSigma_eff[:, 1, 1]
+#        D33 = invSigma_eff[:, 2, 2]
+#        D23 = invSigma_eff[:, 1, 2]
+#        D12 = invSigma_eff[:, 0, 1]
+#        D13 = invSigma_eff[:, 0, 2]
+#
+#        quadratic = (
+#            torch.diag(D33)
+#            + torch.matmul(torch.matmul(L.T, torch.diag(D22)), L)
+#            + torch.matmul(L.T, torch.diag(D23))
+#            + torch.matmul(torch.diag(D23), L)
+#        )
+#
+#        # NEXT: Check if really necessary
+#        if enforce_positivity:
+#            mineig = torch.linalg.eig(quadratic).eigenvalues.real.min()
+#            #    print(mineig)
+#            quadratic = (
+#                quadratic
+#                - torch.eye(len(quadratic)).to(quadratic.device) * mineig * 1.0
+#            )
+#
+#        linear = (
+#            torch.matmul(torch.diag(D13) + torch.matmul(L.T, torch.diag(D12)), x - xm)
+#            - torch.matmul(torch.diag(D23) + torch.matmul(L.T, torch.diag(D22)), lm)
+#            - torch.matmul(torch.diag(D33) + torch.matmul(L.T, torch.diag(D23)), zm)
+#        )
+#
+#        return quadratic, linear
+#
+#    def get_MAP(self, x, prior_cov=None, double_precision=True):
+#        """Generate MAP estimator for z.
+#
+#        Args:
+#            x: Data vector
+#            prior_cov: Prior covariance matrix
+#            double_precision: Use double precision for matrix inversion
+#
+#        Returns:
+#            torch.tensor: MAP estimator
+#        """
+#
+#        invN, b = self.get_likelihood_components(
+#            x, double_precision=double_precision, enforce_positivity=False
+#        )
+#        if prior_cov is not None:
+#            z_MAP = torch.matmul(
+#                torch.linalg.inv(invN + torch.linalg.inv(prior_cov)), -b
+#            )
+#        else:
+#            z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
+#        return z_MAP
+#
+#    def get_post_samples(self, N, x, prior_cov=None, gamma=1.0):
+#        """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
+#
+#        Args:
+#            x: Data vector
+#            prior_cov: Prior covariance matrix
+#            gamma: Rescaling factor for likelihood covariance matrix
+#
+#        Returns:
+#            Samples
+#
+#        Note: This is expected to work for significantly less than 1e4
+#        dimensions. For more parameters, other techniques directly based on the
+#        likelihood quadratic and linear components should be used.
+#        """
+#        best = self.get_MAP(x, prior_cov=prior_cov)
+#        invN, _ = self.get_likelihood_components(x, enforce_positivity=True)
+#        invN = invN * gamma
+#        full_cov = torch.linalg.inv(invN + torch.linalg.inv(prior_cov))
+#        dist = torch.distributions.MultivariateNormal(best, full_cov)
+#        draws = dist.sample(torch.Size([N]))
+#        return draws
+
+
+#class LogRatioEstimator_Gaussian_Autoregressive_Z(nn.Module):
+#    r"""Estimate high-dimensional Gaussian log-ratios with an autoregressive model.
+#
+#    Args:
+#        num_params: Length of parameter vector.
+#        varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
+#        L_init: Optional initial values for L-matrix.
+#        minstd: Minimum standard deviation to enforce numerical stability
+#
+#    The forward method returns an swyft.LogRatioSamples object.
+#    """
+#
+#    def __init__(
+#        self, num_params, varnames, L1_init=None, L2_init=None, minstd: float = 1e-10
+#    ):
+#        super().__init__()
+#        self.cl1 = LogRatioEstimator_Gaussian(
+#            num_params, varnames=varnames, minstd=minstd
+#        )  # Estimate prior
+#        self.cl2 = LogRatioEstimator_Gaussian(
+#            num_params, varnames=varnames, minstd=minstd
+#        )  # Estimate likelihood
+#        self.num_params = num_params
+#        self._mask = nn.Parameter(self._get_mask(num_params), requires_grad=False)
+#        if L1_init is None:
+#            L1_init = torch.ones(num_params, num_params) * 0.1
+#        self.L1_full = nn.Parameter(L1_init, requires_grad=True)
+#        if L2_init is None:
+#            L2_init = torch.ones(num_params, num_params) * 0.1
+#        self.L2_full = nn.Parameter(L2_init, requires_grad=True)
+#
+#    @property
+#    def L1(self):
+#        """Lower triangular matrix of parameter correlations."""
+#        return self._mask * self.L1_full
+#
+#    @property
+#    def L2(self):
+#        """Lower triangular matrix of parameter correlations."""
+#        return self._mask * self.L2_full
+#
+#    @staticmethod
+#    def _get_mask(D):
+#        "Autoregressive masking"
+#        mask = torch.ones(D, D)
+#        for i in range(D):
+#            mask[i, i:] = 0
+#        return mask
+#
+#    def forward(self, xA, zA, zB):
+#        """Forward method.
+#
+#        Args:
+#            xA: Data vector from A (num_params,)
+#            zA: Model parameters from A (num_params,)
+#            zB: Model parameters from B (num_params,)
+#
+#        Returns:
+#            swyft.LogRatioSamples
+#        """
+#        # Estimating correlated prior p(z)
+#        L1zB = torch.matmul(zB, self.L1.T)
+#        logratios1 = self.cl1(zA.unsqueeze(-1), L1zB.unsqueeze(-1))  # (z; L1 z)
+#
+#        # Estimating correlated posterior p(Gz|x)
+#        G, D = self.get_prior_decomposition()
+#        GzA = torch.matmul(zA, G.T.detach())
+#        GzB = torch.matmul(zB, G.T.detach())
+#
+#        L2GzA = torch.matmul(GzA, self.L2.T)
+#        fA = torch.stack([xA, L2GzA], dim=-1)
+#        logratios2 = self.cl2(fA, GzB.unsqueeze(-1))  # (x, L2 G z; G z)
+#
+#        return logratios1, logratios2
+#
+#    def get_prior_decomposition(self):
+#        """Returns estimate of the prior, such that
+#            inv_Sigma = G.T * D * G
+#        is the inverse of the prior covariance matrix.  Here D, is diagonal and G is a lower triangular matrix.
+#        """
+#        cov = self.cl1.cov
+#        invCov = torch.linalg.inv(cov)
+#        G = torch.eye(len(self.L1)).to(cov.device) + torch.matmul(
+#            torch.diag(invCov[:, 0, 1] / invCov[:, 0, 0]), self.L1
+#        )
+#        D = invCov[:, 0, 0]
+#        return G, D
+#
+#    def get_likelihood_components(self, x, double_precision=True):
+#        """Returns linear and quadratic component of likelihood ln p(x|z).
+#
+#        ln p(x|z) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
+#
+#        Args:
+#            x: Data vector
+#            double_precision: Use double precision for matrix inversions
+#
+#        Returns:
+#            invN, b: torch.Tensor, torch.Tensor
+#        """
+#        mean = self.cl2.mean.detach()
+#        cov = self.cl2.cov.detach()
+#        L2 = self.L2.detach()
+#        G, _ = self.get_prior_decomposition()
+#
+#        if double_precision:
+#            cov = cov.double()
+#            mean = mean.double()
+#            L2 = L2.double()
+#            x = x.double()
+#            G = G.double()
+#
+#        xm, lm, zm = mean.T
+#        invSigma_eff = torch.linalg.inv(cov)
+#        invSigma_eff[:, 2:, 2:] -= torch.linalg.inv(cov[:, 2:, 2:])
+#        D00 = invSigma_eff[:, 0, 0]
+#        D11 = invSigma_eff[:, 1, 1]
+#        D22 = invSigma_eff[:, 2, 2]
+#        D12 = invSigma_eff[:, 1, 2]
+#        D01 = invSigma_eff[:, 0, 1]
+#        D02 = invSigma_eff[:, 0, 2]
+#
+#        quadratic = (
+#            torch.diag(D22)
+#            + torch.matmul(torch.matmul(L2.T, torch.diag(D11)), L2)
+#            + torch.matmul(L2.T, torch.diag(D12))
+#            + torch.matmul(torch.diag(D12), L2)
+#        )
+#        quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
+#
+#        linear = (
+#            torch.matmul(torch.diag(D02) + torch.matmul(L2.T, torch.diag(D01)), x - xm)
+#            - torch.matmul(torch.diag(D12) + torch.matmul(L2.T, torch.diag(D11)), lm)
+#            - torch.matmul(torch.diag(D22) + torch.matmul(L2.T, torch.diag(D12)), zm)
+#        )
+#        linear = torch.matmul(G.T, linear)
+#
+#        return quadratic, linear
+#
+#    def get_posterior_components(self, x, double_precision=True):
+#        """Returns linear and quadratic component of likelihood ln p(x|z).
+#
+#        ln p(z|x) = -1/2 * [ z.T invN z + 2 z.T b ] + const(x)
+#
+#        Args:
+#            x: Data vector
+#            double_precision: Use double precision for matrix inversions
+#
+#        Returns:
+#            invN, b: torch.Tensor, torch.Tensor
+#        """
+#        mean = self.cl2.mean.detach()
+#        cov = self.cl2.cov.detach()
+#        L2 = self.L2.detach()
+#        G, _ = self.get_prior_decomposition()
+#
+#        if double_precision:
+#            cov = cov.double()
+#            mean = mean.double()
+#            L2 = L2.double()
+#            x = x.double()
+#            G = G.double()
+#
+#        xm, lm, zm = mean.T
+#        invSigma_eff = torch.linalg.inv(cov)
+#        D00 = invSigma_eff[:, 0, 0]
+#        D11 = invSigma_eff[:, 1, 1]
+#        D22 = invSigma_eff[:, 2, 2]
+#        D12 = invSigma_eff[:, 1, 2]
+#        D01 = invSigma_eff[:, 0, 1]
+#        D02 = invSigma_eff[:, 0, 2]
+#
+#        quadratic = (
+#            torch.diag(D22)
+#            + torch.matmul(torch.matmul(L2.T, torch.diag(D11)), L2)
+#            + torch.matmul(L2.T, torch.diag(D12))
+#            + torch.matmul(torch.diag(D12), L2)
+#        )
+#        quadratic = torch.matmul(torch.matmul(G.T, quadratic), G)
+#
+#        linear = (
+#            torch.matmul(torch.diag(D02) + torch.matmul(L2.T, torch.diag(D01)), x - xm)
+#            - torch.matmul(torch.diag(D12) + torch.matmul(L2.T, torch.diag(D11)), lm)
+#            - torch.matmul(torch.diag(D22) + torch.matmul(L2.T, torch.diag(D12)), zm)
+#        )
+#        linear = torch.matmul(G.T, linear)
+#
+#        return quadratic, linear
+#
+#    def get_MAP(self, x, prior_cov=None, double_precision=True, gamma=1.0):
+#        """Generate MAP estimator for z.
+#
+#        Args:
+#            x: Data vector
+#            prior_cov: Prior covariance matrix to combine with estimated likelihood (if not provided, posterior estimate will be used).
+#            double_precision: Use double precision for matrix inversion
+#            gamma: Rescaling of likelihood function (only used when prior_cov is not None)
+#
+#        Returns:
+#            torch.tensor: MAP estimator
+#        """
+#
+#        if prior_cov is not None:
+#            invN, b = self.get_likelihood_components(
+#                x, double_precision=double_precision
+#            )
+#            z_MAP = torch.matmul(
+#                torch.linalg.inv(invN * gamma + torch.linalg.inv(prior_cov)), -b * gamma
+#            )
+#        else:
+#            invN, b = self.get_posterior_components(
+#                x, double_precision=double_precision
+#            )
+#            z_MAP = torch.matmul(torch.linalg.inv(invN), -b)
+#        return z_MAP
+#
+#    def get_prior_samples(self, N, prior_cov=None):
+#        """Generate samples from approximate prior, based on output of prior decomposition.
+#
+#        Args:
+#            N: Number of requested samples.
+#            prior_cov: Prior covariance matrix (if provided, overwrites approximate prior)
+#
+#        Returns:
+#            torch.tensor: Samples
+#        """
+#        if prior_cov is None:
+#            G, D = self.get_prior_decomposition()
+#            G = G.double()
+#            D = D.double()
+#            inv_cov = torch.matmul(torch.matmul(G.T, torch.diag(D)), G).double()
+#            cov = torch.linalg.inv(inv_cov)
+#        else:
+#            cov = prior_cov.double() * 1.0
+#        dist = torch.distributions.MultivariateNormal(
+#            torch.zeros(len(cov)).to(cov.device).double(), covariance_matrix=cov
+#        )
+#        draws = dist.sample(torch.Size((N,)))
+#        return draws
+#
+#    def get_post_samples(self, N, x, prior_cov=None, gamma=1.0):
+#        """Generate samples for z, using standard matrix inversion (Cholesky decomposition).
+#
+#        Args:
+#            x: Data vector
+#            prior_cov: Prior covariance matrix
+#            gamma: Rescaling factor for likelihood covariance matrix
+#
+#        Returns:
+#            Samples
+#
+#        Note: This is expected to work for significantly less than 1e4
+#        dimensions. For more parameters, other techniques directly based on the
+#        likelihood quadratic and linear components should be used.
+#        """
+#        best = self.get_MAP(x, prior_cov=prior_cov, gamma=gamma)
+#        if prior_cov is not None:
+#            invN, _ = self.get_likelihood_components(x)
+#            invN = invN * gamma
+#            full_cov = torch.linalg.inv(invN + torch.linalg.inv(prior_cov))
+#        else:
+#            invN, _ = self.get_posterior_components(x)
+#            invN = invN * gamma
+#            full_cov = torch.linalg.inv(invN)
+#        dist = torch.distributions.MultivariateNormal(best, full_cov)
+#        draws = dist.sample(torch.Size([N]))
+#        return draws
 
 
 class LogRatioEstimator_Gaussian_Autoregressive_X(nn.Module):
