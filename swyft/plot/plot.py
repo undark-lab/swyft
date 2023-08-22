@@ -379,22 +379,25 @@ def plot_posterior(
     Args:
         lrs_coll: Collection of swyft.LogRatioSamples objects
         parnames: List of parameters of interest
-        truth: Ground truth vector
         bins: Number of bins used for histograms.
-        figsize: Size of figure
+        figsize: Optional size of figure
         color: Color
-        labels: Custom labels (default is parameter names)
-        label_args: Custom label arguments
-        ncol: Number of panel columns
-        fig: Figure instance
+        labels: (Optional) Custom labels
+        label_args: (Pptional) Custom label arguments
+        ncol: (Optional) Number of panel columns
+        subplots_kwargs: Optional arguments for subplots generation.
+        fig: Optional figure instance
         contours: Plot 1-dim contours
-        smooth: Smothing
+        smooth: Gaussian smothing scale
         cred_level: Credible levels for contours
-        truth: Dictionary with parameters names as keys and true values
+        truth: (Optional) Dictionary with parameters names as keys and true values
     """
 
+    # parnames should be single str or list of strings
     if isinstance(parnames, str):
         parnames = [parnames]
+
+    # labels can be None (defaulting to parnames), or list of names of dictionary mapping parnames on labels
     if labels is None:
         labels = parnames
     elif isinstance(labels, list):
@@ -404,6 +407,7 @@ def plot_posterior(
     else:
         raise ValueError("labels must be None, list or dict")
     
+    # If ncol is None, default to (max) 4 panels per row
     if ncol is None:
         ncol = min(len(parnames), 4)
     
@@ -414,13 +418,6 @@ def plot_posterior(
         fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
     else:
         axes = fig.get_axes()
-
-  #  lb = 0.125
-  #  tr = 0.9
-  #  whspace = 0.15
-  #  fig.subplots_adjust(
-  #      left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
-  #  )
 
     # Ensure axes has always the same shape
     if isinstance(axes, np.ndarray):
@@ -449,6 +446,8 @@ def plot_posterior(
         ax.set_yticks([])
         #ax.tick_params(axis='x', which='minor', bottom = True)
         ax.minorticks_on()
+    
+    # Tight things up
     fig.tight_layout()
 
 if __name__ == "__main__":
