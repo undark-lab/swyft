@@ -128,15 +128,18 @@ def plot_2d(
     ax.set_ylim([ybins.min(), ybins.max()])
     
     if truth is not None:
-        ax.axvline(truth[parname1], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
-        ax.axhline(truth[parname2], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
-        ax.scatter(
-            [truth[parname1]],
-            [truth[parname2]],
-            c="k",
-            marker=".",
-            s=100,
-        )
+        if parname1 in truth.keys():
+            ax.axvline(truth[parname1], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+        if parname2 in truth.keys():
+            ax.axhline(truth[parname2], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+        if parname1 in truth.keys() and parname2 in truth.keys():
+            ax.scatter(
+                [truth[parname1]],
+                [truth[parname2]],
+                c="k",
+                marker=".",
+                s=100,
+            )
 
 
 #    xm = (xbins[:-1] + xbins[1:]) / 2
@@ -204,7 +207,8 @@ def plot_corner(
     fig=None,
     smooth=0.0,
     cred_level=[0.68268, 0.95450, 0.99730],
-    truth=None
+    truth=None,
+#    plot_diagonal=True  # TODO: Implement supression of diagonals
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -228,14 +232,14 @@ def plot_corner(
         fig, axes = plt.subplots(K, K, figsize=figsize)
     else:
         axes = np.array(fig.get_axes()).reshape((K, K))
-    lb = 0.125
-    tr = 0.9
-    whspace = 0.1
-    fig.subplots_adjust(
-        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
-    )
-
-    diagnostics = {}
+#    lb = 0.125
+#    tr = 0.9
+#    whspace = 0.1
+#    fig.subplots_adjust(
+#        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+#    )
+#
+#    diagnostics = {}
 
     if labels is None:
         labels = parnames
@@ -307,6 +311,9 @@ def plot_corner(
                 except swyft.SwyftParameterError:
                     pass
 
+    # Tight things up
+    fig.tight_layout()
+
     return fig
 
 
@@ -356,11 +363,10 @@ def plot_pp(
     plt.xlabel("Nominal credibility [$1-p$]")
     plt.ylabel("Empirical coverage [$1-p$]")
     # swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
-
-
+    
 def plot_posterior(
     lrs_coll,
-    parnames,
+    parnames=None,
     bins=100,
     figsize=None,
     color="k",
@@ -378,7 +384,7 @@ def plot_posterior(
 
     Args:
         lrs_coll: Collection of swyft.LogRatioSamples objects
-        parnames: List of parameters of interest
+        parnames: (Optional) List of parameters of interest
         bins: Number of bins used for histograms.
         figsize: Optional size of figure
         color: Color
@@ -406,7 +412,7 @@ def plot_posterior(
         labels = [labels.get(k, k) for k in parnames]
     else:
         raise ValueError("labels must be None, list or dict")
-    
+
     # If ncol is None, default to (max) 4 panels per row
     if ncol is None:
         ncol = min(len(parnames), 4)
@@ -444,6 +450,96 @@ def plot_posterior(
         )
         ax.set_xlabel(labels[k], **label_args)
         ax.set_yticks([])
+        #ax.tick_params(axis='x', which='minor', bottom = True)
+        ax.minorticks_on()
+    
+    # Tight things up
+    fig.tight_layout()
+
+def plot_pair(
+    lrs_coll,
+    parnames=None,
+    bins=100,
+    figsize=None,
+    color="k",
+    labels=None,
+    label_args={},
+    ncol=None,
+    subplots_kwargs={},
+    fig=None,
+    smooth=1.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None
+) -> None:
+    """Make beautiful 2-dim posteriors.
+
+    Args:
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parnames: (Optional) List of parameter pairs of interest
+        bins: Number of bins used for histograms.
+        figsize: Optional size of figure
+        color: Color
+        labels: (Optional) Custom labels
+        label_args: (Pptional) Custom label arguments
+        ncol: (Optional) Number of panel columns
+        subplots_kwargs: Optional arguments for subplots generation.
+        fig: Optional figure instance
+        contours: Plot 1-dim contours
+        smooth: Gaussian smothing scale
+        cred_level: Credible levels for contours
+        truth: (Optional) Dictionary with parameters names as keys and true values
+    """
+
+    # parnames should be single str or list of strings
+    if isinstance(parnames[0], str):
+        parnames = [parnames]
+
+    # labels can be None (defaulting to parnames), or list of names of dictionary mapping parnames on labels
+    if labels is None:
+        labels = parnames
+    elif isinstance(labels, dict):
+        labels = [[l[i].get(k[i], k[i]) for i in [0, 1]] for l, k in zip(labels, parnames)]
+    else:
+        raise ValueError("labels must be None or dict")
+
+    # If ncol is None, default to (max) 4 panels per row
+    if ncol is None:
+        ncol = min(len(parnames), 4)
+    
+    K = len(parnames)
+    nrow = (K - 1) // ncol + 1
+
+    if fig is None:
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
+    else:
+        axes = fig.get_axes()
+
+    # Ensure axes has always the same shape
+    if isinstance(axes, np.ndarray):
+        axes = axes.reshape(-1)
+    else:
+        axes = np.array([axes])
+        ncol = nrow = 1
+
+    for k in range(ncol*nrow):
+        ax = axes[k]
+        if k >= K:
+            ax.set_visible(False)
+            continue
+        plot_2d(
+            lrs_coll,
+            parnames[k][0],
+            parnames[k][1],
+            ax=ax,
+            bins=bins,
+            color=color,
+            smooth=smooth,
+            cred_level=cred_level,
+            truth=truth
+        )
+        ax.set_xlabel(labels[k][0], **label_args)
+        ax.set_ylabel(labels[k][1], **label_args)
+        #ax.set_yticks([])
         #ax.tick_params(axis='x', which='minor', bottom = True)
         ax.minorticks_on()
     
