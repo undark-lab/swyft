@@ -484,21 +484,22 @@ def collate_output(out):
 
 
 class StandardOptimizer:
-    lr = 1e-3    
-    lr_scheduler_factor = 0.1
-    lr_scheduler_patience = 5
-    early_stopping_patience = 3
-
     def configure_callbacks(self):
-        early_stop = EarlyStopping(monitor="val_loss", patience = self.early_stopping_patience)
+        early_stop = EarlyStopping(monitor="val_loss",
+                         patience = getattr(self, 'early_stopping_patience', 5)
+                     )
         checkpoint = ModelCheckpoint(monitor="val_loss")
         return [early_stop, checkpoint]
     
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr = self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), 
+            lr = getattr(self, 'lr', 1e-3)
+        )
         lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, factor = self.lr_scheduler_factor, patience = self.lr_scheduler_patience),
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 
+                factor = getattr(self, 'lr_scheduler_factor', 0.1),
+                patience = getattr(self, 'lr_scheduler_patience', 3)
+                ),
             "monitor": "val_loss"
         }
         return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
