@@ -31,4 +31,5 @@ __all__ = [
     "LogRatioEstimator_Gaussian",
     "RectBoundSampler",
     "LogRatioEstimator_1dim_Gaussian",
+    "StandardOptimizer",
 ]
