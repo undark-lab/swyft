@@ -20,8 +20,6 @@ __all__ = [
     "Sample",
     "Samples",
     "SwyftDataModule",
-    "OptimizerInit",
-    "AdamOptimizerInit",
     "CoverageSamples",
     "estimate_coverage",
     "equalize_tensors",
@@ -32,6 +30,6 @@ __all__ = [
     "RectBoundSampler",
     "LogRatioEstimator_1dim_Gaussian",
     "AdamW",
-    "AdamW_OneCycleLR",
-    "AdamW_ReduceLROnPlateau",
+    "AdamWOneCycleLR",
+    "AdamWReduceLROnPlateau",
 ]

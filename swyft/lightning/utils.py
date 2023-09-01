@@ -488,6 +488,8 @@ class AdamW:
 
     Attributes:
     - learning_rate (default 1e-3)
+    - weight_decay (default 0.01)
+    - amsgrad (default False)
     - early_stopping_patience (optional, default 5)
     """
 
@@ -502,11 +504,18 @@ class AdamW:
         return [early_stop, checkpoint]
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        weight_decay = getattr(self, "weight_decay", 0.01)
+        amsgrad = getattr(self, "amsgrad", False)
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
+        )
         return dict(optimizer=optimizer)
 
 
-class AdamW_OneCycleLR:
+class AdamWOneCycleLR:
     """AdamW with early stopping and OneCycleLR scheduler.
 
     Attributes:
@@ -535,7 +544,7 @@ class AdamW_OneCycleLR:
         return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
 
 
-class AdamW_ReduceLROnPlateau:
+class AdamWReduceLROnPlateau:
     """AdamW with early stopping and ReduceLROnPlateau scheduler.
 
     Attributes:
