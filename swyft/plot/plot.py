@@ -66,7 +66,7 @@ def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
 #####################
 
 
-def plot_2d(
+def _plot_2d(
     lrs_coll,
     parname1,
     parname2,
@@ -126,7 +126,7 @@ def plot_2d(
     )
     ax.set_xlim([xbins.min(), xbins.max()])
     ax.set_ylim([ybins.min(), ybins.max()])
-    
+
     if truth is not None:
         if parname1 in truth.keys():
             ax.axvline(truth[parname1], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
@@ -153,7 +153,7 @@ def plot_2d(
 #    return dict(mean=mean, mode=None, HDI1=None, HDI2=None, HDI3=None, entropy=None)
 
 
-def plot_1d(
+def _plot_1d(
     lrs_coll,
     parname,
     ax=None,
@@ -162,7 +162,7 @@ def plot_1d(
     contours=True,
     smooth=0.0,
     cred_level=[0.68268, 0.95450, 0.99730],
-    truth=None
+    truth=None,
 ):
     """Plot 1-dimensional posteriors.
 
@@ -208,7 +208,7 @@ def plot_corner(
     smooth=0.0,
     cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
-#    plot_diagonal=True  # TODO: Implement supression of diagonals
+    #    plot_diagonal=True  # TODO: Implement supression of diagonals
 ) -> None:
     """Make a beautiful corner plot.
 
@@ -232,19 +232,21 @@ def plot_corner(
         fig, axes = plt.subplots(K, K, figsize=figsize)
     else:
         axes = np.array(fig.get_axes()).reshape((K, K))
-#    lb = 0.125
-#    tr = 0.9
-#    whspace = 0.1
-#    fig.subplots_adjust(
-#        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
-#    )
-#
-#    diagnostics = {}
+    #    lb = 0.125
+    #    tr = 0.9
+    #    whspace = 0.1
+    #    fig.subplots_adjust(
+    #        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+    #    )
+    #
+    #    diagnostics = {}
 
     if labels is None:
         labels = parnames
     elif isinstance(labels, list):
-        assert len(labels)==len(parnames), "Length of labels list must correspond to number of parameters."
+        assert len(labels) == len(
+            parnames
+        ), "Length of labels list must correspond to number of parameters."
     elif isinstance(labels, dict):
         labels = [labels.get(k, k) for k in parnames]
     else:
@@ -282,7 +284,7 @@ def plot_corner(
             # 2-dim plots
             if j < i:
                 try:
-                    ret = plot_2d(
+                    ret = _plot_2d(
                         lrs_coll,
                         parnames[j],
                         parnames[i],
@@ -291,14 +293,14 @@ def plot_corner(
                         bins=bins,
                         smooth=smooth,
                         cred_level=cred_level,
-                        truth=truth
+                        truth=truth,
                     )
                 except swyft.SwyftParameterError:
                     pass
-           
+
             if j == i:
                 try:
-                    ret = plot_1d(
+                    ret = _plot_1d(
                         lrs_coll,
                         parnames[i],
                         ax=ax,
@@ -306,7 +308,7 @@ def plot_corner(
                         bins=bins,
                         contours=contours_1d,
                         smooth=smooth,
-                        truth=truth
+                        truth=truth,
                     )
                 except swyft.SwyftParameterError:
                     pass
@@ -363,7 +365,8 @@ def plot_pp(
     plt.xlabel("Nominal credibility [$1-p$]")
     plt.ylabel("Empirical coverage [$1-p$]")
     # swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
-    
+
+
 def plot_posterior(
     lrs_coll,
     parnames=None,
@@ -378,7 +381,7 @@ def plot_posterior(
     contours=True,
     smooth=1.0,
     cred_level=[0.68268, 0.95450, 0.99730],
-    truth=None
+    truth=None,
 ) -> None:
     """Make beautiful 1-dim posteriors.
 
@@ -407,7 +410,9 @@ def plot_posterior(
     if labels is None:
         labels = parnames
     elif isinstance(labels, list):
-        assert len(labels)==len(parnames), "Length of labels list must correspond to number of parameters."
+        assert len(labels) == len(
+            parnames
+        ), "Length of labels list must correspond to number of parameters."
     elif isinstance(labels, dict):
         labels = [labels.get(k, k) for k in parnames]
     else:
@@ -416,7 +421,7 @@ def plot_posterior(
     # If ncol is None, default to (max) 4 panels per row
     if ncol is None:
         ncol = min(len(parnames), 4)
-    
+
     K = len(parnames)
     nrow = (K - 1) // ncol + 1
 
@@ -432,12 +437,12 @@ def plot_posterior(
         axes = np.array([axes])
         ncol = nrow = 1
 
-    for k in range(ncol*nrow):
+    for k in range(ncol * nrow):
         ax = axes[k]
         if k >= K:
             ax.set_visible(False)
             continue
-        plot_1d(
+        _plot_1d(
             lrs_coll,
             parnames[k],
             ax=ax,
@@ -446,15 +451,16 @@ def plot_posterior(
             contours=contours,
             smooth=smooth,
             cred_level=cred_level,
-            truth=truth
+            truth=truth,
         )
         ax.set_xlabel(labels[k], **label_args)
         ax.set_yticks([])
-        #ax.tick_params(axis='x', which='minor', bottom = True)
+        # ax.tick_params(axis='x', which='minor', bottom = True)
         ax.minorticks_on()
-    
+
     # Tight things up
     fig.tight_layout()
+
 
 def plot_pair(
     lrs_coll,
@@ -469,7 +475,7 @@ def plot_pair(
     fig=None,
     smooth=1.0,
     cred_level=[0.68268, 0.95450, 0.99730],
-    truth=None
+    truth=None,
 ) -> None:
     """Make beautiful 2-dim posteriors.
 
@@ -498,14 +504,16 @@ def plot_pair(
     if labels is None:
         labels = parnames
     elif isinstance(labels, dict):
-        labels = [[l[i].get(k[i], k[i]) for i in [0, 1]] for l, k in zip(labels, parnames)]
+        labels = [
+            [l[i].get(k[i], k[i]) for i in [0, 1]] for l, k in zip(labels, parnames)
+        ]
     else:
         raise ValueError("labels must be None or dict")
 
     # If ncol is None, default to (max) 4 panels per row
     if ncol is None:
         ncol = min(len(parnames), 4)
-    
+
     K = len(parnames)
     nrow = (K - 1) // ncol + 1
 
@@ -521,12 +529,12 @@ def plot_pair(
         axes = np.array([axes])
         ncol = nrow = 1
 
-    for k in range(ncol*nrow):
+    for k in range(ncol * nrow):
         ax = axes[k]
         if k >= K:
             ax.set_visible(False)
             continue
-        plot_2d(
+        _plot_2d(
             lrs_coll,
             parnames[k][0],
             parnames[k][1],
@@ -535,16 +543,17 @@ def plot_pair(
             color=color,
             smooth=smooth,
             cred_level=cred_level,
-            truth=truth
+            truth=truth,
         )
         ax.set_xlabel(labels[k][0], **label_args)
         ax.set_ylabel(labels[k][1], **label_args)
-        #ax.set_yticks([])
-        #ax.tick_params(axis='x', which='minor', bottom = True)
+        # ax.set_yticks([])
+        # ax.tick_params(axis='x', which='minor', bottom = True)
         ax.minorticks_on()
-    
+
     # Tight things up
     fig.tight_layout()
+
 
 if __name__ == "__main__":
     pass

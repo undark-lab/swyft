@@ -2,11 +2,19 @@
 # from swyft.plot.histogram import corner, hist1d
 # from swyft.plot.mass import empirical_z_score_corner, plot_empirical_z_score
 # from swyft.plot.violin import violin
-from swyft.plot.plot import plot_posterior, plot_2d, plot_corner, plot_zz, plot_pp, plot_1d, plot_pair
+from swyft.plot.plot import (
+    plot_posterior,
+    _plot_2d,
+    plot_corner,
+    plot_zz,
+    plot_pp,
+    _plot_1d,
+    plot_pair,
+)
 
 __all__ = [
-    "plot_1d",
-    "plot_2d",
+    "_plot_1d",
+    "_plot_2d",
     "plot_corner",
     "plot_zz",
     "plot_pp",
