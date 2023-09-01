@@ -149,7 +149,9 @@ class LossAggregationSteps:
         return self(A, B)
 
 
-class SwyftModule(AdamW, OnFitEndLoadBestModel, LossAggregationSteps, pl.LightningModule):
+class SwyftModule(
+    AdamW, OnFitEndLoadBestModel, LossAggregationSteps, pl.LightningModule
+):
     r"""This is the central Swyft LightningModule for handling the training of logratio estimators.
 
     Derived classes are supposed to overwrite the `forward` method in order to implement specific inference tasks.

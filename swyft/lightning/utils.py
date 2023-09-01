@@ -490,18 +490,19 @@ class AdamW:
     - learning_rate (default 1e-3)
     - early_stopping_patience (optional, default 5)
     """
+
     learning_rate = 1e-3  # Required for learning rate tuning
 
     def configure_callbacks(self):
-        esp = getattr(self, 'early_stopping_patience', 5)
-        early_stop = EarlyStopping(monitor="val_loss",
-                         patience = getattr(self, 'early_stopping_patience', esp)
-                     )
+        esp = getattr(self, "early_stopping_patience", 5)
+        early_stop = EarlyStopping(
+            monitor="val_loss", patience=getattr(self, "early_stopping_patience", esp)
+        )
         checkpoint = ModelCheckpoint(monitor="val_loss")
         return [early_stop, checkpoint]
-    
+
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr = self.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         return dict(optimizer=optimizer)
 
 
@@ -512,24 +513,24 @@ class AdamW_OneCycleLR:
     - learning_rate (default 1e-3)
     - early_stopping_patience (optional, default 5)
     """
+
     learning_rate = 1e-3
 
     def configure_callbacks(self):
-        esp = getattr(self, 'early_stopping_patience', 5)
-        early_stop = EarlyStopping(monitor="val_loss",
-                         patience = getattr(self, 'early_stopping_patience', esp)
-                     )
+        esp = getattr(self, "early_stopping_patience", 5)
+        early_stop = EarlyStopping(
+            monitor="val_loss", patience=getattr(self, "early_stopping_patience", esp)
+        )
         checkpoint = ModelCheckpoint(monitor="val_loss")
         return [early_stop, checkpoint]
-    
+
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr = self.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         total_steps = self.trainer.estimated_stepping_batches
         lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.OneCycleLR(optimizer, 
-                max_lr = self.learning_rate,
-                total_steps = total_steps
-                )
+            "scheduler": torch.optim.lr_scheduler.OneCycleLR(
+                optimizer, max_lr=self.learning_rate, total_steps=total_steps
+            )
         }
         return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
 
@@ -543,35 +544,36 @@ class AdamW_ReduceLROnPlateau:
     - lr_scheduler_factor (optional, default 0.1)
     - lr_scheduler_patience (optional, default 3)
     """
+
     learning_rate = 1e-3
 
     def configure_callbacks(self):
-        esp = getattr(self, 'early_stopping_patience', 5)
-        early_stop = EarlyStopping(monitor="val_loss",
-                         patience = getattr(self, 'early_stopping_patience', esp)
-                     )
+        esp = getattr(self, "early_stopping_patience", 5)
+        early_stop = EarlyStopping(
+            monitor="val_loss", patience=getattr(self, "early_stopping_patience", esp)
+        )
         checkpoint = ModelCheckpoint(monitor="val_loss")
         return [early_stop, checkpoint]
-    
+
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr = self.learning_rate)
-        lrsf = getattr(self, 'lr_scheduler_factor', 0.1)
-        lrsp = getattr(self, 'lr_scheduler_patience', 3)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        lrsf = getattr(self, "lr_scheduler_factor", 0.1)
+        lrsp = getattr(self, "lr_scheduler_patience", 3)
         lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 
-                factor = getattr(self, 'lr_scheduler_factor', lrsf),
-                patience = getattr(self, 'lr_scheduler_patience', lrsp)
-                ),
-            "monitor": "val_loss"
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                factor=getattr(self, "lr_scheduler_factor", lrsf),
+                patience=getattr(self, "lr_scheduler_patience", lrsp),
+            ),
+            "monitor": "val_loss",
         }
         return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
 
 
 class OnFitEndLoadBestModel:
-    best_model_path = ''
+    best_model_path = ""
 
     def on_fit_end(self):
         self.best_model_path = self.trainer.checkpoint_callback.best_model_path
         checkpoint = torch.load(self.best_model_path)
-        self.load_state_dict(checkpoint['state_dict'])
-
+        self.load_state_dict(checkpoint["state_dict"])
