@@ -207,7 +207,6 @@ def plot_corner(
         lrs_coll: Collection of swyft.LogRatioSamples objects
         parnames: List of parameters of interest
         bins: Number of bins used for histograms.
-        truth: Ground truth vector
         figsize: Size of figure
         color: Color
         labels: Optional custom labels, either list or dict.
@@ -481,7 +480,6 @@ def plot_pair(
         ncol: (Optional) Number of panel columns
         subplots_kwargs: Optional arguments for subplots generation.
         fig: Optional figure instance
-        contours: Plot 1-dim contours
         smooth: Gaussian smothing scale
         cred_level: Credible levels for contours
         truth: (Optional) Dictionary with parameters names as keys and true values
