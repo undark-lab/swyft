@@ -1,21 +1,12 @@
 import numpy as np
 import pylab as plt
 from scipy.integrate import simps
-from scipy.ndimage import gaussian_filter, gaussian_filter1d
 import swyft
 import swyft.lightning.utils
 
 from typing import (
-    Callable,
-    Dict,
-    Hashable,
-    Optional,
     Sequence,
-    Tuple,
-    Type,
-    TypeVar,
     Union,
-    Any,
 )
 
 
@@ -59,11 +50,6 @@ def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
     #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
     #    for c in z[zero_crossings]:
     #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
-
-
-#####################
-# Inferface functions
-#####################
 
 
 def _plot_2d(
@@ -193,6 +179,11 @@ def _plot_1d(
 
     if truth is not None:
         ax.axvline(truth[parname], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+
+
+#####
+# API
+#####
 
 
 def plot_corner(
@@ -553,7 +544,3 @@ def plot_pair(
 
     # Tight things up
     fig.tight_layout()
-
-
-if __name__ == "__main__":
-    pass
