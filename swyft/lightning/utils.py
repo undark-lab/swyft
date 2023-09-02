@@ -31,7 +31,6 @@ import yaml
 
 from swyft.lightning.data import *
 import swyft.lightning.simulator
-from swyft.plot.mass import get_empirical_z_score
 
 import scipy
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
