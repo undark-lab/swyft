@@ -1,8 +1,10 @@
 import numpy as np
 import pylab as plt
-from scipy.integrate import simps
 import swyft
-import swyft.lightning.utils
+
+from scipy.integrate import simps
+from swyft.lightning.utils import get_pdf
+from swyft.plot.mass import plot_empirical_z_score, get_alpha
 
 from typing import (
     Sequence,
@@ -78,9 +80,7 @@ def _plot_2d(
         cred_level: Credible levels for contours
         truth: Dictionary with parameters names as keys and true values
     """
-    counts, xy = swyft.lightning.utils.get_pdf(
-        lrs_coll, [parname1, parname2], bins=bins, smooth=smooth
-    )
+    counts, xy = get_pdf(lrs_coll, [parname1, parname2], bins=bins, smooth=smooth)
     xbins = xy[:, 0]
     ybins = xy[:, 1]
 
@@ -164,7 +164,7 @@ def _plot_1d(
         truth: Dictionary with parameters names as keys and true values
     """
 
-    v, zm = swyft.lightning.utils.get_pdf(lrs_coll, parname, bins=bins, smooth=smooth)
+    v, zm = get_pdf(lrs_coll, parname, bins=bins, smooth=smooth)
     zm = zm[:, 0]
 
     if ax is None:
@@ -327,7 +327,7 @@ def plot_zz(
     """
     cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
     ax = ax if ax else plt.gca()
-    swyft.plot.mass.plot_empirical_z_score(ax, cov[:, 0], cov[:, 1], cov[:, 2:])
+    plot_empirical_z_score(ax, cov[:, 0], cov[:, 1], cov[:, 2:])
 
 
 def plot_pp(
@@ -347,14 +347,13 @@ def plot_pp(
         ax: Optional axes instance.
     """
     cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
-    alphas = 1 - swyft.plot.mass.get_alpha(cov)
+    alphas = 1 - get_alpha(cov)
     ax = ax if ax else plt.gca()
     ax.fill_between(alphas[:, 0], alphas[:, 2], alphas[:, 3], color="0.8")
     ax.plot(alphas[:, 0], alphas[:, 1], "k")
     plt.plot([0, 1], [0, 1], "g--")
     plt.xlabel("Nominal credibility [$1-p$]")
     plt.ylabel("Empirical coverage [$1-p$]")
-    # swyft.plot.mass.plot_empirical_z_score(ax, cov[:,0], cov[:,1], cov[:,2:])
 
 
 def plot_posterior(
