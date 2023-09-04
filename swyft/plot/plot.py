@@ -65,6 +65,7 @@ def _plot_2d(
     smooth=0.0,
     cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
+    smooth_prior=False,
 ):
     """Plot 2-dimensional posterior.
 
@@ -79,8 +80,15 @@ def _plot_2d(
         smooth: Applied smoothing factor
         cred_level: Credible levels for contours
         truth: Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
-    counts, xy = get_pdf(lrs_coll, [parname1, parname2], bins=bins, smooth=smooth)
+    counts, xy = get_pdf(
+        lrs_coll,
+        [parname1, parname2],
+        bins=bins,
+        smooth=smooth,
+        smooth_prior=smooth_prior,
+    )
     xbins = xy[:, 0]
     ybins = xy[:, 1]
 
@@ -149,6 +157,7 @@ def _plot_1d(
     smooth=0.0,
     cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
+    smooth_prior=False,
 ):
     """Plot 1-dimensional posteriors.
 
@@ -162,9 +171,12 @@ def _plot_1d(
         smooth: Applied smoothing factor
         cred_level: Credible levels for contours
         truth: Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
 
-    v, zm = get_pdf(lrs_coll, parname, bins=bins, smooth=smooth)
+    v, zm = get_pdf(
+        lrs_coll, parname, bins=bins, smooth=smooth, smooth_prior=smooth_prior
+    )
     zm = zm[:, 0]
 
     if ax is None:
@@ -199,6 +211,7 @@ def plot_corner(
     smooth=0.0,
     cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
+    smooth_prior=False,
     #    plot_diagonal=True  # TODO: Implement supression of diagonals
 ) -> None:
     """Make a beautiful corner plot.
@@ -216,6 +229,7 @@ def plot_corner(
         smooth: histogram smoothing
         cred_level: Credible levels for contours
         truth: Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
     K = len(parnames)
     if fig is None:
@@ -284,6 +298,7 @@ def plot_corner(
                         smooth=smooth,
                         cred_level=cred_level,
                         truth=truth,
+                        smooth_prior=smooth_prior,
                     )
                 except swyft.SwyftParameterError:
                     pass
@@ -299,6 +314,7 @@ def plot_corner(
                         contours=contours_1d,
                         smooth=smooth,
                         truth=truth,
+                        smooth_prior=smooth_prior,
                     )
                 except swyft.SwyftParameterError:
                     pass
@@ -371,6 +387,7 @@ def plot_posterior(
     smooth=1.0,
     cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
+    smooth_prior=False,
 ) -> None:
     """Make beautiful 1-dim posteriors.
 
@@ -389,6 +406,7 @@ def plot_posterior(
         smooth: Gaussian smothing scale
         cred_level: Credible levels for contours
         truth: (Optional) Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
 
     # parnames should be single str or list of strings
@@ -441,6 +459,7 @@ def plot_posterior(
             smooth=smooth,
             cred_level=cred_level,
             truth=truth,
+            smooth_prior=smooth_prior,
         )
         ax.set_xlabel(labels[k], **label_args)
         ax.set_yticks([])

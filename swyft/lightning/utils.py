@@ -53,28 +53,30 @@ class SwyftParameterError(Exception):
 ############################
 
 
-def _pdf_from_weighted_samples(v, w, bins=50, smooth=0, v_aux=None):
+def _pdf_from_weighted_samples(v, w, bins=50, smooth=0, smooth_prior=False):
     """Take weighted samples and turn them into a pdf on a grid.
 
     Args:
         bins
     """
     ndim = v.shape[-1]
-    if v_aux is None:
+    if not smooth_prior:
         return _weighted_smoothed_histogramdd(v, w, bins=bins, smooth=smooth)
     else:
-        h, xy = _weighted_smoothed_histogramdd(v_aux, None, bins=bins, smooth=smooth)
+        h, xy = _weighted_smoothed_histogramdd(v, w * 0 + 1, bins=bins, smooth=smooth)
         if ndim == 2:
             X, Y = np.meshgrid(xy[:, 0], xy[:, 1])
             n = len(xy)
             out = scipy.interpolate.griddata(
                 v, w, (X.flatten(), Y.flatten()), method="cubic", fill_value=0.0
             ).reshape(n, n)
+            out = out * h.numpy()
             return out, xy
         elif ndim == 1:
             out = scipy.interpolate.griddata(
                 v[:, 0], w, xy[:, 0], method="cubic", fill_value=0.0
             )
+            out = out * h.numpy()
             return out, xy
         else:
             raise KeyError("Not supported")
@@ -112,6 +114,7 @@ def get_pdf(
     aux=None,
     bins: int = 50,
     smooth: float = 0.0,
+    smooth_prior=False,
 ):
     """Generate binned PDF based on input
 
@@ -120,6 +123,7 @@ def get_pdf(
         params: Parameter names
         bins: Number of bins
         smooth: Apply Gaussian smoothing
+        smooth_prior: Smooth prior instead of posterior
 
     Returns:
         np.array, np.array: Returns densities and parameter grid.
@@ -129,7 +133,9 @@ def get_pdf(
         z_aux, _ = get_weighted_samples(aux, params)
     else:
         z_aux = None
-    return _pdf_from_weighted_samples(z, w, bins=bins, smooth=smooth, v_aux=z_aux)
+    return _pdf_from_weighted_samples(
+        z, w, bins=bins, smooth=smooth, smooth_prior=smooth_prior
+    )
 
 
 def _get_weights(logratios, normalize: bool = False):
