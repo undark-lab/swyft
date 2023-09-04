@@ -38,68 +38,6 @@ from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import torchist
 
 
-############
-# Optimizers
-############
-
-
-class OptimizerInit:
-    """Handles initializing optimizier and schedulers in Swyft.
-
-    Args:
-        optim_constructor: Constructor for torch optimizer.
-        optim_args: Optimizer arguments
-        scheduler_constructor: Constructor for learning rate scheduler
-        scheduler_args: Scheduler arguments
-    """
-
-    def __init__(
-        self,
-        optim_constructor: torch.optim.Optimizer = torch.optim.Adam,
-        optim_args: Dict = {"lr": 1e-3},
-        scheduler_constructor: torch.optim.lr_scheduler._LRScheduler = torch.optim.lr_scheduler.ReduceLROnPlateau,
-        scheduler_args: Dict = {"factor": 0.3, "patience": 5},
-    ):
-        self.optim_constructor = optim_constructor
-        self.optim_args = optim_args
-        self.scheduler_constructor = scheduler_constructor
-        self.scheduler_args = scheduler_args
-
-    def __call__(self, params):
-        optimizer = self.optim_constructor(params, **self.optim_args)
-        lr_scheduler = {
-            "scheduler": self.scheduler_constructor(optimizer, **self.scheduler_args),
-            "monitor": "val_loss",
-        }
-        return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
-
-
-class AdamOptimizerInit(OptimizerInit):
-    """Base class: OptimizerInit
-
-    Optimizer initialization with Adam optimizer and ReduceLROnPlateau scheduler.
-
-    Args:
-        lr: Initial learning rate
-        lrs_factor: Learning ratio schedule decay factor
-        lrs_patience: Learning ratio schedule decay patience
-    """
-
-    def __init__(
-        self, lr: float = 1e-3, lrs_factor: float = 0.3, lrs_patience: int = 5
-    ):
-        super().__init__(
-            optim_constructor=torch.optim.Adam,
-            optim_args={"lr": lr},
-            scheduler_constructor=torch.optim.lr_scheduler.ReduceLROnPlateau,
-            scheduler_args={
-                "factor": lrs_factor,
-                "patience": lrs_patience,
-                "verbose": True,
-            },
-        )
-
-
 ##################
 # Parameter errors
 ##################
@@ -481,6 +419,11 @@ def collate_output(out):
         else:
             result[key] = np.stack([x[key] for x in out])
     return result
+
+
+############
+# Optimizers
+############
 
 
 class AdamW:
