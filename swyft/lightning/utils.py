@@ -38,68 +38,6 @@ from scipy.ndimage import gaussian_filter1d, gaussian_filter
 import torchist
 
 
-############
-# Optimizers
-############
-
-
-class OptimizerInit:
-    """Handles initializing optimizier and schedulers in Swyft.
-
-    Args:
-        optim_constructor: Constructor for torch optimizer.
-        optim_args: Optimizer arguments
-        scheduler_constructor: Constructor for learning rate scheduler
-        scheduler_args: Scheduler arguments
-    """
-
-    def __init__(
-        self,
-        optim_constructor: torch.optim.Optimizer = torch.optim.Adam,
-        optim_args: Dict = {"lr": 1e-3},
-        scheduler_constructor: torch.optim.lr_scheduler._LRScheduler = torch.optim.lr_scheduler.ReduceLROnPlateau,
-        scheduler_args: Dict = {"factor": 0.3, "patience": 5},
-    ):
-        self.optim_constructor = optim_constructor
-        self.optim_args = optim_args
-        self.scheduler_constructor = scheduler_constructor
-        self.scheduler_args = scheduler_args
-
-    def __call__(self, params):
-        optimizer = self.optim_constructor(params, **self.optim_args)
-        lr_scheduler = {
-            "scheduler": self.scheduler_constructor(optimizer, **self.scheduler_args),
-            "monitor": "val_loss",
-        }
-        return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
-
-
-class AdamOptimizerInit(OptimizerInit):
-    """Base class: OptimizerInit
-
-    Optimizer initialization with Adam optimizer and ReduceLROnPlateau scheduler.
-
-    Args:
-        lr: Initial learning rate
-        lrs_factor: Learning ratio schedule decay factor
-        lrs_patience: Learning ratio schedule decay patience
-    """
-
-    def __init__(
-        self, lr: float = 1e-3, lrs_factor: float = 0.3, lrs_patience: int = 5
-    ):
-        super().__init__(
-            optim_constructor=torch.optim.Adam,
-            optim_args={"lr": lr},
-            scheduler_constructor=torch.optim.lr_scheduler.ReduceLROnPlateau,
-            scheduler_args={
-                "factor": lrs_factor,
-                "patience": lrs_patience,
-                "verbose": True,
-            },
-        )
-
-
 ##################
 # Parameter errors
 ##################
@@ -481,3 +419,113 @@ def collate_output(out):
         else:
             result[key] = np.stack([x[key] for x in out])
     return result
+
+
+############
+# Optimizers
+############
+
+
+class AdamW:
+    """AdamW with early stopping.
+
+    Attributes:
+    - learning_rate (default 1e-3)
+    - weight_decay (default 0.01)
+    - amsgrad (default False)
+    - early_stopping_patience (optional, default 5)
+    """
+
+    learning_rate = 1e-3  # Required for learning rate tuning
+
+    def configure_callbacks(self):
+        esp = getattr(self, "early_stopping_patience", 5)
+        early_stop = EarlyStopping(
+            monitor="val_loss", patience=getattr(self, "early_stopping_patience", esp)
+        )
+        checkpoint = ModelCheckpoint(monitor="val_loss")
+        return [early_stop, checkpoint]
+
+    def configure_optimizers(self):
+        weight_decay = getattr(self, "weight_decay", 0.01)
+        amsgrad = getattr(self, "amsgrad", False)
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
+        )
+        return dict(optimizer=optimizer)
+
+
+class AdamWOneCycleLR:
+    """AdamW with early stopping and OneCycleLR scheduler.
+
+    Attributes:
+    - learning_rate (default 1e-3)
+    - early_stopping_patience (optional, default 5)
+    """
+
+    learning_rate = 1e-3
+
+    def configure_callbacks(self):
+        esp = getattr(self, "early_stopping_patience", 5)
+        early_stop = EarlyStopping(
+            monitor="val_loss", patience=getattr(self, "early_stopping_patience", esp)
+        )
+        checkpoint = ModelCheckpoint(monitor="val_loss")
+        return [early_stop, checkpoint]
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        total_steps = self.trainer.estimated_stepping_batches
+        lr_scheduler = {
+            "scheduler": torch.optim.lr_scheduler.OneCycleLR(
+                optimizer, max_lr=self.learning_rate, total_steps=total_steps
+            )
+        }
+        return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
+
+
+class AdamWReduceLROnPlateau:
+    """AdamW with early stopping and ReduceLROnPlateau scheduler.
+
+    Attributes:
+    - learning_rate (default 1e-3)
+    - early_stopping_patience (optional, default 5)
+    - lr_scheduler_factor (optional, default 0.1)
+    - lr_scheduler_patience (optional, default 3)
+    """
+
+    learning_rate = 1e-3
+
+    def configure_callbacks(self):
+        esp = getattr(self, "early_stopping_patience", 5)
+        early_stop = EarlyStopping(
+            monitor="val_loss", patience=getattr(self, "early_stopping_patience", esp)
+        )
+        checkpoint = ModelCheckpoint(monitor="val_loss")
+        return [early_stop, checkpoint]
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        lrsf = getattr(self, "lr_scheduler_factor", 0.1)
+        lrsp = getattr(self, "lr_scheduler_patience", 3)
+        lr_scheduler = {
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                factor=getattr(self, "lr_scheduler_factor", lrsf),
+                patience=getattr(self, "lr_scheduler_patience", lrsp),
+            ),
+            "monitor": "val_loss",
+        }
+        return dict(optimizer=optimizer, lr_scheduler=lr_scheduler)
+
+
+class OnFitEndLoadBestModel:
+    best_model_path = ""
+
+    def on_fit_end(self):
+        self.best_model_path = self.trainer.checkpoint_callback.best_model_path
+        checkpoint = torch.load(self.best_model_path)
+        self.load_state_dict(checkpoint["state_dict"])

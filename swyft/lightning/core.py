@@ -33,8 +33,8 @@ import yaml
 from swyft.lightning.data import *
 from swyft.plot.mass import get_empirical_z_score
 from swyft.lightning.utils import (
-    OptimizerInit,
-    AdamOptimizerInit,
+    AdamW,
+    OnFitEndLoadBestModel,
     SwyftParameterError,
     _collection_mask,
     _collection_flatten,
@@ -51,42 +51,7 @@ from scipy.ndimage import gaussian_filter1d, gaussian_filter
 #############
 
 
-class SwyftModule(pl.LightningModule):
-    r"""This is the central Swyft LightningModule for handling the training of logratio estimators.
-
-    Derived classes are supposed to overwrite the `forward` method in order to implement specific inference tasks.
-
-    The attribute `optimizer_init` points to the optimizer initializer (default is `AdamOptimizerInit`).
-
-    .. note::
-
-       The forward method takes as arguments the sample batches `A` and `B`,
-       which typically include all sample variables.  Joined samples correspond to
-       A=B, whereas marginal samples correspond to samples A != B.
-
-    Example usage:
-
-    .. code-block:: python
-
-       class MyNetwork(swyft.SwyftModule):
-           def __init__(self):
-               self.optimizer_init = AdamOptimizerInit(lr = 1e-4)
-               self.mlp = swyft.LogRatioEstimator_1dim(4, 4)
-
-           def forward(A, B);
-               x = A['x']
-               z = A['z']
-               logratios = self.mlp(x, z)
-               return logratios
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.optimizer_init = AdamOptimizerInit()
-
-    def configure_optimizers(self):
-        return self.optimizer_init(self.parameters())
-
+class LossAggregationSteps:
     def _get_logratios(self, out):
         if isinstance(out, dict):
             out = {k: v for k, v in out.items() if k[:4] != "aux_"}
@@ -106,10 +71,14 @@ class SwyftModule(pl.LightningModule):
             logratios = None
         return logratios
 
-    def validation_step(self, batch, batch_idx):
-        loss = self._calc_loss(batch, randomized=False)
-        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-        return loss
+    def _get_aux_losses(self, out):
+        flattened_out = _collection_flatten(out)
+        filtered_out = [v for v in flattened_out if isinstance(v, swyft.AuxLoss)]
+        if len(filtered_out) == 0:
+            return None
+        else:
+            losses = torch.cat([v.loss.unsqueeze(-1) for v in filtered_out], dim=1)
+            return losses
 
     def _calc_loss(self, batch, randomized=True):
         """Calcualte batch-averaged loss summed over ratio estimators.
@@ -159,18 +128,14 @@ class SwyftModule(pl.LightningModule):
 
         return loss_tot
 
-    def _get_aux_losses(self, out):
-        flattened_out = _collection_flatten(out)
-        filtered_out = [v for v in flattened_out if isinstance(v, swyft.AuxLoss)]
-        if len(filtered_out) == 0:
-            return None
-        else:
-            losses = torch.cat([v.loss.unsqueeze(-1) for v in filtered_out], dim=1)
-            return losses
-
     def training_step(self, batch, batch_idx):
         loss = self._calc_loss(batch)
         self.log("train_loss", loss, on_step=True, on_epoch=False)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self._calc_loss(batch, randomized=False)
+        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -182,6 +147,38 @@ class SwyftModule(pl.LightningModule):
         A = batch[0]
         B = batch[1]
         return self(A, B)
+
+
+class SwyftModule(
+    AdamW, OnFitEndLoadBestModel, LossAggregationSteps, pl.LightningModule
+):
+    r"""This is the central Swyft LightningModule for handling the training of logratio estimators.
+
+    Derived classes are supposed to overwrite the `forward` method in order to implement specific inference tasks.
+
+    .. note::
+
+       The forward method takes as arguments the sample batches `A` and `B`,
+       which typically include all sample variables.  Joined samples correspond to
+       A=B, whereas marginal samples correspond to samples A != B.
+
+    Example usage:
+
+    .. code-block:: python
+
+       class MyNetwork(swyft.SwyftModule):
+           def __init__(self):
+               self.mlp = swyft.LogRatioEstimator_1dim(4, 4)
+
+           def forward(A, B);
+               x = A['x']
+               z = B['z']
+               logratios = self.mlp(x, z)
+               return logratios
+    """
+
+    def __init__(self):
+        super().__init__()
 
 
 #################
