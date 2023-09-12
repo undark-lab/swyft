@@ -484,6 +484,7 @@ def plot_pair(
     smooth=1.0,
     cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
+    smooth_prior=False,
 ) -> None:
     """Make beautiful 2-dim posteriors.
 
@@ -501,6 +502,7 @@ def plot_pair(
         smooth: Gaussian smothing scale
         cred_level: Credible levels for contours
         truth: (Optional) Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
 
     # parnames should be single str or list of strings
@@ -551,6 +553,7 @@ def plot_pair(
             smooth=smooth,
             cred_level=cred_level,
             truth=truth,
+            smooth_prior=smooth_prior
         )
         ax.set_xlabel(labels[k][0], **label_args)
         ax.set_ylabel(labels[k][1], **label_args)
