@@ -517,4 +517,3 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         lrs = swyft.LogRatioSamples(logratios, a, self.varnames)
 
         return lrs
-
