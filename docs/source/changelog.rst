@@ -5,6 +5,21 @@ The full release logs can be found on `github
 <https://github.com/undark-lab/swyft/releases>_.  Here we provide a brief
 summary.
 
+v0.4.4 (2023-07-31)
+-------------------
+
+- Included updated author list (AUTHOR file) and update LICENSE information
+- Add torch conjugate gradient to dependencies (for forthcoming applications)
+- Add list of Swyft publications and events to docs
+- pytorch-lighthing 2.0 compatibility not fully established (pending until 2.0 has feature parity with 1.9)
+- Add swyft.get_class_probs for extracting classification results from ratio estimators
+- Add LogRatioEstimator_Gaussian, a Gaussian ratio estimator for arbitrary dimensions
+- Deprecate LogRatioEstimator_1dim_Gaussian (worked only with 1dim features and 1dim parameters)
+- Rewritten logratios aggregator in swyft.Module to be more resilient 
+- Add AuxLoss, which just enables to add arbitrary extra losses (e.g. related to regularisation) to the training object
+- Enable Spectral embedding for parameters in LogRatioEstimator_Ndim for high fidelity posteriors
+- Add LogRatioEstimator_Autoregressive, an autoregressive neural ratio estimator module
+
 v0.4.3 (2023-04-28)
 -------------------
 
