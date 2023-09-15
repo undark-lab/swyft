@@ -1,18 +1,12 @@
-from typing import Optional, Sequence, Tuple, Union
-
-import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 from scipy import stats
+from swyft.types import Array
 
-from swyft.plot.histogram import split_corner_axes
-from swyft.types import Array, MarginalToArray
-
-# from swyft.utils.marginals import get_d_dim_marginal_indices
+from typing import Optional, Tuple, Union
 
 
-def get_z_score(alpha: Union[float, np.ndarray]) -> np.ndarray:
+def _get_z_score(alpha: Union[float, np.ndarray]) -> np.ndarray:
     """Recover the z_score given by `z = normal_ppd(1 - alpha / 2)`.
 
     Args:
@@ -36,7 +30,7 @@ def get_alpha(z_score: Union[float, np.ndarray]) -> np.ndarray:
     return 2 * (1 - stats.norm.cdf(z_score))
 
 
-def get_jefferys_interval(
+def _get_jefferys_interval(
     n_success: Union[int, np.ndarray],
     n_trials: int,
     alpha: Union[float, np.ndarray] = 0.05,
@@ -94,11 +88,11 @@ def get_empirical_z_score(
 
     # compute the properties of the mean and Jeffery's interval
     mean = n_not_containing_truth / n
-    interval = get_jefferys_interval(
+    interval = _get_jefferys_interval(
         n_not_containing_truth, n, alpha=get_alpha(interval_z_score)
     )
-    z_mean = get_z_score(1 - mean)
-    z_interval = get_z_score(1 - interval)
+    z_mean = _get_z_score(1 - mean)
+    z_interval = _get_z_score(1 - interval)
     return nominal_z_scores, z_mean, z_interval
 
 
@@ -217,99 +211,3 @@ def plot_empirical_z_score(
     else:
         axes.set_ylim(ylim)
     return axes
-
-
-def empirical_z_score_corner(
-    empirical_mass_1d: MarginalToArray,
-    empirical_mass_2d: MarginalToArray,
-    max_z_score: float = 3.5,
-    labels: Sequence[str] = None,
-    figsize: Optional[Tuple[float, float]] = None,
-    space_between_axes: float = 0.1,
-) -> Tuple[Figure, Axes]:
-    """create a corner plot with each subplot containing a p-p test of expected coverage probability
-
-    Args:
-        empirical_mass_1d: empirical mass dict from marginal_indices to array
-        empirical_mass_2d: empirical mass dict from marginal_indices to array
-        max_z_score: maximum nominal z-score to plot. Defaults to 3.5.
-        labels: for labeling the x and y axes. Defaults to None.
-        figsize: set figsize like in `plt.subplots`. Defaults to None.
-        space_between_axes: changes the `wspace` and `hspace` between subplots. see `plt.subplots_adjust`. Defaults to 0.1.
-
-    Returns:
-        matplotlib figure, np array of matplotlib axes
-    """
-    # compute the dimension, necessary inds, assert all is there
-    d = len(empirical_mass_1d)
-    upper_inds = get_d_dim_marginal_indices(d, 2)
-    assert len(empirical_mass_2d) == len(upper_inds)
-
-    # create the plots, adjust them, remove unnecessary upper corner
-    fig, axes = plt.subplots(
-        nrows=d, ncols=d, sharex="col", sharey="row", figsize=figsize
-    )
-
-    _, diag, upper = split_corner_axes(axes)
-    lb = 0.125
-    tr = 0.9
-    fig.subplots_adjust(
-        left=lb,
-        bottom=lb,
-        right=tr,
-        top=tr,
-        wspace=space_between_axes,
-        hspace=space_between_axes,
-    )
-
-    for ax in upper:
-        ax.axis("off")
-
-    # plot the 1d mass
-    for i, (k, ax) in enumerate(zip(empirical_mass_1d.keys(), diag)):
-        nominal_z_scores, z_mean, z_interval = get_empirical_z_score(
-            empirical_mass_1d[k], max_z_score
-        )
-        plot_empirical_z_score(
-            ax,
-            nominal_z_scores,
-            z_mean,
-            z_interval,
-            xlabel=None,
-            ylabel=None,
-        )
-
-    # plot the 2d mass
-    # for i, (k, ax) in enumerate(zip(empirical_mass_2d.keys(), upper)):
-    for k, i in zip(empirical_mass_2d.keys(), upper_inds):
-        a, b = i  # plot array index, upper index (lower index is transpose)
-        ax = axes[b, a]  # targets the lower left corner
-
-        nominal_z_scores, z_mean, z_interval = get_empirical_z_score(
-            empirical_mass_2d[k], max_z_score
-        )
-        plot_empirical_z_score(
-            ax,
-            nominal_z_scores,
-            z_mean,
-            z_interval,
-            xlabel=None,
-            ylabel=None,
-        )
-
-    # bottom row
-    for i, ax in enumerate(axes[-1, :]):
-        if labels is not None:
-            ax.set_xlabel(labels[i])
-
-    # left column
-    for i, ax in enumerate(axes[1:, 0], 1):
-        if labels is not None:
-            ax.set_ylabel(labels[i])
-
-    fig.align_labels()
-    return fig, axes
-
-
-if __name__ == "__main__":
-    pass

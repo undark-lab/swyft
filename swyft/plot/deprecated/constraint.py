@@ -1,12 +1,21 @@
 import matplotlib.patches as mpatches
 import matplotlib.path as mpath
 
-from swyft.plot.histogram import split_corner_axes
 from swyft.utils.marginals import get_d_dim_marginal_indices
+
+import numpy as np
+from typing import Tuple
+
+
+def _split_corner_axes(axes: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    diag = np.diag(axes)
+    lower = axes[np.tril(axes, -1).nonzero()]
+    upper = axes[np.triu(axes, 1).nonzero()]
+    return lower, diag, upper
 
 
 def diagonal_constraint(axes, bounds, alpha=0.25):
-    _, diag, _ = split_corner_axes(axes)
+    _, diag, _ = _split_corner_axes(axes)
     for i, ax in enumerate(diag):
         xlim = ax.get_xlim()
         ax.axvspan(xlim[0], bounds[i, 0], alpha=alpha)

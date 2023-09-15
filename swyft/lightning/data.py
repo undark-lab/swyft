@@ -30,8 +30,7 @@ class SwyftDataModule(pl.LightningDataModule):
 
     Args:
         data: Simulation data
-        lenghts: List of number of samples used for [training, validation, testing].
-        fractions: Fraction of samples used for [training, validation, testing].
+        val_fraction: Fraction of data used for validation.
         batch_size: Minibatch size.
         num_workers: Number of workers for dataloader.
         shuffle: Shuffle training data.
@@ -43,8 +42,9 @@ class SwyftDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data,
-        lengths: Union[Sequence[int], None] = None,
-        fractions: Union[Sequence[float], None] = None,
+        # lengths: Union[Sequence[int], None] = None,
+        # fractions: Union[Sequence[float], None] = None,
+        val_fraction: float = 0.2,
         batch_size: int = 32,
         num_workers: int = 0,
         shuffle: bool = False,
@@ -52,9 +52,20 @@ class SwyftDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         self.data = data
+        # TODO: Clean up codes
+        lengths = None
+        fractions = [1 - val_fraction, val_fraction]
         if lengths is not None and fractions is None:
+            assert (
+                len(lengths) == 2
+            ), "SwyftDataModule only provides training and validation data."
+            lengths = [lengths[0], lenghts[1], 0]
             self.lengths = lengths
         elif lengths is None and fractions is not None:
+            assert (
+                len(fractions) == 2
+            ), "SwyftDataModule only provides training and validation data."
+            fractions = [fractions[0], fractions[1], 0]
             self.lengths = self._get_lengths(fractions, len(data))
         else:
             raise ValueError("Either lenghts or fraction must be set, but not both.")
@@ -114,13 +125,16 @@ class SwyftDataModule(pl.LightningDataModule):
         return dataloader
 
     def test_dataloader(self):
-        dataloader = torch.utils.data.DataLoader(
-            self.dataset_test,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-        )
-        return dataloader
+        return
+
+
+#        dataloader = torch.utils.data.DataLoader(
+#            self.dataset_test,
+#            batch_size=self.batch_size,
+#            shuffle=False,
+#            num_workers=self.num_workers,
+#        )
+#        return dataloader
 
 
 class SamplesDataset(torch.utils.data.Dataset):
@@ -178,9 +192,7 @@ class ZarrStore:
         for k in self.data.keys():
             shape = self.data[k].shape
             self.data[k].resize(N, *shape[1:])
-        self.root["meta/sim_status"].resize(
-            N,
-        )
+        self.root["meta/sim_status"].resize(N,)
 
     def init(self, N, chunk_size, shapes=None, dtypes=None):
         if len(self) > 0:

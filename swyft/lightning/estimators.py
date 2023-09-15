@@ -319,16 +319,16 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
 
         # log r(x, z) = log p(x, z)/p(x)/p(z), with covariance given by [[x_var, xz_cov], [xz_cov, z_var]]
         x, z = swyft.equalize_tensors(x, z)
-        xb = (x - self.x_mean) / self.x_var**0.5
-        zb = (z - self.z_mean) / self.z_var**0.5
-        rho = self.xz_cov / self.x_var**0.5 / self.z_var**0.5
+        xb = (x - self.x_mean) / self.x_var ** 0.5
+        zb = (z - self.z_mean) / self.z_var ** 0.5
+        rho = self.xz_cov / self.x_var ** 0.5 / self.z_var ** 0.5
         rho = torch.clip(
-            rho, min=-((1 - self.minstd**2) ** 0.5), max=(1 - self.minstd**2) ** 0.5
+            rho, min=-((1 - self.minstd ** 2) ** 0.5), max=(1 - self.minstd ** 2) ** 0.5
         )
         logratios = (
-            -0.5 * torch.log(1 - rho**2)
-            + rho / (1 - rho**2) * xb * zb
-            - 0.5 * rho**2 / (1 - rho**2) * (xb**2 + zb**2)
+            -0.5 * torch.log(1 - rho ** 2)
+            + rho / (1 - rho ** 2) * xb * zb
+            - 0.5 * rho ** 2 / (1 - rho ** 2) * (xb ** 2 + zb ** 2)
         )
         out = LogRatioSamples(
             logratios, z.unsqueeze(-1), self.varnames, metadata={"type": "Gaussian1d"}
@@ -336,7 +336,7 @@ class LogRatioEstimator_1dim_Gaussian(torch.nn.Module):
         return out
 
     def get_z_estimate(self, x):
-        z_estimator = (x - self.x_mean) * self.xz_cov / self.x_var**0.5 + self.z_mean
+        z_estimator = (x - self.x_mean) * self.xz_cov / self.x_var ** 0.5 + self.z_mean
         return z_estimator
 
 
@@ -449,7 +449,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
     def cov(self):
         return (
             self._cov
-            + torch.eye(self._mean.shape[-1]).to(self._cov.device) * self._minstd**2
+            + torch.eye(self._mean.shape[-1]).to(self._cov.device) * self._minstd ** 2
         )
 
     @property
@@ -524,6 +524,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         lrs = swyft.LogRatioSamples(logratios, a, self.varnames)
 
         return lrs
+
 
 #class _LogRatioEstimator_Autoregressive_Gaussian_4factors(nn.Module):
 #    r"""Estimate Gaussian log-ratios with an autoregressive model, using four factor decomposition.

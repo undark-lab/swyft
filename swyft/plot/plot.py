@@ -1,9 +1,23 @@
 import numpy as np
 import pylab as plt
+import swyft
+
 from scipy.integrate import simps
+from swyft.lightning.utils import get_pdf
+from swyft.plot.mass import plot_empirical_z_score, get_alpha
+
+from typing import (
+    Sequence,
+    Union,
+)
 
 
-def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
+#####################
+# Auxiliary functions
+#####################
+
+
+def _grid_interpolate_samples(x, y, bins=1000, return_norm=False):
     idx = np.argsort(x)
     x, y = x[idx], y[idx]
     x_grid = np.linspace(x[0], x[-1], bins)
@@ -16,7 +30,7 @@ def grid_interpolate_samples(x, y, bins=1000, return_norm=False):
         return x_grid, y_grid_normed
 
 
-def get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
+def _get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
     x = x.flatten()
     x = np.sort(x)[::-1]  # Sort backwards
     total_mass = x.sum()
@@ -26,218 +40,218 @@ def get_HDI_thresholds(x, cred_level=[0.68268, 0.95450, 0.99730]):
     return levels
 
 
-def plot_posterior(
-    samples,
-    pois,
-    weights_key=None,
-    ax=plt,
-    grid_interpolate=False,
+def _contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
+    y0 = -1.0 * v.max()
+    y1 = 5.0 * v.max()
+    ax.fill_between(z, y0, y1, where=v >= levels[0], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v >= levels[1], color=color, alpha=0.1)
+    ax.fill_between(z, y0, y1, where=v >= levels[2], color=color, alpha=0.1)
+    # if not isinstance(colors, list):
+    #    colors = [colors]*len(levels)
+    # for i, l in enumerate(levels):
+    #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
+    #    for c in z[zero_crossings]:
+    #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
+
+
+def _plot_2d(
+    lrs_coll,
+    parname1,
+    parname2,
+    ax=None,
     bins=100,
     color="k",
-    contours=True,
-    **kwargs
-):
-    if isinstance(pois, int):
-        pois = (pois,)
-
-    w = None
-
-    # FIXME: Clean up ad hoc code
-    if weights_key is None:
-        weights_key = tuple(sorted(pois))
-    try:
-        w = samples["weights"][tuple(weights_key)]
-    except KeyError:
-        if len(weights_key) == 1:
-            for k in samples["weights"].keys():
-                if weights_key[0] in k:
-                    weights_key = k
-                    break
-            w = samples["weights"][tuple(weights_key)]
-        elif len(weights_key) == 2:
-            for k in samples["weights"].keys():
-                if set(weights_key).issubset(k):
-                    weights_key = k
-                    w = samples["weights"][k]
-    if w is None:
-        return
-
-    if len(pois) == 1:
-        x = samples["v"][:, pois[0]]
-
-        if grid_interpolate:
-            # Grid interpolate samples
-            log_prior = samples["log_priors"][pois[0]]
-            w_eff = np.exp(np.log(w) + log_prior)  # p(z|x) = r(x, z) p(z)
-            zm, v = grid_interpolate_samples(x, w_eff)
-        else:
-            v, e = np.histogram(x, weights=w, bins=bins, density=True)
-            zm = (e[1:] + e[:-1]) / 2
-
-        levels = sorted(get_HDI_thresholds(v))
-        if contours:
-            contour1d(zm, v, levels, ax=ax, color=color)
-        ax.plot(zm, v, color=color, **kwargs)
-        ax.set_xlim([x.min(), x.max()])
-        ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
-
-        # Diagnostics
-        mean = sum(w * x) / sum(w)
-        mode = zm[v == v.max()][0]
-        int2 = zm[v > levels[2]].min(), zm[v > levels[2]].max()
-        int1 = zm[v > levels[1]].min(), zm[v > levels[1]].max()
-        int0 = zm[v > levels[0]].min(), zm[v > levels[0]].max()
-        entropy = -simps(v * np.log(v), zm)
-        return dict(
-            mean=mean, mode=mode, HDI1=int2, HDI2=int1, HDI3=int0, entropy=entropy
-        )
-    elif len(pois) == 2:
-        # FIXME: use interpolation when grid_interpolate == True
-        x = samples["v"][:, pois[0]]
-        y = samples["v"][:, pois[1]]
-        counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap="gray_r")
-        levels = sorted(get_HDI_thresholds(counts))
-        try:
-            ax.contour(
-                counts.T,
-                extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
-                levels=levels,
-                linestyles=[":", "--", "-"],
-                colors=color,
-            )
-        except ValueError:
-            print("WARNING: 2-dim contours not well-defined.")
-        ax.set_xlim([x.min(), x.max()])
-        ax.set_ylim([y.min(), y.max()])
-
-        xm = (xbins[:-1] + xbins[1:]) / 2
-        ym = (ybins[:-1] + ybins[1:]) / 2
-
-        cx = counts.sum(axis=1)
-        cy = counts.sum(axis=0)
-
-        mean = (sum(xm * cx) / sum(cx), sum(ym * cy) / sum(cy))
-
-        return dict(mean=mean, mode=None, HDI1=None, HDI2=None, HDI3=None, entropy=None)
-
-
-def plot_1d(
-    samples,
-    pois,
+    cmap="gray_r",
+    smooth=0.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
     truth=None,
-    bins=100,
-    figsize=(15, 10),
-    color="k",
-    labels=None,
-    label_args={},
-    ncol=None,
-    subplots_kwargs={},
-    fig=None,
-    contours=True,
-) -> None:
-    """Make beautiful 1-dim posteriors.
+    smooth_prior=False,
+):
+    """Plot 2-dimensional posterior.
 
     Args:
-        samples: Samples from `swyft.Posteriors.sample`
-        pois: List of parameters of interest
-        truth: Ground truth vector
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parname1: Name of parameter 1
+        parname2: Name of parameter 2
+        ax: Optional figure axis argument
         bins: Number of bins used for histograms.
-        figsize: Size of figure
-        color: Color
-        labels: Custom labels (default is parameter names)
-        label_args: Custom label arguments
-        ncol: Number of panel columns
-        subplot_kwargs: Subplot kwargs
+        color: Contour colors
+        cmap: Density colors
+        smooth: Applied smoothing factor
+        cred_level: Credible levels for contours
+        truth: Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
+    """
+    counts, xy = get_pdf(
+        lrs_coll,
+        [parname1, parname2],
+        bins=bins,
+        smooth=smooth,
+        smooth_prior=smooth_prior,
+    )
+    xbins = xy[:, 0]
+    ybins = xy[:, 1]
+
+    if ax is None:
+        ax = plt.gca()
+
+    #    # FIXME: use interpolation when grid_interpolate == True
+    #    x = samples[:,0].numpy()
+    #    y = samples[:,1].numpy()
+    #    w = weights.numpy()
+    #    counts, xbins, ybins, _ = ax.hist2d(x, y, weights=w, bins=bins, cmap=cmap)
+    #    if smooth is not None:
+    #        counts = gaussian_filter(counts, smooth)
+
+    levels = sorted(_get_HDI_thresholds(counts, cred_level=cred_level))
+    ax.contour(
+        counts.T,
+        extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
+        levels=levels,
+        linestyles=[":", "--", "-"],
+        colors=color,
+    )
+    ax.imshow(
+        counts.T,
+        extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()],
+        cmap=cmap,
+        origin="lower",
+        aspect="auto",
+    )
+    ax.set_xlim([xbins.min(), xbins.max()])
+    ax.set_ylim([ybins.min(), ybins.max()])
+
+    if truth is not None:
+        if parname1 in truth.keys():
+            ax.axvline(truth[parname1], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+        if parname2 in truth.keys():
+            ax.axhline(truth[parname2], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+        if parname1 in truth.keys() and parname2 in truth.keys():
+            ax.scatter(
+                [truth[parname1]], [truth[parname2]], c="k", marker=".", s=100,
+            )
+
+
+#    xm = (xbins[:-1] + xbins[1:]) / 2
+#    ym = (ybins[:-1] + ybins[1:]) / 2
+#
+#    cx = counts.sum(axis=1)
+#    cy = counts.sum(axis=0)
+#
+#    mean = (sum(xm * cx) / sum(cx), sum(ym * cy) / sum(cy))
+#
+#    return dict(mean=mean, mode=None, HDI1=None, HDI2=None, HDI3=None, entropy=None)
+
+
+def _plot_1d(
+    lrs_coll,
+    parname,
+    ax=None,
+    bins=100,
+    color="k",
+    contours=True,
+    smooth=0.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None,
+    smooth_prior=False,
+):
+    """Plot 1-dimensional posteriors.
+
+    Args:
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parname: Name of parameter
+        ax: Optional figure axis argument
+        bins: Number of bins used for histograms.
+        color: Contour colors
+        contours: Indicate contours
+        smooth: Applied smoothing factor
+        cred_level: Credible levels for contours
+        truth: Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
 
-    grid_interpolate = False
-    diags = {}
-
-    if ncol is None:
-        ncol = len(pois)
-    K = len(pois)
-    nrow = (K - 1) // ncol + 1
-
-    if fig is None:
-        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
-    else:
-        axes = fig.get_axes()
-    lb = 0.125
-    tr = 0.9
-    whspace = 0.15
-    fig.subplots_adjust(
-        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+    v, zm = get_pdf(
+        lrs_coll, parname, bins=bins, smooth=smooth, smooth_prior=smooth_prior
     )
+    zm = zm[:, 0]
 
-    if labels is None:
-        labels = [samples["parameter_names"][pois[i]] for i in range(K)]
+    if ax is None:
+        ax = plt.gca()
 
-    for k in range(K):
-        if nrow == 1 and ncol > 1:
-            ax = axes[k]
-        elif nrow == 1 and ncol == 1:
-            ax = axes
-        else:
-            i, j = k % ncol, k // ncol
-            ax = axes[j, i]
-        ret = plot_posterior(
-            samples,
-            pois[k],
-            ax=ax,
-            grid_interpolate=grid_interpolate,
-            color=color,
-            bins=bins,
-            contours=contours,
-        )
-        ax.set_xlabel(labels[k], **label_args)
-        if truth is not None:
-            ax.axvline(truth[pois[k]], ls=":", color="r")
-        diags[(pois[k],)] = ret
-    return fig, diags
+    levels = sorted(_get_HDI_thresholds(v, cred_level=cred_level))
+    if contours:
+        _contour1d(zm, v, levels, ax=ax, color=color)
+    ax.plot(zm, v, color=color)
+    ax.set_xlim([zm.min(), zm.max()])
+    ax.set_ylim([-v.max() * 0.05, v.max() * 1.1])
+
+    if truth is not None:
+        ax.axvline(truth[parname], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
+
+
+#####
+# API
+#####
 
 
 def plot_corner(
-    samples,
-    pois,
+    lrs_coll,
+    parnames,
     bins=100,
-    truth=None,
-    figsize=(10, 10),
+    figsize=None,
     color="k",
     labels=None,
     label_args={},
     contours_1d: bool = True,
     fig=None,
+    smooth=0.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None,
+    smooth_prior=False,
+    #    plot_diagonal=True  # TODO: Implement supression of diagonals
 ) -> None:
     """Make a beautiful corner plot.
 
     Args:
-        samples: Samples from `swyft.Posteriors.sample`
-        pois: List of parameters of interest
-        truth: Ground truth vector
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parnames: List of parameters of interest
         bins: Number of bins used for histograms.
         figsize: Size of figure
         color: Color
-        labels: Custom labels (default is parameter names)
+        labels: Optional custom labels, either list or dict.
         label_args: Custom label arguments
         contours_1d: Plot 1-dim contours
         fig: Figure instance
+        smooth: histogram smoothing
+        cred_level: Credible levels for contours
+        truth: Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
     """
-    K = len(pois)
+    K = len(parnames)
     if fig is None:
         fig, axes = plt.subplots(K, K, figsize=figsize)
     else:
         axes = np.array(fig.get_axes()).reshape((K, K))
-    lb = 0.125
-    tr = 0.9
-    whspace = 0.1
-    fig.subplots_adjust(
-        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
-    )
-
-    diagnostics = {}
+    #    lb = 0.125
+    #    tr = 0.9
+    #    whspace = 0.1
+    #    fig.subplots_adjust(
+    #        left=lb, bottom=lb, right=tr, top=tr, wspace=whspace, hspace=whspace
+    #    )
+    #
+    #    diagnostics = {}
 
     if labels is None:
-        labels = [samples["parameter_names"][pois[i]] for i in range(K)]
+        labels = parnames
+    elif isinstance(labels, list):
+        assert len(labels) == len(
+            parnames
+        ), "Length of labels list must correspond to number of parameters."
+    elif isinstance(labels, dict):
+        labels = [labels.get(k, k) for k in parnames]
+    else:
+        raise ValueError("labels must be None, list or dict")
+
     for i in range(K):
         for j in range(K):
             ax = axes[i, j]
@@ -269,41 +283,283 @@ def plot_corner(
 
             # 2-dim plots
             if j < i:
-                ret = plot_posterior(
-                    samples, [pois[j], pois[i]], ax=ax, color=color, bins=bins
-                )
-                if truth is not None:
-                    ax.axvline(truth[pois[j]], color="r")
-                    ax.axhline(truth[pois[i]], color="r")
-                diagnostics[(pois[j], pois[i])] = ret
+                try:
+                    ret = _plot_2d(
+                        lrs_coll,
+                        parnames[j],
+                        parnames[i],
+                        ax=ax,
+                        color=color,
+                        bins=bins,
+                        smooth=smooth,
+                        cred_level=cred_level,
+                        truth=truth,
+                        smooth_prior=smooth_prior,
+                    )
+                except swyft.SwyftParameterError:
+                    pass
+
             if j == i:
-                ret = plot_posterior(
-                    samples,
-                    pois[i],
-                    ax=ax,
-                    color=color,
-                    bins=bins,
-                    contours=contours_1d,
-                )
-                if truth is not None:
-                    ax.axvline(truth[pois[i]], ls=":", color="r")
-                diagnostics[(pois[i],)] = ret
-    return fig, diagnostics
+                try:
+                    ret = _plot_1d(
+                        lrs_coll,
+                        parnames[i],
+                        ax=ax,
+                        color=color,
+                        bins=bins,
+                        contours=contours_1d,
+                        smooth=smooth,
+                        truth=truth,
+                        smooth_prior=smooth_prior,
+                    )
+                except swyft.SwyftParameterError:
+                    pass
+
+    # Tight things up
+    fig.tight_layout()
+
+    return fig
 
 
-def contour1d(z, v, levels, ax=plt, linestyles=None, color=None, **kwargs):
-    y0 = -1.0 * v.max()
-    y1 = 5.0 * v.max()
-    ax.fill_between(z, y0, y1, where=v > levels[0], color=color, alpha=0.1)
-    ax.fill_between(z, y0, y1, where=v > levels[1], color=color, alpha=0.1)
-    ax.fill_between(z, y0, y1, where=v > levels[2], color=color, alpha=0.1)
-    # if not isinstance(colors, list):
-    #    colors = [colors]*len(levels)
-    # for i, l in enumerate(levels):
-    #    zero_crossings = np.where(np.diff(np.sign(v-l*1.001)))[0]
-    #    for c in z[zero_crossings]:
-    #        ax.axvline(c, ls=linestyles[i], color = colors[i], **kwargs)
+def plot_zz(
+    coverage_samples,
+    params: Union[str, Sequence[str]],
+    z_max: float = 3.5,
+    bins: int = 50,
+    ax=None,
+):
+    """Make a zz plot.
+
+    Args:
+        coverage_samples: Collection of CoverageSamples object
+        params: Parameters of interest
+        z_max: Maximum value of z.
+        bins: Number of discretization bins.
+        ax: Optional axes instance.
+    """
+    cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
+    ax = ax if ax else plt.gca()
+    plot_empirical_z_score(ax, cov[:, 0], cov[:, 1], cov[:, 2:])
 
 
-if __name__ == "__main__":
-    pass
+def plot_pp(
+    coverage_samples,
+    params: Union[str, Sequence[str]],
+    z_max: float = 3.5,
+    bins: int = 50,
+    ax=None,
+):
+    """Make a pp plot.
+
+    Args:
+        coverage_samples: Collection of CoverageSamples object
+        params: Parameters of interest
+        z_max: Maximum value of z.
+        bins: Number of discretization bins.
+        ax: Optional axes instance.
+    """
+    cov = swyft.estimate_coverage(coverage_samples, params, z_max=z_max, bins=bins)
+    alphas = 1 - get_alpha(cov)
+    ax = ax if ax else plt.gca()
+    ax.fill_between(alphas[:, 0], alphas[:, 2], alphas[:, 3], color="0.8")
+    ax.plot(alphas[:, 0], alphas[:, 1], "k")
+    plt.plot([0, 1], [0, 1], "g--")
+    plt.xlabel("Nominal credibility [$1-p$]")
+    plt.ylabel("Empirical coverage [$1-p$]")
+
+
+def plot_posterior(
+    lrs_coll,
+    parnames=None,
+    bins=100,
+    figsize=None,
+    color="k",
+    labels=None,
+    label_args={},
+    ncol=None,
+    subplots_kwargs={},
+    fig=None,
+    contours=True,
+    smooth=1.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None,
+    smooth_prior=False,
+) -> None:
+    """Make beautiful 1-dim posteriors.
+
+    Args:
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parnames: (Optional) List of parameters of interest
+        bins: Number of bins used for histograms.
+        figsize: Optional size of figure
+        color: Color
+        labels: (Optional) Custom labels
+        label_args: (Pptional) Custom label arguments
+        ncol: (Optional) Number of panel columns
+        subplots_kwargs: Optional arguments for subplots generation.
+        fig: Optional figure instance
+        contours: Plot 1-dim contours
+        smooth: Gaussian smothing scale
+        cred_level: Credible levels for contours
+        truth: (Optional) Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
+    """
+
+    # parnames should be single str or list of strings
+    if isinstance(parnames, str):
+        parnames = [parnames]
+
+    # labels can be None (defaulting to parnames), or list of names of dictionary mapping parnames on labels
+    if labels is None:
+        labels = parnames
+    elif isinstance(labels, list):
+        assert len(labels) == len(
+            parnames
+        ), "Length of labels list must correspond to number of parameters."
+    elif isinstance(labels, dict):
+        labels = [labels.get(k, k) for k in parnames]
+    else:
+        raise ValueError("labels must be None, list or dict")
+
+    # If ncol is None, default to (max) 4 panels per row
+    if ncol is None:
+        ncol = min(len(parnames), 4)
+
+    K = len(parnames)
+    nrow = (K - 1) // ncol + 1
+
+    if fig is None:
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
+    else:
+        axes = fig.get_axes()
+
+    # Ensure axes has always the same shape
+    if isinstance(axes, np.ndarray):
+        axes = axes.reshape(-1)
+    elif isinstance(axes, list):
+        axes = np.array(axes)
+    else:
+        axes = np.array([axes])
+        ncol = nrow = 1
+
+    for k in range(ncol * nrow):
+        ax = axes[k]
+        if k >= K:
+            ax.set_visible(False)
+            continue
+        _plot_1d(
+            lrs_coll,
+            parnames[k],
+            ax=ax,
+            bins=bins,
+            color=color,
+            contours=contours,
+            smooth=smooth,
+            cred_level=cred_level,
+            truth=truth,
+            smooth_prior=smooth_prior,
+        )
+        ax.set_xlabel(labels[k], **label_args)
+        ax.set_yticks([])
+        # ax.tick_params(axis='x', which='minor', bottom = True)
+        ax.minorticks_on()
+
+    # Tight things up
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_pair(
+    lrs_coll,
+    parnames=None,
+    bins=100,
+    figsize=None,
+    color="k",
+    labels=None,
+    label_args={},
+    ncol=None,
+    subplots_kwargs={},
+    fig=None,
+    smooth=1.0,
+    cred_level=[0.68268, 0.95450, 0.99730],
+    truth=None,
+    smooth_prior=False,
+) -> None:
+    """Make beautiful 2-dim posteriors.
+
+    Args:
+        lrs_coll: Collection of swyft.LogRatioSamples objects
+        parnames: (Optional) List of parameter pairs of interest
+        bins: Number of bins used for histograms.
+        figsize: Optional size of figure
+        color: Color
+        labels: (Optional) Custom labels
+        label_args: (Pptional) Custom label arguments
+        ncol: (Optional) Number of panel columns
+        subplots_kwargs: Optional arguments for subplots generation.
+        fig: Optional figure instance
+        smooth: Gaussian smothing scale
+        cred_level: Credible levels for contours
+        truth: (Optional) Dictionary with parameters names as keys and true values
+        smooth_prior: Smooth and histogram prior instead of posterior (default False)
+    """
+
+    # parnames should be single str or list of strings
+    if isinstance(parnames[0], str):
+        parnames = [parnames]
+
+    # labels can be None (defaulting to parnames), or list of names of dictionary mapping parnames on labels
+    if labels is None:
+        labels = parnames
+    elif isinstance(labels, dict):
+        labels = [
+            [l[i].get(k[i], k[i]) for i in [0, 1]] for l, k in zip(labels, parnames)
+        ]
+    else:
+        raise ValueError("labels must be None or dict")
+
+    # If ncol is None, default to (max) 4 panels per row
+    if ncol is None:
+        ncol = min(len(parnames), 4)
+
+    K = len(parnames)
+    nrow = (K - 1) // ncol + 1
+
+    if fig is None:
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize, **subplots_kwargs)
+    else:
+        axes = fig.get_axes()
+
+    # Ensure axes has always the same shape
+    if isinstance(axes, np.ndarray):
+        axes = axes.reshape(-1)
+    else:
+        axes = np.array([axes])
+        ncol = nrow = 1
+
+    for k in range(ncol * nrow):
+        ax = axes[k]
+        if k >= K:
+            ax.set_visible(False)
+            continue
+        _plot_2d(
+            lrs_coll,
+            parnames[k][0],
+            parnames[k][1],
+            ax=ax,
+            bins=bins,
+            color=color,
+            smooth=smooth,
+            cred_level=cred_level,
+            truth=truth,
+            smooth_prior=smooth_prior,
+        )
+        ax.set_xlabel(labels[k][0], **label_args)
+        ax.set_ylabel(labels[k][1], **label_args)
+        # ax.set_yticks([])
+        # ax.tick_params(axis='x', which='minor', bottom = True)
+        ax.minorticks_on()
+
+    # Tight things up
+    fig.tight_layout()
