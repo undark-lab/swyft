@@ -97,7 +97,7 @@ def _weighted_smoothed_histogramdd(v, w, bins=50, smooth=0):
         low = v.min(axis=0).values
         upp = v.max(axis=0).values
         h = torchist.histogramdd(v, bins=bins, weights=w, low=low, upp=upp)
-        h /= len(v) * (upp[0] - low[0]) * (upp[1] - low[1]) / bins**2
+        h /= len(v) * (upp[0] - low[0]) * (upp[1] - low[1]) / bins ** 2
         x = torch.linspace(low[0], upp[0], bins + 1)
         y = torch.linspace(low[1], upp[1], bins + 1)
         x = (x[1:] + x[:-1]) / 2
