@@ -440,6 +440,8 @@ def plot_posterior(
     # Ensure axes has always the same shape
     if isinstance(axes, np.ndarray):
         axes = axes.reshape(-1)
+    elif isinstance(axes, list):
+        axes = np.array(axes)
     else:
         axes = np.array([axes])
         ncol = nrow = 1
@@ -468,6 +470,8 @@ def plot_posterior(
 
     # Tight things up
     fig.tight_layout()
+
+    return fig
 
 
 def plot_pair(
