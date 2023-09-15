@@ -533,4 +533,5 @@ class OnFitEndLoadBestModel:
     def on_fit_end(self):
         self.best_model_path = self.trainer.checkpoint_callback.best_model_path
         checkpoint = torch.load(self.best_model_path)
+        print("Reloading best model:", self.best_model_path)
         self.load_state_dict(checkpoint["state_dict"])
