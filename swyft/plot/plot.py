@@ -128,11 +128,7 @@ def _plot_2d(
             ax.axhline(truth[parname2], color="k", lw=1.0, zorder=10, ls=(1, (5, 1)))
         if parname1 in truth.keys() and parname2 in truth.keys():
             ax.scatter(
-                [truth[parname1]],
-                [truth[parname2]],
-                c="k",
-                marker=".",
-                s=100,
+                [truth[parname1]], [truth[parname2]], c="k", marker=".", s=100,
             )
 
 
@@ -557,7 +553,7 @@ def plot_pair(
             smooth=smooth,
             cred_level=cred_level,
             truth=truth,
-            smooth_prior=smooth_prior
+            smooth_prior=smooth_prior,
         )
         ax.set_xlabel(labels[k][0], **label_args)
         ax.set_ylabel(labels[k][1], **label_args)

@@ -42,8 +42,8 @@ class SwyftDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data,
-        #lengths: Union[Sequence[int], None] = None,
-        #fractions: Union[Sequence[float], None] = None,
+        # lengths: Union[Sequence[int], None] = None,
+        # fractions: Union[Sequence[float], None] = None,
         val_fraction: float = 0.2,
         batch_size: int = 32,
         num_workers: int = 0,
@@ -54,13 +54,17 @@ class SwyftDataModule(pl.LightningDataModule):
         self.data = data
         # TODO: Clean up codes
         lengths = None
-        fractions = [1-val_fraction, val_fraction]
+        fractions = [1 - val_fraction, val_fraction]
         if lengths is not None and fractions is None:
-            assert len(lengths) == 2,  "SwyftDataModule only provides training and validation data."
+            assert (
+                len(lengths) == 2
+            ), "SwyftDataModule only provides training and validation data."
             lengths = [lengths[0], lenghts[1], 0]
             self.lengths = lengths
         elif lengths is None and fractions is not None:
-            assert len(fractions) == 2, "SwyftDataModule only provides training and validation data."
+            assert (
+                len(fractions) == 2
+            ), "SwyftDataModule only provides training and validation data."
             fractions = [fractions[0], fractions[1], 0]
             self.lengths = self._get_lengths(fractions, len(data))
         else:
@@ -122,6 +126,8 @@ class SwyftDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return
+
+
 #        dataloader = torch.utils.data.DataLoader(
 #            self.dataset_test,
 #            batch_size=self.batch_size,
@@ -186,9 +192,7 @@ class ZarrStore:
         for k in self.data.keys():
             shape = self.data[k].shape
             self.data[k].resize(N, *shape[1:])
-        self.root["meta/sim_status"].resize(
-            N,
-        )
+        self.root["meta/sim_status"].resize(N,)
 
     def init(self, N, chunk_size, shapes=None, dtypes=None):
         if len(self) > 0:
