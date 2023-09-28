@@ -1311,8 +1311,10 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
         varnames,
         Phi=None,
         PhiT=None,
+        L=None,
         minstd: float = 1e-10,
         momentum=0.02,
+        shape = None,
     ):
         super().__init__()
         self.cl = LogRatioEstimator_Gaussian(
@@ -1321,8 +1323,26 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
         self.num_params = num_params
         self.Phi = Phi
         self.PhiT = PhiT
+        self.L = L if L else lambda x: x
+        self.shape = shape
 
     def forward(self, xA, zB):
+        """Forward method.
+
+        Args:
+            xA: Data vector from A (num_params,)
+            zB: Model parameters from B (num_params,)
+
+        Returns:
+            swyft.LogRatioSamples
+        """
+        # Getting good data summaries for marginals p(z_i|x_i)/p(z_i)
+        PxA = self.Phi(xA)
+        PzB = self.Phi(zB)
+        logratios = self.cl(PxA.unsqueeze(-1), PzB.unsqueeze(-1))  # (x; z)
+        return logratios
+
+    def forward(self, xA, xB, zB):
         """Forward method.
 
         Args:
@@ -1336,8 +1356,14 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
         # Getting good data summaries for marginals p(z_i|x_i)/p(z_i)
         PxA = self.Phi(xA)
         PzB = self.Phi(zB)
-        logratios = self.cl(PxA.unsqueeze(-1), PzB.unsqueeze(-1))  # (x; z)
-        return logratios
+        logratios1 = self.cl1(PxA.unsqueeze(-1), PzB.unsqueeze(-1))  # (x; z)
+
+        # Estimating likelihood p(\vec x|\vec z)/\prod_i p(x_i)
+        LxB = self.L(self.Phi(xB).detach())
+        fB = torch.stack([LxB, PzB], dim=-1)
+        logratios2 = self.cl2(PxA.unsqueeze(-1).detach(), fB)  # (x; L x, Phi z)
+
+        return logratios1, logratios2
 
     def get_likelihood_components(self, x = None, double_precision=True):
         """Returns linear and quadratic component of likelihood ln p(x|z).
@@ -1355,8 +1381,8 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
         Returns:
             Phi.T, D, Phi, b: torch.Tensor, torch.Tensor
         """
-        mean = self.cl.mean.detach()
-        cov = self.cl.cov.detach()
+        mean = self.cl2.mean.detach()
+        cov = self.cl2.cov.detach()
 
         if double_precision:
             cov = cov.double()
@@ -1366,21 +1392,22 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
             else:
                 x = None
 
-        xm, zm = mean.T
-        invSigma = torch.linalg.inv(cov)
+        xm, lm, zm = mean.T
+        invSigma_eff = torch.linalg.inv(cov)
+        invSigma_eff[:, 1:, 1:] -= torch.linalg.inv(cov[:, 1:, 1:])
 
         if x is not None:
             Px = self.Phi(x)
             temp = (
-                -invSigma[:, 1, 0]*(Px - xm)
-                + invSigma[:, 1, 1]*zm
+                -invSigma_eff[:, 2, 0]*(Px - xm)
+                - invSigma_eff[:, 2, 1]*(self.L(Px) - lm)
+                + invSigma_eff[:, 2, 2]*zm
             )
-            #print(temp.shape, Px.shape, zm.shape, xm.shape)
-            linear = self.PhiT(temp.unsqueeze(0)).squeeze(0)
+            linear = self.PhiT(temp)
         else:
             linear = None
 
-        return lambda x: self.PhiT(x), invSigma[:, 1, 1], lambda x: self.Phi(x), linear
+        return lambda Px: self.PhiT(Px).detach(), invSigma_eff[:, 2, 2], lambda x: self.Phi(x).detach(), linear
 
     def get_likelihood_Q_factors(self):
         """Return components of likelihood precision matrix Q.
@@ -1390,35 +1417,26 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
         Returns:
             UT, D, U: Linear operator, tensor, linear operator
         """
-        G1Tt, D1, G1t, _ = self.get_likelihood_components(x = None)
-        G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
-        G1 = lambda x: G1t(x.unsqueeze(0))[0]
+        G1T, D1, G1, _ = self.get_likelihood_components(x = None)
+        #G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
+        #G1 = lambda x: G1t(x.unsqueeze(0))[0]
         return G1T, D1, G1
 
     def get_MAP(self, x, prior, gamma = 1.):
-        G1Tt, D1, G1t, b = self.get_likelihood_components(x)
+        # Import components and flatten everything
+        G1Tt, D1, G1t, bt = self.get_likelihood_components(x)
+        G1T = lambda x: G1Tt(x).flatten(start_dim = -2)
+        G1 = lambda x: G1t(x.view(-1, *self.shape))
+        b = bt.flatten()
 
-        #G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
-        #G1 = lambda x: G1t(x.unsqueeze(0))[0]
-        like_Q = lambda x: G1Tt(D1.unsqueeze(0)*G1t(x.view(1, 128, 128))).flatten()*gamma
-        #print(x.shape, G1(x).shape, D1.shape, like_Q(x).shape)
+        like_Q = lambda x: G1T(D1*G1(x))*gamma
 
         U2T, D2, U2 = prior
         prior_Q = lambda x: U2T(U2(x)*D2).real.detach()
-
         B0 = b.cuda().view(1, -1, 1).detach()*1.*gamma
 
         def A(x):
             x = x[0,:,0]
-        #    print(x.shape)
-            #y = G1t(x.view(1, 128, 128))
-            #print(y.shape)
-            #y = D1.unsqueeze(0)*y
-            #print(y.shape)
-            #y = G1Tt(y)
-            #print(y.shape)
-            #y = y.flatten()
-            #print(y.shape)
             x = prior_Q(x) + like_Q(x)
             return x.view(1, -1, 1).detach()
 
@@ -1428,12 +1446,8 @@ class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
 
     def get_noise_samples_GEDA(self, N, prior, steps = 100, epsilon = None, reset = False, initialize_with_Q2 = True, gamma = 1.):
         G1Tt, D1, G1t = self.get_likelihood_Q_factors()
-        def G1(x):
-            x = G1t(x.view(-1, 128, 128)).flatten(start_dim=-2)
-            return x
-        def G1T(x):
-            x = G1Tt(x.unsqueeze(0)).flatten(start_dim=-2)
-            return x
+        G1T = lambda x: G1Tt(x).flatten(start_dim = -2)
+        G1 = lambda x: G1t(x.view(-1, *self.shape))
         U2T, D2, U2 = prior
         if epsilon is None:
             epsilon = 0.5/D1.max().item()
