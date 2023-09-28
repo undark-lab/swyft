@@ -1281,3 +1281,162 @@ class LogRatioEstimator_Gaussian_Autoregressive_X_module_based(nn.Module):
         geda = swyft.utils.GEDASampler(epsilon, G1, D1*gamma, G1T, U2, D2, U2T)
         draws = geda.sample(N, steps = steps, reset = reset, initialize_with_Q2= initialize_with_Q2)
         return draws
+
+
+class LogRatioEstimator_Gaussian_Autoregressive_Egmond(nn.Module):
+    r"""Estimate high-dimensional Gaussian log-ratios with an autoregressive model.
+
+    Args:
+        num_params: Length of parameter vector.
+        varnames: List of names of parameter vector. If a single string is provided, indices are attached automatically.
+        L_init: Optional initial values for L-matrix.
+        minstd: Minimum standard deviation to enforce numerical stability
+        momentum: Momentum of Gaussian variance estimation.
+        optimize_Phi: Optimize Phi matrix during fit.
+
+    The forward method returns an swyft.LogRatioSamples object.
+
+    .. note::
+
+       This is yet another version of a Gaussian Autoregressive model. Here we
+       first estimate data summaries for individual marginals, and then use them to
+       estimate the joined likelihood.  This introduces a quite minimal set of
+       parameters.
+
+    """
+
+    def __init__(
+        self,
+        num_params,
+        varnames,
+        Phi=None,
+        PhiT=None,
+        minstd: float = 1e-10,
+        momentum=0.02,
+    ):
+        super().__init__()
+        self.cl = LogRatioEstimator_Gaussian(
+            num_params, varnames=varnames, minstd=minstd, momentum=momentum
+        )  # Estimate prior
+        self.num_params = num_params
+        self.Phi = Phi
+        self.PhiT = PhiT
+
+    def forward(self, xA, zB):
+        """Forward method.
+
+        Args:
+            xA: Data vector from A (num_params,)
+            xB: Data vector from B (num_params,)
+            zB: Model parameters from B (num_params,)
+
+        Returns:
+            swyft.LogRatioSamples
+        """
+        # Getting good data summaries for marginals p(z_i|x_i)/p(z_i)
+        PxA = self.Phi(xA)
+        PzB = self.Phi(zB)
+        logratios = self.cl(PxA.unsqueeze(-1), PzB.unsqueeze(-1))  # (x; z)
+        return logratios
+
+    def get_likelihood_components(self, x = None, double_precision=True):
+        """Returns linear and quadratic component of likelihood ln p(x|z).
+
+        ln p(x|z) = -1/2 * [ z.T Q z - 2 z.T b ] + const(x)
+
+        We assume the matrix factorization Q = Phi.T D Phi.
+
+        Phi is a linear operator, Phi.T its transpose.
+
+        Args:
+            x: Data vector
+            double_precision: Use double precision for matrix inversions
+
+        Returns:
+            Phi.T, D, Phi, b: torch.Tensor, torch.Tensor
+        """
+        mean = self.cl.mean.detach()
+        cov = self.cl.cov.detach()
+
+        if double_precision:
+            cov = cov.double()
+            mean = mean.double()
+            if x is not None:
+                x = x.double()
+            else:
+                x = None
+
+        xm, zm = mean.T
+        invSigma = torch.linalg.inv(cov)
+
+        if x is not None:
+            Px = self.Phi(x)
+            temp = (
+                -invSigma[:, 1, 0]*(Px - xm)
+                + invSigma[:, 1, 1]*zm
+            )
+            #print(temp.shape, Px.shape, zm.shape, xm.shape)
+            linear = self.PhiT(temp.unsqueeze(0)).squeeze(0)
+        else:
+            linear = None
+
+        return lambda x: self.PhiT(x), invSigma[:, 1, 1], lambda x: self.Phi(x), linear
+
+    def get_likelihood_Q_factors(self):
+        """Return components of likelihood precision matrix Q.
+
+        Q = GT * D * G
+
+        Returns:
+            UT, D, U: Linear operator, tensor, linear operator
+        """
+        G1Tt, D1, G1t, _ = self.get_likelihood_components(x = None)
+        G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
+        G1 = lambda x: G1t(x.unsqueeze(0))[0]
+        return G1T, D1, G1
+
+    def get_MAP(self, x, prior, gamma = 1.):
+        G1Tt, D1, G1t, b = self.get_likelihood_components(x)
+
+        #G1T = lambda x: G1Tt(x.unsqueeze(0))[0]
+        #G1 = lambda x: G1t(x.unsqueeze(0))[0]
+        like_Q = lambda x: G1Tt(D1.unsqueeze(0)*G1t(x.view(1, 128, 128))).flatten()*gamma
+        #print(x.shape, G1(x).shape, D1.shape, like_Q(x).shape)
+
+        U2T, D2, U2 = prior
+        prior_Q = lambda x: U2T(U2(x)*D2).real.detach()
+
+        B0 = b.cuda().view(1, -1, 1).detach()*1.*gamma
+
+        def A(x):
+            x = x[0,:,0]
+        #    print(x.shape)
+            #y = G1t(x.view(1, 128, 128))
+            #print(y.shape)
+            #y = D1.unsqueeze(0)*y
+            #print(y.shape)
+            #y = G1Tt(y)
+            #print(y.shape)
+            #y = y.flatten()
+            #print(y.shape)
+            x = prior_Q(x) + like_Q(x)
+            return x.view(1, -1, 1).detach()
+
+        cg = swyft.utils.CG(A, rtol = 0.001, verbose = False, maxiter = 10000)
+        x0 = cg.forward(B0)
+        return x0
+
+    def get_noise_samples_GEDA(self, N, prior, steps = 100, epsilon = None, reset = False, initialize_with_Q2 = True, gamma = 1.):
+        G1Tt, D1, G1t = self.get_likelihood_Q_factors()
+        def G1(x):
+            x = G1t(x.view(-1, 128, 128)).flatten(start_dim=-2)
+            return x
+        def G1T(x):
+            x = G1Tt(x.unsqueeze(0)).flatten(start_dim=-2)
+            return x
+        U2T, D2, U2 = prior
+        if epsilon is None:
+            epsilon = 0.5/D1.max().item()
+        geda = swyft.utils.GEDASampler(epsilon, G1, D1*gamma, G1T, U2, D2, U2T)
+        draws = geda.sample(N, steps = steps, reset = reset, initialize_with_Q2= initialize_with_Q2)
+        return draws
