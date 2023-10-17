@@ -422,8 +422,8 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
     ):
         super().__init__()
         self._momentum = momentum
-        self._mean = None
-        self._cov = None
+        self._mean = torch.nn.parameter.UninitializedBuffer()
+        self._cov = torch.nn.parameter.UninitializedBuffer()
         self._minstd = minstd
 
         if isinstance(varnames, list):
@@ -467,7 +467,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         a_dim = a.shape[-1]
         b_dim = b.shape[-1]
 
-        if self.training or self._mean is None:
+        if self.training or torch.nn.parameter.is_lazy(self._mean):
             batch_size = len(a)
             idx = np.arange(batch_size)
 
