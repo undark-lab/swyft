@@ -407,7 +407,7 @@ class LogRatioEstimator_Autoregressive(nn.Module):
         )
 
 
-class LogRatioEstimator_Gaussian(torch.nn.Module):
+class LogRatioEstimator_Gaussian(torch.nn.modules.lazy.LazyModuleMixin, torch.nn.Module):
     """Estimating posteriors with Gaussian approximation.
 
     Args:
@@ -422,8 +422,8 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
     ):
         super().__init__()
         self._momentum = momentum
-        self._mean = torch.nn.parameter.UninitializedBuffer()
-        self._cov = torch.nn.parameter.UninitializedBuffer()
+        self.register_buffer("_mean", torch.nn.parameter.UninitializedBuffer())
+        self.register_buffer("_cov", torch.nn.parameter.UninitializedBuffer())
         self._minstd = minstd
 
         if isinstance(varnames, list):
@@ -432,6 +432,14 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
             self.varnames = np.array(
                 [[varnames + "[%i]" % i] for i in range(num_params)]
             )
+
+    def initialize_parameters(self, a, b):
+        dim_a = a[0].shape
+        dim_b = b[0].shape
+        dim_ab = (dim_a[0], dim_a[1]+dim_b[1])
+        dim_abc = (dim_a[0], dim_a[1]+dim_b[1], dim_a[1]+dim_b[1])
+        self._mean = torch.zeros(dim_ab, dtype = a.dtype, device = a.device)
+        self._cov = torch.zeros(dim_abc, dtype = a.dtype, device = a.device)
 
     @staticmethod
     def _get_mean_cov(x, correction=1):
@@ -467,7 +475,7 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         a_dim = a.shape[-1]
         b_dim = b.shape[-1]
 
-        if self.training or torch.nn.parameter.is_lazy(self._mean):
+        if self.training:
             batch_size = len(a)
             idx = np.arange(batch_size)
 
