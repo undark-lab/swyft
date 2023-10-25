@@ -90,6 +90,68 @@ class LogRatioEstimator_Ndim(torch.nn.Module):
         return w
 
 
+#class VectorPicker:
+#    """(B, N) z, (marginal indices), string, flags
+#
+#    Args:
+#        marginals: List of index tuples.
+#    
+#    """
+#    def __init__(self, marginals, varname = None):
+#        self.marginals = marginals
+#        self.num_marginals = len(marginals)
+#        self.dim_marginals = max([len(m) for m in marginals])
+#
+#        self.ptrans = swyft.networks.ParameterTransform(
+#            self.num_marginals, self.marginals, online_z_score=False
+#        )
+#
+#        self.varname = varname
+#
+#    def __call__(self, z):
+#        """Returns (B, M, P)"""
+#        return self.ptrans(z)
+#
+#    def varnames(self):
+#        """Returns list of variable names."""
+
+
+class Correlator(torch.nn.Module):
+    """(B, M, S) features, (B, M, P) parameters, (M,) names, (B, M) ratios."""
+
+    def __init__(
+        self,
+        num_marginals,
+        num_features,
+        num_params,
+        varnames = None,
+        dropout=0.1,
+        hidden_features=64,
+        num_blocks=4,
+        Lmax=0,
+    ):
+        super().__init__()
+        self.classifier = swyft.networks.MarginalClassifier(
+            num_marginals,
+            num_features + num_params,
+            hidden_features = hidden_features,
+            dropout_probability=dropout,
+            num_blocks=num_blocks,
+            Lmax=Lmax,
+        )
+        self.varnames = varnames
+
+    def forward(self, x, z):
+        x, z = equalize_tensors(x, z)
+        ratios = self.classifier(x, z)
+        w = LogRatioSamples(
+            ratios,
+            z,
+            self.varnames,
+        )
+        return w
+
+
 # TODO: Introduce RatioEstimatorDense
 class _RatioEstimatorMLPnd(torch.nn.Module):
     def __init__(self, x_dim, marginals, dropout=0.1, hidden_features=64, num_blocks=2):
