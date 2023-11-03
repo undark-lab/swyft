@@ -12,6 +12,7 @@ from typing import (
 import numpy as np
 import torch
 import torch.nn as nn
+import itertools
 import swyft.networks
 
 from swyft.lightning.core import *
@@ -131,9 +132,10 @@ class Correlator(torch.nn.Module):
         Lmax=0,
     ):
         super().__init__()
+#        print(num_marginals, num_features, num_params)
         self.classifier = swyft.networks.MarginalClassifier(
             num_marginals,
-            num_features + num_params,
+            num_features*num_params + num_params,
             hidden_features = hidden_features,
             dropout_probability=dropout,
             num_blocks=num_blocks,
@@ -143,7 +145,9 @@ class Correlator(torch.nn.Module):
 
     def forward(self, x, z):
         x, z = equalize_tensors(x, z)
+ #       print(x.shape, z.shape)
         ratios = self.classifier(x, z)
+ #       print(ratios.shape)
         w = LogRatioSamples(
             ratios,
             z,
@@ -579,3 +583,127 @@ class LogRatioEstimator_Gaussian(torch.nn.Module):
         lrs = swyft.LogRatioSamples(logratios, a, self.varnames)
 
         return lrs
+
+    
+def get_marginal_index_combinations(marginals, projection):
+    """Returns a list of marginal index combinations.
+    
+    Args:
+        marginals: int or list of marginals to consider
+        projection: '1d', '2d', '3d', 'joined', or combination thereof
+        
+    Returns:
+        Tuple of tuples
+    """
+    if isinstance(marginals, int):
+        marginals = range(marginals)
+    out = []  
+    if '1d' in projection:
+        for i in range(len(marginals)):
+            out.append((marginals[i],))
+    if '2d' in projection:
+        for i in range(len(marginals)):
+            for j in range(i+1, len(marginals)):
+                out.append((marginals[i], marginals[j]))
+    if '3d' in projection:
+        for i in range(len(marginals)):
+            for j in range(i+1, len(marginals)):
+                for k in range(j+1, len(marginals)):
+                    out.append((marginals[i], marginals[j], marginals[k]))
+    if 'joined' in projection:
+        joined = tuple(marginals)
+        if not joined in out:
+            out.append(joined)
+    return tuple(out)
+
+
+class MarginalProjector:
+    """Marginal projection of parameters and data summaries.
+    
+    Args:
+        marginals: list of marginals (tuple of tuples)
+        varname: Variable name (str)
+    """
+    def __init__(self, marginals, varname = None):
+        self._marginals = marginals
+        self._compressed_marginals, self._num_unique_indices = self._get_compressed_marginals(marginals)
+        
+        self._padded_marginals = self._pad_marginal_indices(self._marginals)
+        self._padded_compressed_marginals = self._pad_marginal_indices(self._compressed_marginals)
+
+        self._padding_mask = torch.tensor((self._padded_marginals != -1)*1)
+        self._varnames = self._gen_varnames(marginals, varname)
+        
+    @property
+    def num_marginals(self):
+        """Number of marginals that will be returned"""
+        return len(self._padded_marginals)
+    
+    @property
+    def num_params(self):
+        """Maximum dimension of marginal posteriors"""
+        return self._padded_marginals.shape[1]
+        
+    @property
+    def marginals(self):
+        """Return list of marginals"""
+        return self._marginals
+        
+    @property
+    def varnames(self):
+        return self._varnames
+        
+    @staticmethod
+    def _gen_varnames(marginals, varname):
+        if varname is None:
+            return None
+        v = []
+        for m in marginals:
+            v.append(tuple(varname+"["+str(i)+"]" for i in m))
+        return tuple(v)
+    
+    @staticmethod
+    def _get_compressed_marginals(marginals):
+        # Map marginal list on list with minimum unique index range
+        sorted_unique_indices = tuple(sorted(list(set(itertools.chain.from_iterable(marginals)))))
+        inverse = np.arange(sorted_unique_indices[-1]+1)
+        for i in range(len(sorted_unique_indices)):
+            inverse[sorted_unique_indices[i]] = i
+        num_unique_indices = len(sorted_unique_indices)
+        compressed_marginals = tuple([tuple(inverse[i] for i in m) for m in marginals])
+        return compressed_marginals, num_unique_indices
+
+    @staticmethod
+    def _pad_marginal_indices(marginals):
+        # In the case of marignals with variable dimensionality, pad -1 indices
+        # Those -1 components will be masked in the end
+        d = max([len(m) for m in marginals])
+        m_padded = [m + (-1,)*(d-len(m)) for m in marginals]
+        return np.array(m_padded)
+    
+    def project_parameters(self, z):
+        """Project parameters."""
+        zp = z[..., self._padded_marginals]*self._padding_mask
+        return zp
+    
+    def project_summaries(self, s):
+        """Project data summaries."""
+        assert s.shape[1] >= self._num_unique_indices, "Data summary must be of form (B, U, S), with U >= %i"%self._num_unique_indices
+        s = s[..., self._padded_compressed_marginals, :]*self._padding_mask.unsqueeze(-1).to(s.device)
+        s = s.flatten(start_dim=-2)
+        return s
+    
+    
+class LogRatioEstimator(torch.nn.Module):
+    def __init__(self, marginals, projection = '1d', varname = None, num_features = 2):
+        super().__init__()
+        self.marginal_indices = get_marginal_index_combinations(marginals, projection)
+        self.proj = MarginalProjector(self.marginal_indices, varname = varname)
+        num_marginals = self.proj.num_marginals
+        num_params = self.proj.num_params
+        self.corr = swyft.lightning.estimators.Correlator(num_marginals, num_features, num_params, varnames = self.proj.varnames)
+        
+    def forward(self, x, z):
+        s = self.proj.project_summaries(x)
+        z =self.proj.project_parameters(z)
+        return self.corr(s, z)
