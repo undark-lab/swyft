@@ -683,7 +683,7 @@ class MarginalProjector:
     
     def project_parameters(self, z):
         """Project parameters."""
-        zp = z[..., self._padded_marginals]*self._padding_mask
+        zp = z[..., self._padded_marginals]*self._padding_mask.to(z.device)
         return zp
     
     def project_summaries(self, s):
@@ -707,3 +707,4 @@ class LogRatioEstimator(torch.nn.Module):
         s = self.proj.project_summaries(x)
         z =self.proj.project_parameters(z)
         return self.corr(s, z)
+
