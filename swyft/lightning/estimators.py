@@ -711,7 +711,7 @@ class MarginalProjector:
     
     
 class LogRatioEstimator(torch.nn.Module):
-    # FIX/TODO: marginals and varname ordering should be the same in the case marginals are non-consequtive 
+    # Note: varname must be always ordered with increasing number of indices
     def __init__(self, marginals, projection = '1d', varname = None, num_features = 1):
         super().__init__()
         self.marginal_indices = get_marginal_index_combinations(marginals, projection)
