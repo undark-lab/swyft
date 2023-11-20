@@ -626,7 +626,7 @@ class MarginalProjector:
     """
     def __init__(self, marginals, varname = None):
         self._marginals = marginals
-        self._compressed_marginals, self._num_unique_indices = self._get_compressed_marginals(marginals)
+        self._compressed_marginals, self._sorted_unique_indices, self._num_unique_indices = self._get_compressed_marginals(marginals)
         
         self._padded_marginals = self._pad_marginal_indices(self._marginals)
         self._padded_compressed_marginals = self._pad_marginal_indices(self._compressed_marginals)
@@ -638,6 +638,10 @@ class MarginalProjector:
     def num_marginals(self):
         """Number of marginals that will be returned"""
         return len(self._padded_marginals)
+
+    @property
+    def num_unique_indices(self):
+        return self._num_unique_indices
     
     @property
     def num_params(self):
@@ -653,13 +657,25 @@ class MarginalProjector:
     def varnames(self):
         return self._varnames
         
-    @staticmethod
-    def _gen_varnames(marginals, varname):
+#    @staticmethod
+#    def _gen_varnames(marginals, varname):
+#        if varname is None:
+#            return None
+#        v = []
+#        for m in marginals:
+#            v.append(tuple(varname+"["+str(i)+"]" for i in m))
+#        return tuple(v)
+
+    def _gen_varnames(self, marginals, varname):
         if varname is None:
             return None
+        elif isinstance(varname, str):
+            varname = [varname+"["+str(i)+"]" for i in self._sorted_unique_indices]
+        else:
+            pass
         v = []
         for m in marginals:
-            v.append(tuple(varname+"["+str(i)+"]" for i in m))
+            v.append(tuple(varname[i] for i in m))
         return tuple(v)
     
     @staticmethod
@@ -671,7 +687,7 @@ class MarginalProjector:
             inverse[sorted_unique_indices[i]] = i
         num_unique_indices = len(sorted_unique_indices)
         compressed_marginals = tuple([tuple(inverse[i] for i in m) for m in marginals])
-        return compressed_marginals, num_unique_indices
+        return compressed_marginals, sorted_unique_indices, num_unique_indices
 
     @staticmethod
     def _pad_marginal_indices(marginals):
@@ -688,23 +704,27 @@ class MarginalProjector:
     
     def project_summaries(self, s):
         """Project data summaries."""
-        assert s.shape[1] >= self._num_unique_indices, "Data summary must be of form (B, U, S), with U >= %i"%self._num_unique_indices
+        assert s.shape[1] >= self.num_unique_indices, "Data summary must be of form (B, U, S), with U >= %i"%self.num_unique_indices
         s = s[..., self._padded_compressed_marginals, :]*self._padding_mask.unsqueeze(-1).to(s.device)
         s = s.flatten(start_dim=-2)
         return s
     
     
 class LogRatioEstimator(torch.nn.Module):
-    def __init__(self, marginals, projection = '1d', varname = None, num_features = 2):
+    # FIX/TODO: marginals and varname ordering should be the same in the case marginals are non-consequtive 
+    def __init__(self, marginals, projection = '1d', varname = None, num_features = 1):
         super().__init__()
         self.marginal_indices = get_marginal_index_combinations(marginals, projection)
         self.proj = MarginalProjector(self.marginal_indices, varname = varname)
-        num_marginals = self.proj.num_marginals
-        num_params = self.proj.num_params
-        self.corr = swyft.lightning.estimators.Correlator(num_marginals, num_features, num_params, varnames = self.proj.varnames)
+        self.num_marginals = self.proj.num_marginals
+        self.num_features = num_features
+        self.corr = swyft.lightning.estimators.Correlator(self.num_marginals, num_features, self.proj.num_params, varnames = self.proj.varnames)
         
-    def forward(self, x, z):
-        s = self.proj.project_summaries(x)
-        z =self.proj.project_parameters(z)
+    def forward(self, s, z):
+        assert s.shape[1] >= self.num_features*self.proj.num_unique_indices, \
+            "Need at least %i (unique parameters) * %i (features per parameter) input features"%(self.proj.num_unique_indices, self.num_features)
+        s = s[:, :self.num_features*self.proj.num_unique_indices].reshape(-1, self.proj.num_unique_indices, self.num_features)
+        s = self.proj.project_summaries(s)
+        z = self.proj.project_parameters(z)
         return self.corr(s, z)
 
