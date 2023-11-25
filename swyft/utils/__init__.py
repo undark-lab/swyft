@@ -10,9 +10,9 @@ from swyft.utils.marginals import (
     tupleize_marginal_indices,
 )
 from swyft.utils.misc import depth, is_cuda_available, is_empty
-from swyft.utils.geda import GEDASampler
+from swyft.utils.geda import GEDASampler, GEDASampler2
 from swyft.utils.cg import CG
-from swyft.utils.ps import get_pk, PowerSpectrumSampler
+from swyft.utils.ps import get_pk, PowerSpectrumSampler, PowerSpectrumSampler2
 
 __all__ = [
     "array_to_tensor",
@@ -26,7 +26,9 @@ __all__ = [
     "tensor_to_array",
     "tupleize_marginal_indices",
     "GEDASampler",
+    "GEDASampler2",
     "CG",
     "get_pk",
-    "PowerSpectrumSampler"
+    "PowerSpectrumSampler",
+    "PowerSpectrumSampler2",
 ]
