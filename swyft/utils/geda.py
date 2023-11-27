@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from tqdm.auto import tqdm
 
 class GEDASampler:
     """Gibbs sampler for MVN based on exact data augmentation (GEDA).
@@ -168,7 +169,7 @@ class GEDASampler2:
         o_flag = 0 if initialize_with_Q2 else 1
         samples = []
         # Initialize with a random sample from Q2
-        for i in range(N):
+        for i in tqdm(range(N)):
             if reset or i == 0:
                 theta = self.U2T(
                         torch.randn(self.N2, dtype = self.U2_dtype, device = self.device)
