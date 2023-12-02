@@ -99,7 +99,7 @@ class GEDASampler2:
         - $u_1$ is in in image space (updated according to coupling strength)
         - $u_2$ is in vector space of $Q_1$ (updated according to likelihood precision)
     """
-    def __init__(self, omega, G1, D1, G1T, U2, D2, U2T, out_shape, mu = None):
+    def __init__(self, omega, G1, D1, G1T, U2, D2, U2T, out_shape, b = None, mu = None):
         """
         Arguments:
             omega: float
@@ -132,9 +132,12 @@ class GEDASampler2:
         self.Q1 = lambda x: self.G1T(self.D1*self.G1(x))
         self.Q2 = lambda x: self.U2T(self.D2*self.U2(x))
         self.R = lambda x: x/self.omega - self.Q1(x)
-#        self.Qu = self.Q1(mu) + self.Q2(mu) if mu is not None else 0
-        self.Qu = mu if mu is not None else 0
-#        self.Qu = self.Q1(mu) if mu is not None else 0
+        if mu is not None:
+            self.Qu = self.Q1(mu) + self.Q2(mu)
+        elif b is not None:
+            self.Qu = b
+        else:
+            self.Qu = 0
         
     def _gibbs_sample_step(self, theta, u1):
         # u2 lives in Q1 vector space (in the space of D1) (B, NX*NY*NZ)
