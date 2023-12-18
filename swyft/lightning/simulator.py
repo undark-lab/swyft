@@ -312,8 +312,12 @@ class Simulator:
             (Dict, Dict): Dictionary of shapes and dictionary of dtypes
         """
         sample = self.sample(targets=targets)
-        shapes = {k: tuple(v.shape) for k, v in sample.items()}
-        dtypes = {k: v.dtype for k, v in sample.items()}
+        shapes = {k: 
+                tuple(v.shape) if hasattr(v, 'shape') else None
+                for k, v in sample.items()}
+        dtypes = {k: 
+                v.dtype if hasattr(v, 'dtype') else None
+                for k, v in sample.items()}
         return shapes, dtypes
 
     def sample(
