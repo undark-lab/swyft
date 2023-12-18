@@ -99,7 +99,8 @@ class GEDASampler2:
         - $u_1$ is in in image space (updated according to coupling strength)
         - $u_2$ is in vector space of $Q_1$ (updated according to likelihood precision)
     """
-    def __init__(self, omega, G1, D1, G1T, U2, D2, U2T, out_shape, b = None, mu = None):
+    def __init__(self, omega, G1, D1, G1T, U2, D2, U2T, out_shape, 
+            b = None, z_MAP = None, z_MLE = None):
         """
         Arguments:
             omega: float
@@ -132,10 +133,12 @@ class GEDASampler2:
         self.Q1 = lambda x: self.G1T(self.D1*self.G1(x))
         self.Q2 = lambda x: self.U2T(self.D2*self.U2(x))
         self.R = lambda x: x/self.omega - self.Q1(x)
-        if mu is not None:
-            self.Qu = self.Q1(mu) + self.Q2(mu)
+        if z_MAP is not None:
+            self.Qu = self.Q1(z_MAP) + self.Q2(z_MAP)
         elif b is not None:
             self.Qu = b
+        elif z_MLE is not None:
+            self.Qu = self.Q1(z_MLE)
         else:
             self.Qu = 0
         
