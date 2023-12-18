@@ -207,6 +207,9 @@ class ZarrStore:
         keys = self.root["data"].keys()
         ns = [len(self.root["data"][k]) for k in keys]
         N = ns[0]
+        #keys = self.root["data"].keys()
+        #print(list(keys))
+        #print(ns)
         assert all([n == N for n in ns])
         return N
 
@@ -229,6 +232,10 @@ class ZarrStore:
         for k in shapes.keys():
             s = shapes[k]
             dtype = dtypes[k]
+            #print(k, s, dtype)
+            if s is None or dtype is None:
+                continue
+            #print(k, s, dtype)
             try:
                 self.root.zeros(
                     "data/" + k, shape=(N, *s), chunks=(chunk_size, *s), dtype=dtype
