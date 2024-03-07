@@ -49,6 +49,8 @@ class SwyftDataModule(pl.LightningDataModule):
         num_workers: int = 0,
         shuffle: bool = False,
         on_after_load_sample: Optional[callable] = None,
+        as_dict = True,
+        targets = None
     ):
         super().__init__()
         self.data = data
@@ -73,6 +75,8 @@ class SwyftDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.shuffle = shuffle
         self.on_after_load_sample = on_after_load_sample
+        self._as_dict = as_dict
+        self._targets = targets
 
     @staticmethod
     def _get_lengths(fractions, N):
@@ -84,9 +88,12 @@ class SwyftDataModule(pl.LightningDataModule):
         return [int(v) for v in n]
 
     def setup(self, stage: str):
+        print("SwyftDataModule setup stage:", stage)
         if isinstance(self.data, Samples):
             dataset = self.data.get_dataset(
-                on_after_load_sample=self.on_after_load_sample
+                on_after_load_sample=self.on_after_load_sample,
+                as_dict = self._as_dict,
+                targets = self._targets
             )
             splits = torch.utils.data.random_split(dataset, self.lengths)
             self.dataset_train, self.dataset_val, self.dataset_test = splits
@@ -95,13 +102,16 @@ class SwyftDataModule(pl.LightningDataModule):
             idxr2 = (self.lengths[0], self.lengths[0] + self.lengths[1])
             idxr3 = (self.lengths[0] + self.lengths[1], len(self.data))
             self.dataset_train = self.data.get_dataset(
-                idx_range=idxr1, on_after_load_sample=self.on_after_load_sample
+                idx_range=idxr1, on_after_load_sample=self.on_after_load_sample,
+                as_dict = self._as_dict, targets = self._targets
             )
             self.dataset_val = self.data.get_dataset(
-                idx_range=idxr2, on_after_load_sample=None
+                idx_range=idxr2, on_after_load_sample=None,
+                as_dict = self._as_dict, targets = self._targets
             )
             self.dataset_test = self.data.get_dataset(
-                idx_range=idxr3, on_after_load_sample=None
+                idx_range=idxr3, on_after_load_sample=None,
+                as_dict = self._as_dict, targets = self._targets
             )
         else:
             raise ValueError
@@ -124,6 +134,15 @@ class SwyftDataModule(pl.LightningDataModule):
         )
         return dataloader
 
+    def predict_dataloader(self):
+        dataloader = torch.utils.data.DataLoader(
+            self.dataset_train,
+            batch_size=self.batch_size,
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
+        )
+        return dataloader
+
     def test_dataloader(self):
         return
 
@@ -140,17 +159,22 @@ class SwyftDataModule(pl.LightningDataModule):
 class SamplesDataset(torch.utils.data.Dataset):
     """Simple torch dataset based on Samples."""
 
-    def __init__(self, sample_store, on_after_load_sample=None):
+    def __init__(self, sample_store, on_after_load_sample=None, as_dict=True, targets=None):
         self._dataset = sample_store
         self._on_after_load_sample = on_after_load_sample
+        self._targets = targets if targets is not None else self._dataset.keys()
+        self._as_dict = as_dict
 
     def __len__(self):
         return len(self._dataset[list(self._dataset.keys())[0]])
 
     def __getitem__(self, i):
-        d = {k: v[i] for k, v in self._dataset.items()}
+        #d = {k: v[i] for k, v in self._dataset.items()}
+        d = {k: self._dataset[k][i] for k in self._targets}
         if self._on_after_load_sample is not None:
             d = self._on_after_load_sample(d)
+        if not self._as_dict:
+            d = tuple(v for _, v in d.items())
         return d
 
 
@@ -383,7 +407,7 @@ class ZarrStoreIterableDataset(torch.utils.data.dataloader.IterableDataset):
             ]
             idx = np.random.permutation(range(*idx))
         else:
-            idx = np.random.permutation(n_chunks)
+            dx = np.random.permutation(n_chunks)
         return idx
 
     def __iter__(self):

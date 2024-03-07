@@ -55,7 +55,7 @@ class Samples(dict):
         else:
             return super().__getitem__(i)
 
-    def get_dataset(self, on_after_load_sample=None):
+    def get_dataset(self, on_after_load_sample=None, as_dict = True, targets = None):
         """Generator function for SamplesDataset object.
 
         Args:
@@ -65,7 +65,8 @@ class Samples(dict):
             SamplesDataset
         """
         return swyft.lightning.data.SamplesDataset(
-            self, on_after_load_sample=on_after_load_sample
+            self, on_after_load_sample=on_after_load_sample,
+            as_dict = as_dict, targets = targets
         )
 
     def get_dataloader(
@@ -128,6 +129,7 @@ class Node:
                 else arg
                 for arg in self._inputs
             )
+            result = self._fn(*args)
             result = self._fn(*args)
             if self._mult_parnames is None:
                 trace[self._parname] = result
@@ -250,9 +252,9 @@ class Simulator:
     """
 
     def __init__(self):
-        self.graph = None
-
-    #        self.build_graph(self.graph)
+#        self.graph = None
+         self.graph = Graph()
+         self.build(self.graph)
 
     def transform_conditions(self, conditions):
         return conditions
@@ -288,9 +290,9 @@ class Simulator:
         return sample
 
     def _run(self, targets=None, conditions={}):
-        if self.graph is None:
-            self.graph = Graph()
-            self.build(self.graph)
+#        if self.graph is None:
+#            self.graph = Graph()
+#            self.build(self.graph)
         conditions = conditions() if callable(conditions) else conditions
         conditions = self.transform_conditions(conditions)
         trace = dict(conditions)
