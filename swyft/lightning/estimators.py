@@ -351,6 +351,7 @@ class LogRatioEstimator_Autoregressive(nn.Module):
         dropout=0.1,
         num_blocks=2,
         hidden_features=64,
+        min_l2 = None
     ):
         super().__init__()
         self.cl1 = swyft.LogRatioEstimator_1dim(
@@ -372,6 +373,7 @@ class LogRatioEstimator_Autoregressive(nn.Module):
             Lmax=0,
         )
         self.num_params = num_params
+        self.min_l2 = min_l2
 
     def forward(self, xA, zA, zB):
         xA, zB = swyft.equalize_tensors(xA, zB)
@@ -397,7 +399,8 @@ class LogRatioEstimator_Autoregressive(nn.Module):
 
         l1 = logratios1.logratios.sum(-1)
         l2 = logratios2.logratios.sum(-1)
-        l2 = torch.where(l2 > 0, l2, 0)
+        if self.min_l2 is not None:
+            l2 = torch.where(l2 > self.min_l2, l2, self.min_l2)
         l = (l1 - l2).detach().unsqueeze(-1)
 
         logratios_tot = swyft.LogRatioSamples(l, logratios1.params, logratios1.parnames)
